@@ -441,53 +441,29 @@ class IncentivosController extends Controller
                 cedula,
                 nombres,
                 apellidos,
-                porcentaje,
-                FORMAT(SUM(total), 2) AS total_empleado,
-                tipo_producto
+                FORMAT(SUM(total), 2) AS total_empleado
             FROM (
                 SELECT 
                     e.companyid,
-                    'Joselito' AS company,
+                    CASE WHEN e.companyid = 168 THEN 'Joselito' ELSE 'Negosur' END AS company,
                     c.empleado_id AS empleadoid,
                     e.cedula,
                     e.nombres,
                     e.apellidos,
                     pad_tot.total_agencia AS total,
-                    pad_tot.porcentaje_coordinador AS porcentaje,
-                    tipo_producto
+                    pad_tot.porcentaje_coordinador AS porcentaje
                 FROM coordinador c
                 INNER JOIN (
-                    SELECT agencia_id, tipo_producto, SUM(monto_coordinador) AS total_agencia, porcentaje_coordinador
+                    SELECT agencia_id, SUM(monto_coordinador) AS total_agencia, porcentaje_coordinador
                     FROM plan_agencias_distribucion
-                    WHERE incentivo_id = $incentivoId AND excedente > 0
-                    GROUP BY agencia_id, tipo_producto, porcentaje_coordinador
+                    WHERE incentivo_id = ? AND excedente > 0 AND sistema = ?
+                    GROUP BY agencia_id, porcentaje_coordinador
                 ) pad_tot ON pad_tot.agencia_id = c.agencia_id
                 INNER JOIN empleados e ON c.empleado_id = e.empleadoid 
-                    AND e.companyid = 168 AND e.fechasalida IS NULL
-
-                UNION ALL
-
-                SELECT 
-                    e.companyid,
-                    'Negosur' AS company,
-                    c.empleado_id AS empleadoid,
-                    e.cedula,
-                    e.nombres,
-                    e.apellidos,
-                    pad_tot.total_agencia AS total,
-                    pad_tot.porcentaje_coordinador AS porcentaje,
-                    tipo_producto
-                FROM coordinador c
-                INNER JOIN (
-                    SELECT agencia_id, tipo_producto, SUM(monto_coordinador) AS total_agencia, porcentaje_coordinador
-                    FROM plan_agencias_distribucion
-                    WHERE incentivo_id = $incentivoId AND excedente > 0
-                    GROUP BY agencia_id, tipo_producto, porcentaje_coordinador
-                ) pad_tot ON pad_tot.agencia_id = c.agencia_id
-                INNER JOIN empleados e ON c.empleado_id = e.empleadoid 
-                    AND e.companyid = 169 AND e.fechasalida IS NULL
+                    AND e.companyid IN (168, 169) AND e.fechasalida IS NULL
             ) AS t
-            GROUP BY companyid, company, empleadoid, cedula, nombres, apellidos, porcentaje, tipo_producto;"
+            GROUP BY companyid, company, empleadoid, cedula, nombres, apellidos;",
+            [$incentivoId, $sistema]
         );
         return response()->json($data);
     }
@@ -538,29 +514,52 @@ class IncentivosController extends Controller
         ini_set('memory_limit', '1G');
 
         $cedula = $request->input('cedula');
-        $tipo_producto = $request->input('tipo_producto');
+        $tipo_producto = trim($request->input('tipo_producto', ''));
+        $sistema = $request->input('sistema');
+        $mes = $request->input('mes');
+        $anio = $request->input('year', date('Y'));
 
-        $data = DB::select(
-            "SELECT 
-                agencia_id, 
-                tipo_producto, 
-                sistema, 
-                FORMAT(venta_mes, 2) AS venta_mes,
-                FORMAT(venta_base, 2) AS venta_base,
-                FORMAT(excedente, 2) AS excedente,
-                FORMAT(porcentaje_coordinador, 3) AS porcentaje_coordinador,
-                FORMAT(monto_coordinador, 2) AS monto_coordinador
-            from plan_agencias_distribucion
-            where agencia_id IN (
-                select agencia_id 
-                from coordinador c
-                inner join empleados e on c.empleado_id = e.empleadoid
-                where e.cedula = ?
-            )
-            and tipo_producto = ?
-            and excedente > 0",
-            [$cedula, $tipo_producto]
-        );
+        $incentivoId = DB::table('incentivo_temporal_c')
+            ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
+
+        if ($incentivoId === null) {
+            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+        }
+
+        $sql = "SELECT 
+                    agencia_id, 
+                    tipo_producto, 
+                    sistema, 
+                    FORMAT(venta_mes, 2) AS venta_mes,
+                    FORMAT(venta_base, 2) AS venta_base,
+                    FORMAT(excedente, 2) AS excedente,
+                    FORMAT(porcentaje_coordinador, 3) AS porcentaje_coordinador,
+                    FORMAT(monto_coordinador, 2) AS monto_coordinador
+                FROM plan_agencias_distribucion
+                WHERE incentivo_id = ?
+                    AND agencia_id IN (
+                        SELECT agencia_id 
+                        FROM coordinador c
+                        INNER JOIN empleados e ON c.empleado_id = e.empleadoid
+                        WHERE e.cedula = ?
+                    )
+                    AND excedente > 0";
+
+        $bindings = [$incentivoId, $cedula];
+
+        if (!empty($sistema)) {
+            $sql .= " AND sistema = ?";
+            $bindings[] = $sistema;
+        }
+
+        if ($tipo_producto !== '') {
+            $sql .= " AND tipo_producto = ?";
+            $bindings[] = $tipo_producto;
+        }
+
+        $sql .= " ORDER BY agencia_id, tipo_producto, sistema";
+
+        $data = DB::select($sql, $bindings);
         return response()->json($data);
     }
 

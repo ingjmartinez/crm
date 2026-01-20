@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3306
--- Tiempo de generación: 15-01-2026 a las 23:03:32
+-- Tiempo de generación: 20-01-2026 a las 15:46:02
 -- Versión del servidor: 9.1.0
 -- Versión de PHP: 8.3.14
 
@@ -26,7 +26,7 @@ DELIMITER $$
 -- Procedimientos
 --
 DROP PROCEDURE IF EXISTS `CalculoIncentivo`$$
-CREATE DEFINER=`root`@`localhost` PROCEDURE `CalculoIncentivo` (IN `_mes` INT, IN `_anio` INT, IN `_excluidos` VARCHAR(255))   BEGIN
+CREATE  PROCEDURE `CalculoIncentivo` (IN `_mes` INT, IN `_anio` INT, IN `_excluidos` VARCHAR(255))   BEGIN
     DECLARE _fecha_inicio DATE;
     DECLARE _fecha_fin DATE;
     DECLARE _anio_actual INT DEFAULT YEAR(CURDATE());
@@ -150,12 +150,12 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `CalculoIncentivo` (IN `_mes` INT, I
             IFNULL(a.total_mes, 0) AS total_mes,
             a.venta_base,
             IFNULL(cn.nivel, '') AS nivel,
-            IFNULL(
+            /* IFNULL(
                 IFNULL(
                     cn.incremento_fijo,
                     a.promedio_mensual * (1 + cn.incremento_porcentaje)
-                ), 0
-            ) AS meta_incremental,
+                ), 0 
+            ) AS meta_incremental,*/
             IFNULL(
                 IFNULL(
                     cn.incremento_fijo,
@@ -177,13 +177,13 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `CalculoIncentivo` (IN `_mes` INT, I
         FORMAT(total_mes, 2, 'en_US') AS total_mes,
         nivel,
         FORMAT(cumplimiento, 2, 'en_US') AS cumplimiento,
-        FORMAT(meta_incremental, 2, 'en_US') AS meta_incremental,
-        FORMAT(IFNULL((venta_base + meta_incremental), 0), 2, 'en_US') AS meta_plan
+        FORMAT(0, 2, 'en_US') AS meta_plan,
+        FORMAT(IFNULL((venta_base + cumplimiento), 0), 2, 'en_US') AS meta_incremental
     FROM nivel;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_ventas_unificadas`$$
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_ventas_unificadas` (IN `_ini` DATE, IN `_fin` DATE)   BEGIN
+CREATE  PROCEDURE `sp_ventas_unificadas` (IN `_ini` DATE, IN `_fin` DATE)   BEGIN
 
     SELECT 
         v.agencia_id,
@@ -240,7 +240,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_ventas_unificadas` (IN `_ini` DA
 END$$
 
 DROP PROCEDURE IF EXISTS `ventas`$$
-CREATE DEFINER=`root`@`localhost` PROCEDURE `ventas` (IN `_ini` DATE, IN `_fin` DATE)   BEGIN
+CREATE  PROCEDURE `ventas` (IN `_ini` DATE, IN `_fin` DATE)   BEGIN
 
     SELECT 
         v.agencia_id,
@@ -1187,6 +1187,184 @@ CREATE TABLE IF NOT EXISTS `sessions` (
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `solicitudes_empleo`
+--
+
+DROP TABLE IF EXISTS `solicitudes_empleo`;
+CREATE TABLE IF NOT EXISTS `solicitudes_empleo` (
+  `solicitud_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `apellidos` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `nombres` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `apodo` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cedula_pasaporte` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fecha_nacimiento` date DEFAULT NULL,
+  `lugar_nacimiento` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `nacionalidad` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `edad` smallint UNSIGNED DEFAULT NULL,
+  `direccion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sector` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ciudad` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `telefono_residencial` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `celular` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `email` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado_civil` enum('SOLTERO','CASADO','DIVORCIADO','UNION_LIBRE') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tipo_sangre` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `instagram` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `facebook` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estudia_actualmente` tinyint(1) DEFAULT NULL,
+  `que_estudia` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `horario_estudio` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `domina_computadora` tinyint(1) NOT NULL DEFAULT '0',
+  `domina_fax` tinyint(1) NOT NULL DEFAULT '0',
+  `domina_impresora` tinyint(1) NOT NULL DEFAULT '0',
+  `domina_scanner` tinyint(1) NOT NULL DEFAULT '0',
+  `domina_maquinas_elec` tinyint(1) NOT NULL DEFAULT '0',
+  `domina_calculadoras` tinyint(1) NOT NULL DEFAULT '0',
+  `ha_trabajado_antes_en_empresa` tinyint(1) DEFAULT NULL,
+  `familiares_en_empresa` tinyint(1) DEFAULT NULL,
+  `competencias_laborales` text COLLATE utf8mb4_unicode_ci,
+  `fortalezas_profesionales` text COLLATE utf8mb4_unicode_ci,
+  `impedimento_sab_dom_fer` tinyint(1) DEFAULT NULL,
+  `problemas_salud_detalle` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `afp` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ars` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sabe_conducir` tinyint(1) DEFAULT NULL,
+  `licencia_categoria` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `licencia_vencimiento` date DEFAULT NULL,
+  `fecha_disponible` date DEFAULT NULL,
+  `acepta_cambio_horario` tinyint(1) DEFAULT NULL,
+  `acepta_cambio_lugar` tinyint(1) DEFAULT NULL,
+  `disp_diurno` tinyint(1) NOT NULL DEFAULT '0',
+  `disp_nocturno` tinyint(1) NOT NULL DEFAULT '0',
+  `disp_rotativo` tinyint(1) NOT NULL DEFAULT '0',
+  `disp_domingos` tinyint(1) NOT NULL DEFAULT '0',
+  `disp_feriados` tinyint(1) NOT NULL DEFAULT '0',
+  `cuenta_banco_caribe_bhd` tinyint(1) DEFAULT NULL,
+  `incluido_buro_credito` tinyint(1) DEFAULT NULL,
+  `referido_por` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `referido_parentesco` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `emergencia_contacto_nombre` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `emergencia_parentesco` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `emergencia_telefonos` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `medio_informo_vacante` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `firma_nombre` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fecha_firma` date DEFAULT NULL,
+  `seleccionado` tinyint(1) DEFAULT NULL,
+  `puesto_aplicado` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `banca` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `horario_trabajo` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fecha_ingreso` date DEFAULT NULL,
+  `salario` decimal(12,2) DEFAULT NULL,
+  `aprobado_por` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`solicitud_id`),
+  KEY `idx_solicitud_cedula` (`cedula_pasaporte`),
+  KEY `idx_solicitud_fecha` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `solicitud_educacion`
+--
+
+DROP TABLE IF EXISTS `solicitud_educacion`;
+CREATE TABLE IF NOT EXISTS `solicitud_educacion` (
+  `educacion_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `solicitud_id` bigint UNSIGNED NOT NULL,
+  `nivel` enum('PRIMARIA','SECUNDARIA','UNIVERSITARIO','TECNICO','POST_GRADO','MAESTRIA','OTRO') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'OTRO',
+  `centro_docente` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lugar` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fecha_termino` date DEFAULT NULL,
+  `nivel_alcanzado` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`educacion_id`),
+  KEY `idx_edu_solicitud` (`solicitud_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `solicitud_empleos`
+--
+
+DROP TABLE IF EXISTS `solicitud_empleos`;
+CREATE TABLE IF NOT EXISTS `solicitud_empleos` (
+  `empleo_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `solicitud_id` bigint UNSIGNED NOT NULL,
+  `empresa_nombre` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `telefono` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `puesto` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tiempo_en_puesto` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fecha_desde` date DEFAULT NULL,
+  `fecha_hasta` date DEFAULT NULL,
+  `ultimo_sueldo` decimal(12,2) DEFAULT NULL,
+  `funciones` text COLLATE utf8mb4_unicode_ci,
+  `motivo_salida` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `supervisor_inmediato` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`empleo_id`),
+  KEY `idx_emp_solicitud` (`solicitud_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `solicitud_familiares`
+--
+
+DROP TABLE IF EXISTS `solicitud_familiares`;
+CREATE TABLE IF NOT EXISTS `solicitud_familiares` (
+  `familiar_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `solicitud_id` bigint UNSIGNED NOT NULL,
+  `parentesco` enum('PADRE','MADRE','CONYUGE','HIJO','OTRO') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'OTRO',
+  `nombre` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `edad` smallint UNSIGNED DEFAULT NULL,
+  `telefono` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ocupacion` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lugar_trabajo` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`familiar_id`),
+  KEY `idx_fam_solicitud` (`solicitud_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `solicitud_referencias_laborales`
+--
+
+DROP TABLE IF EXISTS `solicitud_referencias_laborales`;
+CREATE TABLE IF NOT EXISTS `solicitud_referencias_laborales` (
+  `ref_lab_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `solicitud_id` bigint UNSIGNED NOT NULL,
+  `nombre` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ocupacion` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lugar_trabajo` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `telefono` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`ref_lab_id`),
+  KEY `idx_reflab_solicitud` (`solicitud_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `solicitud_referencias_personales`
+--
+
+DROP TABLE IF EXISTS `solicitud_referencias_personales`;
+CREATE TABLE IF NOT EXISTS `solicitud_referencias_personales` (
+  `ref_per_id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `solicitud_id` bigint UNSIGNED NOT NULL,
+  `nombre` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ocupacion` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lugar_trabajo` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sector_residencia` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `telefono` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`ref_per_id`),
+  KEY `idx_refper_solicitud` (`solicitud_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `tokens`
 --
 
@@ -1328,14 +1506,14 @@ CREATE TABLE IF NOT EXISTS `vt_usuarios_net` (
 --
 DROP VIEW IF EXISTS `vw_usuarios_union`;
 CREATE TABLE IF NOT EXISTS `vw_usuarios_union` (
-`agencia_id` varchar(25)
+`consorcio_id` varchar(5)
+,`agencia_id` varchar(25)
 ,`cedula` varchar(50)
-,`consorcio_id` varchar(5)
-,`fecha` date
-,`monto` decimal(34,2)
-,`origen` varchar(3)
-,`producto_id` varchar(50)
 ,`tipo` varchar(45)
+,`producto_id` varchar(50)
+,`monto` decimal(34,2)
+,`fecha` date
+,`origen` varchar(3)
 );
 
 -- --------------------------------------------------------
@@ -1346,11 +1524,11 @@ CREATE TABLE IF NOT EXISTS `vw_usuarios_union` (
 --
 DROP VIEW IF EXISTS `vw_ventas_por_producto`;
 CREATE TABLE IF NOT EXISTS `vw_ventas_por_producto` (
-`a` double
+`producto_id` varchar(12)
 ,`descripcion_producto` varchar(255)
-,`producto_id` varchar(12)
 ,`tipo_producto` varchar(255)
 ,`total_ventas` decimal(12,2)
+,`a` double
 );
 
 -- --------------------------------------------------------
@@ -1361,7 +1539,7 @@ CREATE TABLE IF NOT EXISTS `vw_ventas_por_producto` (
 DROP TABLE IF EXISTS `empleados_no_regularizados`;
 
 DROP VIEW IF EXISTS `empleados_no_regularizados`;
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `empleados_no_regularizados`  AS SELECT DISTINCT `vt_usuarios_bet`.`cedula` AS `cedula` FROM `vt_usuarios_bet` WHERE (`vt_usuarios_bet`.`cedula` in (select `empleados`.`cedula` from `empleados` where (length(`empleados`.`cedula`) = 11)) is false AND (`vt_usuarios_bet`.`cedula` <> ''))union all select distinct `vt_usuarios_net`.`cedula` AS `cedula` from `vt_usuarios_net` where (`vt_usuarios_net`.`cedula` in (select `empleados`.`cedula` from `empleados` where (length(`empleados`.`cedula`) = 11)) is false and (`vt_usuarios_net`.`cedula` <> ''))  ;
+CREATE ALGORITHM=UNDEFINED  SQL SECURITY DEFINER VIEW `empleados_no_regularizados`  AS SELECT DISTINCT `vt_usuarios_bet`.`cedula` AS `cedula` FROM `vt_usuarios_bet` WHERE (`vt_usuarios_bet`.`cedula` in (select `empleados`.`cedula` from `empleados` where (length(`empleados`.`cedula`) = 11)) is false AND (`vt_usuarios_bet`.`cedula` <> ''))union all select distinct `vt_usuarios_net`.`cedula` AS `cedula` from `vt_usuarios_net` where (`vt_usuarios_net`.`cedula` in (select `empleados`.`cedula` from `empleados` where (length(`empleados`.`cedula`) = 11)) is false and (`vt_usuarios_net`.`cedula` <> ''))  ;
 
 -- --------------------------------------------------------
 
@@ -1371,7 +1549,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW 
 DROP TABLE IF EXISTS `vw_usuarios_union`;
 
 DROP VIEW IF EXISTS `vw_usuarios_union`;
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vw_usuarios_union`  AS SELECT max(`vt_usuarios_bet`.`consorcio_id`) AS `consorcio_id`, max(`vt_usuarios_bet`.`agencia_id`) AS `agencia_id`, `vt_usuarios_bet`.`cedula` AS `cedula`, `vt_usuarios_bet`.`tipo` AS `tipo`, `vt_usuarios_bet`.`producto_id` AS `producto_id`, sum(`vt_usuarios_bet`.`monto`) AS `monto`, max(`vt_usuarios_bet`.`fecha`) AS `fecha`, 'BET' AS `origen` FROM `vt_usuarios_bet` WHERE ((`vt_usuarios_bet`.`cedula` is null) OR (trim(`vt_usuarios_bet`.`cedula`) = '')) GROUP BY `vt_usuarios_bet`.`producto_id`, `vt_usuarios_bet`.`tipo`, `vt_usuarios_bet`.`cedula`union all select max(`vt_usuarios_net`.`consorcio_id`) AS `consorcio_id`,max(`vt_usuarios_net`.`agencia_id`) AS `agencia_id`,`vt_usuarios_net`.`cedula` AS `cedula`,`vt_usuarios_net`.`tipo` AS `tipo`,`vt_usuarios_net`.`producto_id` AS `producto_id`,sum(`vt_usuarios_net`.`monto`) AS `monto`,max(`vt_usuarios_net`.`fecha`) AS `fecha`,'NET' AS `origen` from `vt_usuarios_net` where ((`vt_usuarios_net`.`cedula` is null) or (trim(`vt_usuarios_net`.`cedula`) = '')) group by `vt_usuarios_net`.`producto_id`,`vt_usuarios_net`.`tipo`,`vt_usuarios_net`.`cedula`  ;
+CREATE ALGORITHM=UNDEFINED  SQL SECURITY DEFINER VIEW `vw_usuarios_union`  AS SELECT max(`vt_usuarios_bet`.`consorcio_id`) AS `consorcio_id`, max(`vt_usuarios_bet`.`agencia_id`) AS `agencia_id`, `vt_usuarios_bet`.`cedula` AS `cedula`, `vt_usuarios_bet`.`tipo` AS `tipo`, `vt_usuarios_bet`.`producto_id` AS `producto_id`, sum(`vt_usuarios_bet`.`monto`) AS `monto`, max(`vt_usuarios_bet`.`fecha`) AS `fecha`, 'BET' AS `origen` FROM `vt_usuarios_bet` WHERE ((`vt_usuarios_bet`.`cedula` is null) OR (trim(`vt_usuarios_bet`.`cedula`) = '')) GROUP BY `vt_usuarios_bet`.`producto_id`, `vt_usuarios_bet`.`tipo`, `vt_usuarios_bet`.`cedula`union all select max(`vt_usuarios_net`.`consorcio_id`) AS `consorcio_id`,max(`vt_usuarios_net`.`agencia_id`) AS `agencia_id`,`vt_usuarios_net`.`cedula` AS `cedula`,`vt_usuarios_net`.`tipo` AS `tipo`,`vt_usuarios_net`.`producto_id` AS `producto_id`,sum(`vt_usuarios_net`.`monto`) AS `monto`,max(`vt_usuarios_net`.`fecha`) AS `fecha`,'NET' AS `origen` from `vt_usuarios_net` where ((`vt_usuarios_net`.`cedula` is null) or (trim(`vt_usuarios_net`.`cedula`) = '')) group by `vt_usuarios_net`.`producto_id`,`vt_usuarios_net`.`tipo`,`vt_usuarios_net`.`cedula`  ;
 
 -- --------------------------------------------------------
 
@@ -1381,7 +1559,41 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW 
 DROP TABLE IF EXISTS `vw_ventas_por_producto`;
 
 DROP VIEW IF EXISTS `vw_ventas_por_producto`;
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vw_ventas_por_producto`  AS SELECT `c`.`producto_id` AS `producto_id`, `c`.`descripcion` AS `descripcion_producto`, `c`.`tipo` AS `tipo_producto`, `v`.`monto` AS `total_ventas`, sum(`c`.`tipo`) AS `a` FROM ((select `vt_usuarios_net`.`producto_id` AS `producto_id`,`vt_usuarios_net`.`monto` AS `monto` from `vt_usuarios_net` union all select `vt_usuarios_bet`.`producto_id` AS `producto_id`,`vt_usuarios_bet`.`monto` AS `monto` from `vt_usuarios_bet`) `v` left join `catalogo_juegos` `c` on((`c`.`producto_id` = `v`.`producto_id`))) GROUP BY `c`.`producto_id`, `c`.`descripcion`, `c`.`tipo` ;
+CREATE ALGORITHM=UNDEFINED  SQL SECURITY DEFINER VIEW `vw_ventas_por_producto`  AS SELECT `c`.`producto_id` AS `producto_id`, `c`.`descripcion` AS `descripcion_producto`, `c`.`tipo` AS `tipo_producto`, `v`.`monto` AS `total_ventas`, sum(`c`.`tipo`) AS `a` FROM ((select `vt_usuarios_net`.`producto_id` AS `producto_id`,`vt_usuarios_net`.`monto` AS `monto` from `vt_usuarios_net` union all select `vt_usuarios_bet`.`producto_id` AS `producto_id`,`vt_usuarios_bet`.`monto` AS `monto` from `vt_usuarios_bet`) `v` left join `catalogo_juegos` `c` on((`c`.`producto_id` = `v`.`producto_id`))) GROUP BY `c`.`producto_id`, `c`.`descripcion`, `c`.`tipo` ;
+
+--
+-- Restricciones para tablas volcadas
+--
+
+--
+-- Filtros para la tabla `solicitud_educacion`
+--
+ALTER TABLE `solicitud_educacion`
+  ADD CONSTRAINT `fk_edu_solicitud` FOREIGN KEY (`solicitud_id`) REFERENCES `solicitudes_empleo` (`solicitud_id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `solicitud_empleos`
+--
+ALTER TABLE `solicitud_empleos`
+  ADD CONSTRAINT `fk_emp_solicitud` FOREIGN KEY (`solicitud_id`) REFERENCES `solicitudes_empleo` (`solicitud_id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `solicitud_familiares`
+--
+ALTER TABLE `solicitud_familiares`
+  ADD CONSTRAINT `fk_fam_solicitud` FOREIGN KEY (`solicitud_id`) REFERENCES `solicitudes_empleo` (`solicitud_id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `solicitud_referencias_laborales`
+--
+ALTER TABLE `solicitud_referencias_laborales`
+  ADD CONSTRAINT `fk_reflab_solicitud` FOREIGN KEY (`solicitud_id`) REFERENCES `solicitudes_empleo` (`solicitud_id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `solicitud_referencias_personales`
+--
+ALTER TABLE `solicitud_referencias_personales`
+  ADD CONSTRAINT `fk_refper_solicitud` FOREIGN KEY (`solicitud_id`) REFERENCES `solicitudes_empleo` (`solicitud_id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

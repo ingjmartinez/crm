@@ -1155,7 +1155,7 @@
                             <td>${item.apellidos}</td>
                             <td>${item.total_empleado}</td>
                             <td>
-                                <button onclick='listPagoCoordinadorDetalle("${item.cedula}", "${item.tipo_producto}")' class='btn btn-success'>Ver Detalle</button>
+                                <button onclick='listPagoCoordinadorDetalle("${item.cedula}")' class='btn btn-success'>Ver Detalle</button>
                             </td>
                         `;
                         tableBody.appendChild(row);
@@ -1187,7 +1187,7 @@
             listPagoCoordinador();
         });
 
-        function listPagoCoordinadorDetalle(cedula, tipo_producto) {
+        function listPagoCoordinadorDetalle(cedula, tipo_producto = '') {
             var modal = new bootstrap.Modal(document.getElementById('myModal'));
             modal.show();
 
@@ -1203,8 +1203,13 @@
             $('#tablePagoCoordinadorDetalle').DataTable().destroy();
             $('#tablePagoCoordinadorDetalle tbody').empty();
             let year = document.getElementById('year').value;
-            fetch("/incentivos/list/pago-incentivos-coordinador-detalle?cedula=" + cedula + '&tipo_producto=' +
-                    tipo_producto + '&year=' + year)
+            let sistema = document.getElementById('sistema').value;
+            let mes = document.getElementById('mes_coordinador').value;
+            fetch("/incentivos/list/pago-incentivos-coordinador-detalle?cedula=" + cedula +
+                    '&tipo_producto=' + tipo_producto +
+                    '&sistema=' + sistema +
+                    '&mes=' + mes +
+                    '&year=' + year)
                 .then(response => response.json())
                 .then(data => {
                     if ('message' in data) {
