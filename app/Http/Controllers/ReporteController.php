@@ -102,6 +102,7 @@ class ReporteController extends Controller
         $query = DB::table('faltantes_bet')
             ->leftJoin('empleados', 'faltantes_bet.identificacion', '=', 'empleados.cedula')
             ->select(
+                'faltantes_bet.agencia_id',
                 'faltantes_bet.identificacion',
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
                 DB::raw('COUNT(faltantes_bet.faltante_id) as cantidad_faltantes'),
@@ -115,7 +116,7 @@ class ReporteController extends Controller
         }
 
         $registros = $query
-            ->groupBy('faltantes_bet.identificacion', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy('faltantes_bet.agencia_id', 'faltantes_bet.identificacion', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->paginate(50);
 

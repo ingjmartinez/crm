@@ -61,6 +61,7 @@
                                         <thead>
                                             <tr>
                                                 <th>Cédula</th>
+                                                <th>Agencia ID</th>
                                                 <th>Nombre Empleado</th>
                                                 <th>Cantidad de Faltantes</th>
                                                 <th>Monto Total</th>
@@ -144,6 +145,7 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${registro.identificacion}</td>
+                    <td class="text-center">${registro.agencia_id ?? ''}</td>
                     <td>${registro.nombre_empleado || 'Sin especificar'}</td>
                     <td class="text-center">${registro.cantidad_faltantes}</td>
                     <td class="text-end">$${parseFloat(registro.total_monto).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>

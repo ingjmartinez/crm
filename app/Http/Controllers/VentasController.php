@@ -106,6 +106,13 @@ class VentasController extends Controller
 
         $data = [];
 
+        if (!isset($ventas['Content']) || empty($ventas['Content'])) {
+            return response()->json([
+                'message' => 'No hay datos para guardar en la fecha: ' . $fecha,
+                'total' => 0,
+            ]);
+        }
+
         foreach ($ventas['Content'] as $v) {
             $data[] = [
                 'consorcio_id'  => $v['consorcio_id'] ?? null,
