@@ -51,24 +51,33 @@ class FinanceDashboardController extends Controller
         // Query para datos agrupados por tipo
         $tabla = 'vt_usuarios_net';
 
+        // Expresión única para normalizar "tipo"
         $tipoExpr = "COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo')";
 
-        $datos = DB::table($tabla . ' as v')
+        // 1) Subquery: aquí sí se agrupa
+        $sub = DB::table($tabla . ' as v')
             ->leftJoin('catalogo_juegos as c', 'v.producto_id', '=', 'c.producto_id')
-            ->selectRaw("$tipoExpr as tipo, SUM(v.monto) as total, COUNT(*) as transacciones")
+            ->selectRaw("$tipoExpr as tipo")
+            ->selectRaw("SUM(v.monto) as total")
+            ->selectRaw("COUNT(*) as transacciones")
             ->whereBetween('v.fecha', [$inicio, $fin])
             ->when($agencia_id, function ($q) use ($agencia_id) {
                 $q->where('v.agencia_id', $agencia_id);
             })
-            ->groupByRaw($tipoExpr)
+            // OJO: groupBy por la expresión (máxima compatibilidad con ONLY_FULL_GROUP_BY)
+            ->groupByRaw($tipoExpr);
+
+        // 2) Query externo: aquí solo se ordena (sin GROUP BY)
+        $datos = DB::query()
+            ->fromSub($sub, 'sub')
             ->orderByRaw("
                 CASE
-                    WHEN LOWER(TRIM(c.tipo)) = 'tradicional' THEN 1
-                    WHEN LOWER(TRIM(c.tipo)) = 'no tradicional' THEN 2
+                    WHEN sub.tipo = 'tradicional' THEN 1
+                    WHEN sub.tipo = 'no tradicional' THEN 2
                     ELSE 3
                 END
             ")
-            ->orderByDesc('total')
+            ->orderByDesc('sub.total')
             ->get();
 
         // Query para ventas por día separadas por tipo
