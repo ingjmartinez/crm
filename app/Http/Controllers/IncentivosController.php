@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class IncentivosController extends Controller
 {
@@ -20,24 +21,33 @@ class IncentivosController extends Controller
 
     function list(Request $request)
     {
-        // PHP (solo evita que PHP muera antes)
-        ini_set('max_execution_time', 1800);
-        ini_set('memory_limit', '1024M');
+        Log::info('Inicia CalculoIncentivo');
+
+        DB::statement("SET SESSION max_statement_time = 1800");
+        DB::statement("SET SESSION wait_timeout = 600");
+        DB::statement("SET SESSION net_read_timeout = 300");
+        DB::statement("SET SESSION net_write_timeout = 300");
+
+        $vars = DB::selectOne("SELECT
+            @@SESSION.max_statement_time AS mst,
+            @@SESSION.wait_timeout AS wt,
+            @@SESSION.net_read_timeout AS nrt,
+            @@SESSION.net_write_timeout AS nwt,
+            @@port AS port,
+            @@version AS ver
+        ");
+
+        Log::info('Vars session', (array)$vars);
 
         $mes = $request->input('mes');
         $year = $request->input('year');
         $excluidos = $request->input('excluidos', '');
 
-        // ⚠️ IMPORTANTE: MISMA CONEXIÓN
-        DB::statement("SET SESSION max_statement_time = 1800");  // 30 min
-        DB::statement("SET SESSION wait_timeout = 600");
-        DB::statement("SET SESSION net_read_timeout = 300");
-        DB::statement("SET SESSION net_write_timeout = 300");
+        Log::info('Antes del CALL', compact('mes', 'year', 'excluidos'));
 
-        $incentivos = DB::select(
-            'CALL CalculoIncentivo(?, ?, ?)',
-            [$mes, $year, $excluidos]
-        );
+        $incentivos = DB::select('CALL CalculoIncentivo(?, ?, ?)', [$mes, $year, $excluidos]);
+
+        Log::info('Termina CalculoIncentivo', ['rows' => count($incentivos)]);
 
         return response()->json($incentivos);
     }
