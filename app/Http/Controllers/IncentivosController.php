@@ -19,37 +19,47 @@ class IncentivosController extends Controller
         ]);
     }
 
+    public function generar(Request $request)
+    {
+        $mes = (int)$request->input('mes');
+        $anio = (int)$request->input('year');
+        $excluidos = $request->input('excluidos', null);
+        $excluidos = $excluidos ? trim($excluidos, ',') : null;
+
+        $jobId = DB::table('incentivo_jobs')->insertGetId([
+            'mes' => $mes,
+            'anio' => $anio,
+            'excluidos' => $excluidos,
+            'status' => 'pending',
+            'created_at' => now(),
+        ]);
+
+        return response()->json(['job_id' => $jobId, 'status' => 'pending']);
+    }
+
+    public function status($id)
+    {
+        $job = DB::table('incentivo_jobs')->where('id', $id)->first();
+        return response()->json($job);
+    }
+
     function list(Request $request)
     {
-        Log::info('Inicia CalculoIncentivo');
+        $mes = (int)$request->input('mes');
+        $anio = (int)$request->input('year');
+        $excluidos = $request->input('excluidos', null);
 
-        DB::statement("SET SESSION max_statement_time = 1800");
-        DB::statement("SET SESSION wait_timeout = 600");
-        DB::statement("SET SESSION net_read_timeout = 300");
-        DB::statement("SET SESSION net_write_timeout = 300");
+        $q = DB::table('incentivo_resultados')
+            ->where('mes', $mes)
+            ->where('anio', $anio);
 
-        $vars = DB::selectOne("SELECT
-            @@SESSION.max_statement_time AS mst,
-            @@SESSION.wait_timeout AS wt,
-            @@SESSION.net_read_timeout AS nrt,
-            @@SESSION.net_write_timeout AS nwt,
-            @@port AS port,
-            @@version AS ver
-        ");
+        if ($excluidos === null || $excluidos === '') {
+            $q->whereNull('excluidos');
+        } else {
+            $q->where('excluidos', trim($excluidos, ','));
+        }
 
-        Log::info('Vars session', (array)$vars);
-
-        $mes = $request->input('mes');
-        $year = $request->input('year');
-        $excluidos = $request->input('excluidos', '');
-
-        Log::info('Antes del CALL', compact('mes', 'year', 'excluidos'));
-
-        $incentivos = DB::select('CALL CalculoIncentivo(?, ?, ?)', [$mes, $year, $excluidos]);
-
-        Log::info('Termina CalculoIncentivo', ['rows' => count($incentivos)]);
-
-        return response()->json($incentivos);
+        return $q->orderByDesc('meta_incremental')->get();
     }
 
     function save(Request $request)
