@@ -49,25 +49,26 @@ class FinanceDashboardController extends Controller
         $totalAgencias = $agencias->count();
 
         // Query para datos agrupados por tipo
+        $tabla = 'vt_usuarios_net';
+
+        $tipoExpr = "COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo')";
+
         $datos = DB::table($tabla . ' as v')
             ->leftJoin('catalogo_juegos as c', 'v.producto_id', '=', 'c.producto_id')
-            ->selectRaw("
-        COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo') as tipo,
-        SUM(v.monto) as total,
-        COUNT(*) as transacciones
-    ")
+            ->selectRaw("$tipoExpr as tipo, SUM(v.monto) as total, COUNT(*) as transacciones")
             ->whereBetween('v.fecha', [$inicio, $fin])
             ->when($agencia_id, function ($q) use ($agencia_id) {
                 $q->where('v.agencia_id', $agencia_id);
             })
-            ->groupBy('tipo')
+            ->groupByRaw($tipoExpr)
             ->orderByRaw("
                 CASE
-                    WHEN tipo = 'tradicional' THEN 1
-                    WHEN tipo = 'no tradicional' THEN 2
+                    WHEN LOWER(TRIM(c.tipo)) = 'tradicional' THEN 1
+                    WHEN LOWER(TRIM(c.tipo)) = 'no tradicional' THEN 2
                     ELSE 3
-                END, total DESC
+                END
             ")
+            ->orderByDesc('total')
             ->get();
 
         // Query para ventas por día separadas por tipo
