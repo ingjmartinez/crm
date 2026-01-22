@@ -21,6 +21,7 @@ class IncentivosController extends Controller
     function list(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
+        ini_set('max_statement_time', 300);
         ini_set('memory_limit', '512M');
         $mes = $request->input('mes');
         $excluidos = $request->input('excluidos', '');
