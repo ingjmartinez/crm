@@ -25,7 +25,7 @@ class IncentivosController extends Controller
         $mes = $request->input('mes');
         $excluidos = $request->input('excluidos', '');
         $year = $request->input('year', '');
-        $incentivos = DB::select('SET SESSION max_statement_time = 300;CALL CalculoIncentivo(?, ?, ?)', [$mes,  $year, $excluidos]);
+        $incentivos = DB::select('CALL CalculoIncentivo(?, ?, ?)', [$mes,  $year, $excluidos]);
         return response()->json($incentivos);
     }
 
