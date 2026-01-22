@@ -793,7 +793,7 @@
 
         function esperarFinalizacion(jobId) {
             const pollInterval = 10000; // 10 segundos
-            const maxIntentos = 60; // ~10 minutos
+            const maxIntentos = 180; // ~30 minutos
             let intentos = 0;
 
             return new Promise((resolve, reject) => {
