@@ -20,12 +20,25 @@ class IncentivosController extends Controller
 
     function list(Request $request)
     {
-        ini_set('max_execution_time', 300); // 5 minute
-        ini_set('memory_limit', '512M');
+        // PHP (solo evita que PHP muera antes)
+        ini_set('max_execution_time', 1800);
+        ini_set('memory_limit', '1024M');
+
         $mes = $request->input('mes');
+        $year = $request->input('year');
         $excluidos = $request->input('excluidos', '');
-        $year = $request->input('year', '');
-        $incentivos = DB::select('CALL CalculoIncentivo(?, ?, ?)', [$mes,  $year, $excluidos]);
+
+        // ⚠️ IMPORTANTE: MISMA CONEXIÓN
+        DB::statement("SET SESSION max_statement_time = 1800");  // 30 min
+        DB::statement("SET SESSION wait_timeout = 600");
+        DB::statement("SET SESSION net_read_timeout = 300");
+        DB::statement("SET SESSION net_write_timeout = 300");
+
+        $incentivos = DB::select(
+            'CALL CalculoIncentivo(?, ?, ?)',
+            [$mes, $year, $excluidos]
+        );
+
         return response()->json($incentivos);
     }
 
