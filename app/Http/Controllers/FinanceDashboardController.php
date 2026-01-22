@@ -50,7 +50,7 @@ class FinanceDashboardController extends Controller
         $totalAgencias = $agencias->count();
 
         // Query para datos agrupados por tipo
-        $datos = DB::table($tabla . ' as v')
+        $datosQuery = DB::table($tabla . ' as v')
             ->leftJoin('catalogo_juegos as c', 'v.producto_id', '=', 'c.producto_id')
             ->selectRaw("
                 {$tipoExpression} as tipo,
@@ -61,15 +61,23 @@ class FinanceDashboardController extends Controller
             ->when($agencia_id, function ($q) use ($agencia_id) {
                 $q->where('v.agencia_id', $agencia_id);
             })
-            ->groupByRaw($tipoExpression)
-            ->orderByRaw("
-                CASE
-                    WHEN {$tipoExpression} = 'tradicional' THEN 1
-                    WHEN {$tipoExpression} = 'no tradicional' THEN 2
-                    ELSE 3
-                END, total DESC
-            ")
-            ->get();
+            ->groupByRaw($tipoExpression);
+
+        $tipoPrioridad = [
+            'tradicional' => 0,
+            'no tradicional' => 1,
+        ];
+
+        $datos = $datosQuery->get()->sort(function ($a, $b) use ($tipoPrioridad) {
+            $ordenA = $tipoPrioridad[$a->tipo] ?? 2;
+            $ordenB = $tipoPrioridad[$b->tipo] ?? 2;
+
+            if ($ordenA === $ordenB) {
+                return $b->total <=> $a->total;
+            }
+
+            return $ordenA <=> $ordenB;
+        })->values();
 
         // Query para ventas por día separadas por tipo
         $ventasDiariasPorTipoQuery = DB::table($tabla . ' as v')
