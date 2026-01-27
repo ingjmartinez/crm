@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class IncentivosController extends Controller
 {
@@ -19,47 +18,15 @@ class IncentivosController extends Controller
         ]);
     }
 
-    public function generar(Request $request)
-    {
-        $mes = (int)$request->input('mes');
-        $anio = (int)$request->input('year');
-        $excluidos = $request->input('excluidos', null);
-        $excluidos = $excluidos ? trim($excluidos, ',') : null;
-
-        $jobId = DB::table('incentivo_jobs')->insertGetId([
-            'mes' => $mes,
-            'anio' => $anio,
-            'excluidos' => $excluidos,
-            'status' => 'pending',
-            'created_at' => now(),
-        ]);
-
-        return response()->json(['job_id' => $jobId, 'status' => 'pending']);
-    }
-
-    public function status($id)
-    {
-        $job = DB::table('incentivo_jobs')->where('id', $id)->first();
-        return response()->json($job);
-    }
-
     function list(Request $request)
     {
-        $mes = (int)$request->input('mes');
-        $anio = (int)$request->input('year');
-        $excluidos = $request->input('excluidos', null);
-
-        $q = DB::table('incentivo_resultados')
-            ->where('mes', $mes)
-            ->where('anio', $anio);
-
-        if ($excluidos === null || $excluidos === '') {
-            $q->whereNull('excluidos');
-        } else {
-            $q->where('excluidos', trim($excluidos, ','));
-        }
-
-        return $q->orderByDesc('meta_incremental')->get();
+        ini_set('max_execution_time', 300); // 5 minutes
+        ini_set('memory_limit', '512M');
+        $mes = $request->input('mes');
+        $excluidos = $request->input('excluidos', '');
+        $year = $request->input('year', '');
+        $incentivos = DB::select('CALL CalculoIncentivo(?, ?, ?)', [$mes,  $year, $excluidos]);
+        return response()->json($incentivos);
     }
 
     function save(Request $request)

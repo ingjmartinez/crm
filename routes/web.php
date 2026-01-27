@@ -166,8 +166,6 @@ Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usua
 Route::get('/reportes-bi/faltantes', fn() => view('reportes-bi.faltantes'));
 
 Route::get('/incentivos', [IncentivosController::class, 'index']);
-Route::get('/incentivos/generar', [IncentivosController::class, 'generar']);
-Route::get('/incentivos/status/{id}', [IncentivosController::class, 'status']);
 Route::get('/incentivos/list', [IncentivosController::class, 'list']);
 Route::post('/incentivos/save', [IncentivosController::class, 'save']);
 Route::get('/incentivos/list/plan-agencia', [IncentivosController::class, 'listPlanAgencia']);

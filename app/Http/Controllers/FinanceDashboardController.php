@@ -23,7 +23,6 @@ class FinanceDashboardController extends Controller
         $plataforma = $request->get('plataforma', 'bet');
         $tabla = $plataforma === 'net' ? 'vt_usuarios_net' : 'vt_usuarios_bet';
         $agencia_id = $request->get('agencia_id', null);
-        $tipoExpression = "COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo')";
 
         $fecha_inicio = $request->get('fecha_inicio', Carbon::today()->format('Y-m-d'));
         $fecha_fin = $request->get('fecha_fin', Carbon::today()->format('Y-m-d'));
@@ -50,39 +49,41 @@ class FinanceDashboardController extends Controller
         $totalAgencias = $agencias->count();
 
         // Query para datos agrupados por tipo
-        $datosQuery = DB::table($tabla . ' as v')
+        $tabla = 'vt_usuarios_net';
+
+        // Expresión única para normalizar "tipo"
+        $tipoExpr = "COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo')";
+
+        // 1) Subquery: aquí sí se agrupa
+        $sub = DB::table($tabla . ' as v')
             ->leftJoin('catalogo_juegos as c', 'v.producto_id', '=', 'c.producto_id')
-            ->selectRaw("
-                {$tipoExpression} as tipo,
-                SUM(v.monto) as total,
-                COUNT(*) as transacciones
-            ")
+            ->selectRaw("$tipoExpr as tipo")
+            ->selectRaw("SUM(v.monto) as total")
+            ->selectRaw("COUNT(*) as transacciones")
             ->whereBetween('v.fecha', [$inicio, $fin])
             ->when($agencia_id, function ($q) use ($agencia_id) {
                 $q->where('v.agencia_id', $agencia_id);
             })
-            ->groupByRaw($tipoExpression);
+            // OJO: groupBy por la expresión (máxima compatibilidad con ONLY_FULL_GROUP_BY)
+            ->groupByRaw($tipoExpr);
 
-        $tipoPrioridad = [
-            'tradicional' => 0,
-            'no tradicional' => 1,
-        ];
-
-        $datos = $datosQuery->get()->sort(function ($a, $b) use ($tipoPrioridad) {
-            $ordenA = $tipoPrioridad[$a->tipo] ?? 2;
-            $ordenB = $tipoPrioridad[$b->tipo] ?? 2;
-
-            if ($ordenA === $ordenB) {
-                return $b->total <=> $a->total;
-            }
-
-            return $ordenA <=> $ordenB;
-        })->values();
+        // 2) Query externo: aquí solo se ordena (sin GROUP BY)
+        $datos = DB::query()
+            ->fromSub($sub, 'sub')
+            ->orderByRaw("
+                CASE
+                    WHEN sub.tipo = 'tradicional' THEN 1
+                    WHEN sub.tipo = 'no tradicional' THEN 2
+                    ELSE 3
+                END
+            ")
+            ->orderByDesc('sub.total')
+            ->get();
 
         // Query para ventas por día separadas por tipo
         $ventasDiariasPorTipoQuery = DB::table($tabla . ' as v')
             ->leftJoin('catalogo_juegos as c', 'v.producto_id', '=', 'c.producto_id')
-            ->selectRaw("DATE(v.fecha) as fecha, {$tipoExpression} as tipo, SUM(v.monto) as total")
+            ->selectRaw("DATE(v.fecha) as fecha, COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo') as tipo, SUM(v.monto) as total")
             ->whereBetween('v.fecha', [$inicio, $fin]);
 
         if ($agencia_id) {
@@ -90,7 +91,7 @@ class FinanceDashboardController extends Controller
         }
 
         $ventasDiariasPorTipo = $ventasDiariasPorTipoQuery
-            ->groupByRaw("DATE(v.fecha), {$tipoExpression}")
+            ->groupByRaw("DATE(v.fecha), tipo")
             ->orderBy('fecha')
             ->get();
 
@@ -118,7 +119,7 @@ class FinanceDashboardController extends Controller
 
         $ventasMesAnteriorPorTipoQuery = DB::table($tabla . ' as v')
             ->leftJoin('catalogo_juegos as c', 'v.producto_id', '=', 'c.producto_id')
-            ->selectRaw("DATE(v.fecha) as fecha, {$tipoExpression} as tipo, SUM(v.monto) as total")
+            ->selectRaw("DATE(v.fecha) as fecha, COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo') as tipo, SUM(v.monto) as total")
             ->whereBetween('v.fecha', [$mesAnteriorInicio, $mesAnteriorFin]);
 
         if ($agencia_id) {
@@ -126,7 +127,7 @@ class FinanceDashboardController extends Controller
         }
 
         $ventasMesAnteriorPorTipo = $ventasMesAnteriorPorTipoQuery
-            ->groupByRaw("DATE(v.fecha), {$tipoExpression}")
+            ->groupByRaw("DATE(v.fecha), COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo')")
             ->get();
 
         // Calcular promedios por tipo del mes anterior

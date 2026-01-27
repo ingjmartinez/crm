@@ -775,64 +775,7 @@
         document.getElementById('btnGenerar').addEventListener('click', list);
         document.getElementById('btnGenerarExcluir').addEventListener('click', list);
 
-        async function iniciarGeneracion(mes, year, excluidos) {
-            const params = new URLSearchParams({
-                mes,
-                year
-            });
-            if (excluidos) {
-                params.append('excluidos', excluidos);
-            }
-
-            const response = await fetch(`/incentivos/generar?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error('No se pudo iniciar la generación de incentivos');
-            }
-            return response.json();
-        }
-
-        function esperarFinalizacion(jobId) {
-            const pollInterval = 10000; // 10 segundos
-            const maxIntentos = 180; // ~30 minutos
-            let intentos = 0;
-
-            return new Promise((resolve, reject) => {
-                const consultar = () => {
-                    fetch(`/incentivos/status/${jobId}`)
-                        .then(resp => {
-                            if (!resp.ok) {
-                                throw new Error('No se pudo consultar el estado del proceso');
-                            }
-                            return resp.json();
-                        })
-                        .then(job => {
-                            const estado = job && job.status ? job.status : 'pending';
-                            if (estado === 'done') {
-                                resolve(job);
-                                return;
-                            }
-                            if (estado === 'failed') {
-                                reject(new Error(job && job.message ? job.message :
-                                    'El proceso de incentivos falló'));
-                                return;
-                            }
-                            intentos += 1;
-                            if (intentos >= maxIntentos) {
-                                reject(new Error('El proceso de incentivos tardó demasiado'));
-                                return;
-                            }
-                            setTimeout(consultar, pollInterval);
-                        })
-                        .catch(error => {
-                            reject(error);
-                        });
-                };
-
-                consultar();
-            });
-        }
-
-        async function list() {
+        function list() {
             $('#tableItems').DataTable().destroy();
             datosToSave = [];
             let year = document.getElementById('year').value;
@@ -862,61 +805,51 @@
                 }
             });
             let excluidos = productosExcluidos.join(',');
-            try {
-                const jobInfo = await iniciarGeneracion(mes, year, excluidos);
-                const jobId = jobInfo && jobInfo.job_id ? jobInfo.job_id : null;
-                if (!jobId) {
-                    throw new Error('No se recibió el identificador del proceso');
-                }
-                await esperarFinalizacion(jobId);
+            fetch("/incentivos/list?mes=" + mes + "&excluidos=" + excluidos + '&year=' + year)
+                .then(response => response.json())
+                .then(data => {
+                    const tableBody = document.querySelector('#tableItems tbody');
+                    tableBody.innerHTML = ''; // Limpiar filas existentes
 
-                const response = await fetch(`/incentivos/list?mes=${mes}&excluidos=${excluidos}&year=${year}`);
-                if (!response.ok) {
-                    throw new Error('No se pudo obtener la lista de incentivos');
-                }
-                const data = await response.json();
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.agencia_id}</td>
+                            <td>${item.tipo_producto}</td>
+                            <td>${item.sistema}</td>
+                            <td>${item.total_trimestre}</td>
+                            <td>${item.promedio_mensual}</td>
+                            <td>${item.venta_base}</td>
+                            <td>${item.total_mes}</td>
+                            <td>${item.nivel}</td>
+                            <td>${item.cumplimiento}</td>
+                            <td>${item.meta_incremental}</td>
+                        `;
+                        tableBody.appendChild(row);
+                        datosToSave.push(item);
+                    });
 
-                const tableBody = document.querySelector('#tableItems tbody');
-                tableBody.innerHTML = '';
-
-                data.forEach(item => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${item.agencia_id}</td>
-                        <td>${item.tipo_producto}</td>
-                        <td>${item.sistema}</td>
-                        <td>${item.total_trimestre}</td>
-                        <td>${item.promedio_mensual}</td>
-                        <td>${item.venta_base}</td>
-                        <td>${item.total_mes}</td>
-                        <td>${item.nivel}</td>
-                        <td>${item.cumplimiento}</td>
-                        <td>${item.meta_incremental}</td>
-                    `;
-                    tableBody.appendChild(row);
-                    datosToSave.push(item);
+                    $('#tableItems').DataTable({
+                        responsive: true,
+                        dom: 'Bfrtip',
+                        buttons: [
+                            'copy', 'csv', 'excel', 'pdf', 'print'
+                        ],
+                        order: [
+                            [0, 'asc'],
+                            [1, 'asc']
+                        ]
+                    });
+                    Swal.close();
+                    btnCloseExcluidos.click();
+                })
+                .catch(error => {
+                    Swal.fire({
+                        title: "Error",
+                        text: error,
+                        icon: "warning"
+                    });
                 });
-
-                $('#tableItems').DataTable({
-                    responsive: true,
-                    dom: 'Bfrtip',
-                    buttons: [
-                        'copy', 'csv', 'excel', 'pdf', 'print'
-                    ],
-                    order: [
-                        [0, 'asc'],
-                        [1, 'asc']
-                    ]
-                });
-                Swal.close();
-                btnCloseExcluidos.click();
-            } catch (error) {
-                Swal.fire({
-                    title: "Error",
-                    text: error && error.message ? error.message : error,
-                    icon: "warning"
-                });
-            }
         }
 
         function listAgenciaPlan() {

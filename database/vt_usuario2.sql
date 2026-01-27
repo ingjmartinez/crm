@@ -913,3 +913,45 @@ LEFT JOIN (
 ) x ON x.empleadoid = e.empleadoid
 SET e.tipo_empleado_incentivo = x.nuevo_tipo
 WHERE x.nuevo_tipo IS NOT NULL;
+
+
+CREATE TABLE incentivo_resultados (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  mes INT NOT NULL,
+  anio INT NOT NULL,
+  excluidos VARCHAR(255) NULL,
+
+  agencia_id INT NOT NULL,
+  tipo_producto VARCHAR(120) NULL,
+  sistema VARCHAR(20) NOT NULL,
+
+  total_trimestre DECIMAL(18,2) NOT NULL,
+  promedio_mensual DECIMAL(18,2) NOT NULL,
+  venta_base DECIMAL(18,2) NOT NULL,
+  total_mes DECIMAL(18,2) NOT NULL,
+
+  nivel VARCHAR(50) NULL,
+  cumplimiento DECIMAL(18,2) NOT NULL,
+  meta_plan DECIMAL(18,2) NOT NULL,
+  meta_incremental DECIMAL(18,2) NOT NULL,
+
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  KEY idx_periodo (anio, mes),
+  KEY idx_agencia (agencia_id),
+  KEY idx_sistema (sistema),
+  KEY idx_tipo (tipo_producto)
+);
+
+CREATE TABLE incentivo_jobs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  mes INT NOT NULL,
+  anio INT NOT NULL,
+  excluidos VARCHAR(255) NULL,
+  status ENUM('pending','running','done','failed') NOT NULL DEFAULT 'pending',
+  error TEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  started_at DATETIME NULL,
+  finished_at DATETIME NULL
+);
+

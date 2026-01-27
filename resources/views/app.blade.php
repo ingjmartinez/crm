@@ -1203,7 +1203,7 @@
                                 </ul>
                             </div>
                         </li>
-                        <li class="nav-item">
+                        <li class="nav-item d-none">
                             <a href="#sidebarReportesBI" class="nav-link collapsed" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="sidebarReportesBI"
                                 data-key="t-invoices">
