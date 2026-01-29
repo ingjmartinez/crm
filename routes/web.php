@@ -195,6 +195,8 @@ Route::get('/ventas-flash-lotobet', [VentaFlashController::class, 'ventasFlashLo
 Route::get('/get-ventas-flash-lotobet', [VentaFlashController::class, 'getVentasLotobet']);
 Route::post('/save-ventas-flash-lotobet', [VentaFlashController::class, 'saveVentasLotobet']);
 Route::get('/delete-ventas-flash-lotobet', [VentaFlashController::class, 'deleteVentasLotobet']);
+Route::get('/ventas-lotobet-flash-dashboard', [VentaFlashController::class, 'dashboardFlashLotobet']);
+Route::get('/ventas-lotobet-flash-dashboard/data', [VentaFlashController::class, 'dashboardFlashLotobetData']);
 
 Route::get('/ventas-flash-lotonet', [VentaFlashController::class, 'ventasFlashLotonet']);
 Route::get('/get-ventas-flash-lotonet', [VentaFlashController::class, 'getVentasFlashLotonet']);

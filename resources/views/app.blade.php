@@ -1176,7 +1176,7 @@
                                             <span data-key="t-dashboards">Ventas Flash Lotobet</span>
                                         </a>
                                     </li>
-                                    <li class="nav-item">
+                                    <li class="nav-item d-none">
                                         <a href="{{ url('/ventas-flash-lotonet') }}" class="nav-link">
                                             <span data-key="t-dashboards">Ventas Flash Lotonet</span>
                                         </a>
