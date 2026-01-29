@@ -8,31 +8,34 @@
             <div class="container-fluid">
                 <div class="row">
                     <div class="col-12">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="d-flex justify-content-between align-items-start align-items-lg-center flex-column flex-lg-row gap-3 text-center text-lg-start mb-3">
                             <h1 class="h3 mb-0">Dashboard Financiero LotoBet - Ventas por Tipo de Producto</h1>
-                            <span id="badge-agencia" class="badge bg-primary fs-6" style="display: none; padding: 8px 12px;">Agencia: <span id="agencia-id-badge" style="font-weight: bold;"></span></span>
+                            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-center">
+                                <span id="badge-agencia" class="badge bg-primary fs-6" style="display: none; padding: 8px 12px;">Agencia: <span id="agencia-id-badge" style="font-weight: bold;"></span></span>
+                                <button id="btn-limpiar-agencia" class="btn btn-outline-secondary btn-sm" style="display: none;">Limpiar agencia</button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Datepicker -->
-                <div class="row mb-4">
-                    <div class="col-md-3">
+                <div class="row mb-4 g-3">
+                    <div class="col-12 col-md-4 col-lg-3">
                         <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
                         <input type="date" id="fecha_inicio" class="form-control" value="{{ date('Y-m-d') }}">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-12 col-md-4 col-lg-3">
                         <label for="fecha_fin" class="form-label">Fecha Fin</label>
                         <input type="date" id="fecha_fin" class="form-control" value="{{ date('Y-m-d') }}">
                     </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button id="filtrar-btn" class="btn btn-primary">Filtrar</button>
+                    <div class="col-12 col-md-4 col-lg-3 col-xl-2 d-flex align-items-end">
+                        <button id="filtrar-btn" class="btn btn-primary w-100">Filtrar</button>
                     </div>
                 </div>
 
                 <!-- KPIs -->
-                <div class="row mb-4">
-                    <div class="col-md-4">
+                <div class="row mb-4 g-3">
+                    <div class="col-12 col-sm-6 col-xl-3">
                         <div class="card shadow-sm">
                             <div class="card-body">
                                 <h5 class="card-title">Total Vendido</h5>
@@ -40,7 +43,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-sm-6 col-xl-3">
                         <div class="card shadow-sm">
                             <div class="card-body">
                                 <h5 class="card-title">Transacciones</h5>
@@ -48,7 +51,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-sm-6 col-xl-3">
                         <div class="card shadow-sm">
                             <div class="card-body">
                                 <h5 class="card-title">Ticket Promedio</h5>
@@ -56,7 +59,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4 mt-3">
+                    <div class="col-12 col-sm-6 col-xl-3">
                         <div class="card shadow-sm">
                             <div class="card-body">
                                 <h5 class="card-title">Total Agencias</h5>
@@ -74,7 +77,7 @@
                     <div class="col-12">
                         <h5 class="mb-3">Ventas por Tipo de Producto</h5>
                     </div>
-                    <div id="cards-container" class="row w-100 mx-0">
+                    <div id="cards-container" class="row g-3 w-100 mx-0">
                         <!-- Las cards se generarán dinámicamente aquí -->
                     </div>
                 </div>
@@ -111,18 +114,20 @@
                                 <h5>Detalle por Tipo</h5>
                             </div>
                             <div class="card-body">
-                                <table id="tabla-ventas" class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Tipo</th>
-                                            <th>Total Ventas</th>
-                                            <th>Transacciones</th>
-                                            <th>Promedio</th>
-                                            <th>% del Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
+                                <div class="table-responsive">
+                                    <table id="tabla-ventas" class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Tipo</th>
+                                                <th>Total Ventas</th>
+                                                <th>Transacciones</th>
+                                                <th>Promedio</th>
+                                                <th>% del Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -141,16 +146,18 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <table id="tabla-agencias" class="table table-striped table-hover">
-                    <thead>
-                        <tr>
-                            <th>ID Agencia</th>
-                            <th>Total Ventas</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+                <div class="table-responsive">
+                    <table id="tabla-agencias" class="table w-100 table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID Agencia</th>
+                                <th>Total Ventas</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -172,6 +179,37 @@
         let tableInstance = null;
         let agenciasData = [];
         let currentAgenciaId = null;
+        const badgeAgencia = document.getElementById('badge-agencia');
+        const badgeAgenciaText = document.getElementById('agencia-id-badge');
+        const limpiarAgenciaBtn = document.getElementById('btn-limpiar-agencia');
+        const tablaVentasColumns = [
+            { title: 'Tipo' },
+            { title: 'Total Ventas' },
+            { title: 'Transacciones' },
+            { title: 'Promedio' },
+            { title: '% del Total' }
+        ];
+        const tablaAgenciasColumns = [
+            { title: 'ID Agencia' },
+            { title: 'Total Ventas' },
+            { title: 'Acción', orderable: false, searchable: false }
+        ];
+
+        tableInstance = $('#tabla-ventas').DataTable({
+            data: [],
+            columns: tablaVentasColumns,
+            paging: true,
+            searching: true,
+            ordering: true
+        });
+
+        const agenciasTableInstance = $('#tabla-agencias').DataTable({
+            data: [],
+            columns: tablaAgenciasColumns,
+            paging: true,
+            searching: true,
+            ordering: true
+        });
 
         function formatCurrency(value) {
             return new Intl.NumberFormat('es-DO', {
@@ -202,14 +240,19 @@
                 .then(response => response.json())
                 .then(data => {
                     Swal.close();
-                    agenciasData = data.agencias || [];
+                    if (!agencia_id && Array.isArray(data.agencias)) {
+                        agenciasData = data.agencias;
+                    }
 
                     // Mostrar/ocultar badge de agencia
                     if (agencia_id) {
-                        document.getElementById('badge-agencia').style.display = 'inline-block';
-                        document.getElementById('agencia-id-badge').textContent = agencia_id;
+                        badgeAgencia.style.display = 'inline-block';
+                        badgeAgenciaText.textContent = agencia_id;
+                        limpiarAgenciaBtn.style.display = 'inline-flex';
                     } else {
-                        document.getElementById('badge-agencia').style.display = 'none';
+                        badgeAgencia.style.display = 'none';
+                        badgeAgenciaText.textContent = '';
+                        limpiarAgenciaBtn.style.display = 'none';
                     }
 
                     // KPIs
@@ -362,44 +405,13 @@
                     });
 
                     // Tabla
-                    if (tableInstance) {
-                        tableInstance.clear().rows.add(data.tabla.map(row => [
-                            row.tipo,
-                            formatCurrency(row.total),
-                            row.transacciones,
-                            formatCurrency(row.promedio),
-                            row.porcentaje.toFixed(2) + '%'
-                        ])).draw();
-                    } else {
-                        tableInstance = $('#tabla-ventas').DataTable({
-                            data: data.tabla.map(row => [
-                                row.tipo,
-                                formatCurrency(row.total),
-                                row.transacciones,
-                                formatCurrency(row.promedio),
-                                row.porcentaje.toFixed(2) + '%'
-                            ]),
-                            columns: [{
-                                    title: 'Tipo'
-                                },
-                                {
-                                    title: 'Total Ventas'
-                                },
-                                {
-                                    title: 'Transacciones'
-                                },
-                                {
-                                    title: 'Promedio'
-                                },
-                                {
-                                    title: '% del Total'
-                                }
-                            ],
-                            paging: true,
-                            searching: true,
-                            ordering: true
-                        });
-                    }
+                    tableInstance.clear().rows.add(data.tabla.map(row => [
+                        row.tipo,
+                        formatCurrency(row.total),
+                        row.transacciones,
+                        formatCurrency(row.promedio),
+                        row.porcentaje.toFixed(2) + '%'
+                    ])).draw();
                 })
                 .catch(error => {
                     Swal.close();
@@ -418,6 +430,16 @@
             loadData(fecha_inicio, fecha_fin);
         });
 
+        limpiarAgenciaBtn.addEventListener('click', function() {
+            if (!currentAgenciaId) {
+                return;
+            }
+            const fecha_inicio = document.getElementById('fecha_inicio').value;
+            const fecha_fin = document.getElementById('fecha_fin').value;
+            currentAgenciaId = null;
+            loadData(fecha_inicio, fecha_fin);
+        });
+
         // Evento para ver detalle de agencias
         document.getElementById('btn-ver-agencias').addEventListener('click', function() {
             if (agenciasData.length === 0) {
@@ -430,19 +452,11 @@
             }
 
             // Limpiar y repoblar tabla de agencias
-            $('#tabla-agencias tbody').html('');
-            agenciasData.forEach(agencia => {
-                const row = `<tr>
-                    <td>${agencia.agencia_id}</td>
-                    <td>${formatCurrency(agencia.total)}</td>
-                    <td>
-                        <button class="btn btn-sm btn-primary btn-filtrar-agencia" data-agencia-id="${agencia.agencia_id}">
-                            Ver Gráficos
-                        </button>
-                    </td>
-                </tr>`;
-                $('#tabla-agencias tbody').append(row);
-            });
+            agenciasTableInstance.clear().rows.add(agenciasData.map(agencia => [
+                agencia.agencia_id,
+                formatCurrency(agencia.total),
+                `<button class="btn btn-sm btn-primary btn-filtrar-agencia" data-agencia-id="${agencia.agencia_id}">Ver Gráficos</button>`
+            ])).draw();
 
             // Mostrar modal
             const modal = new bootstrap.Modal(document.getElementById('modalAgencias'));
