@@ -22,6 +22,7 @@ class FinanceDashboardController extends Controller
     {
         $plataforma = $request->get('plataforma', 'bet');
         $tabla = $plataforma === 'net' ? 'vt_usuarios_net' : 'vt_usuarios_bet';
+        // dd($tabla);
         $agencia_id = $request->get('agencia_id', null);
 
         $fecha_inicio = $request->get('fecha_inicio', Carbon::today()->format('Y-m-d'));
@@ -47,9 +48,6 @@ class FinanceDashboardController extends Controller
 
         $agencias = $agenciasQuery->get();
         $totalAgencias = $agencias->count();
-
-        // Query para datos agrupados por tipo
-        $tabla = 'vt_usuarios_net';
 
         // Expresión única para normalizar "tipo"
         $tipoExpr = "COALESCE(NULLIF(TRIM(c.tipo),''),'Sin tipo')";

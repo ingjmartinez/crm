@@ -9,7 +9,7 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h1 class="h3 mb-0">Dashboard Financiero - Ventas por Tipo de Producto</h1>
+                            <h1 class="h3 mb-0">Dashboard Financiero LotoBet - Ventas por Tipo de Producto</h1>
                             <span id="badge-agencia" class="badge bg-primary fs-6" style="display: none; padding: 8px 12px;">Agencia: <span id="agencia-id-badge" style="font-weight: bold;"></span></span>
                         </div>
                     </div>
