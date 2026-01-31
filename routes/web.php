@@ -161,6 +161,12 @@ Route::get('/reportes-faltantes-bet/list', [ReporteController::class, 'listFalta
 Route::get('/reportes-faltantes-bet/excel', [ReporteController::class, 'excelFaltantesBet']);
 Route::get('/reportes-faltantes-bet/pdf', [ReporteController::class, 'pdfFaltantesBet']);
 
+Route::get('/reportes-cuadre-ventas', [ReporteController::class, 'cuadreVentas']);
+Route::get('/reportes-cuadre-ventas/list', [ReporteController::class, 'listCuadreVentas']);
+
+Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
+Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
+
 Route::resource('registro-empleados', RegistroEmpleadoController::class);
 
 Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-ventas'));
@@ -168,6 +174,7 @@ Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usua
 Route::get('/reportes-bi/faltantes', fn() => view('reportes-bi.faltantes'));
 
 Route::get('/incentivos', [IncentivosController::class, 'index']);
+Route::get('/incentivos/procesar', [IncentivosController::class, 'procesar']);
 Route::get('/incentivos/list', [IncentivosController::class, 'list']);
 Route::post('/incentivos/save', [IncentivosController::class, 'save']);
 Route::get('/incentivos/list/plan-agencia', [IncentivosController::class, 'listPlanAgencia']);

@@ -18,6 +18,17 @@ class IncentivosController extends Controller
         ]);
     }
 
+    public function procesar()
+    {
+        $productosExcluidos = DB::table('catalogo_juegos')
+            ->whereIn('producto_id', [538, 539])
+            ->get();
+
+        return view('incentivos.procesar', [
+            'productosExcluidos' => $productosExcluidos
+        ]);
+    }
+
     function list(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes

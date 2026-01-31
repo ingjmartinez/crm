@@ -1200,6 +1200,14 @@
                                         <a href="{{ url('/reportes-faltantes-bet') }}" class="nav-link"
                                             data-key="t-mailbox"> Faltantes BET </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/reportes-cuadre-ventas') }}" class="nav-link"
+                                            data-key="t-mailbox"> Cuadre de Ventas </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/reportes-cruce-usuarios') }}" class="nav-link"
+                                            data-key="t-mailbox"> Cruce de Usuarios </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>
@@ -1234,6 +1242,11 @@
                             </a>
                             <div class="collapse menu-dropdown" id="sidebarIncentivos">
                                 <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ url('/incentivos/procesar') }}" class="nav-link" data-key="t-incentivos-procesar">
+                                            Procesar Incentivos
+                                        </a>
+                                    </li>
                                     <li class="nav-item">
                                         <a href="{{ url('/incentivos') }}" class="nav-link" data-key="t-incentivos-gestion">
                                             Gestión Incentivos
