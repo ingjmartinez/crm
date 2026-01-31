@@ -167,6 +167,9 @@ Route::get('/reportes-cuadre-ventas/list', [ReporteController::class, 'listCuadr
 Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
 Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
 
+Route::get('/reportes-verificador-usuarios', [ReporteController::class, 'verificadorUsuarios']);
+Route::get('/reportes-verificador-usuarios/list', [ReporteController::class, 'listVerificadorUsuarios']);
+
 Route::resource('registro-empleados', RegistroEmpleadoController::class);
 
 Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-ventas'));

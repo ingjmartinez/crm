@@ -1208,6 +1208,10 @@
                                         <a href="{{ url('/reportes-cruce-usuarios') }}" class="nav-link"
                                             data-key="t-mailbox"> Cruce de Usuarios </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/reportes-verificador-usuarios') }}" class="nav-link"
+                                            data-key="t-mailbox"> Verificador de Usuarios </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>
