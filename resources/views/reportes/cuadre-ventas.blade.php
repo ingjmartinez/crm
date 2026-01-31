@@ -62,21 +62,23 @@
                                 <h5 class="card-title mb-0">Resultados</h5>
                             </div>
                             <div class="card-body">
-                                <table id="tableCuadreVentas"
-                                    class="table table-bordered dt-responsive nowrap table-striped align-middle"
-                                    style="width:100%">
-                                    <thead>
-                                        <tr>
-                                            <th>Fecha</th>
-                                            <th>Tradicional</th>
-                                            <th>No Tradicional</th>
-                                            <th>Recarga</th>
-                                            <th>Paquetico</th>
-                                            <th>Total Día</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
+                                <div style="overflow-x: auto;">
+                                    <table id="tableCuadreVentas"
+                                        class="table table-bordered table-striped align-middle"
+                                        style="width:100%">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Tradicional</th>
+                                                <th>No Tradicional</th>
+                                                <th>Recarga</th>
+                                                <th>Paquetico</th>
+                                                <th>Total Día</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -145,7 +147,7 @@
                     { data: 'Paquetico', className: 'text-end' },
                     { data: 'Total_Dia', className: 'text-end' }
                 ],
-                responsive: true,
+                autoWidth: false,
                 dom: 'Bfrtip',
                 buttons: [
                     'copy', 'csv', 'excel', 'pdf', 'print'
