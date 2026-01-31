@@ -136,6 +136,8 @@ Route::get('/mar-ventas', fn() => view('mar.ventas'));
 Route::get('/get-mar-ventas', [MarController::class, 'getVentas']);
 Route::get('/save-mar-ventas', [MarController::class, 'saveVentas']);
 Route::get('/delete-mar-ventas', [MarController::class, 'deleteVentas']);
+Route::get('/ventas-mar-dashboard', [MarController::class, 'dashboardVentasMar']);
+Route::get('/ventas-mar-dashboard/data', [MarController::class, 'dashboardVentasMarData']);
 
 Route::get('/empleados', [EmpleadoController::class, 'index']);
 Route::get('/empleados/list', [EmpleadoController::class, 'list']);

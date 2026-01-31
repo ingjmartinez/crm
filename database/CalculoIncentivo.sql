@@ -46,7 +46,7 @@ BEGIN
     WITH factor AS (
         SELECT factor_base
         FROM estacionalidad 
-        WHERE vigente = 1 AND mes = _mes
+        WHERE vigente = 1 AND mes = _mes AND year = _anio
         LIMIT 1
     ),
 

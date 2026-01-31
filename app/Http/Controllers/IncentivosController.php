@@ -370,6 +370,7 @@ class IncentivosController extends Controller
                 AND eu.tipo_producto = it.tipo_producto
             WHERE eu.incentivo_id = $incentivoId AND eu.sistema = '$sistema'
                 AND it.venta_mes >= it.venta_base
+                AND pad.monto_agente > 0
                 AND it.venta_mes > 0;"
         );
         return response()->json($data);
