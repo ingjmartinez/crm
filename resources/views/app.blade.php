@@ -1227,21 +1227,30 @@
                             </div>
                         </li>
                         <li class="nav-item">
-                            <a href="{{ url('/incentivos') }}" class="nav-link">
-                                <i class="ri-dashboard-2-line"></i> <span data-key="t-dashboards"> Incentivos</span>
+                            <a href="#sidebarIncentivos" class="nav-link collapsed" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="sidebarIncentivos"
+                                data-key="t-incentivos">
+                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Incentivos</span>
                             </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ url('/incentivos/empleados') }}" class="nav-link">
-                                <i class="ri-dashboard-2-line"></i> <span data-key="t-dashboards"> Incentivos
-                                    Empleados</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ url('/incentivos/reporte-pagos') }}" class="nav-link">
-                                <i class="ri-dashboard-2-line"></i> <span data-key="t-dashboards"> Incentivos
-                                    Reporte</span>
-                            </a>
+                            <div class="collapse menu-dropdown" id="sidebarIncentivos">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ url('/incentivos') }}" class="nav-link" data-key="t-incentivos-gestion">
+                                            Gestión Incentivos
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/incentivos/empleados') }}" class="nav-link" data-key="t-incentivos-empleados">
+                                            Incentivos Empleados
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/incentivos/reporte-pagos') }}" class="nav-link" data-key="t-incentivos-reporte">
+                                            Reporte de Pagos
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
                         </li>
                     </ul>
                 </div>
