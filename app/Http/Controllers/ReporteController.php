@@ -516,4 +516,145 @@ class ReporteController extends Controller
 
         return response()->json($resultados);
     }
+
+    public function excelVerificadorUsuarios(Request $request)
+    {
+        ini_set('memory_limit', '2G');
+        ini_set('max_execution_time', 300);
+
+        $fechaInicio = $request->input('fecha_inicio');
+        $fechaFin = $request->input('fecha_fin');
+        $sistema = $request->input('sistema', 'todos');
+
+        if (!$fechaInicio || !$fechaFin) {
+            return response()->json(['error' => 'Fechas requeridas'], 400);
+        }
+
+        // Deshabilitar temporalmente strict mode
+        DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'STRICT_TRANS_TABLES',''))");
+        DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'NO_ZERO_DATE',''))");
+
+        $query = "
+            SELECT
+                e.empleadoid,
+                e.nombres,
+                e.apellidos,
+                c.cedula,
+                ROUND(COALESCE(an.horas_net, 0), 2) AS horas_net,
+                ROUND(COALESCE(ab.horas_bet, 0), 2) AS horas_bet,
+                ROUND(COALESCE(an.horas_net, 0) + COALESCE(ab.horas_bet, 0), 2) AS horas_total,
+                COALESCE(fn.cant_faltantes_net, 0) AS cant_faltantes_net,
+                COALESCE(fb.cant_faltantes_bet, 0) AS cant_faltantes_bet,
+                COALESCE(fn.cant_faltantes_net, 0) + COALESCE(fb.cant_faltantes_bet, 0) AS cant_faltantes_total,
+                ROUND(COALESCE(fn.monto_faltantes_net, 0), 2) AS monto_faltantes_net,
+                ROUND(COALESCE(fb.monto_faltantes_bet, 0), 2) AS monto_faltantes_bet,
+                ROUND(
+                    COALESCE(fn.monto_faltantes_net, 0) +
+                    COALESCE(fb.monto_faltantes_bet, 0),
+                    2
+                ) AS monto_faltantes_total,
+                CASE
+                    WHEN e.empleadoid IS NULL
+                         AND (
+                             COALESCE(an.horas_net, 0) > 0
+                             OR COALESCE(ab.horas_bet, 0) > 0
+                             OR COALESCE(fn.cant_faltantes_net, 0) > 0
+                             OR COALESCE(fb.cant_faltantes_bet, 0) > 0
+                         )
+                    THEN 'cedula sin nombre'
+                    ELSE ''
+                END AS comentario
+            FROM (
+                SELECT DISTINCT REPLACE(identificacion, '-', '') AS cedula
+                FROM asistencias_net
+                WHERE entrada >= ? AND entrada < DATE_ADD(?, INTERVAL 1 DAY)
+                UNION
+                SELECT DISTINCT REPLACE(cedula, '-', '')
+                FROM asistencias_bet
+                WHERE fecha BETWEEN ? AND ?
+                UNION
+                SELECT DISTINCT REPLACE(identificacion, '-', '')
+                FROM faltantes_net
+                WHERE fecha BETWEEN ? AND ?
+                UNION
+                SELECT DISTINCT REPLACE(identificacion, '-', '')
+                FROM faltantes_bet
+                WHERE fecha BETWEEN ? AND ?
+            ) c
+            LEFT JOIN empleados e
+                ON REPLACE(e.cedula, '-', '') = c.cedula
+            LEFT JOIN (
+                SELECT
+                    REPLACE(identificacion, '-', '') AS cedula,
+                    SUM(GREATEST(TIMESTAMPDIFF(SECOND, entrada, salida), 0)) / 3600 AS horas_net
+                FROM asistencias_net
+                WHERE entrada >= ? AND entrada < DATE_ADD(?, INTERVAL 1 DAY)
+                  AND salida IS NOT NULL
+                GROUP BY REPLACE(identificacion, '-', '')
+            ) an ON an.cedula = c.cedula
+            LEFT JOIN (
+                SELECT
+                    REPLACE(cedula, '-', '') AS cedula,
+                    SUM(GREATEST(TIMESTAMPDIFF(SECOND, primer_login, ultimo_login), 0)) / 3600 AS horas_bet
+                FROM asistencias_bet
+                WHERE fecha BETWEEN ? AND ?
+                  AND primer_login IS NOT NULL
+                  AND ultimo_login IS NOT NULL
+                GROUP BY REPLACE(cedula, '-', '')
+            ) ab ON ab.cedula = c.cedula
+            LEFT JOIN (
+                SELECT
+                    REPLACE(identificacion, '-', '') AS cedula,
+                    COUNT(*) AS cant_faltantes_net,
+                    SUM(COALESCE(monto, 0)) AS monto_faltantes_net
+                FROM faltantes_net
+                WHERE fecha BETWEEN ? AND ?
+                GROUP BY REPLACE(identificacion, '-', '')
+            ) fn ON fn.cedula = c.cedula
+            LEFT JOIN (
+                SELECT
+                    REPLACE(identificacion, '-', '') AS cedula,
+                    COUNT(*) AS cant_faltantes_bet,
+                    SUM(COALESCE(monto, 0)) AS monto_faltantes_bet
+                FROM faltantes_bet
+                WHERE fecha BETWEEN ? AND ?
+                GROUP BY REPLACE(identificacion, '-', '')
+            ) fb ON fb.cedula = c.cedula
+            ORDER BY
+                (e.empleadoid IS NULL) DESC,
+                e.nombres,
+                e.apellidos,
+                c.cedula
+        ";
+
+        $resultados = DB::select($query, [
+            $fechaInicio, $fechaFin,
+            $fechaInicio, $fechaFin,
+            $fechaInicio, $fechaFin,
+            $fechaInicio, $fechaFin,
+            $fechaInicio, $fechaFin,
+            $fechaInicio, $fechaFin,
+            $fechaInicio, $fechaFin,
+            $fechaInicio, $fechaFin
+        ]);
+
+        DB::statement("SET SESSION sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
+
+        // Filtrar por sistema
+        if ($sistema !== 'todos') {
+            $resultados = array_filter($resultados, function($item) use ($sistema) {
+                if ($sistema === 'lotobet') {
+                    return $item->horas_bet > 0 || $item->cant_faltantes_bet > 0;
+                } elseif ($sistema === 'lotonet') {
+                    return $item->horas_net > 0 || $item->cant_faltantes_net > 0;
+                }
+                return true;
+            });
+            $resultados = array_values($resultados);
+        }
+
+        $fileName = 'verificador_usuarios_' . now()->format('Ymd_His') . '.xlsx';
+
+        return Excel::download(new \App\Exports\VerificadorUsuariosExport($resultados), $fileName);
+    }
 }

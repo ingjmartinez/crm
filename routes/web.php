@@ -169,6 +169,7 @@ Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruc
 
 Route::get('/reportes-verificador-usuarios', [ReporteController::class, 'verificadorUsuarios']);
 Route::get('/reportes-verificador-usuarios/list', [ReporteController::class, 'listVerificadorUsuarios']);
+Route::get('/reportes-verificador-usuarios/excel', [ReporteController::class, 'excelVerificadorUsuarios']);
 
 Route::resource('registro-empleados', RegistroEmpleadoController::class);
 

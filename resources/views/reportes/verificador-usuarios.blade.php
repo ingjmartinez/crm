@@ -52,6 +52,10 @@
                                     <button id="btnFiltrar" class="btn btn-primary">
                                         Filtrar
                                     </button>
+
+                                    <button id="btnExportarExcel" class="btn btn-success">
+                                        Exportar Excel
+                                    </button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -200,6 +204,25 @@
 
         document.getElementById('btnFiltrar').addEventListener('click', function() {
             cargarDatos();
+        });
+
+        document.getElementById('btnExportarExcel').addEventListener('click', function() {
+            const fechaInicio = document.getElementById('fecha_inicio').value;
+            const fechaFin = document.getElementById('fecha_fin').value;
+            const sistema = document.getElementById('sistema').value;
+
+            if (!fechaInicio || !fechaFin) {
+                alert('Por favor seleccione las fechas');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                fecha_inicio: fechaInicio,
+                fecha_fin: fechaFin,
+                sistema: sistema
+            });
+
+            window.location.href = `${urlBase}/excel?${params}`;
         });
     </script>
 @endsection
