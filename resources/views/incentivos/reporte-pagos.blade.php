@@ -26,32 +26,32 @@
                     <div class="col-lg-12">
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between">
-                                <h4 class="card-title mb-0">Pago A Empleados</h5>
-                                    <div>
-                                        <h3>Total a pagar: <span id="totalPago"></span></h1>
-                                    </div>
-                                    <div class="d-flex gap-3 align-items-center justify-content-between">
-                                        <div><label class="mb-0" for="tipo">Tipo</label></div>
-                                        <div>
-                                            <select id="tipo" class="form-select">
-                                                <option value="">Todos</option>
-                                                <option value="1">Agente de Venta</option>
-                                                <option value="2">Coordinador</option>
-                                                <option value="3">Administrativo</option>
-                                                <option value="4">Operador</option>
-                                            </select>
-                                        </div>
-                                        <div><label class="mb-0" for="empresa">Empresa</label></div>
-                                        <div>
-                                            <select id="empresa" class="form-select">
-                                                <option value="">Todas</option>
-                                                <option value="168">Joselito</option>
-                                                <option value="169">Negosur</option>
-                                            </select>
-                                        </div>
+                                <div>
+                                    <h3 class="mb-0">Total a pagar: <span id="totalPago"></span></h1>
+                                </div>
+                                <div class="d-flex gap-3 align-items-center justify-content-between">
+                                    <div class="d-flex flex-column gap-2">
                                         <div class="d-flex gap-3 align-items-center justify-content-between">
-                                            <div><label class="mb-0" for="year">Año</label></div>
                                             <div>
+                                                <div><label class="mb-0" for="tipo">Tipo</label></div>
+                                                <select id="tipo" class="form-select">
+                                                    <option value="">Todos</option>
+                                                    <option value="1">Agente de Venta</option>
+                                                    <option value="2">Coordinador</option>
+                                                    <option value="3">Administrativo</option>
+                                                    <option value="4">Operador</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <div><label class="mb-0" for="empresa">Empresa</label></div>
+                                                <select id="empresa" class="form-select">
+                                                    <option value="">Todas</option>
+                                                    <option value="168">Joselito</option>
+                                                    <option value="169">Negosur</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <div><label class="mb-0" for="year">Año</label></div>
                                                 <select id="year" class="form-select">
                                                     <option value="2026">2026</option>
                                                     <option value="2025">2025</option>
@@ -61,30 +61,54 @@
                                                     <option value="2021">2021</option>
                                                 </select>
                                             </div>
+                                            <div>
+                                                <div><label class="mb-0" for="mes">Mes</label></div>
+                                                <select id="mes" class="form-select">
+                                                    <option value="">Seleccione</option>
+                                                    <option value="1">Enero</option>
+                                                    <option value="2">Febrero</option>
+                                                    <option value="3">Marzo</option>
+                                                    <option value="4">Abril</option>
+                                                    <option value="5">Mayo</option>
+                                                    <option value="6">Junio</option>
+                                                    <option value="7">Julio</option>
+                                                    <option value="8">Agosto</option>
+                                                    <option value="9">Septiembre</option>
+                                                    <option value="10">Octubre</option>
+                                                    <option value="11">Noviembre</option>
+                                                    <option value="12">Diciembre</option>
+                                                </select>
+                                            </div>
                                         </div>
-                                        <div><label class="mb-0" for="mes">Mes</label></div>
-                                        <div>
-                                            <select id="mes" class="form-select">
-                                                <option value="">Todos</option>
-                                                <option value="1">Enero</option>
-                                                <option value="2">Febrero</option>
-                                                <option value="3">Marzo</option>
-                                                <option value="4">Abril</option>
-                                                <option value="5">Mayo</option>
-                                                <option value="6">Junio</option>
-                                                <option value="7">Julio</option>
-                                                <option value="8">Agosto</option>
-                                                <option value="9">Septiembre</option>
-                                                <option value="10">Octubre</option>
-                                                <option value="11">Noviembre</option>
-                                                <option value="12">Diciembre</option>
-                                            </select>
+                                        <div class="d-flex gap-3 align-items-center justify-content-between">
+                                            <div>
+                                                <div><label class="mb-0" for="califican">Califican</label></div>
+                                                <select id="califican" class="form-select">
+                                                    <option value="1">Todos</option>
+                                                    <option value="2">Califican</option>
+                                                    <option value="3">No Califican</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <div><label class="mb-0" for="horas">Horas</label></div>
+                                                <select id="horas" class="form-select">
+                                                    <option value="1">Todos</option>
+                                                    <option value="2">> 150</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <div><label class="mb-0" for="pago">Pago</label></div>
+                                                <select id="pago" class="form-select">
+                                                    <option value="1">Todos</option>
+                                                    <option value="2">< $200.00</option>
+                                                </select>
+                                            </div>
                                         </div>
-
-                                        <button type="button" class="btn btn-primary" id="btnGenerar">
-                                            Genarar Data
-                                        </button>
                                     </div>
+                                    <button type="button" class="btn btn-primary" id="btnGenerar">
+                                        Genarar Data
+                                    </button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <table id="table"
@@ -102,12 +126,6 @@
                                         </tr>
                                     </thead>
                                     <tbody></tbody>
-                                    <tfoot>
-                                        <tr>
-                                            <th colspan="6" style="text-align: right">TOTAL:</th>
-                                            <th id="tfootTotal"></th>
-                                        </tr>
-                                    </tfoot>
                                 </table>
                             </div>
                         </div>
@@ -131,6 +149,9 @@
             let mes = document.getElementById('mes').value;
             let empresa = document.getElementById('empresa').value;
             let tipo = document.getElementById('tipo').value;
+            let califican = document.getElementById('califican').value;
+            let horas = document.getElementById('horas').value;
+            let pago = document.getElementById('pago').value;
 
             Swal.fire({
                 title: "Procesando Información ...",
@@ -144,7 +165,7 @@
             $('#table').DataTable().destroy();
             $('#table tbody').empty();
             fetch("/incentivos/reporte-pago-incentivos?mes=" + mes + "&empresa=" + empresa + "&tipo=" + tipo + "&year=" +
-                    year)
+                    year + "&califican=" + califican + "&horas=" + horas + "&pago=" + pago)
                 .then(response => response.json())
                 .then(data => {
                     if ('message' in data) {
@@ -173,6 +194,15 @@
                         tableBody.appendChild(row);
                     });
 
+                    // Calcular el total
+                    let total = data.reduce((sum, item) => {
+                        return sum + parseFloat(item.monto.replace(/,/g, ''));
+                    }, 0);
+                    document.getElementById('totalPago').innerText = new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: 'USD'
+                    }).format(total);
+
                     var table = $('#table').DataTable({
                         responsive: true,
                         dom: 'Bfrtip',
@@ -183,31 +213,21 @@
                             [0, 'asc'],
                             [2, 'asc']
                         ],
-                        footerCallback: function(row, data, start, end, display) {
-                            var api = this.api();
-                            var intVal = function(i) {
-                                if (typeof i === 'string') {
-                                    return parseFloat(i.replace(/[^0-9.-]+/g, '')) || 0;
-                                } else if (typeof i === 'number') {
-                                    return i;
-                                } else {
-                                    return 0;
-                                }
-                            };
-
-                            // Total over all pages
-                            var total = api.column(6).data().reduce(function(a, b) {
-                                return intVal(a) + intVal(b);
-                            }, 0);
-
-                            // Total for current page
-                            var pageTotal = api.column(6, { page: 'current' }).data().reduce(function(a, b) {
-                                return intVal(a) + intVal(b);
-                            }, 0);
-
-                            // Update footer (show page total) and #totalPago (show grand total)
-                            $(api.column(6).footer()).html(new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(pageTotal));
-                            document.getElementById('totalPago').innerText = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total);
+                        pageLength: 10000,
+                        scrollY: '500px',
+                        scrollCollapse: true,
+                        language: {
+                            lengthMenu: "Mostrar _MENU_ registros por página",
+                            info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                            infoEmpty: "No hay registros disponibles",
+                            infoFiltered: "(filtrado de _MAX_ registros totales)",
+                            search: "Buscar:",
+                            paginate: {
+                                first: "Primero",
+                                last: "Último",
+                                next: "Siguiente",
+                                previous: "Anterior"
+                            }
                         }
                     });
                     Swal.close();

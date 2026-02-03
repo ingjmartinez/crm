@@ -812,23 +812,76 @@ class IncentivosController extends Controller
 
         $incentivoId = '%';
         $mes = $request->input('mes');
-        if (!empty($mes)) {
-            $anio = $request->input('year', date('Y'));
+        if (empty($mes)) {
+            return response()->json(['message' => 'Seleccione mes.'], 400);
+        }
+        $anio = $request->input('year', date('Y'));
+        $incentivoId = DB::table('incentivo_temporal_c')
+            ->where('anio', $anio)
+            ->where('mes', $mes)
+            ->value('incentivo_id');
 
-            $incentivoId = DB::table('incentivo_temporal_c')
-                ->where('anio', $anio)
-                ->where('mes', $mes)
-                ->value('incentivo_id');
-
-            if ($incentivoId === null) {
-                return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
-            }
+        if ($incentivoId === null) {
+            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
         }
 
         $tipoId = '%';
         $tipo = $request->input('tipo');
         if (!empty($tipo)) {
             $tipoId = $tipo;
+        }
+
+        $califican = $request->input('califican', '1'); // 1=Todos, 2=Califican, 3=No Califican
+        $horas = $request->input('horas', '1'); // 1=Todos, 2=> 150
+        $pago = $request->input('pago', '1'); // 1=Todos, 2=< $200.00
+
+        // Construir el filtro de faltantes según el parámetro califican
+        $filtroFaltantes = '';
+        if ($califican === '2') {
+            // Califican: excluir los que tienen faltantes (NOT IN)
+            $filtroFaltantes = "AND CAST(e.cedula AS SIGNED) NOT IN (
+                    SELECT CAST(identificacion AS SIGNED) FROM faltantes_bet WHERE YEAR(fecha) = $anio AND MONTH(fecha) = $mes
+                    UNION ALL
+                    SELECT CAST(identificacion AS SIGNED) FROM faltantes_net WHERE YEAR(fecha) = $anio AND MONTH(fecha) = $mes
+                )";
+        } elseif ($califican === '3') {
+            // No califican: incluir solo los que tienen faltantes (IN)
+            $filtroFaltantes = "AND CAST(e.cedula AS SIGNED) IN (
+                    SELECT CAST(identificacion AS SIGNED) FROM faltantes_bet WHERE YEAR(fecha) = $anio AND MONTH(fecha) = $mes
+                    UNION ALL
+                    SELECT CAST(identificacion AS SIGNED) FROM faltantes_net WHERE YEAR(fecha) = $anio AND MONTH(fecha) = $mes
+                )";
+        }
+        // Si califican === '1' (Todos), no se aplica ningún filtro
+
+        // Construir filtro de horas
+        $filtroHoras = '';
+        if ($horas === '2') {
+            $filtroHoras = "AND EXISTS (
+                    SELECT 1 FROM (
+                        SELECT combined.cedula AS emp_cedula, SUM(combined.total_horas) AS horas_totales
+                        FROM (
+                            SELECT ab.cedula, SUM(TIMESTAMPDIFF(HOUR, ab.primer_login, ab.ultimo_login)) AS total_horas
+                            FROM asistencias_bet ab
+                            WHERE YEAR(ab.fecha) = $anio AND MONTH(ab.fecha) = $mes
+                            GROUP BY ab.cedula
+                            UNION ALL
+                            SELECT an.identificacion AS cedula, SUM(TIMESTAMPDIFF(HOUR, an.entrada, an.salida)) AS total_horas
+                            FROM asistencias_net an
+                            WHERE YEAR(an.entrada) = $anio AND MONTH(an.entrada) = $mes
+                            GROUP BY an.identificacion
+                        ) combined
+                        GROUP BY combined.cedula
+                        HAVING SUM(combined.total_horas) > 150
+                    ) a
+                    WHERE CAST(a.emp_cedula AS SIGNED) = CAST(e.cedula AS SIGNED)
+                )";
+        }
+
+        // Construir filtro de pago
+        $filtroPago = '';
+        if ($pago === '2') {
+            $filtroPago = 'AND t.total_monto < 200';
         }
 
         $data = DB::select(
@@ -888,7 +941,10 @@ class IncentivosController extends Controller
                 AND t.total_monto > 0
                 AND e.companyid LIKE '$empresaId'
                 AND e.tipo_empleado_incentivo LIKE '$tipoId'
-                AND e.fechasalida IS NULL;"
+                AND e.fechasalida IS NULL
+                $filtroFaltantes
+                $filtroHoras
+                $filtroPago;"
         );
 
         return response()->json($data);
