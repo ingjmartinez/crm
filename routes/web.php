@@ -7,6 +7,7 @@ use App\Http\Controllers\MarController;
 use App\Http\Controllers\TokenController;
 use App\Http\Controllers\PremioController;
 use App\Http\Controllers\VentasController;
+use App\Http\Controllers\AgenciaController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\RecargasController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\PaqueticoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\VentaFlashController;
+use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\VentasProductosController;
 use App\Http\Controllers\FinanceDashboardController;
 use App\Http\Controllers\PagoAOtraEmpresaController;
@@ -173,6 +175,12 @@ Route::get('/reportes-verificador-usuarios/excel', [ReporteController::class, 'e
 
 Route::resource('registro-empleados', RegistroEmpleadoController::class);
 
+Route::resource('agencias', AgenciaController::class);
+Route::get('agencias-list', [AgenciaController::class, 'list'])->name('agencias.list');
+Route::get('agencias-export', [AgenciaController::class, 'export'])->name('agencias.export');
+Route::post('agencias-import', [AgenciaController::class, 'import'])->name('agencias.import');
+Route::get('agencias-template', [AgenciaController::class, 'template'])->name('agencias.template');
+
 Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-ventas'));
 Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usuarios'));
 Route::get('/reportes-bi/faltantes', fn() => view('reportes-bi.faltantes'));
@@ -223,3 +231,7 @@ Route::get('/ventas-lotobet-dashboard/data', [FinanceDashboardController::class,
 // dashboard finanzas lotonet
 Route::get('/ventas-lotonet-dashboard', [FinanceDashboardController::class, 'indexLotonet']);
 Route::get('/ventas-lotonet-dashboard/data', [FinanceDashboardController::class, 'data']);
+
+// KPI Lotobet
+Route::get('/kpi-lotobet', [KpiLotobetController::class, 'index']);
+Route::get('/kpi-lotobet/data', [KpiLotobetController::class, 'getData']);

@@ -1,0 +1,60 @@
+<?php
+
+namespace App\Exports;
+
+use App\Models\Agencia;
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+
+class AgenciasExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles
+{
+    public function collection()
+    {
+        return Agencia::all();
+    }
+
+    public function headings(): array
+    {
+        return [
+            'ID',
+            'Agencia',
+            'Terminal',
+            'Nombre Agencia',
+            'Sistema',
+            'Ciudad',
+            'Ruta',
+            'Operador',
+            'Coordinador',
+            'Fecha Creación',
+            'Fecha Actualización',
+        ];
+    }
+
+    public function map($agencia): array
+    {
+        return [
+            $agencia->id,
+            $agencia->agencia,
+            $agencia->terminal,
+            $agencia->nombre_agencia,
+            $agencia->sistema,
+            $agencia->ciudad,
+            $agencia->ruta,
+            $agencia->operador,
+            $agencia->coordinador,
+            $agencia->created_at ? $agencia->created_at->format('Y-m-d H:i:s') : '',
+            $agencia->updated_at ? $agencia->updated_at->format('Y-m-d H:i:s') : '',
+        ];
+    }
+
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            1 => ['font' => ['bold' => true]],
+        ];
+    }
+}

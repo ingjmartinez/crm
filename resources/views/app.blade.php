@@ -946,6 +946,10 @@
                                                     <a href="{{ url('/ventas-lotobet-dashboard') }}"
                                                         class="nav-link" data-key="t-mailbox"> Ventas </a>
                                                 </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/kpi-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> KPI Metas </a>
+                                                </li>
                                             </ul>
                                         </div>
                                     </li>
@@ -1028,6 +1032,21 @@
                             <a href="{{ url('/') }}" class="nav-link">
                                 <i class="ri-dashboard-2-line"></i> <span data-key="t-dashboards">Contabilidad</span>
                             </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#sidebarMantenimientos" class="nav-link collapsed" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="sidebarMantenimientos"
+                                data-key="t-mantenimientos">
+                                <i class="ri-settings-2-line"></i> <span data-key="t-apps">Mantenimientos</span>
+                            </a>
+                            <div class="collapse menu-dropdown" id="sidebarMantenimientos">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ url('/agencias') }}" class="nav-link" data-key="t-mailbox">
+                                            Agencias </a>
+                                    </li>
+                                </ul>
+                            </div>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarApps" data-bs-toggle="collapse"

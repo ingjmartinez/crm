@@ -223,7 +223,12 @@ class VentaFlashController extends Controller
         ];
 
         $transacciones = (clone $baseQuery)->count();
-        $totalAgencias = (clone $baseQuery)->distinct()->count('numero_externo');
+        $totalAgencias = (clone $baseQuery)
+            ->selectRaw('numero_externo')
+            ->selectRaw('COALESCE(SUM(venta_loteria + venta_recarga + ventas_no_tradicional), 0) as total_venta')
+            ->groupBy('numero_externo')
+            ->havingRaw('total_venta > 0')
+            ->count();
         $ticketPromedio = $transacciones > 0 ? $totalGeneralVentas / $transacciones : 0;
 
         $tablaData = [
@@ -350,6 +355,7 @@ class VentaFlashController extends Controller
                 ->selectRaw('COALESCE(SUM(venta_loteria + venta_recarga + ventas_no_tradicional), 0) as total')
                 ->whereBetween('fecha', [$rangeStart, $rangeEnd])
                 ->groupBy('numero_externo')
+                ->havingRaw('total > 0')
                 ->orderByDesc('total')
                 ->get()
                 ->map(fn($agencia) => [
