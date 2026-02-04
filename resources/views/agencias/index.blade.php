@@ -217,6 +217,24 @@
                 showConfirmButton: false
             });
         @endif
+
+        // Mostrar mensaje de error si existe
+        @if(session('error'))
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: '{{ session('error') }}'
+            });
+        @endif
+
+        // Mostrar errores de validación
+        @if($errors->any())
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de validación',
+                html: `{!! implode('<br>', $errors->all()) !!}`
+            });
+        @endif
     });
 </script>
 @endsection

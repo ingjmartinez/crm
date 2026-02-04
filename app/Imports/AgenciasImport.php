@@ -18,28 +18,28 @@ class AgenciasImport implements ToModel, WithHeadingRow, WithValidation, SkipsEm
     public function model(array $row)
     {
         return new Agencia([
-            'agencia'        => $row['agencia'] ?? $row['Agencia'] ?? null,
-            'terminal'       => $row['terminal'] ?? $row['Terminal'] ?? null,
-            'nombre_agencia' => $row['nombre_agencia'] ?? $row['Nombre Agencia'] ?? $row['nombre agencia'] ?? null,
-            'sistema'        => $row['sistema'] ?? $row['Sistema'] ?? null,
-            'ciudad'         => $row['ciudad'] ?? $row['Ciudad'] ?? null,
-            'ruta'           => $row['ruta'] ?? $row['Ruta'] ?? null,
-            'operador'       => $row['operador'] ?? $row['Operador'] ?? null,
-            'coordinador'    => $row['coordinador'] ?? $row['Coordinador'] ?? null,
+            'agencia'        => isset($row['agencia']) ? (string) $row['agencia'] : (isset($row['Agencia']) ? (string) $row['Agencia'] : null),
+            'terminal'       => isset($row['terminal']) ? (string) $row['terminal'] : (isset($row['Terminal']) ? (string) $row['Terminal'] : null),
+            'nombre_agencia' => isset($row['nombre_agencia']) ? (string) $row['nombre_agencia'] : (isset($row['Nombre Agencia']) ? (string) $row['Nombre Agencia'] : (isset($row['nombre agencia']) ? (string) $row['nombre agencia'] : null)),
+            'sistema'        => isset($row['sistema']) ? (string) $row['sistema'] : (isset($row['Sistema']) ? (string) $row['Sistema'] : null),
+            'ciudad'         => isset($row['ciudad']) ? (string) $row['ciudad'] : (isset($row['Ciudad']) ? (string) $row['Ciudad'] : null),
+            'ruta'           => isset($row['ruta']) ? (string) $row['ruta'] : (isset($row['Ruta']) ? (string) $row['Ruta'] : null),
+            'operador'       => isset($row['operador']) ? (string) $row['operador'] : (isset($row['Operador']) ? (string) $row['Operador'] : null),
+            'coordinador'    => isset($row['coordinador']) ? (string) $row['coordinador'] : (isset($row['Coordinador']) ? (string) $row['Coordinador'] : null),
         ]);
     }
 
     public function rules(): array
     {
         return [
-            'agencia' => 'required|string|max:255',
-            'terminal' => 'nullable|string|max:255',
-            'nombre_agencia' => 'nullable|string|max:255',
-            'sistema' => 'nullable|string|max:255',
-            'ciudad' => 'nullable|string|max:255',
-            'ruta' => 'nullable|string|max:255',
-            'operador' => 'nullable|string|max:255',
-            'coordinador' => 'nullable|string|max:255',
+            'agencia' => 'required',
+            'terminal' => 'nullable',
+            'nombre_agencia' => 'nullable',
+            'sistema' => 'nullable',
+            'ciudad' => 'nullable',
+            'ruta' => 'nullable',
+            'operador' => 'nullable',
+            'coordinador' => 'nullable',
         ];
     }
 }
