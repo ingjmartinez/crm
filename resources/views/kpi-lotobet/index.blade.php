@@ -154,7 +154,7 @@
                 </div>
                 <div class="row mb-4 g-3">
                     <div class="col-12 col-sm-6 col-md-3">
-                        <div class="card shadow-sm" style="border-left: 5px solid #4BC0C0;">
+                        <div class="card shadow-sm" style="border-left: 5px solid #4BC0C0; cursor: pointer;" id="card-cumplieron">
                             <div class="card-body text-center">
                                 <div class="avatar-sm mx-auto mb-3">
                                     <div class="avatar-title rounded-circle fs-3" style="background-color: rgba(75, 192, 192, 0.2); color: #4BC0C0;">
@@ -164,11 +164,12 @@
                                 <h6 class="text-muted mb-2">Agencias que Cumplieron</h6>
                                 <h3 id="kpi-agencias-cumplieron" style="color: #4BC0C0;">0</h3>
                                 <p class="text-muted mb-0"><small>Con al menos 1 día cumplido</small></p>
+                                <small class="text-primary"><i class="ri-eye-line"></i> Click para ver detalle</small>
                             </div>
                         </div>
                     </div>
                     <div class="col-12 col-sm-6 col-md-3">
-                        <div class="card shadow-sm" style="border-left: 5px solid #FF6384;">
+                        <div class="card shadow-sm" style="border-left: 5px solid #FF6384; cursor: pointer;" id="card-no-cumplieron">
                             <div class="card-body text-center">
                                 <div class="avatar-sm mx-auto mb-3">
                                     <div class="avatar-title rounded-circle fs-3" style="background-color: rgba(255, 99, 132, 0.2); color: #FF6384;">
@@ -178,6 +179,7 @@
                                 <h6 class="text-muted mb-2">Agencias que No Cumplieron</h6>
                                 <h3 id="kpi-agencias-no-cumplieron" style="color: #FF6384;">0</h3>
                                 <p class="text-muted mb-0"><small>Sin días cumplidos</small></p>
+                                <small class="text-primary"><i class="ri-eye-line"></i> Click para ver detalle</small>
                             </div>
                         </div>
                     </div>
@@ -322,6 +324,162 @@
         </div>
     </div>
 
+    <!-- Modal Agencias Cumplieron -->
+    <div class="modal fade" id="modalAgenciasCumplieron" tabindex="-1" aria-labelledby="modalAgenciasCumplieronLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="modalAgenciasCumplieronLabel">
+                        <i class="ri-calendar-check-line me-2"></i>Agencias que Cumplieron - Detalle
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table id="tabla-cumplieron" class="table table-bordered table-striped table-sm" style="width:100%">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Agencia</th>
+                                    <th>Días Cumplidos</th>
+                                    <th>Cumplimiento Tradicional</th>
+                                    <th>Cumplimiento No Tradicional</th>
+                                    <th>Cumplimiento Recargas</th>
+                                    <th>Severidad</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Agencias No Cumplieron -->
+    <div class="modal fade" id="modalAgenciasNoCumplieron" tabindex="-1" aria-labelledby="modalAgenciasNoCumplieronLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="modalAgenciasNoCumplieronLabel">
+                        <i class="ri-calendar-close-line me-2"></i>Agencias que No Cumplieron - Detalle
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table id="tabla-no-cumplieron" class="table table-bordered table-striped table-sm" style="width:100%">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Agencia</th>
+                                    <th>Días No Cumplidos</th>
+                                    <th>Meta Tradicional</th>
+                                    <th>Meta No Tradicional</th>
+                                    <th>Meta Recargas</th>
+                                    <th>Severidad</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detalle de Productos por Agencia -->
+    <div class="modal fade" id="modalProductosAgencia" tabindex="-1" aria-labelledby="modalProductosAgenciaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title text-white" id="modalProductosAgenciaLabel">
+                        <i class="ri-bar-chart-box-line me-2"></i>Detalle de Productos Por Agencia <span id="nombre-agencia-productos" class="text-white"></span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-12 col-lg-4 mb-3">
+                            <div class="card shadow-sm border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="ri-fire-line me-2"></i>Top 10 Más Vendidos</h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Producto</th>
+                                                    <th class="text-end">Ventas</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tabla-mas-vendidos"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-4 mb-3">
+                            <div class="card shadow-sm border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="ri-line-chart-line me-2"></i>Top 10 Regulares</h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Producto</th>
+                                                    <th class="text-end">Ventas</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tabla-regulares"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-4 mb-3">
+                            <div class="card shadow-sm border-warning">
+                                <div class="card-header bg-warning text-white">
+                                    <h6 class="mb-0"><i class="ri-arrow-down-line me-2"></i>Top 10 Menos Vendidos</h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Producto</th>
+                                                    <th class="text-end">Ventas</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tabla-menos-vendidos"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Volver</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <footer class="footer">
         <div class="container-fluid">
             <div class="row">
@@ -341,6 +499,9 @@
 
 <script>
     let tableInstance = null;
+    let tableCumplieron = null;
+    let tableNoCumplieron = null;
+    let currentData = null;
 
     function formatCurrency(value) {
         return new Intl.NumberFormat('es-DO', {
@@ -372,6 +533,7 @@
             })
             .then(data => {
                 Swal.close();
+                currentData = data;
 
                 // Actualizar parámetros
                 document.getElementById('param-meta-total').textContent = formatCurrency(data.parametros.meta_total);
@@ -443,8 +605,187 @@
             });
     }
 
+    function showModalCumplieron() {
+        if (!currentData || !currentData.tabla) return;
+
+        const agenciasCumplieron = currentData.tabla.filter(row => parseInt(row.Cant_Dias_Cumplido) > 0);
+
+        if (tableCumplieron) {
+            tableCumplieron.destroy();
+        }
+
+        const tableData = agenciasCumplieron.map(row => [
+            row.agencia,
+            parseInt(row.Cant_Dias_Cumplido),
+            `<span class="badge ${row.MetaMensual_Tra === 'Cumplio' ? 'bg-success' : 'bg-warning'}">${row.MetaMensual_Tra}</span>`,
+            `<span class="badge ${row.MetaMensual_NoTra === 'Cumplio' ? 'bg-success' : 'bg-warning'}">${row.MetaMensual_NoTra}</span>`,
+            `<span class="badge ${row.MetaMensual_Rec === 'Cumplio' ? 'bg-success' : 'bg-warning'}">${row.MetaMensual_Rec}</span>`,
+            `<span class="badge ${
+                row.Severidad === 'Excelencia' ? 'bg-success' :
+                row.Severidad === 'Estable' ? 'bg-info' :
+                row.Severidad === 'En riesgo' ? 'bg-warning' :
+                'bg-danger'
+            }">${row.Severidad}</span>`,
+            `<button class="btn btn-sm btn-primary ver-productos" data-agencia="${row.agencia}">
+                <i class="ri-eye-line"></i> Ver
+            </button>`
+        ]);
+
+        tableCumplieron = $('#tabla-cumplieron').DataTable({
+            data: tableData,
+            responsive: true,
+            scrollY: '400px',
+            scrollCollapse: true,
+            pageLength: 50,
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json'
+            },
+            order: [[1, 'desc']],
+            drawCallback: function() {
+                // Adjuntar eventos a los botones después del renderizado
+                $('#tabla-cumplieron .ver-productos').off('click').on('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const agencia = $(this).data('agencia');
+                    console.log('Click en ver productos, agencia:', agencia);
+                    verProductosAgencia(agencia);
+                });
+            }
+        });
+
+        new bootstrap.Modal(document.getElementById('modalAgenciasCumplieron')).show();
+    }
+
+    function showModalNoCumplieron() {
+        if (!currentData || !currentData.tabla) return;
+
+        const agenciasNoCumplieron = currentData.tabla.filter(row => parseInt(row.Cant_Dias_Cumplido) === 0);
+
+        if (tableNoCumplieron) {
+            tableNoCumplieron.destroy();
+        }
+
+        const tableData = agenciasNoCumplieron.map(row => [
+            row.agencia,
+            parseInt(row.Cant_No_Cumplido),
+            `<span class="badge ${row.MetaMensual_Tra === 'Cumplio' ? 'bg-success' : 'bg-warning'}">${row.MetaMensual_Tra}</span>`,
+            `<span class="badge ${row.MetaMensual_NoTra === 'Cumplio' ? 'bg-success' : 'bg-warning'}">${row.MetaMensual_NoTra}</span>`,
+            `<span class="badge ${row.MetaMensual_Rec === 'Cumplio' ? 'bg-success' : 'bg-warning'}">${row.MetaMensual_Rec}</span>`,
+            `<span class="badge ${
+                row.Severidad === 'Excelencia' ? 'bg-success' :
+                row.Severidad === 'Estable' ? 'bg-info' :
+                row.Severidad === 'En riesgo' ? 'bg-warning' :
+                'bg-danger'
+            }">${row.Severidad}</span>`,
+            `<button class="btn btn-sm btn-primary ver-productos" data-agencia="${row.agencia}">
+                <i class="ri-eye-line"></i> Ver
+            </button>`
+        ]);
+
+        tableNoCumplieron = $('#tabla-no-cumplieron').DataTable({
+            data: tableData,
+            responsive: true,
+            scrollY: '400px',
+            scrollCollapse: true,
+            pageLength: 50,
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json'
+            },
+            order: [[1, 'desc']],
+            drawCallback: function() {
+                // Adjuntar eventos a los botones después del renderizado
+                $('#tabla-no-cumplieron .ver-productos').off('click').on('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const agencia = $(this).data('agencia');
+                    console.log('Click en ver productos, agencia:', agencia);
+                    verProductosAgencia(agencia);
+                });
+            }
+        });
+
+        new bootstrap.Modal(document.getElementById('modalAgenciasNoCumplieron')).show();
+    }
+
+    function verProductosAgencia(agencia) {
+        console.log('verProductosAgencia llamado con:', agencia);
+        const anio = document.getElementById('anio').value;
+        const mes = document.getElementById('mes').value;
+
+        document.getElementById('nombre-agencia-productos').textContent = agencia;
+
+        Swal.fire({
+            title: 'Cargando productos...',
+            text: 'Por favor espere.',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        fetch(`/kpi-lotobet/productos-agencia?agencia=${encodeURIComponent(agencia)}&anio=${anio}&mes=${mes}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error al consultar productos');
+                }
+                return response.json();
+            })
+            .then(data => {
+                Swal.close();
+
+                // Llenar tabla de más vendidos
+                const tablaMasVendidos = document.getElementById('tabla-mas-vendidos');
+                tablaMasVendidos.innerHTML = '';
+                data.mas_vendidos.forEach((prod, index) => {
+                    tablaMasVendidos.innerHTML += `
+                        <tr>
+                            <td><span class="badge bg-success">${index + 1}</span></td>
+                            <td>${prod.producto}</td>
+                            <td class="text-end fw-bold">${formatCurrency(prod.ventas)}</td>
+                        </tr>
+                    `;
+                });
+
+                // Llenar tabla de regulares
+                const tablaRegulares = document.getElementById('tabla-regulares');
+                tablaRegulares.innerHTML = '';
+                data.regulares.forEach((prod, index) => {
+                    tablaRegulares.innerHTML += `
+                        <tr>
+                            <td><span class="badge bg-info">${index + 1}</span></td>
+                            <td>${prod.producto}</td>
+                            <td class="text-end fw-bold">${formatCurrency(prod.ventas)}</td>
+                        </tr>
+                    `;
+                });
+
+                // Llenar tabla de menos vendidos
+                const tablaMenosVendidos = document.getElementById('tabla-menos-vendidos');
+                tablaMenosVendidos.innerHTML = '';
+                data.menos_vendidos.forEach((prod, index) => {
+                    tablaMenosVendidos.innerHTML += `
+                        <tr>
+                            <td><span class="badge bg-warning">${index + 1}</span></td>
+                            <td>${prod.producto}</td>
+                            <td class="text-end fw-bold">${formatCurrency(prod.ventas)}</td>
+                        </tr>
+                    `;
+                });
+
+                new bootstrap.Modal(document.getElementById('modalProductosAgencia')).show();
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: error.message
+                });
+            });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('filtrar-btn').addEventListener('click', loadData);
+        document.getElementById('card-cumplieron').addEventListener('click', showModalCumplieron);
+        document.getElementById('card-no-cumplieron').addEventListener('click', showModalNoCumplieron);
         loadData();
     });
 </script>

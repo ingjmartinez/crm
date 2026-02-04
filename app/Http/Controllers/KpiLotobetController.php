@@ -213,4 +213,73 @@ class KpiLotobetController extends Controller
             'tabla' => $resultados
         ]);
     }
+
+    public function getProductosAgencia(Request $request)
+    {
+        $agencia = $request->input('agencia');
+        $anio = $request->input('anio', date('Y'));
+        $mes = $request->input('mes', date('m'));
+        
+        // Fechas
+        $ini = date('Y-m-d', strtotime("$anio-$mes-01"));
+        $fin = date('Y-m-t', strtotime($ini));
+
+        // Query para obtener ventas por producto (combinando bet y net)
+        $productos = DB::select("
+            SELECT 
+                descripcion AS producto,
+                SUM(monto) AS ventas
+            FROM (
+                SELECT descripcion, monto
+                FROM ventas_producto_bet
+                WHERE agencia_id = ?
+                    AND fecha BETWEEN ? AND ?
+                    AND descripcion NOT IN (
+                        '19','42','53','66','41','54','106','55','65','204','205','61','58','107',
+                        '90219','90319','90419','90619','206','207','91119','105','62','64','108',
+                        '109','110','111','63','90119','57'
+                    )
+                UNION ALL
+                SELECT descripcion, monto
+                FROM ventas_producto_net
+                WHERE agencia_id = ?
+                    AND fecha BETWEEN ? AND ?
+                    AND descripcion NOT IN (
+                        '19','42','53','66','41','54','106','55','65','204','205','61','58','107',
+                        '90219','90319','90419','90619','206','207','91119','105','62','64','108',
+                        '109','110','111','63','90119','57'
+                    )
+            ) AS combined
+            GROUP BY descripcion
+            HAVING ventas > 0
+            ORDER BY ventas DESC
+        ", [$agencia, $ini, $fin, $agencia, $ini, $fin]);
+
+        $totalProductos = count($productos);
+
+        // Top 10 más vendidos
+        $masVendidos = array_slice($productos, 0, 10);
+
+        // Top 10 regulares (del medio)
+        $regulares = [];
+        if ($totalProductos > 20) {
+            $inicio = floor($totalProductos / 2) - 5;
+            $regulares = array_slice($productos, max(0, $inicio), 10);
+        } elseif ($totalProductos > 10) {
+            $regulares = array_slice($productos, 10, 10);
+        }
+
+        // Top 10 menos vendidos
+        $menosVendidos = [];
+        if ($totalProductos > 10) {
+            $menosVendidos = array_slice($productos, -10);
+            $menosVendidos = array_reverse($menosVendidos);
+        }
+
+        return response()->json([
+            'mas_vendidos' => $masVendidos,
+            'regulares' => $regulares,
+            'menos_vendidos' => $menosVendidos
+        ]);
+    }
 }

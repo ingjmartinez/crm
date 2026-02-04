@@ -235,3 +235,4 @@ Route::get('/ventas-lotonet-dashboard/data', [FinanceDashboardController::class,
 // KPI Lotobet
 Route::get('/kpi-lotobet', [KpiLotobetController::class, 'index']);
 Route::get('/kpi-lotobet/data', [KpiLotobetController::class, 'getData']);
+Route::get('/kpi-lotobet/productos-agencia', [KpiLotobetController::class, 'getProductosAgencia']);
