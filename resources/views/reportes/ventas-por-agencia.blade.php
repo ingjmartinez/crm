@@ -88,7 +88,7 @@
                                         <thead>
                                             <tr>
                                                 <th>Terminal</th>
-                                                <th>Código Agencia</th>
+                                                <th>Coordinador</th>
                                                 <th>Nombre Agencia</th>
                                                 <th>Ruta</th>
                                                 <th>Período</th>
@@ -210,7 +210,7 @@
                 },
                 columns: [
                     { data: 'terminal' },
-                    { data: 'codigo_agencia' },
+                    { data: 'coordinador' },
                     { data: 'nombre_agencia' },
                     { data: 'ruta' },
                     { data: 'periodo' },

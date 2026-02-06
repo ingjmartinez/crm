@@ -346,7 +346,7 @@ class ReporteController extends Controller
         $resultados = DB::select("
             SELECT
                 a.terminal AS terminal,
-                a.agencia AS codigo_agencia,
+                a.coordinador AS coordinador,
                 a.nombre_agencia AS nombre_agencia,
                 a.ruta AS ruta,
                 {$selectPeriodo} AS periodo,
@@ -364,13 +364,13 @@ class ReporteController extends Controller
               AND TRIM(a.terminal) COLLATE utf8mb4_unicode_ci = TRIM(?) COLLATE utf8mb4_unicode_ci
             GROUP BY
                 a.terminal,
-                a.agencia,
+                a.coordinador,
                 a.nombre_agencia,
                 a.ruta,
                 {$selectPeriodo}
             ORDER BY
                 a.terminal,
-                a.agencia,
+                a.coordinador,
                 periodo
         ", [$fechaInicio, $fechaFin, $terminal]);
 
