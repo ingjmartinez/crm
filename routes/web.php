@@ -166,6 +166,9 @@ Route::get('/reportes-faltantes-bet/pdf', [ReporteController::class, 'pdfFaltant
 Route::get('/reportes-cuadre-ventas', [ReporteController::class, 'cuadreVentas']);
 Route::get('/reportes-cuadre-ventas/list', [ReporteController::class, 'listCuadreVentas']);
 
+Route::get('/reportes-ventas-agencia-periodo', [ReporteController::class, 'ventasAgenciaPeriodo']);
+Route::get('/reportes-ventas-agencia-periodo/list', [ReporteController::class, 'listVentasAgenciaPeriodo']);
+
 Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
 Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
 

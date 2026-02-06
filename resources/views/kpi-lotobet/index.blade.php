@@ -63,7 +63,7 @@
                                         <h5 id="param-meta-total" class="text-white fw-bold mb-0">RD$ 0</h5>
                                     </div>
                                     <div class="col-6 col-md-3">
-                                        <p class="text-white-50 mb-1">Meta Tradicional (70%)</p>
+                                        <p class="text-white-50 mb-1">Meta Tradicional (100%)</p>
                                         <h6 id="param-meta-trad" class="text-white mb-1">RD$ 0</h6>
                                         <p class="text-white-50 mb-0" style="font-size: 0.75rem;">Diario: <span id="param-meta-trad-d" class="text-white fw-semibold">RD$ 0</span></p>
                                     </div>

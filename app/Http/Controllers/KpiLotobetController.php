@@ -23,7 +23,8 @@ class KpiLotobetController extends Controller
         $pctNotrad = 0.20;
         $pctRec = 0.10;
         
-        $metaTrad = $metaTotal * $pctTrad;
+        // Tradicional exige el 100% del total
+        $metaTrad = $metaTotal;
         $metaNotrad = $metaTotal * $pctNotrad;
         $metaRec = $metaTotal * $pctRec;
         

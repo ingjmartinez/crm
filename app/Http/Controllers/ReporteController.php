@@ -258,6 +258,52 @@ class ReporteController extends Controller
         return view('reportes.cruce-usuarios');
     }
 
+    public function ventasAgenciaPeriodo(Request $request)
+    {
+        return view('reportes.ventas-agencia-periodo');
+    }
+
+    public function listVentasAgenciaPeriodo(Request $request)
+    {
+        $sistema = $request->input('sistema', 'Lotobet');
+        $fechaInicio = $request->input('fecha_inicio');
+        $fechaFin = $request->input('fecha_fin');
+        $periodo = $request->input('periodo', 'dia');
+
+        if (!$fechaInicio || !$fechaFin) {
+            return response()->json([]);
+        }
+
+        $tabla = $sistema === 'Lotobet' ? 'vt_usuarios_bet' : 'vt_usuarios_net';
+
+        $selectPeriodo = $periodo === 'mes'
+            ? "DATE_FORMAT(v.fecha, '%Y-%m')"
+            : "DATE_FORMAT(v.fecha, '%Y-%m-%d')";
+
+        $resultados = DB::select("
+            SELECT
+                v.agencia_id AS agencia_id,
+                {$selectPeriodo} AS periodo,
+                FORMAT(SUM(CASE WHEN c.tipo = 'tradicional'     THEN v.monto ELSE 0 END), 2, 'en_US') AS tradicional,
+                FORMAT(SUM(CASE WHEN c.tipo = 'no tradicional'  THEN v.monto ELSE 0 END), 2, 'en_US') AS no_tradicional,
+                FORMAT(SUM(CASE WHEN c.tipo = 'recarga'         THEN v.monto ELSE 0 END), 2, 'en_US') AS recargas,
+                FORMAT(SUM(CASE WHEN c.tipo = 'paquetico'       THEN v.monto ELSE 0 END), 2, 'en_US') AS paquetico,
+                FORMAT(SUM(v.monto), 2, 'en_US') AS total
+            FROM {$tabla} v
+            LEFT JOIN catalogo_juegos c
+                ON v.producto_id = c.producto_id
+            WHERE v.fecha BETWEEN ? AND ?
+            GROUP BY
+                v.agencia_id,
+                {$selectPeriodo}
+            ORDER BY
+                v.agencia_id,
+                periodo
+        ", [$fechaInicio, $fechaFin]);
+
+        return response()->json($resultados);
+    }
+
     public function listCruceUsuarios(Request $request)
     {
         $sistema = $request->input('sistema', 'Lotobet');
