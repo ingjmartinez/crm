@@ -169,6 +169,10 @@ Route::get('/reportes-cuadre-ventas/list', [ReporteController::class, 'listCuadr
 Route::get('/reportes-ventas-agencia-periodo', [ReporteController::class, 'ventasAgenciaPeriodo']);
 Route::get('/reportes-ventas-agencia-periodo/list', [ReporteController::class, 'listVentasAgenciaPeriodo']);
 
+Route::get('/reportes-ventas-por-agencia', [ReporteController::class, 'ventasPorAgencia']);
+Route::get('/reportes-ventas-por-agencia/list', [ReporteController::class, 'listVentasPorAgencia']);
+Route::get('/reportes-ventas-por-agencia/agencia', [ReporteController::class, 'buscarAgencia']);
+
 Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
 Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
 

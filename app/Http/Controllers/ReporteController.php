@@ -304,6 +304,79 @@ class ReporteController extends Controller
         return response()->json($resultados);
     }
 
+    public function ventasPorAgencia(Request $request)
+    {
+        return view('reportes.ventas-por-agencia');
+    }
+
+    public function buscarAgencia(Request $request)
+    {
+        $codigo = $request->input('codigo');
+
+        if (!$codigo) {
+            return response()->json(null);
+        }
+
+        $agencia = DB::table('agencias')
+            ->select('agencia', 'nombre_agencia', 'terminal')
+            ->where('terminal', $codigo)
+            ->first();
+
+        return response()->json($agencia);
+    }
+
+    public function listVentasPorAgencia(Request $request)
+    {
+        $sistema = $request->input('sistema', 'Lotobet');
+        $fechaInicio = $request->input('fecha_inicio');
+        $fechaFin = $request->input('fecha_fin');
+        $periodo = $request->input('periodo', 'dia');
+        $terminal = $request->input('terminal');
+
+        if (!$fechaInicio || !$fechaFin || !$terminal) {
+            return response()->json([]);
+        }
+
+        $tabla = $sistema === 'Lotobet' ? 'vt_usuarios_bet' : 'vt_usuarios_net';
+
+        $selectPeriodo = $periodo === 'mes'
+            ? "DATE_FORMAT(v.fecha, '%Y-%m')"
+            : "DATE_FORMAT(v.fecha, '%Y-%m-%d')";
+
+        $resultados = DB::select("
+            SELECT
+                a.terminal AS terminal,
+                a.agencia AS codigo_agencia,
+                a.nombre_agencia AS nombre_agencia,
+                a.ruta AS ruta,
+                {$selectPeriodo} AS periodo,
+                FORMAT(SUM(CASE WHEN c.tipo = 'tradicional'     THEN v.monto ELSE 0 END), 2, 'en_US') AS tradicional,
+                FORMAT(SUM(CASE WHEN c.tipo = 'no tradicional'  THEN v.monto ELSE 0 END), 2, 'en_US') AS no_tradicional,
+                FORMAT(SUM(CASE WHEN c.tipo = 'recarga'         THEN v.monto ELSE 0 END), 2, 'en_US') AS recargas,
+                FORMAT(SUM(CASE WHEN c.tipo = 'paquetico'       THEN v.monto ELSE 0 END), 2, 'en_US') AS paquetico,
+                FORMAT(SUM(v.monto), 2, 'en_US') AS total
+            FROM {$tabla} v
+            JOIN agencias a
+                ON TRIM(CAST(v.agencia_id AS CHAR)) COLLATE utf8mb4_unicode_ci = TRIM(a.terminal) COLLATE utf8mb4_unicode_ci
+            LEFT JOIN catalogo_juegos c
+                ON v.producto_id = c.producto_id
+            WHERE v.fecha BETWEEN ? AND ?
+              AND TRIM(a.terminal) COLLATE utf8mb4_unicode_ci = TRIM(?) COLLATE utf8mb4_unicode_ci
+            GROUP BY
+                a.terminal,
+                a.agencia,
+                a.nombre_agencia,
+                a.ruta,
+                {$selectPeriodo}
+            ORDER BY
+                a.terminal,
+                a.agencia,
+                periodo
+        ", [$fechaInicio, $fechaFin, $terminal]);
+
+        return response()->json($resultados);
+    }
+
     public function listCruceUsuarios(Request $request)
     {
         $sistema = $request->input('sistema', 'Lotobet');

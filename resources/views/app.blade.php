@@ -1228,6 +1228,10 @@
                                             data-key="t-mailbox"> Ventas por Agencia y Período </a>
                                     </li>
                                     <li class="nav-item">
+                                        <a href="{{ url('/reportes-ventas-por-agencia') }}" class="nav-link"
+                                            data-key="t-mailbox"> Ventas por Agencia </a>
+                                    </li>
+                                    <li class="nav-item">
                                         <a href="{{ url('/reportes-cruce-usuarios') }}" class="nav-link"
                                             data-key="t-mailbox"> Cruce de Usuarios </a>
                                     </li>
