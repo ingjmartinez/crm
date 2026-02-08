@@ -6,7 +6,7 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
-      APP_URL: http://crm.helppro.com.do
+      APP_URL: https://crm.helppro.com.do
       DB_CONNECTION: mysql
       DB_HOST: db
       DB_PORT: 3306
