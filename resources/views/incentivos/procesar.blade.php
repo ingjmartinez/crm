@@ -257,6 +257,15 @@
                 }
                 
                 if (!listRes.ok) {
+                    const noDataMessage = listData?.message || '';
+                    const isNoData = listRes.status === 404 && noDataMessage.toLowerCase().includes('no hay datos');
+                    if (isNoData) {
+                        const msg = noDataMessage || 'No hay datos para procesar';
+                        addLog(`INFO ${mod.name}: ${msg}`);
+                        setStatus(mod.name, 'OK', msg);
+                        return { ok: true, message: msg };
+                    }
+
                     addLog(`ERROR ${mod.name}: HTTP ${listRes.status} - ${listText}`, 'error');
                     setStatus(mod.name, 'Error', `HTTP ${listRes.status}`);
                     return { ok: false, message: listText };

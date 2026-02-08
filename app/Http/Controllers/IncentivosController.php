@@ -97,7 +97,7 @@ class IncentivosController extends Controller
 
         // Validar si existen datos en incentivo_temporal_c
         if ($incentivoId === null) {
-            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+            return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
 
         $planAgencia = DB::select(
@@ -239,7 +239,7 @@ class IncentivosController extends Controller
 
         // Validar si existen datos en incentivo_temporal_c
         if ($incentivoId === null) {
-            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+            return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
         $excluidos = trim($request->input('excluidos', '')); // ejemplo: "7,8,9"
 
@@ -348,7 +348,7 @@ class IncentivosController extends Controller
 
         // Validar si existen datos en incentivo_temporal_c
         if ($incentivoId === null) {
-            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+            return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
 
         $data = DB::select(
@@ -442,7 +442,7 @@ class IncentivosController extends Controller
 
         // Validar si existen datos en incentivo_temporal_c
         if ($incentivoId === null) {
-            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+            return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
 
         $data = DB::select(
@@ -535,7 +535,7 @@ class IncentivosController extends Controller
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
 
         if ($incentivoId === null) {
-            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+            return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
 
         $sql = "SELECT 
@@ -587,7 +587,7 @@ class IncentivosController extends Controller
 
         // Validar si existen datos en incentivo_temporal_c
         if ($incentivoId === null) {
-            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+            return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
 
         $data = DB::select(
@@ -711,7 +711,7 @@ class IncentivosController extends Controller
             ->value('incentivo_id');
 
         if ($incentivoId === null) {
-            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+            return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
 
         $data = DB::select(
@@ -822,7 +822,7 @@ class IncentivosController extends Controller
             ->value('incentivo_id');
 
         if ($incentivoId === null) {
-            return response()->json(['message' => 'No hay datos registrados en el mes.'], 404);
+            return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
 
         $tipoId = '%';
