@@ -225,6 +225,25 @@
             myModalExcluir.show();
         });
 
+        function chunkArray(arr, size) {
+            const chunks = [];
+            for (let i = 0; i < arr.length; i += size) {
+                chunks.push(arr.slice(i, i + size));
+            }
+            return chunks;
+        }
+
+        async function fetchWithTimeout(url, options = {}, timeoutMs = 300000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(url, { ...options, signal: controller.signal });
+                return res;
+            } finally {
+                clearTimeout(id);
+            }
+        }
+
         async function processModule(mod, params, productosExcluidos) {
             const { mes, year } = params;
             
@@ -246,7 +265,7 @@
                 }
                 
                 // Consultar datos
-                const listRes = await fetch(listUrl);
+                const listRes = await fetchWithTimeout(listUrl, {}, 300000);
                 const listText = await listRes.text();
                 let listData = null;
                 
@@ -290,43 +309,56 @@
                 addLog(`INFO ${mod.name}: ${dataCount} registros obtenidos`);
                 
                 // Guardar datos
-                setStatus(mod.name, 'Ejecutando', 'Guardando...');
-                addLog(`-> Guardando ${mod.name} (${mod.saveUrl})`);
-                
-                const saveRes = await fetch(mod.saveUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        datos: listData,
-                        mes: mes,
-                        year: year,
-                        sistema: mod.sistema || null
-                    })
-                });
-                
-                const saveText = await saveRes.text();
-                let saveData = null;
-                
-                try { 
-                    saveData = JSON.parse(saveText); 
-                } catch(e) { 
-                    saveData = null; 
+                const dataArray = Array.isArray(listData) ? listData : [listData];
+                const chunkSize = 2000;
+                const chunks = chunkArray(dataArray, chunkSize);
+
+                let lastSaveData = null;
+
+                for (let c = 0; c < chunks.length; c++) {
+                    const chunk = chunks[c];
+                    const progress = `${c + 1}/${chunks.length}`;
+                    setStatus(mod.name, 'Ejecutando', `Guardando... (${progress})`);
+                    addLog(`-> Guardando ${mod.name} (${mod.saveUrl}) ${progress}`);
+
+                    const saveRes = await fetchWithTimeout(mod.saveUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({
+                            datos: chunk,
+                            mes: mes,
+                            year: year,
+                            sistema: mod.sistema || null,
+                            reset: c === 0
+                        })
+                    }, 300000);
+
+                    const saveText = await saveRes.text();
+                    let saveData = null;
+
+                    try { 
+                        saveData = JSON.parse(saveText); 
+                    } catch(e) { 
+                        saveData = null; 
+                    }
+
+                    if (!saveRes.ok) {
+                        addLog(`ERROR ${mod.name} al guardar: HTTP ${saveRes.status} - ${saveText}`, 'error');
+                        setStatus(mod.name, 'Error', `HTTP ${saveRes.status}`);
+                        return { ok: false, message: saveText };
+                    }
+
+                    lastSaveData = saveData;
                 }
-                
-                if (!saveRes.ok) {
-                    addLog(`ERROR ${mod.name} al guardar: HTTP ${saveRes.status} - ${saveText}`, 'error');
-                    setStatus(mod.name, 'Error', `HTTP ${saveRes.status}`);
-                    return { ok: false, message: saveText };
-                }
-                
-                const msg = saveData?.message || saveText || 'Guardado exitosamente';
+
+                const msg = lastSaveData?.message || 'Guardado exitosamente';
                 addLog(`OK ${mod.name}: ${msg}`);
                 setStatus(mod.name, 'OK', msg);
-                
-                return { ok: true, data: saveData };
+
+                return { ok: true, data: lastSaveData };
                 
             } catch (err) {
                 addLog(`EXCEPCIÓN ${mod.name}: ${err.message}`, 'error');

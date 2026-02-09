@@ -48,6 +48,7 @@ class IncentivosController extends Controller
         $mes = $request->input('mes');
         $anio = $request->input('year', date('Y'));
         $datos = $request->input('datos');
+        $reset = $request->boolean('reset', true);
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
@@ -59,8 +60,10 @@ class IncentivosController extends Controller
         }
 
         $data = [];
-        // Limpiar tabla 
-        DB::table('incentivo_temporal')->where('incentivo_id', $incentivoId)->delete();
+        // Limpiar tabla solo si es el primer lote
+        if ($reset) {
+            DB::table('incentivo_temporal')->where('incentivo_id', $incentivoId)->delete();
+        }
 
         foreach ($datos as $dato) {
             $data[] = [
@@ -188,6 +191,7 @@ class IncentivosController extends Controller
         $mes = $request->input('mes');
         $anio = $request->input('year', date('Y'));
         $datos = $request->input('datos');
+        $reset = $request->boolean('reset', true);
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
@@ -199,8 +203,10 @@ class IncentivosController extends Controller
         }
 
         $data = [];
-        // Limpiar tabla 
-        DB::table('plan_agencias_distribucion')->where('incentivo_id', $incentivoId)->delete();
+        // Limpiar tabla solo si es el primer lote
+        if ($reset) {
+            DB::table('plan_agencias_distribucion')->where('incentivo_id', $incentivoId)->delete();
+        }
 
         foreach ($datos as $dato) {
             $data[] = [
@@ -297,6 +303,7 @@ class IncentivosController extends Controller
         $mes = $request->input('mes');
         $anio = $request->input('year', date('Y'));
         $datos = $request->input('datos');
+        $reset = $request->boolean('reset', true);
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
@@ -308,8 +315,10 @@ class IncentivosController extends Controller
         }
 
         $data = [];
-        // Limpiar tabla 
-        DB::table('efectividad_usuarios')->where('incentivo_id', $incentivoId)->delete();
+        // Limpiar tabla solo si es el primer lote
+        if ($reset) {
+            DB::table('efectividad_usuarios')->where('incentivo_id', $incentivoId)->delete();
+        }
 
         foreach ($datos as $dato) {
             $data[] = [
@@ -395,6 +404,7 @@ class IncentivosController extends Controller
         $mes = $request->input('mes');
         $anio = $request->input('year', date('Y'));
         $datos = $request->input('datos');
+        $reset = $request->boolean('reset', true);
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
@@ -406,8 +416,10 @@ class IncentivosController extends Controller
         }
 
         $data = [];
-        // Limpiar tabla 
-        DB::table('pago_incentivos')->where('incentivo_id', $incentivoId)->delete();
+        // Limpiar tabla solo si es el primer lote
+        if ($reset) {
+            DB::table('pago_incentivos')->where('incentivo_id', $incentivoId)->delete();
+        }
 
         foreach ($datos as $dato) {
             $data[] = [
@@ -488,6 +500,7 @@ class IncentivosController extends Controller
         $mes = $request->input('mes');
         $anio = $request->input('year', date('Y'));
         $datos = $request->input('datos');
+        $reset = $request->boolean('reset', true);
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
@@ -499,8 +512,10 @@ class IncentivosController extends Controller
         }
 
         $data = [];
-        // Limpiar tabla 
-        DB::table('pago_incentivos_coordinador')->where('incentivo_id', $incentivoId)->delete();
+        // Limpiar tabla solo si es el primer lote
+        if ($reset) {
+            DB::table('pago_incentivos_coordinador')->where('incentivo_id', $incentivoId)->delete();
+        }
 
         foreach ($datos as $dato) {
             $data[] = [
@@ -659,6 +674,7 @@ class IncentivosController extends Controller
         $mes = $request->input('mes');
         $anio = $request->input('year', date('Y'));
         $datos = $request->input('datos');
+        $reset = $request->boolean('reset', true);
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
@@ -671,8 +687,10 @@ class IncentivosController extends Controller
         }
 
         $data = [];
-        // Limpiar tabla 
-        DB::table('pago_incentivos_admin')->where('incentivo_id', $incentivoId)->delete();
+        // Limpiar tabla solo si es el primer lote
+        if ($reset) {
+            DB::table('pago_incentivos_admin')->where('incentivo_id', $incentivoId)->delete();
+        }
 
         foreach ($datos as $dato) {
             $data[] = [
