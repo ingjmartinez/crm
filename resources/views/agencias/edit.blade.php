@@ -105,6 +105,17 @@
                                                 <div class="invalid-feedback">{{ $message }}</div>
                                             @enderror
                                         </div>
+
+                                        <div class="col-12 col-md-6 mb-3">
+                                            <label for="aplica_incentivo" class="form-label">Aplica incentivo <span class="text-danger">*</span></label>
+                                            <select class="form-select @error('aplica_incentivo') is-invalid @enderror" id="aplica_incentivo" name="aplica_incentivo" required>
+                                                <option value="1" {{ old('aplica_incentivo', $agencia->aplica_incentivo ? '1' : '0') == '1' ? 'selected' : '' }}>Sí</option>
+                                                <option value="0" {{ old('aplica_incentivo', $agencia->aplica_incentivo ? '1' : '0') == '0' ? 'selected' : '' }}>No</option>
+                                            </select>
+                                            @error('aplica_incentivo')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
                                     </div>
 
                                     <div class="d-flex flex-column flex-sm-row justify-content-end gap-2 mt-3">

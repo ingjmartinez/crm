@@ -39,6 +39,7 @@ class AgenciaController extends Controller
             'ruta' => 'nullable|string|max:55',
             'operador' => 'nullable|string|max:55',
             'coordinador' => 'nullable|string|max:55',
+            'aplica_incentivo' => 'required|boolean',
         ]);
 
         Agencia::create($validated);
@@ -69,12 +70,15 @@ class AgenciaController extends Controller
     public function update(Request $request, Agencia $agencia)
     {
         $validated = $request->validate([
-            'agencia' => 'required|string|max:255',            'nombre_agencia' => 'nullable|string|max:255',            'terminal' => 'nullable|string|max:255',
+            'agencia' => 'required|string|max:255',
+            'nombre_agencia' => 'nullable|string|max:255',
+            'terminal' => 'nullable|string|max:255',
             'sistema' => 'nullable|string|max:255',
             'ciudad' => 'nullable|string|max:255',
             'ruta' => 'nullable|string|max:255',
             'operador' => 'nullable|string|max:255',
             'coordinador' => 'nullable|string|max:255',
+            'aplica_incentivo' => 'required|boolean',
         ]);
 
         $agencia->update($validated);
@@ -112,7 +116,8 @@ class AgenciaController extends Controller
                   ->orWhere('ciudad', 'like', "%{$search}%")
                   ->orWhere('ruta', 'like', "%{$search}%")
                   ->orWhere('operador', 'like', "%{$search}%")
-                  ->orWhere('coordinador', 'like', "%{$search}%");
+                                    ->orWhere('coordinador', 'like', "%{$search}%")
+                                    ->orWhere('aplica_incentivo', 'like', "%{$search}%");
             });
         }
 
@@ -179,11 +184,12 @@ class AgenciaController extends Controller
             'Ruta',
             'Operador',
             'Coordinador',
+            'Aplica Incentivo',
         ];
 
         $data = [
             $headers,
-            ['20907', '5546', 'Agencia Ejemplo', 'Lotobet', 'San Pedro', 'Ruta 0501', 'Jose Ruby', 'Aramis'],
+            ['20907', '5546', 'Agencia Ejemplo', 'Lotobet', 'San Pedro', 'Ruta 0501', 'Jose Ruby', 'Aramis', 'SI'],
         ];
 
         $filename = 'plantilla_agencias.xlsx';

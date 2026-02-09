@@ -171,7 +171,9 @@ class IncentivosController extends Controller
             LEFT JOIN distribucion_porcentajes pa_admin
                 ON pa_admin.departamento = 'Administrativo'
                 AND pa_admin.tipo = it.tipo_producto
-            INNER JOIN plan_agencia pa ON CAST(TRIM(it.agencia_id) AS UNSIGNED) = pa.agencia_id
+            INNER JOIN agencias a
+                ON CAST(TRIM(it.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                AND a.aplica_incentivo = 1
             WHERE it.incentivo_id = $incentivoId AND it.venta_mes > 0;"
         );
 
@@ -274,6 +276,9 @@ class IncentivosController extends Controller
                 IFNULL(FORMAT(net.monto_cedula, 2), '') AS monto_net_cedula,
                 IFNULL(ROUND((net.monto_cedula / it.venta_mes) * 100, 2), '') AS porc_net
             FROM incentivo_temporal it
+            INNER JOIN agencias a
+                ON CAST(TRIM(it.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                AND a.aplica_incentivo = 1
             LEFT JOIN (
                 SELECT agencia_id, vb.cedula, e.empleadoid, SUM(monto) AS monto_cedula, tipo, 'Lotobet' AS sistema
                 FROM vt_usuarios_bet vb
@@ -388,6 +393,9 @@ class IncentivosController extends Controller
             INNER JOIN incentivo_temporal it on eu.incentivo_id = it.incentivo_id
                 AND eu.agencia_id = it.agencia_id
                 AND eu.tipo_producto = it.tipo_producto
+            INNER JOIN agencias a
+                ON CAST(TRIM(it.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                AND a.aplica_incentivo = 1
             WHERE eu.incentivo_id = $incentivoId AND eu.sistema = '$sistema'
                 AND it.venta_mes >= it.venta_base
                 AND pad.monto_agente > 0
@@ -478,10 +486,13 @@ class IncentivosController extends Controller
                     pad_tot.porcentaje_coordinador AS porcentaje
                 FROM coordinador c
                 INNER JOIN (
-                    SELECT agencia_id, SUM(monto_coordinador) AS total_agencia, porcentaje_coordinador
-                    FROM plan_agencias_distribucion
-                    WHERE incentivo_id = ? AND excedente > 0 AND sistema = ?
-                    GROUP BY agencia_id, porcentaje_coordinador
+                    SELECT pad.agencia_id, SUM(pad.monto_coordinador) AS total_agencia, pad.porcentaje_coordinador
+                    FROM plan_agencias_distribucion pad
+                    INNER JOIN agencias a
+                        ON CAST(TRIM(pad.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                        AND a.aplica_incentivo = 1
+                    WHERE pad.incentivo_id = ? AND pad.excedente > 0 AND pad.sistema = ?
+                    GROUP BY pad.agencia_id, pad.porcentaje_coordinador
                 ) pad_tot ON pad_tot.agencia_id = c.agencia_id
                 INNER JOIN empleados e ON c.empleado_id = e.empleadoid 
                     AND e.companyid IN (168, 169) AND e.fechasalida IS NULL
@@ -562,9 +573,12 @@ class IncentivosController extends Controller
                     FORMAT(excedente, 2) AS excedente,
                     FORMAT(porcentaje_coordinador, 3) AS porcentaje_coordinador,
                     FORMAT(monto_coordinador, 2) AS monto_coordinador
-                FROM plan_agencias_distribucion
-                WHERE incentivo_id = ?
-                    AND agencia_id IN (
+                FROM plan_agencias_distribucion pad
+                INNER JOIN agencias a
+                    ON CAST(TRIM(pad.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                    AND a.aplica_incentivo = 1
+                WHERE pad.incentivo_id = ?
+                    AND pad.agencia_id IN (
                         SELECT agencia_id 
                         FROM coordinador c
                         INNER JOIN empleados e ON c.empleado_id = e.empleadoid
@@ -607,10 +621,13 @@ class IncentivosController extends Controller
 
         $data = DB::select(
             "WITH totales_producto AS (
-                SELECT SUM(monto_administrativo) AS total, tipo_producto
-                FROM plan_agencias_distribucion
-                WHERE incentivo_id = $incentivoId AND excedente > 0
-                GROUP BY tipo_producto
+                SELECT SUM(pad.monto_administrativo) AS total, pad.tipo_producto
+                FROM plan_agencias_distribucion pad
+                INNER JOIN agencias a
+                    ON CAST(TRIM(pad.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                    AND a.aplica_incentivo = 1
+                WHERE pad.incentivo_id = $incentivoId AND pad.excedente > 0
+                GROUP BY pad.tipo_producto
             )
             SELECT 
                 CASE WHEN emp.companyid = '168' THEN 'Joselito' ELSE 'Negosur' END AS empresa,
@@ -741,9 +758,12 @@ class IncentivosController extends Controller
                     MAX(CASE WHEN tipo_producto = 'Paquetico' THEN total END) AS total_paquetico
                 FROM (
                     SELECT tipo_producto, SUM(monto_administrativo) AS total
-                    FROM plan_agencias_distribucion
-                    WHERE incentivo_id = $incentivoId AND excedente > 0
-                    GROUP BY tipo_producto
+                    FROM plan_agencias_distribucion pad
+                    INNER JOIN agencias a
+                        ON CAST(TRIM(pad.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                        AND a.aplica_incentivo = 1
+                    WHERE pad.incentivo_id = $incentivoId AND pad.excedente > 0
+                    GROUP BY pad.tipo_producto
                 ) x
             ),
             empleado_info AS (

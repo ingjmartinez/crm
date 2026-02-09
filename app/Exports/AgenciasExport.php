@@ -29,6 +29,7 @@ class AgenciasExport implements FromCollection, WithHeadings, WithMapping, Shoul
             'Ruta',
             'Operador',
             'Coordinador',
+            'Aplica Incentivo',
             'Fecha Creación',
             'Fecha Actualización',
         ];
@@ -46,6 +47,7 @@ class AgenciasExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $agencia->ruta,
             $agencia->operador,
             $agencia->coordinador,
+            $agencia->aplica_incentivo ? 'SI' : 'NO',
             $agencia->created_at ? $agencia->created_at->format('Y-m-d H:i:s') : '',
             $agencia->updated_at ? $agencia->updated_at->format('Y-m-d H:i:s') : '',
         ];

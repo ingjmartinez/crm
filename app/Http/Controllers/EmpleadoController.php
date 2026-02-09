@@ -195,7 +195,7 @@ class EmpleadoController extends Controller
 
     public function incentivos()
     {
-        $agencias = DB::select('SELECT DISTINCT agencia_id FROM plan_agencia');
+        $agencias = DB::select("SELECT DISTINCT CAST(agencia AS UNSIGNED) AS agencia_id FROM agencias WHERE aplica_incentivo = 1");
         $agencias = array_map(fn($item) => $item->agencia_id, $agencias);
         $agencias = json_encode($agencias);
 

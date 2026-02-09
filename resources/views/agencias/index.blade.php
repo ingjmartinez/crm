@@ -59,6 +59,7 @@
                                                 <th style="min-width: 150px;">Ruta</th>
                                                 <th style="min-width: 120px;">Operador</th>
                                                 <th style="min-width: 120px;">Coordinador</th>
+                                                <th style="min-width: 120px;">Aplica incentivo</th>
                                                 <th class="text-center" style="min-width: 100px;">Acciones</th>
                                             </tr>
                                         </thead>
@@ -137,6 +138,7 @@
                                 <li>Columna F: Ruta</li>
                                 <li>Columna G: Operador</li>
                                 <li>Columna H: Coordinador</li>
+                                <li>Columna I: Aplica Incentivo (SI/NO)</li>
                             </ul>
                         </div>
                         <a href="{{ route('agencias.template') }}" class="btn btn-sm btn-outline-primary">
@@ -174,6 +176,14 @@
                 { data: 'ruta', name: 'ruta', defaultContent: '-' },
                 { data: 'operador', name: 'operador', defaultContent: '-' },
                 { data: 'coordinador', name: 'coordinador', defaultContent: '-' },
+                {
+                    data: 'aplica_incentivo',
+                    name: 'aplica_incentivo',
+                    className: 'text-center',
+                    render: function(data) {
+                        return data ? 'Sí' : 'No';
+                    }
+                },
                 {
                     data: null,
                     orderable: false,
