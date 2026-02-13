@@ -110,7 +110,7 @@
 
 @section('script')
     <script>
-        let AGENCIAS = JSON.parse(agenciasJson.value);
+        let AGENCIAS = JSON.parse(agenciasJson.value).map(String);
 
         document.querySelector('#tipo').addEventListener('change', function() {
             let tipo = this.value;
@@ -122,17 +122,11 @@
             }
         });
 
-        document.querySelector('#agencias').addEventListener('change', function() {
-            // aceptar solo numeros y saltos de linea
-            this.value = this.value.replace(/[^0-9\n]/g, '');
-
-            // Normalizar, eliminar vacios y duplicados
-            let agenciasInput = this.value.split('\n').map(l => l.trim()).filter(l => l !== '');
+        function validarAgencias(textarea) {
+            let agenciasInput = textarea.value.replace(/[^0-9\n]/g, '').split('\n').map(l => l.trim()).filter(l => l !== '');
             let agenciasNoValidas = agenciasInput.filter(ag => !AGENCIAS.includes(ag));
-            let validAgencias = agenciasInput.filter(ag => AGENCIAS.includes(ag));
-            validAgencias = [...new Set(validAgencias)];
+            let validAgencias = [...new Set(agenciasInput.filter(ag => AGENCIAS.includes(ag)))];
 
-            // Mostrar agencias no validas
             let agenciasNoValidasDiv = document.querySelector('#agenciasNoValidas');
             if (agenciasNoValidas.length > 0) {
                 agenciasNoValidasDiv.innerHTML =
@@ -141,10 +135,21 @@
                 agenciasNoValidasDiv.innerHTML = '';
             }
 
-            // Reescribir el textarea solo con agencias válidas y actualizar total
-            this.value = validAgencias.join('\n');
             document.querySelector('#totalAgencias').innerText = validAgencias.length;
+            return validAgencias;
+        }
+
+        // Mientras escribe: solo mostrar feedback, NO reasignar el valor
+        document.querySelector('#agencias').addEventListener('input', function() {
+            validarAgencias(this);
         });
+
+        // Al perder el foco: limpiar y dejar solo agencias válidas
+        document.querySelector('#agencias').addEventListener('blur', function() {
+            let validAgencias = validarAgencias(this);
+            this.value = validAgencias.join('\n');
+        });
+
         document.querySelector('#agencias').addEventListener('paste', function(e) {
             e.preventDefault();
             let pasteData = (e.clipboardData || window.clipboardData).getData('text');
@@ -324,8 +329,10 @@
                     document.querySelector('#porcentaje').value = data.porcentaje_incentivo;
                     document.querySelector('#tipo').value = data.tipo_empleado_incentivo;                    
                     document.querySelector('#tipo').dispatchEvent(new Event('change'));
-                    document.querySelector('#agencias').value = data.agencias.split(',').join('\n') || '';
-                    document.querySelector('#agencias').dispatchEvent(new Event('change'));
+                    document.querySelector('#agencias').value = data.agencias ? data.agencias.split(',').join('\n') : '';
+                    let agenciasTextarea = document.querySelector('#agencias');
+                    let validAgencias = validarAgencias(agenciasTextarea);
+                    agenciasTextarea.value = validAgencias.join('\n');
                     Swal.close();
                 })
                 .catch(error => {
