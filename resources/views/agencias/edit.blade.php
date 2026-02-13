@@ -1,6 +1,23 @@
 @extends('app')
 
 @section('content')
+    @php
+        $valueHorarioAm = old('horario_am', $agencia->horario_am);
+        $valueHorarioPm = old('horario_pm', $agencia->horario_pm);
+
+        $amPartes = explode('/', (string) $valueHorarioAm);
+        $amInicioTs = isset($amPartes[0]) ? strtotime(trim($amPartes[0])) : false;
+        $amFinTs = isset($amPartes[1]) ? strtotime(trim($amPartes[1])) : false;
+        $amInicio = $amInicioTs ? date('H:i', $amInicioTs) : '';
+        $amFin = $amFinTs ? date('H:i', $amFinTs) : '';
+
+        $pmPartes = explode('/', (string) $valueHorarioPm);
+        $pmInicioTs = isset($pmPartes[0]) ? strtotime(trim($pmPartes[0])) : false;
+        $pmFinTs = isset($pmPartes[1]) ? strtotime(trim($pmPartes[1])) : false;
+        $pmInicio = $pmInicioTs ? date('H:i', $pmInicioTs) : '';
+        $pmFin = $pmFinTs ? date('H:i', $pmFinTs) : '';
+    @endphp
+
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -57,6 +74,42 @@
                                             <input type="text" class="form-control @error('terminal') is-invalid @enderror" 
                                                    id="terminal" name="terminal" value="{{ old('terminal', $agencia->terminal) }}">
                                             @error('terminal')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="col-12 col-md-6 mb-3">
+                                            <label for="horario_am" class="form-label">Horario AM</label>
+                                            <div class="row g-2">
+                                                <div class="col-6">
+                                                    <input type="time" class="form-control" id="horario_am_inicio" value="{{ $amInicio }}">
+                                                    <small class="text-muted">Hora inicio</small>
+                                                </div>
+                                                <div class="col-6">
+                                                    <input type="time" class="form-control" id="horario_am_fin" value="{{ $amFin }}">
+                                                    <small class="text-muted">Hora fin</small>
+                                                </div>
+                                            </div>
+                                            <input type="hidden" id="horario_am" name="horario_am" value="{{ old('horario_am', $agencia->horario_am) }}">
+                                            @error('horario_am')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="col-12 col-md-6 mb-3">
+                                            <label for="horario_pm" class="form-label">Horario PM</label>
+                                            <div class="row g-2">
+                                                <div class="col-6">
+                                                    <input type="time" class="form-control" id="horario_pm_inicio" value="{{ $pmInicio }}">
+                                                    <small class="text-muted">Hora inicio</small>
+                                                </div>
+                                                <div class="col-6">
+                                                    <input type="time" class="form-control" id="horario_pm_fin" value="{{ $pmFin }}">
+                                                    <small class="text-muted">Hora fin</small>
+                                                </div>
+                                            </div>
+                                            <input type="hidden" id="horario_pm" name="horario_pm" value="{{ old('horario_pm', $agencia->horario_pm) }}">
+                                            @error('horario_pm')
                                                 <div class="invalid-feedback">{{ $message }}</div>
                                             @enderror
                                         </div>
@@ -148,4 +201,37 @@
             </div>
         </footer>
     </div>
+@endsection
+
+@section('script')
+<script>
+    function toAmPm(hhmm) {
+        if (!hhmm) return '';
+        const [hStr, mStr] = hhmm.split(':');
+        let h = parseInt(hStr, 10);
+        const suffix = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        if (h === 0) h = 12;
+        return `${h}:${mStr} ${suffix}`;
+    }
+
+    function buildRange(startSelector, endSelector) {
+        const start = $(startSelector).val();
+        const end = $(endSelector).val();
+        if (!start && !end) return '';
+        if (!start || !end) return '';
+        return `${toAmPm(start)} / ${toAmPm(end)}`;
+    }
+
+    function syncHorarios() {
+        $('#horario_am').val(buildRange('#horario_am_inicio', '#horario_am_fin'));
+        $('#horario_pm').val(buildRange('#horario_pm_inicio', '#horario_pm_fin'));
+    }
+
+    $(document).ready(function () {
+        syncHorarios();
+        $('#horario_am_inicio, #horario_am_fin, #horario_pm_inicio, #horario_pm_fin').on('change', syncHorarios);
+        $('form').on('submit', syncHorarios);
+    });
+</script>
 @endsection

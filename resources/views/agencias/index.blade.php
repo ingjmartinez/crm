@@ -32,6 +32,9 @@
                                     </div>
                                     <div class="col-12 col-md-6">
                                         <div class="d-flex flex-column flex-sm-row gap-2 justify-content-md-end">
+                                            <a href="{{ route('agencias.incumplimientos') }}" class="btn btn-warning">
+                                                <i class="ri-alarm-warning-line align-bottom me-1"></i> Incumplimientos
+                                            </a>
                                             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importModal">
                                                 <i class="ri-upload-2-line align-bottom me-1"></i> Importar
                                             </button>
@@ -53,6 +56,8 @@
                                                 <th class="text-center" style="min-width: 50px;">ID</th>
                                                 <th style="min-width: 100px;">Agencia</th>
                                                 <th style="min-width: 100px;">Terminal</th>
+                                                <th style="min-width: 170px;">Horario AM</th>
+                                                <th style="min-width: 170px;">Horario PM</th>
                                                 <th style="min-width: 150px;">Nombre Agencia</th>
                                                 <th style="min-width: 100px;">Sistema</th>
                                                 <th style="min-width: 120px;">Ciudad</th>
@@ -132,13 +137,15 @@
                             <ul class="mb-0 mt-2">
                                 <li>Columna A: Agencia</li>
                                 <li>Columna B: Terminal</li>
-                                <li>Columna C: Nombre Agencia</li>
-                                <li>Columna D: Sistema</li>
-                                <li>Columna E: Ciudad</li>
-                                <li>Columna F: Ruta</li>
-                                <li>Columna G: Operador</li>
-                                <li>Columna H: Coordinador</li>
-                                <li>Columna I: Aplica Incentivo (SI/NO)</li>
+                                <li>Columna C: Horario AM (ej: 7:00 AM / 2:00 PM)</li>
+                                <li>Columna D: Horario PM (ej: 2:00 PM / 9:00 PM)</li>
+                                <li>Columna E: Nombre Agencia</li>
+                                <li>Columna F: Sistema</li>
+                                <li>Columna G: Ciudad</li>
+                                <li>Columna H: Ruta</li>
+                                <li>Columna I: Operador</li>
+                                <li>Columna J: Coordinador</li>
+                                <li>Columna K: Aplica Incentivo (SI/NO)</li>
                             </ul>
                         </div>
                         <a href="{{ route('agencias.template') }}" class="btn btn-sm btn-outline-primary">
@@ -170,6 +177,8 @@
                 { data: 'id', name: 'id', className: 'text-center' },
                 { data: 'agencia', name: 'agencia' },
                 { data: 'terminal', name: 'terminal', defaultContent: '-' },
+                { data: 'horario_am', name: 'horario_am', defaultContent: '-' },
+                { data: 'horario_pm', name: 'horario_pm', defaultContent: '-' },
                 { data: 'nombre_agencia', name: 'nombre_agencia', defaultContent: '-' },
                 { data: 'sistema', name: 'sistema', defaultContent: '-' },
                 { data: 'ciudad', name: 'ciudad', defaultContent: '-' },

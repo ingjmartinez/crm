@@ -29,6 +29,8 @@ class AgenciasImport implements ToModel, WithHeadingRow, WithValidation, SkipsEm
         return new Agencia([
             'agencia'        => isset($row['agencia']) ? (string) $row['agencia'] : (isset($row['Agencia']) ? (string) $row['Agencia'] : null),
             'terminal'       => isset($row['terminal']) ? (string) $row['terminal'] : (isset($row['Terminal']) ? (string) $row['Terminal'] : null),
+            'horario_am'     => isset($row['horario_am']) ? (string) $row['horario_am'] : (isset($row['Horario AM']) ? (string) $row['Horario AM'] : (isset($row['horario am']) ? (string) $row['horario am'] : null)),
+            'horario_pm'     => isset($row['horario_pm']) ? (string) $row['horario_pm'] : (isset($row['Horario PM']) ? (string) $row['Horario PM'] : (isset($row['horario pm']) ? (string) $row['horario pm'] : null)),
             'nombre_agencia' => isset($row['nombre_agencia']) ? (string) $row['nombre_agencia'] : (isset($row['Nombre Agencia']) ? (string) $row['Nombre Agencia'] : (isset($row['nombre agencia']) ? (string) $row['nombre agencia'] : null)),
             'sistema'        => isset($row['sistema']) ? (string) $row['sistema'] : (isset($row['Sistema']) ? (string) $row['Sistema'] : null),
             'ciudad'         => isset($row['ciudad']) ? (string) $row['ciudad'] : (isset($row['Ciudad']) ? (string) $row['Ciudad'] : null),
@@ -44,6 +46,8 @@ class AgenciasImport implements ToModel, WithHeadingRow, WithValidation, SkipsEm
         return [
             'agencia' => 'required',
             'terminal' => 'nullable',
+            'horario_am' => 'nullable',
+            'horario_pm' => 'nullable',
             'nombre_agencia' => 'nullable',
             'sistema' => 'nullable',
             'ciudad' => 'nullable',

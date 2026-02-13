@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api;
 use Illuminate\Validation\Rules\In;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MarController;
 use App\Http\Controllers\TokenController;
 use App\Http\Controllers\PremioController;
@@ -23,6 +24,24 @@ use App\Http\Controllers\PagoAOtraEmpresaController;
 use App\Http\Controllers\PagoMismaEmpresaController;
 use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\PagoPorOtraEmpresaController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\TareaController;
+
+/*
+|--------------------------------------------------------------------------
+| Rutas de Autenticación
+|--------------------------------------------------------------------------
+*/
+Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+/*
+|--------------------------------------------------------------------------
+| Rutas Protegidas
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth')->group(function () {
 
 Route::get('/', function () {
     return view('contabilidad');
@@ -187,6 +206,11 @@ Route::get('agencias-list', [AgenciaController::class, 'list'])->name('agencias.
 Route::get('agencias-export', [AgenciaController::class, 'export'])->name('agencias.export');
 Route::post('agencias-import', [AgenciaController::class, 'import'])->name('agencias.import');
 Route::get('agencias-template', [AgenciaController::class, 'template'])->name('agencias.template');
+Route::get('agencias-incumplimientos-horario', [AgenciaController::class, 'incumplimientosHorario'])->name('agencias.incumplimientos');
+Route::get('agencias-incumplimientos-horario/list', [AgenciaController::class, 'listIncumplimientosHorario'])->name('agencias.incumplimientos.list');
+
+Route::resource('usuarios', UserController::class)->except(['show']);
+Route::get('usuarios-list', [UserController::class, 'list'])->name('usuarios.list');
 
 Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-ventas'));
 Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usuarios'));
@@ -243,3 +267,24 @@ Route::get('/ventas-lotonet-dashboard/data', [FinanceDashboardController::class,
 Route::get('/kpi-lotobet', [KpiLotobetController::class, 'index']);
 Route::get('/kpi-lotobet/data', [KpiLotobetController::class, 'getData']);
 Route::get('/kpi-lotobet/productos-agencia', [KpiLotobetController::class, 'getProductosAgencia']);
+
+// ═══ Módulo de Tareas ═══
+Route::get('/tareas', [TareaController::class, 'index'])->name('tareas.index');
+Route::get('/tareas/gantt-data', [TareaController::class, 'ganttData'])->name('tareas.gantt');
+Route::get('/tareas/stats', [TareaController::class, 'stats'])->name('tareas.stats');
+Route::get('/tareas-list', [TareaController::class, 'list'])->name('tareas.list');
+
+// Departamentos CRM (antes de las rutas con parámetros)
+Route::get('/tareas/departamentos', [TareaController::class, 'departamentos'])->name('tareas.departamentos');
+Route::post('/tareas/departamentos', [TareaController::class, 'storeDepartamento'])->name('tareas.departamentos.store');
+Route::put('/tareas/departamentos/{departamento}', [TareaController::class, 'updateDepartamento'])->name('tareas.departamentos.update');
+Route::delete('/tareas/departamentos/{departamento}', [TareaController::class, 'destroyDepartamento'])->name('tareas.departamentos.destroy');
+
+// CRUD Tareas (rutas con parámetro al final)
+Route::post('/tareas', [TareaController::class, 'store'])->name('tareas.store');
+Route::get('/tareas/{tarea}', [TareaController::class, 'show'])->name('tareas.show');
+Route::put('/tareas/{tarea}', [TareaController::class, 'update'])->name('tareas.update');
+Route::delete('/tareas/{tarea}', [TareaController::class, 'destroy'])->name('tareas.destroy');
+Route::post('/tareas/{tarea}/comentario', [TareaController::class, 'addComentario'])->name('tareas.comentario');
+
+}); // Fin middleware auth
