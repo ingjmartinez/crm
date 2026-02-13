@@ -786,7 +786,7 @@
         document.getElementById('filtrar-btn').addEventListener('click', loadData);
         document.getElementById('card-cumplieron').addEventListener('click', showModalCumplieron);
         document.getElementById('card-no-cumplieron').addEventListener('click', showModalNoCumplieron);
-        loadData();
+        // loadData();
     });
 </script>
 @endsection
