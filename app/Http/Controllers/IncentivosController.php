@@ -295,6 +295,7 @@ class IncentivosController extends Controller
                 GROUP BY n.agencia_id, n.cedula, e.empleadoid, c.tipo
             ) net ON net.agencia_id = it.agencia_id AND net.tipo = it.tipo_producto AND it.sistema = net.sistema
             WHERE it.incentivo_id = $incentivoId AND it.tipo_producto IS NOT NULL
+                AND it.venta_mes > 0
             ORDER BY it.agencia_id;"
         );
         return response()->json($data);
@@ -388,12 +389,12 @@ class IncentivosController extends Controller
                 END AS empleadoid
             FROM efectividad_usuarios eu
             INNER JOIN plan_agencias_distribucion pad ON eu.incentivo_id = pad.incentivo_id
-                AND eu.agencia_id = pad.agencia_id
+                AND CAST(eu.agencia_id AS UNSIGNED) = CAST(pad.agencia_id AS UNSIGNED)
                 AND eu.tipo_producto = pad.tipo_producto
             INNER JOIN incentivo_temporal it on eu.incentivo_id = it.incentivo_id
-                AND eu.agencia_id = it.agencia_id
+                AND CAST(eu.agencia_id AS UNSIGNED) = CAST(it.agencia_id AS UNSIGNED)
                 AND eu.tipo_producto = it.tipo_producto
-            INNER JOIN agencias a ON CAST(TRIM(it.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+            INNER JOIN agencias a ON CAST(it.agencia_id AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
                 AND a.aplica_incentivo = 1
             WHERE eu.incentivo_id = $incentivoId AND eu.sistema = '$sistema'
                 AND it.venta_mes >= it.venta_base
