@@ -426,7 +426,10 @@ class IncentivosController extends Controller
         $data = [];
         // Limpiar tabla solo si es el primer lote
         if ($reset) {
-            DB::table('pago_incentivos')->where('incentivo_id', $incentivoId)->delete();
+            DB::table('pago_incentivos')
+                ->where('incentivo_id', $incentivoId)
+                ->where('sistema', $sistema)
+                ->delete();
         }
 
         foreach ($datos as $dato) {
