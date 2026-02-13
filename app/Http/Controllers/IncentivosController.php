@@ -396,7 +396,6 @@ class IncentivosController extends Controller
             INNER JOIN agencias a ON CAST(TRIM(it.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
                 AND a.aplica_incentivo = 1
             WHERE eu.incentivo_id = $incentivoId AND eu.sistema = '$sistema'
-                AND eu.cedula_bet IS NOT NULL AND eu.cedula_net IS NOT NULL
                 AND it.venta_mes >= it.venta_base
                 AND pad.monto_agente > 0
                 AND it.venta_mes > 0;"
