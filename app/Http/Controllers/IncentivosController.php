@@ -533,7 +533,7 @@ class IncentivosController extends Controller
                 'empleadoid' => $dato['empleadoid'],
                 'companyid' => $dato['companyid'],
                 'cedula' => $dato['cedula'],
-                'porcentaje' => floatval(str_replace(',', '', $dato['porcentaje'])),
+                'porcentaje' => 0,
                 'total' => floatval(str_replace(',', '', $dato['total_empleado'])),
             ];
         }
@@ -566,7 +566,7 @@ class IncentivosController extends Controller
         $sql = "SELECT 
                     agencia_id, 
                     tipo_producto, 
-                    sistema, 
+                    pad.sistema, 
                     FORMAT(venta_mes, 2) AS venta_mes,
                     FORMAT(venta_base, 2) AS venta_base,
                     FORMAT(excedente, 2) AS excedente,
