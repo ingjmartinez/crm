@@ -588,7 +588,7 @@ class IncentivosController extends Controller
         $bindings = [$incentivoId, $cedula];
 
         if (!empty($sistema)) {
-            $sql .= " AND sistema = ?";
+            $sql .= " AND pad.sistema = ?";
             $bindings[] = $sistema;
         }
 
