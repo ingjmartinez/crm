@@ -393,10 +393,10 @@ class IncentivosController extends Controller
             INNER JOIN incentivo_temporal it on eu.incentivo_id = it.incentivo_id
                 AND eu.agencia_id = it.agencia_id
                 AND eu.tipo_producto = it.tipo_producto
-            INNER JOIN agencias a
-                ON CAST(TRIM(it.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+            INNER JOIN agencias a ON CAST(TRIM(it.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
                 AND a.aplica_incentivo = 1
             WHERE eu.incentivo_id = $incentivoId AND eu.sistema = '$sistema'
+                AND it.cedula_bet IS NOT NULL AND it.cedula_net IS NOT NULL
                 AND it.venta_mes >= it.venta_base
                 AND pad.monto_agente > 0
                 AND it.venta_mes > 0;"
@@ -488,8 +488,7 @@ class IncentivosController extends Controller
                 INNER JOIN (
                     SELECT pad.agencia_id, SUM(pad.monto_coordinador) AS total_agencia, pad.porcentaje_coordinador
                     FROM plan_agencias_distribucion pad
-                    INNER JOIN agencias a
-                        ON CAST(TRIM(pad.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                    INNER JOIN agencias a ON CAST(TRIM(pad.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
                         AND a.aplica_incentivo = 1
                     WHERE pad.incentivo_id = ? AND pad.excedente > 0 AND pad.sistema = ?
                     GROUP BY pad.agencia_id, pad.porcentaje_coordinador
@@ -623,8 +622,7 @@ class IncentivosController extends Controller
             "WITH totales_producto AS (
                 SELECT SUM(pad.monto_administrativo) AS total, pad.tipo_producto
                 FROM plan_agencias_distribucion pad
-                INNER JOIN agencias a
-                    ON CAST(TRIM(pad.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
+                INNER JOIN agencias a ON CAST(TRIM(pad.agencia_id) AS UNSIGNED) = CAST(a.terminal AS UNSIGNED)
                     AND a.aplica_incentivo = 1
                 WHERE pad.incentivo_id = $incentivoId AND pad.excedente > 0
                 GROUP BY pad.tipo_producto
