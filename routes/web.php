@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Api;
-use Illuminate\Validation\Rules\In;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MarController;
@@ -208,6 +207,7 @@ Route::post('agencias-import', [AgenciaController::class, 'import'])->name('agen
 Route::get('agencias-template', [AgenciaController::class, 'template'])->name('agencias.template');
 Route::get('agencias-incumplimientos-horario', [AgenciaController::class, 'incumplimientosHorario'])->name('agencias.incumplimientos');
 Route::get('agencias-incumplimientos-horario/list', [AgenciaController::class, 'listIncumplimientosHorario'])->name('agencias.incumplimientos.list');
+Route::post('agencias-incumplimientos-horario/send-mail', [AgenciaController::class, 'enviarMiniReporteIncumplimiento'])->name('agencias.incumplimientos.send-mail');
 
 Route::resource('usuarios', UserController::class)->except(['show']);
 Route::get('usuarios-list', [UserController::class, 'list'])->name('usuarios.list');
@@ -276,6 +276,7 @@ Route::get('/tareas-list', [TareaController::class, 'list'])->name('tareas.list'
 
 // Departamentos CRM (antes de las rutas con parámetros)
 Route::get('/tareas/departamentos', [TareaController::class, 'departamentos'])->name('tareas.departamentos');
+Route::get('/tareas/usuarios', [TareaController::class, 'usuarios'])->name('tareas.usuarios');
 Route::post('/tareas/departamentos', [TareaController::class, 'storeDepartamento'])->name('tareas.departamentos.store');
 Route::put('/tareas/departamentos/{departamento}', [TareaController::class, 'updateDepartamento'])->name('tareas.departamentos.update');
 Route::delete('/tareas/departamentos/{departamento}', [TareaController::class, 'destroyDepartamento'])->name('tareas.departamentos.destroy');

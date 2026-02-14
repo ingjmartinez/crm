@@ -320,6 +320,16 @@ class TareaController extends Controller
         return response()->json(DepartamentoCrm::activos()->orderBy('nombre')->get());
     }
 
+    public function usuarios()
+    {
+        return response()->json(
+            User::query()
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get()
+        );
+    }
+
     public function storeDepartamento(Request $request)
     {
         $validated = $request->validate([

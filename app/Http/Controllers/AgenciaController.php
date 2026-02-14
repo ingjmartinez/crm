@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\IncumplimientoHorarioReportMail;
 use App\Models\Agencia;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\AgenciasExport;
 use App\Imports\AgenciasImport;
@@ -253,6 +255,55 @@ class AgenciaController extends Controller
             'total' => count($rows),
             'incumplidas' => collect($rows)->where('incumplida', true)->count(),
             'data' => array_values($rows),
+        ]);
+    }
+
+    /**
+     * Enviar mini reporte por correo de una fila de incumplimiento.
+     */
+    public function enviarMiniReporteIncumplimiento(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:150'],
+            'fecha' => ['required', 'date'],
+            'registro' => ['required', 'array'],
+            'registro.agencia' => ['nullable', 'string', 'max:25'],
+            'registro.nombre_agencia' => ['nullable', 'string', 'max:150'],
+            'registro.terminal' => ['nullable', 'string', 'max:50'],
+            'registro.horario_am' => ['nullable', 'string', 'max:35'],
+            'registro.horario_pm' => ['nullable', 'string', 'max:35'],
+            'registro.entrada_real' => ['nullable', 'string', 'max:20'],
+            'registro.salida_real' => ['nullable', 'string', 'max:20'],
+            'registro.minutos_tarde' => ['nullable', 'numeric', 'min:0'],
+            'registro.minutos_salida_antes' => ['nullable', 'numeric', 'min:0'],
+            'registro.fuente' => ['nullable', 'string', 'max:30'],
+            'registro.estado' => ['nullable', 'string', 'max:20'],
+            'registro.observaciones' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $registro = $validated['registro'];
+
+        $payload = [
+            'fecha' => Carbon::parse($validated['fecha'])->format('d/m/Y'),
+            'agencia' => $registro['agencia'] ?? '-',
+            'nombre_agencia' => $registro['nombre_agencia'] ?? '-',
+            'terminal' => $registro['terminal'] ?? '-',
+            'horario_am' => $registro['horario_am'] ?? '-',
+            'horario_pm' => $registro['horario_pm'] ?? '-',
+            'entrada_real' => $registro['entrada_real'] ?? '-',
+            'salida_real' => $registro['salida_real'] ?? '-',
+            'minutos_tarde' => (int) round((float) ($registro['minutos_tarde'] ?? 0)),
+            'minutos_salida_antes' => (int) round((float) ($registro['minutos_salida_antes'] ?? 0)),
+            'fuente' => $registro['fuente'] ?? '-',
+            'estado' => strtoupper((string) ($registro['estado'] ?? 'CUMPLE')),
+            'observaciones' => $registro['observaciones'] ?? 'Sin observaciones',
+        ];
+
+        Mail::to($validated['email'])->send(new IncumplimientoHorarioReportMail($payload));
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Mini reporte enviado correctamente.',
         ]);
     }
 
