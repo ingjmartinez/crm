@@ -234,6 +234,8 @@ Route::get('/incentivos/list/pago-incentivos-admin-detalle', [IncentivosControll
 Route::post('/incentivos/save/pago-incentivos-admin', [IncentivosController::class, 'savePagoAdmin']);
 
 Route::get('/incentivos/reporte-pagos', [IncentivosController::class, 'reportePagos']);
+Route::get('/incentivos/reporte-nuevo-incentivo-view', [IncentivosController::class, 'reporteNuevoIncentivoView']);
+Route::get('/incentivos/reporte-nuevo-incentivo', [IncentivosController::class, 'reporteNuevoIncentivo']);
 Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
 
 Route::get('/incentivos/empleados', [EmpleadoController::class, 'incentivos']);

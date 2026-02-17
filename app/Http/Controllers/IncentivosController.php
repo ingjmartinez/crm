@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -836,6 +837,182 @@ class IncentivosController extends Controller
     public function reportePagos()
     {
         return view('incentivos.reporte-pagos');
+    }
+
+    public function reporteNuevoIncentivoView()
+    {
+        return view('incentivos.reporte-nuevo-incentivo');
+    }
+
+    public function reporteNuevoIncentivo(Request $request)
+    {
+        ini_set('max_execution_time', 600);
+        ini_set('memory_limit', '1G');
+
+        $request->validate([
+            'fecha_ini' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_ini',
+            'sistema' => 'nullable|in:Todos,Lotobet,Lotonet',
+            'minimo_agencia' => 'nullable|numeric|min:0',
+            'min_dias_venta' => 'nullable|integer|min:1',
+            'filtro_cumplimiento' => 'nullable|in:todos,cumplidos,no_cumplidos',
+            'pct_1' => 'nullable|numeric|min:0',
+            'pct_2' => 'nullable|numeric|min:0',
+            'pct_3' => 'nullable|numeric|min:0',
+            'pct_4' => 'nullable|numeric|min:0',
+        ]);
+
+        $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
+        $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
+
+        // El "último mes" se define como el mes ANTERIOR completo según la fecha fin seleccionada.
+        // Ejemplo: si fecha_fin está en febrero, se evalúa enero completo.
+        $mesAnterior = Carbon::parse($fechaFinSeleccionada)->subMonthNoOverflow();
+        $evalIni = $mesAnterior->copy()->startOfMonth()->toDateString();
+        $evalFin = $mesAnterior->copy()->endOfMonth()->toDateString();
+
+        $sistema = $request->input('sistema', 'Todos');
+        $minimoAgencia = (float) $request->input('minimo_agencia', 80000);
+        $minDiasVenta = (int) $request->input('min_dias_venta', 10);
+        $filtroCumplimiento = $request->input('filtro_cumplimiento', 'todos');
+
+        // Porcentaje real aplicado sobre ventas del mes actual (1 => 1%)
+        $pct1 = (float) $request->input('pct_1', 1);
+        $pct2 = (float) $request->input('pct_2', 2);
+        $pct3 = (float) $request->input('pct_3', 3);
+        $pct4 = (float) $request->input('pct_4', 4);
+
+        $buildBaseQuery = function (string $desde, string $hasta) use ($sistema) {
+            $betQuery = DB::table('vt_usuarios_bet')
+                ->selectRaw("cedula, monto, fecha, 'Lotobet' as sistema")
+                ->whereBetween('fecha', [$desde, $hasta]);
+
+            $netQuery = DB::table('vt_usuarios_net')
+                ->selectRaw("cedula, monto, fecha, 'Lotonet' as sistema")
+                ->whereBetween('fecha', [$desde, $hasta]);
+
+            if ($sistema === 'Lotobet') {
+                return $betQuery;
+            }
+
+            if ($sistema === 'Lotonet') {
+                return $netQuery;
+            }
+
+            return $betQuery->unionAll($netQuery);
+        };
+
+        $rowsUltimoMes = DB::query()
+            ->fromSub($buildBaseQuery($evalIni, $evalFin), 'y')
+            ->selectRaw('y.cedula, SUM(y.monto) AS ventas_ultimo_mes, COUNT(DISTINCT DATE(y.fecha)) AS dias_ventas_ultimo_mes')
+            ->whereNotNull('y.cedula')
+            ->where('y.cedula', '<>', '')
+            ->groupBy('y.cedula')
+            ->get();
+
+        $rowsMesActual = DB::query()
+            ->fromSub($buildBaseQuery($fechaIniSeleccionada, $fechaFinSeleccionada), 'z')
+            ->selectRaw('z.cedula, SUM(z.monto) AS ventas_mes_actual, COUNT(DISTINCT DATE(z.fecha)) AS dias_ventas_mes_actual')
+            ->whereNotNull('z.cedula')
+            ->where('z.cedula', '<>', '')
+            ->groupBy('z.cedula')
+            ->get();
+
+        $ultimoMesByCedula = $rowsUltimoMes->keyBy('cedula');
+        $mesActualByCedula = $rowsMesActual->keyBy('cedula');
+        $cedulas = $ultimoMesByCedula->keys()->merge($mesActualByCedula->keys())->unique()->values();
+
+        $rawData = $cedulas->map(function ($cedula) use ($ultimoMesByCedula, $mesActualByCedula, $minimoAgencia, $minDiasVenta, $pct1, $pct2, $pct3, $pct4) {
+            $rowUltimoMes = $ultimoMesByCedula->get($cedula);
+            $rowMesActual = $mesActualByCedula->get($cedula);
+
+            $ventas = $rowUltimoMes ? (float) $rowUltimoMes->ventas_ultimo_mes : 0;
+            $ventasMesActual = $rowMesActual ? (float) $rowMesActual->ventas_mes_actual : 0;
+            $diasMesActual = $rowMesActual ? (int) $rowMesActual->dias_ventas_mes_actual : 0;
+
+            // Cumplimiento: mínimo vendido y mínimo de días en el mes actual (rango filtrado)
+            $cumple = $ventasMesActual >= $minimoAgencia && $diasMesActual >= $minDiasVenta;
+
+            $pct = 0.00;
+            $factor = 0.00;
+
+            if ($cumple) {
+                if ($ventasMesActual < 100000) {
+                    $pct = $pct1;
+                } elseif ($ventasMesActual < 150000) {
+                    $pct = $pct2;
+                } elseif ($ventasMesActual < 200000) {
+                    $pct = $pct3;
+                } else {
+                    $pct = $pct4;
+                }
+
+                $factor = $pct / 100;
+            }
+
+            return [
+                'cedula' => $cedula,
+                'ventas_num' => $ventas,
+                'ventas_mes_actual_num' => $ventasMesActual,
+                'dias_ventas_mes_actual' => $diasMesActual,
+                'cumple_bool' => $cumple,
+                'pct_num' => $pct,
+                'nuevo_incentivo_num' => $ventasMesActual * $factor,
+            ];
+        })->sortByDesc('ventas_num')->values();
+
+        if ($filtroCumplimiento === 'cumplidos') {
+            $rawData = $rawData->where('cumple_bool', true)->values();
+        } elseif ($filtroCumplimiento === 'no_cumplidos') {
+            $rawData = $rawData->where('cumple_bool', false)->values();
+        }
+
+        // Total vendido debe reflejar la columna "Ventas Mes Actual"
+        $totalVendido = (float) $rawData->sum('ventas_mes_actual_num');
+        $totalIncentivo = (float) $rawData->sum('nuevo_incentivo_num');
+
+        $data = $rawData->map(function ($row) use ($minimoAgencia) {
+            $pctTexto = $row['pct_num'] > 0
+                ? rtrim(rtrim(number_format($row['pct_num'], 2, '.', ''), '0'), '.') . '%'
+                : '0%';
+
+            return [
+                'cedula' => $row['cedula'],
+                'ventas_ultimo_mes' => number_format($row['ventas_num'], 2, '.', ','),
+                'ventas_mes_actual' => number_format($row['ventas_mes_actual_num'], 2, '.', ','),
+                'dias_ventas_mes_actual' => $row['dias_ventas_mes_actual'],
+                'minimo_agencia' => number_format($minimoAgencia, 2, '.', ','),
+                'cumple_minimo' => $row['cumple_bool'] ? 'SI' : 'NO',
+                'pct_comision' => $pctTexto,
+                'nuevo_incentivo' => number_format($row['nuevo_incentivo_num'], 2, '.', ','),
+            ];
+        })->values();
+
+        return response()->json([
+            'meta' => [
+                'sistema' => $sistema,
+                'fecha_ini' => $request->input('fecha_ini'),
+                'fecha_fin' => $request->input('fecha_fin'),
+                'eval_ini' => $evalIni,
+                'eval_fin' => $evalFin,
+                'minimo_agencia' => $minimoAgencia,
+                'min_dias_venta' => $minDiasVenta,
+                'filtro_cumplimiento' => $filtroCumplimiento,
+                'pct_1' => $pct1,
+                'pct_2' => $pct2,
+                'pct_3' => $pct3,
+                'pct_4' => $pct4,
+                'total_vendido' => $totalVendido,
+                'total_vendido_ultimo_mes' => (float) $rawData->sum('ventas_num'),
+                'total_vendido_mes_actual' => (float) $rawData->sum('ventas_mes_actual_num'),
+                'total_incentivo' => $totalIncentivo,
+                'total_vendido_format' => number_format($totalVendido, 2, '.', ','),
+                'total_vendido_ultimo_mes_format' => number_format((float) $rawData->sum('ventas_num'), 2, '.', ','),
+                'total_vendido_mes_actual_format' => number_format((float) $rawData->sum('ventas_mes_actual_num'), 2, '.', ','),
+                'total_incentivo_format' => number_format($totalIncentivo, 2, '.', ','),
+            ],
+            'data' => $data,
+        ]);
     }
 
     public function reportePagoIncentivos(Request $request)

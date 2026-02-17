@@ -130,6 +130,65 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="col-lg-12">
+                        <div class="card">
+                            <div class="card-header d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h5 class="card-title mb-0">Reporte Nuevo Incentivo</h5>
+                                    <small class="text-muted">Evalúa el último mes dentro del rango seleccionado.</small>
+                                </div>
+                                <div class="d-flex gap-3 align-items-end flex-wrap">
+                                    <div>
+                                        <label class="mb-0" for="ni_sistema">Sistema</label>
+                                        <select id="ni_sistema" class="form-select">
+                                            <option value="Todos">Todos</option>
+                                            <option value="Lotobet">Lotobet</option>
+                                            <option value="Lotonet">Lotonet</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="mb-0" for="ni_fecha_ini">Fecha inicio</label>
+                                        <input type="date" id="ni_fecha_ini" class="form-control">
+                                    </div>
+                                    <div>
+                                        <label class="mb-0" for="ni_fecha_fin">Fecha fin</label>
+                                        <input type="date" id="ni_fecha_fin" class="form-control">
+                                    </div>
+                                    <div>
+                                        <label class="mb-0" for="ni_minimo_agencia">Mínimo agencia</label>
+                                        <input type="number" id="ni_minimo_agencia" class="form-control" value="80000" min="0" step="0.01">
+                                    </div>
+                                    <div>
+                                        <label class="mb-0" for="ni_min_dias">Mín. días venta</label>
+                                        <input type="number" id="ni_min_dias" class="form-control" value="10" min="1" step="1">
+                                    </div>
+                                    <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">
+                                        Generar Reporte
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-2 text-muted" id="ni_rango_evaluado"></div>
+                                <table id="tableNuevoIncentivo"
+                                    class="table table-bordered dt-responsive nowrap table-striped align-middle"
+                                    style="width:100%">
+                                    <thead>
+                                        <tr>
+                                            <th>Cédula</th>
+                                            <th>Ventas Último Mes</th>
+                                            <th>Días Ventas Último Mes</th>
+                                            <th>Mínimo Agencia</th>
+                                            <th>Cumple Mínimo</th>
+                                            <th>% Comisión</th>
+                                            <th>Nuevo Incentivo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div><!--end row-->
             </div>
             <!-- container-fluid -->
@@ -141,6 +200,16 @@
 @section('script')
     <script>
         let datosToSave = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const fechaHoy = new Date();
+            const yyyy = fechaHoy.getFullYear();
+            const mm = String(fechaHoy.getMonth() + 1).padStart(2, '0');
+            const dd = String(fechaHoy.getDate()).padStart(2, '0');
+
+            document.getElementById('ni_fecha_fin').value = `${yyyy}-${mm}-${dd}`;
+            document.getElementById('ni_fecha_ini').value = `${yyyy}-${mm}-01`;
+        });
 
         function list() {
             let totalPago = 0;
@@ -241,8 +310,120 @@
                 });
         }
 
+        function listNuevoIncentivo() {
+            const sistema = document.getElementById('ni_sistema').value;
+            const fechaIni = document.getElementById('ni_fecha_ini').value;
+            const fechaFin = document.getElementById('ni_fecha_fin').value;
+            const minimoAgencia = document.getElementById('ni_minimo_agencia').value;
+            const minDias = document.getElementById('ni_min_dias').value;
+
+            if (!fechaIni || !fechaFin) {
+                Swal.fire({
+                    title: 'Información',
+                    text: 'Debe seleccionar fecha inicio y fecha fin.',
+                    icon: 'warning'
+                });
+                return;
+            }
+
+            Swal.fire({
+                title: 'Procesando Información ...',
+                icon: 'info',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                timerProgressBar: true,
+                didOpen: () => Swal.showLoading()
+            });
+
+            if ($.fn.DataTable.isDataTable('#tableNuevoIncentivo')) {
+                $('#tableNuevoIncentivo').DataTable().destroy();
+            }
+            $('#tableNuevoIncentivo tbody').empty();
+
+            const params = new URLSearchParams({
+                sistema: sistema,
+                fecha_ini: fechaIni,
+                fecha_fin: fechaFin,
+                minimo_agencia: minimoAgencia,
+                min_dias_venta: minDias,
+            });
+
+            fetch('/incentivos/reporte-nuevo-incentivo?' + params.toString())
+                .then(response => response.json())
+                .then(resp => {
+                    if ('message' in resp) {
+                        Swal.fire({
+                            title: 'Información',
+                            text: resp.message,
+                            icon: 'warning'
+                        });
+                        return;
+                    }
+
+                    const data = resp.data || [];
+                    const tableBody = document.querySelector('#tableNuevoIncentivo tbody');
+                    tableBody.innerHTML = '';
+
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.cedula}</td>
+                            <td>${item.ventas_ultimo_mes}</td>
+                            <td>${item.dias_ventas_ultimo_mes}</td>
+                            <td>${item.minimo_agencia}</td>
+                            <td>${item.cumple_minimo}</td>
+                            <td>${item.pct_comision}</td>
+                            <td>${item.nuevo_incentivo}</td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+
+                    const meta = resp.meta || {};
+                    document.getElementById('ni_rango_evaluado').textContent =
+                        `Mes evaluado: ${meta.eval_ini || ''} al ${meta.eval_fin || ''}`;
+
+                    $('#tableNuevoIncentivo').DataTable({
+                        responsive: true,
+                        dom: 'Bfrtip',
+                        buttons: [
+                            'copy', 'csv', 'excel', 'pdf', 'print'
+                        ],
+                        order: [[1, 'desc']],
+                        pageLength: 10000,
+                        scrollY: '500px',
+                        scrollCollapse: true,
+                        language: {
+                            lengthMenu: 'Mostrar _MENU_ registros por página',
+                            info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                            infoEmpty: 'No hay registros disponibles',
+                            infoFiltered: '(filtrado de _MAX_ registros totales)',
+                            search: 'Buscar:',
+                            paginate: {
+                                first: 'Primero',
+                                last: 'Último',
+                                next: 'Siguiente',
+                                previous: 'Anterior'
+                            }
+                        }
+                    });
+
+                    Swal.close();
+                })
+                .catch(error => {
+                    Swal.fire({
+                        title: 'Error',
+                        text: error,
+                        icon: 'warning'
+                    });
+                });
+        }
+
         document.querySelector("#btnGenerar").addEventListener('click', function() {
             list();
+        });
+
+        document.querySelector('#btnGenerarNuevoIncentivo').addEventListener('click', function() {
+            listNuevoIncentivo();
         });
     </script>
 @endsection

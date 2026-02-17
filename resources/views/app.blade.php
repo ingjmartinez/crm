@@ -1290,6 +1290,11 @@
                                             Reporte de Pagos
                                         </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/incentivos/reporte-nuevo-incentivo-view') }}" class="nav-link" data-key="t-incentivos-reporte-nuevo">
+                                            Reporte Nuevo Incentivo
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>
