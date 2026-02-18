@@ -185,14 +185,45 @@ class AgenciaController extends Controller
             $terminalKey = $this->normalizarTerminal($agencia->terminal);
             $asistencia = $mapAsistencia[$terminalKey] ?? null;
 
-            $entradaProgramada = $this->extraerHoraInicio($agencia->horario_am);
-            $salidaProgramada = $this->extraerHoraFin($agencia->horario_pm);
+            $entradaAmProgramada = $this->extraerHoraInicio($agencia->horario_am);
+            $salidaAmProgramada = $this->extraerHoraFin($agencia->horario_am);
+            $entradaPmProgramada = $this->extraerHoraInicio($agencia->horario_pm);
+            $salidaPmProgramada = $this->extraerHoraFin($agencia->horario_pm);
+
+            // Para validar tardanza/salida anticipada se mantiene:
+            // entrada del primer bloque disponible y salida del último bloque disponible.
+            $entradaProgramada = $entradaAmProgramada ?: $entradaPmProgramada;
+            $salidaProgramada = $salidaPmProgramada ?: $salidaAmProgramada;
+
+            $entradaAmProgramadaDateTime = $this->parseFechaHora($fecha, $entradaAmProgramada);
+            $salidaAmProgramadaDateTime = $this->parseFechaHora($fecha, $salidaAmProgramada);
+            $entradaPmProgramadaDateTime = $this->parseFechaHora($fecha, $entradaPmProgramada);
+            $salidaPmProgramadaDateTime = $this->parseFechaHora($fecha, $salidaPmProgramada);
 
             $entradaProgramadaDateTime = $this->parseFechaHora($fecha, $entradaProgramada);
             $salidaProgramadaDateTime = $this->parseFechaHora($fecha, $salidaProgramada);
 
-            $entradaReal = isset($asistencia['entrada']) && $asistencia['entrada'] ? Carbon::parse($asistencia['entrada']) : null;
-            $salidaReal = isset($asistencia['salida']) && $asistencia['salida'] ? Carbon::parse($asistencia['salida']) : null;
+            $entradasReales = $this->parsearHorasReales($asistencia['entradas'] ?? []);
+            $salidasReales = $this->parsearHorasReales($asistencia['salidas'] ?? []);
+
+            // Compatibilidad: se mantiene entrada_real como primera entrada y salida_real como última salida.
+            $entradaReal = $entradasReales[0] ?? null;
+            $salidaReal = !empty($salidasReales) ? $salidasReales[array_key_last($salidasReales)] : null;
+
+            // Nuevas columnas: salida AM real y entrada PM real.
+            $salidaAmReal = $this->seleccionarHoraCercana(
+                $salidasReales,
+                $salidaAmProgramadaDateTime,
+                $entradaAmProgramadaDateTime,
+                $entradaPmProgramadaDateTime
+            );
+
+            $entradaPmReal = $this->seleccionarHoraCercana(
+                $entradasReales,
+                $entradaPmProgramadaDateTime,
+                $salidaAmProgramadaDateTime,
+                $salidaPmProgramadaDateTime
+            );
 
             $incumpleEntrada = false;
             $incumpleSalida = false;
@@ -235,9 +266,15 @@ class AgenciaController extends Controller
                 'terminal' => $agencia->terminal,
                 'horario_am' => $agencia->horario_am,
                 'horario_pm' => $agencia->horario_pm,
+                'entrada_am_programada' => $entradaAmProgramada,
+                'salida_am_programada' => $salidaAmProgramada,
+                'entrada_pm_programada' => $entradaPmProgramada,
+                'salida_pm_programada' => $salidaPmProgramada,
                 'entrada_programada' => $entradaProgramada,
                 'salida_programada' => $salidaProgramada,
                 'entrada_real' => $entradaReal ? $entradaReal->format('h:i A') : '-',
+                'salida_am_real' => $salidaAmReal ? $salidaAmReal->format('h:i A') : '-',
+                'entrada_pm_real' => $entradaPmReal ? $entradaPmReal->format('h:i A') : '-',
                 'salida_real' => $salidaReal ? $salidaReal->format('h:i A') : '-',
                 'minutos_tarde' => $minutosTarde,
                 'minutos_salida_antes' => $minutosSalidaAntes,
@@ -272,7 +309,13 @@ class AgenciaController extends Controller
             'registro.terminal' => ['nullable', 'string', 'max:50'],
             'registro.horario_am' => ['nullable', 'string', 'max:35'],
             'registro.horario_pm' => ['nullable', 'string', 'max:35'],
+            'registro.entrada_am_programada' => ['nullable', 'string', 'max:20'],
+            'registro.salida_am_programada' => ['nullable', 'string', 'max:20'],
+            'registro.entrada_pm_programada' => ['nullable', 'string', 'max:20'],
+            'registro.salida_pm_programada' => ['nullable', 'string', 'max:20'],
             'registro.entrada_real' => ['nullable', 'string', 'max:20'],
+            'registro.salida_am_real' => ['nullable', 'string', 'max:20'],
+            'registro.entrada_pm_real' => ['nullable', 'string', 'max:20'],
             'registro.salida_real' => ['nullable', 'string', 'max:20'],
             'registro.minutos_tarde' => ['nullable', 'numeric', 'min:0'],
             'registro.minutos_salida_antes' => ['nullable', 'numeric', 'min:0'],
@@ -290,7 +333,13 @@ class AgenciaController extends Controller
             'terminal' => $registro['terminal'] ?? '-',
             'horario_am' => $registro['horario_am'] ?? '-',
             'horario_pm' => $registro['horario_pm'] ?? '-',
+            'entrada_am_programada' => $registro['entrada_am_programada'] ?? '-',
+            'salida_am_programada' => $registro['salida_am_programada'] ?? '-',
+            'entrada_pm_programada' => $registro['entrada_pm_programada'] ?? '-',
+            'salida_pm_programada' => $registro['salida_pm_programada'] ?? '-',
             'entrada_real' => $registro['entrada_real'] ?? '-',
+            'salida_am_real' => $registro['salida_am_real'] ?? '-',
+            'entrada_pm_real' => $registro['entrada_pm_real'] ?? '-',
             'salida_real' => $registro['salida_real'] ?? '-',
             'minutos_tarde' => (int) round((float) ($registro['minutos_tarde'] ?? 0)),
             'minutos_salida_antes' => (int) round((float) ($registro['minutos_salida_antes'] ?? 0)),
@@ -311,52 +360,87 @@ class AgenciaController extends Controller
     {
         $bet = DB::table('asistencias_bet')
             ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM agencia_id), ''), '0') as terminal_key")
-            ->selectRaw('MIN(primer_login) as entrada')
-            ->selectRaw('MAX(ultimo_login) as salida')
+            ->selectRaw('primer_login as entrada')
+            ->selectRaw('ultimo_login as salida')
             ->whereDate('fecha', $fecha)
-            ->groupBy('terminal_key')
             ->get();
 
         $net = DB::table('asistencias_net')
             ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM agencia), ''), NULLIF(TRIM(LEADING '0' FROM terminal), ''), '0') as terminal_key")
-            ->selectRaw('MIN(entrada) as entrada')
-            ->selectRaw('MAX(salida) as salida')
+            ->selectRaw('entrada')
+            ->selectRaw('salida')
             ->where(function ($q) use ($fecha) {
                 $q->whereDate('entrada', $fecha)
                   ->orWhereDate('salida', $fecha);
             })
-            ->groupBy('terminal_key')
             ->get();
 
         $map = [];
 
         foreach ($bet as $row) {
-            $map[$row->terminal_key] = [
-                'entrada' => $row->entrada,
-                'salida' => $row->salida,
-                'fuente' => 'BET',
-            ];
+            if (!isset($map[$row->terminal_key])) {
+                $map[$row->terminal_key] = [
+                    'entrada' => null,
+                    'salida' => null,
+                    'entradas' => [],
+                    'salidas' => [],
+                    'has_bet' => false,
+                    'has_net' => false,
+                    'fuente' => '-',
+                ];
+            }
+
+            if ($row->entrada) {
+                $map[$row->terminal_key]['entradas'][] = $row->entrada;
+                if (!$map[$row->terminal_key]['entrada'] || Carbon::parse($row->entrada)->lessThan(Carbon::parse($map[$row->terminal_key]['entrada']))) {
+                    $map[$row->terminal_key]['entrada'] = $row->entrada;
+                }
+            }
+
+            if ($row->salida) {
+                $map[$row->terminal_key]['salidas'][] = $row->salida;
+                if (!$map[$row->terminal_key]['salida'] || Carbon::parse($row->salida)->greaterThan(Carbon::parse($map[$row->terminal_key]['salida']))) {
+                    $map[$row->terminal_key]['salida'] = $row->salida;
+                }
+            }
+
+            $map[$row->terminal_key]['has_bet'] = true;
         }
 
         foreach ($net as $row) {
             if (!isset($map[$row->terminal_key])) {
                 $map[$row->terminal_key] = [
-                    'entrada' => $row->entrada,
-                    'salida' => $row->salida,
-                    'fuente' => 'NET',
+                    'entrada' => null,
+                    'salida' => null,
+                    'entradas' => [],
+                    'salidas' => [],
+                    'has_bet' => false,
+                    'has_net' => false,
+                    'fuente' => '-',
                 ];
-                continue;
             }
 
-            if ($row->entrada && (!$map[$row->terminal_key]['entrada'] || Carbon::parse($row->entrada)->lessThan(Carbon::parse($map[$row->terminal_key]['entrada'])))) {
-                $map[$row->terminal_key]['entrada'] = $row->entrada;
+            if ($row->entrada) {
+                $map[$row->terminal_key]['entradas'][] = $row->entrada;
+                if (!$map[$row->terminal_key]['entrada'] || Carbon::parse($row->entrada)->lessThan(Carbon::parse($map[$row->terminal_key]['entrada']))) {
+                    $map[$row->terminal_key]['entrada'] = $row->entrada;
+                }
             }
 
-            if ($row->salida && (!$map[$row->terminal_key]['salida'] || Carbon::parse($row->salida)->greaterThan(Carbon::parse($map[$row->terminal_key]['salida'])))) {
-                $map[$row->terminal_key]['salida'] = $row->salida;
+            if ($row->salida) {
+                $map[$row->terminal_key]['salidas'][] = $row->salida;
+                if (!$map[$row->terminal_key]['salida'] || Carbon::parse($row->salida)->greaterThan(Carbon::parse($map[$row->terminal_key]['salida']))) {
+                    $map[$row->terminal_key]['salida'] = $row->salida;
+                }
             }
 
-            $map[$row->terminal_key]['fuente'] = 'BET/NET';
+            $map[$row->terminal_key]['has_net'] = true;
+        }
+
+        foreach ($map as $terminalKey => $row) {
+            $map[$terminalKey]['fuente'] = $row['has_bet'] && $row['has_net']
+                ? 'BET/NET'
+                : ($row['has_bet'] ? 'BET' : 'NET');
         }
 
         return $map;
@@ -403,6 +487,54 @@ class AgenciaController extends Controller
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    private function parsearHorasReales(array $horas): array
+    {
+        $parsed = [];
+
+        foreach ($horas as $hora) {
+            if (!$hora) {
+                continue;
+            }
+
+            try {
+                $parsed[] = Carbon::parse($hora);
+            } catch (\Throwable $e) {
+                // Ignorar valores no parseables
+            }
+        }
+
+        usort($parsed, fn (Carbon $a, Carbon $b) => $a->getTimestamp() <=> $b->getTimestamp());
+
+        return $parsed;
+    }
+
+    private function seleccionarHoraCercana(array $horas, ?Carbon $objetivo, ?Carbon $desde = null, ?Carbon $hasta = null): ?Carbon
+    {
+        $filtradas = array_values(array_filter($horas, function (Carbon $hora) use ($desde, $hasta) {
+            if ($desde && $hora->lessThan($desde)) {
+                return false;
+            }
+
+            if ($hasta && $hora->greaterThan($hasta)) {
+                return false;
+            }
+
+            return true;
+        }));
+
+        if (empty($filtradas)) {
+            return null;
+        }
+
+        if (!$objetivo) {
+            return $filtradas[0];
+        }
+
+        usort($filtradas, fn (Carbon $a, Carbon $b) => abs($a->diffInSeconds($objetivo, false)) <=> abs($b->diffInSeconds($objetivo, false)));
+
+        return $filtradas[0] ?? null;
     }
 
     /**

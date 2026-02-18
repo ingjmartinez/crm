@@ -41,19 +41,41 @@
                                     <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['terminal'] ?? '-' }}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Horario AM</td>
-                                    <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['horario_am'] ?? '-' }}</td>
+                                    <td colspan="2" style="padding: 10px 14px; background-color: #eef2ff; color: #405189; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;">Horario programado</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Horario PM</td>
-                                    <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['horario_pm'] ?? '-' }}</td>
+                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Entrada AM</td>
+                                    <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['entrada_am_programada'] ?? '-' }}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Entrada real</td>
+                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Salida AM</td>
+                                    <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['salida_am_programada'] ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Entrada PM</td>
+                                    <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['entrada_pm_programada'] ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Salida PM</td>
+                                    <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['salida_pm_programada'] ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2" style="padding: 10px 14px; background-color: #e8f7f4; color: #0f766e; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;">Marcas reales capturadas</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Entrada AM real</td>
                                     <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['entrada_real'] ?? '-' }}</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Salida real</td>
+                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Salida AM real</td>
+                                    <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['salida_am_real'] ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Entrada PM real</td>
+                                    <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['entrada_pm_real'] ?? '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 14px; background-color: #f8f9fb; color: #878a99; font-size: 13px;">Salida PM real</td>
                                     <td style="padding: 12px 14px; color: #212529; font-size: 13px;">{{ $data['salida_real'] ?? '-' }}</td>
                                 </tr>
                                 <tr>

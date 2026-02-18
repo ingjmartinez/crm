@@ -54,12 +54,15 @@
                                     <table id="tableIncumplimientos" class="table table-bordered table-striped align-middle" style="width:100%; font-size:0.85rem;">
                                         <thead class="table-light">
                                             <tr>
-                                                <th>Terminal</th>
                                                 <th>Agencia</th>
-                                                <th>Horario AM</th>
-                                                <th>Horario PM</th>
-                                                <th>Entrada Real</th>
-                                                <th>Salida Real</th>
+                                                <th>Entrada AM</th>
+                                                <th>Salida AM</th>
+                                                <th>Entrada PM</th>
+                                                <th>Salida PM</th>
+                                                <th>Entrada  AM Real</th>
+                                                <th>Salida AM Real</th>
+                                                <th>Entrada PM Real</th>
+                                                <th>Salida PM Real</th>
                                                 <th>Min. Tarde</th>
                                                 <th>Min. Salida Antes</th>
                                                 <th>Fuente</th>
@@ -339,13 +342,24 @@
             responsive: true,
             scrollX: true,
             columns: [
-                { data: 'terminal' },
                 { data: 'nombre_agencia', render: function(data, type, row) {
                     return (data || row.agencia || '-') + `<div class="text-muted fs-11">Cod: ${row.agencia || '-'}</div>`;
                 }},
-                { data: 'horario_am', defaultContent: '-' },
-                { data: 'horario_pm', defaultContent: '-' },
+                { data: 'entrada_am_programada', defaultContent: '-', className: 'text-center', render: function(data) {
+                    return data || '-';
+                }},
+                { data: 'salida_am_programada', defaultContent: '-', className: 'text-center', render: function(data) {
+                    return data || '-';
+                }},
+                { data: 'entrada_pm_programada', defaultContent: '-', className: 'text-center', render: function(data) {
+                    return data || '-';
+                }},
+                { data: 'salida_pm_programada', defaultContent: '-', className: 'text-center', render: function(data) {
+                    return data || '-';
+                }},
                 { data: 'entrada_real', className: 'text-center' },
+                { data: 'salida_am_real', className: 'text-center' },
+                { data: 'entrada_pm_real', className: 'text-center' },
                 { data: 'salida_real', className: 'text-center' },
                 { data: 'minutos_tarde', className: 'text-center', render: function(data) {
                     const minutos = Math.round(parseFloat(data || 0));
