@@ -36,6 +36,9 @@
                                         </div>
                                     </div>
                                     <div class="col-md-6 text-md-end">
+                                        <button class="btn btn-info" id="btnConfigEstados">
+                                            <i class="ri-settings-3-line me-1"></i> Configurar estados
+                                        </button>
                                         <button class="btn btn-primary" id="btnConsultar">
                                             <i class="ri-search-line me-1"></i> Consultar
                                         </button>
@@ -140,6 +143,102 @@
                     </div>
                 </div>
 
+                <div class="modal fade" id="modalConfigEstadosInc" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header bg-info text-white">
+                                <h5 class="modal-title"><i class="ri-settings-3-line me-2"></i>Configurar estados por minutos</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="text-muted mb-3">Define etiquetas y rangos de minutos (se toma el mayor entre Min. tarde y Min. salida antes).</p>
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered align-middle mb-0" style="font-size: 0.9rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 38%;">Etiqueta</th>
+                                                <th style="width: 20%;">Desde (min)</th>
+                                                <th style="width: 20%;">Hasta (min)</th>
+                                                <th style="width: 22%;">Color</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><input type="text" class="form-control" id="cfg-label-0"></td>
+                                                <td><input type="number" min="0" class="form-control" id="cfg-min-0"></td>
+                                                <td><input type="number" min="0" class="form-control" id="cfg-max-0"></td>
+                                                <td>
+                                                    <select class="form-select" id="cfg-color-0">
+                                                        <option value="success">Verde</option>
+                                                        <option value="primary">Azul</option>
+                                                        <option value="warning">Amarillo</option>
+                                                        <option value="danger">Rojo</option>
+                                                        <option value="secondary">Gris</option>
+                                                        <option value="dark">Negro</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><input type="text" class="form-control" id="cfg-label-1"></td>
+                                                <td><input type="number" min="0" class="form-control" id="cfg-min-1"></td>
+                                                <td><input type="number" min="0" class="form-control" id="cfg-max-1"></td>
+                                                <td>
+                                                    <select class="form-select" id="cfg-color-1">
+                                                        <option value="success">Verde</option>
+                                                        <option value="primary">Azul</option>
+                                                        <option value="warning">Amarillo</option>
+                                                        <option value="danger">Rojo</option>
+                                                        <option value="secondary">Gris</option>
+                                                        <option value="dark">Negro</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><input type="text" class="form-control" id="cfg-label-2"></td>
+                                                <td><input type="number" min="0" class="form-control" id="cfg-min-2"></td>
+                                                <td><input type="number" min="0" class="form-control" id="cfg-max-2"></td>
+                                                <td>
+                                                    <select class="form-select" id="cfg-color-2">
+                                                        <option value="success">Verde</option>
+                                                        <option value="primary">Azul</option>
+                                                        <option value="warning">Amarillo</option>
+                                                        <option value="danger">Rojo</option>
+                                                        <option value="secondary">Gris</option>
+                                                        <option value="dark">Negro</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><input type="text" class="form-control" id="cfg-label-3"></td>
+                                                <td><input type="number" min="0" class="form-control" id="cfg-min-3"></td>
+                                                <td><input type="number" min="0" class="form-control" id="cfg-max-3" placeholder="Vacío = sin límite"></td>
+                                                <td>
+                                                    <select class="form-select" id="cfg-color-3">
+                                                        <option value="success">Verde</option>
+                                                        <option value="primary">Azul</option>
+                                                        <option value="warning">Amarillo</option>
+                                                        <option value="danger">Rojo</option>
+                                                        <option value="secondary">Gris</option>
+                                                        <option value="dark">Negro</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-light" id="btnRestablecerConfigEstados">Restablecer</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                                <button type="button" class="btn btn-info" id="btnGuardarConfigEstados">
+                                    <i class="ri-save-line me-1"></i> Guardar configuración
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -158,10 +257,157 @@
 @section('script')
 <script>
     let table;
+    let ultimaRespuesta = [];
     const CSRF = '{{ csrf_token() }}';
     const URL_TAREAS = '{{ url('/tareas') }}';
     const URL_DEPTOS = '{{ url('/tareas/departamentos') }}';
     const URL_USUARIOS_TAREAS = '{{ url('/tareas/usuarios') }}';
+    const CFG_STORAGE_KEY = 'incumplimientos_config_estados_v1';
+
+    const CFG_DEFAULT = {
+        niveles: [
+            { key: 'cumple', label: 'Cumplen dentro de 5 minutos', min: 0, max: 5, color: 'success' },
+            { key: 'aviso', label: 'Aviso dentro de 6-8 minutos', min: 6, max: 8, color: 'primary' },
+            { key: 'incumple', label: 'Incumple dentro de 9-15 minutos', min: 9, max: 15, color: 'warning' },
+            { key: 'requiere_visita', label: 'Requiere visita dentro de 16 minutos y más', min: 16, max: null, color: 'danger' },
+        ]
+    };
+
+    let configEstados = cargarConfigEstados();
+
+    function clonarConfig(base) {
+        return JSON.parse(JSON.stringify(base));
+    }
+
+    function cargarConfigEstados() {
+        try {
+            const raw = localStorage.getItem(CFG_STORAGE_KEY);
+            if (!raw) return clonarConfig(CFG_DEFAULT);
+            const parsed = JSON.parse(raw);
+            if (!parsed || !Array.isArray(parsed.niveles) || parsed.niveles.length !== 4) {
+                return clonarConfig(CFG_DEFAULT);
+            }
+            return parsed;
+        } catch (e) {
+            return clonarConfig(CFG_DEFAULT);
+        }
+    }
+
+    function guardarConfigEstadosEnStorage() {
+        localStorage.setItem(CFG_STORAGE_KEY, JSON.stringify(configEstados));
+    }
+
+    function poblarModalConfigEstados() {
+        configEstados.niveles.forEach((nivel, i) => {
+            $(`#cfg-label-${i}`).val(nivel.label || '');
+            $(`#cfg-min-${i}`).val((nivel.min ?? 0));
+            $(`#cfg-max-${i}`).val(nivel.max ?? '');
+            $(`#cfg-color-${i}`).val(nivel.color || 'secondary');
+        });
+    }
+
+    function leerConfigEstadosDesdeModal() {
+        const niveles = [0, 1, 2, 3].map((i) => {
+            const min = parseInt($(`#cfg-min-${i}`).val(), 10);
+            const maxRaw = $(`#cfg-max-${i}`).val();
+            const max = maxRaw === '' ? null : parseInt(maxRaw, 10);
+            return {
+                key: (configEstados.niveles[i]?.key || `nivel_${i}`),
+                label: ($(`#cfg-label-${i}`).val() || '').trim(),
+                min: Number.isNaN(min) ? 0 : min,
+                max: Number.isNaN(max) ? null : max,
+                color: $(`#cfg-color-${i}`).val() || 'secondary',
+            };
+        });
+
+        return { niveles };
+    }
+
+    function validarConfigEstados(cfg) {
+        if (!cfg || !Array.isArray(cfg.niveles) || cfg.niveles.length !== 4) {
+            return 'La configuración debe tener 4 niveles.';
+        }
+
+        for (let i = 0; i < cfg.niveles.length; i++) {
+            const n = cfg.niveles[i];
+
+            if (!n.label) {
+                return `La etiqueta del nivel ${i + 1} es obligatoria.`;
+            }
+
+            if (n.min == null || Number.isNaN(n.min) || n.min < 0) {
+                return `El "Desde" del nivel ${i + 1} debe ser un número mayor o igual a 0.`;
+            }
+
+            if (n.max != null && (Number.isNaN(n.max) || n.max < 0)) {
+                return `El "Hasta" del nivel ${i + 1} debe ser un número mayor o igual a 0 o vacío.`;
+            }
+
+            if (n.max != null && n.max < n.min) {
+                return `En el nivel ${i + 1}, "Hasta" no puede ser menor que "Desde".`;
+            }
+        }
+
+        return null;
+    }
+
+    function obtenerMinutosImpacto(row) {
+        const tarde = Math.round(parseFloat(row?.minutos_tarde || 0));
+        const salidaAntes = Math.round(parseFloat(row?.minutos_salida_antes || 0));
+        return Math.max(tarde, salidaAntes);
+    }
+
+    function evaluarEstadoPorConfig(minutos) {
+        const niveles = [...(configEstados.niveles || [])].sort((a, b) => (a.min ?? 0) - (b.min ?? 0));
+
+        for (const nivel of niveles) {
+            const min = Number(nivel.min ?? 0);
+            const max = nivel.max == null ? null : Number(nivel.max);
+
+            if (minutos >= min && (max == null || minutos <= max)) {
+                return nivel;
+            }
+        }
+
+        return niveles[niveles.length - 1] || { key: 'sin_estado', label: 'Sin estado', color: 'secondary' };
+    }
+
+    function aplicarClasificacionConfig(filas) {
+        return (filas || []).map((row) => {
+            const minutosImpacto = obtenerMinutosImpacto(row);
+            const estadoCfg = evaluarEstadoPorConfig(minutosImpacto);
+
+            return {
+                ...row,
+                estado: estadoCfg.label,
+                estado_key: estadoCfg.key,
+                estado_color: estadoCfg.color || 'secondary',
+                minutos_impacto: minutosImpacto,
+                incumplida: estadoCfg.key !== 'cumple',
+            };
+        });
+    }
+
+    function renderizarTablaConConfig(resp) {
+        const filasClasificadas = aplicarClasificacionConfig(resp.data || []);
+        const soloIncumplidas = $('#soloIncumplidas').is(':checked');
+        const data = soloIncumplidas
+            ? filasClasificadas.filter((r) => r.estado_key !== 'cumple')
+            : filasClasificadas;
+
+        if (table) {
+            table.clear().rows.add(data).draw();
+        }
+
+        const total = filasClasificadas.length;
+        const aviso = filasClasificadas.filter((r) => r.estado_key === 'aviso').length;
+        const incumple = filasClasificadas.filter((r) => r.estado_key === 'incumple').length;
+        const visita = filasClasificadas.filter((r) => r.estado_key === 'requiere_visita').length;
+
+        $('#resumenBox').html(
+            `<strong>Fecha:</strong> ${resp.fecha} | <strong>Total:</strong> ${total} | <strong>Aviso:</strong> ${aviso} | <strong>Incumple:</strong> ${incumple} | <strong>Requiere visita:</strong> ${visita}`
+        );
+    }
 
     function cargarDepartamentosTareas() {
         $.getJSON(URL_DEPTOS, function(data) {
@@ -310,25 +556,17 @@
 
     function cargarData() {
         const fecha = $('#fecha').val();
-        const soloIncumplidas = $('#soloIncumplidas').is(':checked') ? 1 : 0;
 
         $.ajax({
             url: '{{ route('agencias.incumplimientos.list') }}',
             method: 'GET',
             data: {
                 fecha: fecha,
-                solo_incumplidas: soloIncumplidas
+                solo_incumplidas: 0
             },
             success: function(resp) {
-                const data = resp.data || [];
-
-                if (table) {
-                    table.clear().rows.add(data).draw();
-                }
-
-                $('#resumenBox').html(
-                    `<strong>Fecha:</strong> ${resp.fecha} | <strong>Total:</strong> ${resp.total} | <strong>Incumplidas:</strong> ${resp.incumplidas}`
-                );
+                ultimaRespuesta = resp || { data: [] };
+                renderizarTablaConConfig(ultimaRespuesta);
             },
             error: function() {
                 Swal.fire('Error', 'No se pudo cargar la información.', 'error');
@@ -370,11 +608,9 @@
                     return minutos > 0 ? `<span class="badge bg-warning text-dark">${minutos}</span>` : '<span class="badge bg-success">0</span>';
                 }},
                 { data: 'fuente', className: 'text-center' },
-                { data: 'estado', className: 'text-center', render: function(data) {
-                    if (data === 'INCUMPLE') {
-                        return '<span class="badge bg-danger">INCUMPLE</span>';
-                    }
-                    return '<span class="badge bg-success">CUMPLE</span>';
+                { data: 'estado', className: 'text-center', render: function(data, type, row) {
+                    const badgeColor = row?.estado_color || 'secondary';
+                    return `<span class="badge bg-${badgeColor}">${data || 'Sin estado'}</span>`;
                 }},
                 { data: 'observaciones' },
                 { data: null, orderable: false, searchable: false, className: 'text-center', render: function(data, type, row) {
@@ -429,10 +665,45 @@
 
         $('#btnGuardarTareaInc').on('click', guardarTareaDesdeIncumplimiento);
 
+        $('#btnConfigEstados').on('click', function() {
+            poblarModalConfigEstados();
+            $('#modalConfigEstadosInc').modal('show');
+        });
+
+        $('#btnGuardarConfigEstados').on('click', function() {
+            const cfg = leerConfigEstadosDesdeModal();
+            const error = validarConfigEstados(cfg);
+
+            if (error) {
+                Swal.fire('Configuración inválida', error, 'warning');
+                return;
+            }
+
+            configEstados = cfg;
+            guardarConfigEstadosEnStorage();
+            $('#modalConfigEstadosInc').modal('hide');
+
+            if (ultimaRespuesta && Array.isArray(ultimaRespuesta.data)) {
+                renderizarTablaConConfig(ultimaRespuesta);
+            }
+
+            Swal.fire('Configuración guardada', 'Los estados fueron actualizados correctamente.', 'success');
+        });
+
+        $('#btnRestablecerConfigEstados').on('click', function() {
+            configEstados = clonarConfig(CFG_DEFAULT);
+            poblarModalConfigEstados();
+        });
+
         cargarDepartamentosTareas();
         cargarUsuariosTareas();
 
         $('#btnConsultar').on('click', cargarData);
+        $('#soloIncumplidas').on('change', function() {
+            if (ultimaRespuesta && Array.isArray(ultimaRespuesta.data)) {
+                renderizarTablaConConfig(ultimaRespuesta);
+            }
+        });
 
         cargarData();
     });
