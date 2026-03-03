@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -73,10 +72,13 @@ class AuthController extends Controller
         ]);
 
         $email = strtolower(trim($data['email_reset']));
+        $cacheStore = Cache::store('file');
         $rateKey = 'reset-password:' . sha1($email);
 
-        if (RateLimiter::tooManyAttempts($rateKey, 1)) {
-            $seconds = RateLimiter::availableIn($rateKey);
+        $nextAllowedAt = (int) $cacheStore->get($rateKey, 0);
+
+        if ($nextAllowedAt > time()) {
+            $seconds = $nextAllowedAt - time();
             $minutes = intdiv($seconds, 60);
             $remainingSeconds = $seconds % 60;
 
@@ -97,7 +99,7 @@ class AuthController extends Controller
 
         $codigo = strtoupper(Str::random(8));
 
-        Cache::put(
+        $cacheStore->put(
             'password-reset-code:' . sha1($email),
             [
                 'code_hash' => Hash::make($codigo),
@@ -124,7 +126,7 @@ class AuthController extends Controller
             ]);
         }
 
-        RateLimiter::hit($rateKey, 180);
+        $cacheStore->put($rateKey, time() + 180, now()->addSeconds(180));
 
         return redirect()
             ->route('login.reset-password.form', ['email' => $email])
@@ -158,7 +160,8 @@ class AuthController extends Controller
 
         $email = strtolower(trim($data['email']));
         $cacheKey = 'password-reset-code:' . sha1($email);
-        $payload = Cache::get($cacheKey);
+        $cacheStore = Cache::store('file');
+        $payload = $cacheStore->get($cacheKey);
 
         if (!$payload) {
             return back()->withErrors([
@@ -183,8 +186,8 @@ class AuthController extends Controller
         $user->password = Hash::make($data['password']);
         $user->save();
 
-        Cache::forget($cacheKey);
-        RateLimiter::clear('reset-password:' . sha1($email));
+        $cacheStore->forget($cacheKey);
+        $cacheStore->forget('reset-password:' . sha1($email));
 
         return redirect()
             ->route('login')
