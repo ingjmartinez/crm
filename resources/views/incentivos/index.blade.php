@@ -831,6 +831,10 @@
 
                     $('#tableItems').DataTable({
                         responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [1, 2], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'
@@ -912,7 +916,11 @@
                     });
 
                     $('#tableAgenciaPlan').DataTable({
-                        // responsive: true,
+                        responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [1, 2], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'
@@ -1004,6 +1012,10 @@
 
                     $('#tableEfectividad').DataTable({
                         responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [1, 2], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'
@@ -1083,6 +1095,10 @@
 
                     $('#tablePagoAgente').DataTable({
                         responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [1, 2], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'
@@ -1164,6 +1180,10 @@
 
                     $('#tablePagoCoordinador').DataTable({
                         responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [2, 3], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'
@@ -1241,7 +1261,11 @@
                     });
 
                     $('#tablePagoCoordinadorDetalle').DataTable({
-                        // responsive: true,
+                        responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [1, 2], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'
@@ -1321,6 +1345,10 @@
 
                     $('#tablePagoAdmin').DataTable({
                         responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [2, 3], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'
@@ -1390,7 +1418,11 @@
                     });
 
                     $('#tablePagoAdminDetalle').DataTable({
-                        // responsive: true,
+                        responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [1, 2], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'

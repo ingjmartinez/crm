@@ -95,6 +95,18 @@
                                                 </button>
                                             </div>
                                         </div>
+
+                                        <div class="col-12 mb-3">
+                                            <label for="roles" class="form-label">Roles</label>
+                                            <select id="roles" name="roles[]" class="form-select" multiple>
+                                                @foreach($roles as $role)
+                                                    <option value="{{ $role->name }}" @selected(in_array($role->name, old('roles', $userRoles ?? [])))>
+                                                        {{ $role->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <div class="form-text">Puedes seleccionar uno o varios roles.</div>
+                                        </div>
                                     </div>
 
                                     <div class="d-flex flex-column flex-sm-row justify-content-end gap-2 mt-3">

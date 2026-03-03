@@ -36,6 +36,8 @@
     <link href="{{ asset('css/app.min.css') }}" rel="stylesheet" type="text/css" />
     <!-- custom Css-->
     <link href="{{ asset('css/custom.min.css') }}" rel="stylesheet" type="text/css" />
+    <!-- Mobile Responsive CSS -->
+    <link href="{{ asset('css/mobile.css') }}" rel="stylesheet" type="text/css" />
 
 </head>
 
@@ -1042,6 +1044,18 @@
                                         <a href="{{ url('/usuarios') }}" class="nav-link" data-key="t-usuarios">
                                             Usuarios </a>
                                     </li>
+                                    @can('roles.view')
+                                        <li class="nav-item">
+                                            <a href="{{ route('roles.index') }}" class="nav-link" data-key="t-roles">
+                                                Roles </a>
+                                        </li>
+                                    @endcan
+                                    @can('permissions.view')
+                                        <li class="nav-item">
+                                            <a href="{{ route('permissions.index') }}" class="nav-link" data-key="t-permissions">
+                                                Permisos </a>
+                                        </li>
+                                    @endcan
                                 </ul>
                             </div>
                         </li>
@@ -1227,6 +1241,10 @@
                                     <li class="nav-item">
                                         <a href="{{ url('/reportes-ventas-por-agencia') }}" class="nav-link"
                                             data-key="t-mailbox"> Ventas por Agencia </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/reportes-ventas-por-cedula') }}" class="nav-link"
+                                            data-key="t-mailbox"> Ventas por Cédula </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{{ url('/reportes-cruce-usuarios') }}" class="nav-link"
@@ -2004,6 +2022,8 @@
     <script src="{{ asset('libs/sweetalert2/sweetalert2.min.js') }}"></script>
     <!-- App js -->
     <script src="{{ asset('js/app.js') }}"></script>
+    <!-- Mobile Optimization JS -->
+    <script src="{{ asset('js/mobile-optimization.js') }}"></script>
 
     @yield('script')
 </body>

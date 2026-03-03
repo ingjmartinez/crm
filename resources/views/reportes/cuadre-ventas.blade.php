@@ -148,6 +148,11 @@
                     { data: 'Total_Dia', className: 'text-end' }
                 ],
                 autoWidth: false,
+                responsive: true,
+                scrollX: true,
+                columnDefs: [
+                    { targets: [2, 3, 4], visible: $(window).width() > 768 }
+                ],
                 dom: 'Bfrtip',
                 buttons: [
                     'copy', 'csv', 'excel', 'pdf', 'print'

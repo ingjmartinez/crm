@@ -377,6 +377,49 @@ class ReporteController extends Controller
         return response()->json($resultados);
     }
 
+    public function ventasPorCedula(Request $request)
+    {
+        return view('reportes.ventas-por-cedula');
+    }
+
+    public function listVentasPorCedula(Request $request)
+    {
+        $sistema = $request->input('sistema', 'todos');
+        $fechaInicio = $request->input('fecha_inicio');
+        $fechaFin = $request->input('fecha_fin');
+        $cedula = preg_replace('/\D/', '', (string) $request->input('cedula', ''));
+
+        if (!$fechaInicio || !$fechaFin || !$cedula || $fechaInicio > $fechaFin) {
+            return response()->json([]);
+        }
+
+        $buildConsultaBase = function (string $tabla) use ($fechaInicio, $fechaFin, $cedula) {
+            return DB::table($tabla)
+                ->selectRaw('CAST(cedula AS CHAR(11)) AS Identificacion, DATE(fecha) AS Dia, agencia_id AS Agencia, monto')
+                ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+                ->whereRaw("REPLACE(REPLACE(cedula, '-', ''), ' ', '') = ?", [$cedula]);
+        };
+
+        if ($sistema === 'lotonet') {
+            $ventasUnificadas = $buildConsultaBase('vt_usuarios_net');
+        } elseif ($sistema === 'lotobet') {
+            $ventasUnificadas = $buildConsultaBase('vt_usuarios_bet');
+        } else {
+            $ventasUnificadas = $buildConsultaBase('vt_usuarios_net')
+                ->unionAll($buildConsultaBase('vt_usuarios_bet'));
+        }
+
+        $resultados = DB::query()
+            ->fromSub($ventasUnificadas, 'ventas_unificadas')
+            ->selectRaw('Identificacion, Dia, Agencia, CAST(SUM(monto) AS DECIMAL(15,2)) AS Total_Dia_Agencia')
+            ->groupBy('Identificacion', 'Dia', 'Agencia')
+            ->orderBy('Dia', 'asc')
+            ->orderByDesc('Total_Dia_Agencia')
+            ->get();
+
+        return response()->json($resultados);
+    }
+
     public function listCruceUsuarios(Request $request)
     {
         $sistema = $request->input('sistema', 'Lotobet');

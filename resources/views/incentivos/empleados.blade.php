@@ -285,6 +285,10 @@
 
                     $('#tableEmpleados').DataTable({
                         responsive: true,
+                        scrollX: true,
+                        columnDefs: [
+                            { targets: [3, 4, 5], visible: $(window).width() > 768 }
+                        ],
                         dom: 'Bfrtip',
                         buttons: [
                             'copy', 'csv', 'excel', 'pdf', 'print'

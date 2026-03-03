@@ -149,6 +149,11 @@
                         Swal.close();
                     }
                 },
+                responsive: true,
+                scrollX: true,
+                columnDefs: [
+                    { targets: [1, 3], visible: $(window).width() > 768 }
+                ],
                 columns: [
                     { data: 'Identificacion' },
                     { data: 'Empleado_ID' },

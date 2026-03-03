@@ -229,6 +229,10 @@
                         $('#tableVentas').DataTable({
                             destroy: true,
                             responsive: true,
+                            scrollX: true,
+                            columnDefs: [
+                                { targets: [4, 5, 6, 7, 8, 9, 10], visible: $(window).width() > 768 }
+                            ],
                             dom: 'Bfrtip',
                             buttons: [
                                 'copy', 'csv', 'excel', 'pdf', 'print'

@@ -77,6 +77,16 @@
                         </div>
                     @endif
 
+                    @if (session('status'))
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="ri-checkbox-circle-line me-2 fs-5"></i>
+                                <div>{{ session('status') }}</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    @endif
+
                     <!-- Formulario -->
                     <form action="{{ route('login') }}" method="POST">
                         @csrf
@@ -120,6 +130,31 @@
                             </button>
                         </div>
                     </form>
+
+                    <hr class="my-4">
+
+                    <div>
+                        <h6 class="mb-3">¿Olvidaste tu contraseña?</h6>
+                        <form action="{{ route('login.reset-password') }}" method="POST">
+                            @csrf
+                            <div class="mb-3">
+                                <label for="email_reset" class="form-label">Correo para reset</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="ri-mail-send-line"></i></span>
+                                    <input type="email" class="form-control @error('email_reset') is-invalid @enderror"
+                                        id="email_reset" name="email_reset" placeholder="correo@ejemplo.com"
+                                        value="{{ old('email_reset', old('email')) }}" required>
+                                </div>
+                                @error('email_reset')
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <button class="btn btn-outline-warning w-100 py-2" type="submit">
+                                <i class="ri-mail-send-line me-1"></i> Enviar código para resetear contraseña
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
 

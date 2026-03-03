@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
@@ -16,12 +17,19 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::updateOrCreate(
+        $admin = User::updateOrCreate(
             ['email' => 'admin@grupojoselito.com'],
             [
                 'name' => 'Administrador',
                 'password' => Hash::make('password123'),
             ]
         );
+
+        $this->call(RolePermissionSeeder::class);
+
+        $superAdminRole = Role::where('name', 'superadmin')->where('guard_name', 'web')->first();
+        if ($superAdminRole) {
+            $admin->syncRoles([$superAdminRole->name]);
+        }
     }
 }

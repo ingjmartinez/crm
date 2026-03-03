@@ -25,6 +25,8 @@ use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\PagoPorOtraEmpresaController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\TareaController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\PermissionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,6 +35,9 @@ use App\Http\Controllers\TareaController;
 */
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login/reset-password', [AuthController::class, 'resetPassword'])->name('login.reset-password');
+Route::get('/login/reset-password/form', [AuthController::class, 'showResetPasswordForm'])->name('login.reset-password.form');
+Route::post('/login/reset-password/confirm', [AuthController::class, 'confirmResetPassword'])->name('login.reset-password.confirm');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 /*
@@ -47,6 +52,10 @@ Route::get('/', function () {
 });
 
 Route::get('/api-cuentas', [Api::class, 'getCuentas']);
+Route::post('/api-cuentas', [Api::class, 'storeCuenta']);
+Route::post('/api-cuentas/sync', [Api::class, 'syncCuentas']);
+Route::put('/api-cuentas/{id}', [Api::class, 'updateCuenta']);
+Route::delete('/api-cuentas/{id}', [Api::class, 'destroyCuenta']);
 Route::get('/api-entradas', [Api::class, 'getEntradas']);
 
 Route::get('/generar-token', [TokenController::class, 'generateToken']);
@@ -191,6 +200,9 @@ Route::get('/reportes-ventas-por-agencia', [ReporteController::class, 'ventasPor
 Route::get('/reportes-ventas-por-agencia/list', [ReporteController::class, 'listVentasPorAgencia']);
 Route::get('/reportes-ventas-por-agencia/agencia', [ReporteController::class, 'buscarAgencia']);
 
+Route::get('/reportes-ventas-por-cedula', [ReporteController::class, 'ventasPorCedula']);
+Route::get('/reportes-ventas-por-cedula/list', [ReporteController::class, 'listVentasPorCedula']);
+
 Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
 Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
 
@@ -211,6 +223,9 @@ Route::post('agencias-incumplimientos-horario/send-mail', [AgenciaController::cl
 
 Route::resource('usuarios', UserController::class)->except(['show']);
 Route::get('usuarios-list', [UserController::class, 'list'])->name('usuarios.list');
+
+Route::resource('roles', RoleController::class)->except(['show']);
+Route::resource('permissions', PermissionController::class)->except(['show']);
 
 Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-ventas'));
 Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usuarios'));

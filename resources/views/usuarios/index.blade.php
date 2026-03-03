@@ -32,9 +32,11 @@
                                     </div>
                                     <div class="col-12 col-md-6">
                                         <div class="d-flex flex-column flex-sm-row gap-2 justify-content-md-end">
-                                            <a href="{{ route('usuarios.create') }}" class="btn btn-primary">
-                                                <i class="ri-add-line align-bottom me-1"></i> Nuevo Usuario
-                                            </a>
+                                            @can('usuarios.create')
+                                                <a href="{{ route('usuarios.create') }}" class="btn btn-primary">
+                                                    <i class="ri-add-line align-bottom me-1"></i> Nuevo Usuario
+                                                </a>
+                                            @endcan
                                         </div>
                                     </div>
                                 </div>
@@ -47,6 +49,7 @@
                                                 <th class="text-center" style="min-width: 50px;">ID</th>
                                                 <th style="min-width: 150px;">Nombre</th>
                                                 <th style="min-width: 200px;">Correo Electrónico</th>
+                                                <th style="min-width: 200px;">Roles</th>
                                                 <th style="min-width: 150px;">Fecha de Registro</th>
                                                 <th class="text-center" style="min-width: 100px;">Acciones</th>
                                             </tr>
@@ -104,6 +107,8 @@
 <script>
     $(document).ready(function() {
         var currentUserId = {{ auth()->id() }};
+        var canEdit = @json(auth()->user()->can('usuarios.edit'));
+        var canDelete = @json(auth()->user()->can('usuarios.delete'));
 
         var table = $('#tableUsuarios').DataTable({
             processing: true,
@@ -111,10 +116,14 @@
             ajax: '{{ route('usuarios.list') }}',
             responsive: true,
             scrollX: true,
+            columnDefs: [
+                { targets: [4], visible: $(window).width() > 768 }
+            ],
             columns: [
                 { data: 'id', name: 'id', className: 'text-center' },
                 { data: 'name', name: 'name' },
                 { data: 'email', name: 'email' },
+                { data: 'roles', name: 'roles', orderable: false, searchable: false },
                 { data: 'created_at', name: 'created_at' },
                 {
                     data: null,
@@ -123,13 +132,17 @@
                     className: 'text-center',
                     render: function(data, type, row) {
                         var buttons = `
-                            <div class="d-flex gap-1 justify-content-center flex-nowrap">
+                            <div class="d-flex gap-1 justify-content-center flex-nowrap">`;
+
+                        if (canEdit) {
+                            buttons += `
                                 <a href="/usuarios/${row.id}/edit" class="btn btn-sm btn-success" title="Editar">
                                     <i class="ri-pencil-line"></i>
                                 </a>`;
+                        }
 
-                        // No mostrar botón eliminar para el usuario actual
-                        if (row.id !== currentUserId) {
+                        // No mostrar boton eliminar para el usuario actual
+                        if (canDelete && row.id !== currentUserId) {
                             buttons += `
                                 <button class="btn btn-sm btn-danger btn-delete" data-id="${row.id}" title="Eliminar">
                                     <i class="ri-delete-bin-line"></i>

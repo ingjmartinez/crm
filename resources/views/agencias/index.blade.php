@@ -8,10 +8,10 @@
                 <!-- start page title -->
                 <div class="row">
                     <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">Mantenimiento de Agencias</h4>
+                        <div class="page-title-box d-flex flex-column flex-md-row align-items-start align-md-items-center justify-content-between">
+                            <h4 class="mb-3 mb-md-0">Mantenimiento de Agencias</h4>
 
-                            <div class="page-title-right">
+                            <div class="page-title-right w-100 w-md-auto">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="javascript: void(0);">Administración</a></li>
                                     <li class="breadcrumb-item active">Agencias</li>
@@ -26,46 +26,50 @@
                     <div class="col-lg-12">
                         <div class="card">
                             <div class="card-header">
-                                <div class="row align-items-center">
+                                <div class="row align-items-start align-md-items-center">
                                     <div class="col-12 col-md-6 mb-3 mb-md-0">
                                         <h5 class="card-title mb-0">Lista de Agencias</h5>
                                     </div>
                                     <div class="col-12 col-md-6">
-                                        <div class="d-flex flex-column flex-sm-row gap-2 justify-content-md-end">
-                                            <a href="{{ route('agencias.incumplimientos') }}" class="btn btn-warning">
-                                                <i class="ri-alarm-warning-line align-bottom me-1"></i> Incumplimientos
-                                            </a>
-                                            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importModal">
-                                                <i class="ri-upload-2-line align-bottom me-1"></i> Importar
-                                            </button>
-                                            <a href="{{ route('agencias.export') }}" class="btn btn-info">
-                                                <i class="ri-download-2-line align-bottom me-1"></i> Exportar
-                                            </a>
-                                            <a href="{{ route('agencias.create') }}" class="btn btn-primary">
-                                                <i class="ri-add-line align-bottom me-1"></i> Nueva
-                                            </a>
+                                        <div class="d-flex flex-column gap-2 gap-md-0">
+                                            <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+                                                <a href="{{ route('agencias.incumplimientos') }}" class="btn btn-warning btn-sm flex-grow-1 flex-md-grow-0">
+                                                    <i class="ri-alarm-warning-line align-bottom me-1"></i><span class="d-none d-md-inline">Incumplimientos</span><span class="d-md-none">Incump.</span>
+                                                </a>
+                                                <button type="button" class="btn btn-success btn-sm flex-grow-1 flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#importModal">
+                                                    <i class="ri-upload-2-line align-bottom me-1"></i><span class="d-none d-md-inline">Importar</span><span class="d-md-none">Imp.</span>
+                                                </button>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+                                                <a href="{{ route('agencias.export') }}" class="btn btn-info btn-sm flex-grow-1 flex-md-grow-0">
+                                                    <i class="ri-download-2-line align-bottom me-1"></i><span class="d-none d-md-inline">Exportar</span><span class="d-md-none">Exp.</span>
+                                                </a>
+                                                <a href="{{ route('agencias.create') }}" class="btn btn-primary btn-sm flex-grow-1 flex-md-grow-0">
+                                                    <i class="ri-add-line align-bottom me-1"></i><span class="d-none d-md-inline">Nueva</span><span class="d-md-none">+</span>
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body p-2 p-md-3">
                                 <div class="table-responsive">
-                                    <table id="tableAgencias" class="table table-bordered table-striped align-middle" style="width:100%; font-size: 0.875rem;">
+                                    <table id="tableAgencias" class="table table-bordered table-striped align-middle table-sm" style="width:100%;">
                                         <thead class="table-light">
                                             <tr>
                                                 <th class="text-center" style="min-width: 50px;">ID</th>
-                                                <th style="min-width: 100px;">Agencia</th>
-                                                <th style="min-width: 100px;">Terminal</th>
-                                                <th style="min-width: 170px;">Horario AM</th>
-                                                <th style="min-width: 170px;">Horario PM</th>
-                                                <th style="min-width: 150px;">Nombre Agencia</th>
-                                                <th style="min-width: 100px;">Sistema</th>
-                                                <th style="min-width: 120px;">Ciudad</th>
-                                                <th style="min-width: 150px;">Ruta</th>
-                                                <th style="min-width: 120px;">Operador</th>
-                                                <th style="min-width: 120px;">Coordinador</th>
-                                                <th style="min-width: 120px;">Aplica incentivo</th>
-                                                <th class="text-center" style="min-width: 100px;">Acciones</th>
+                                                <th style="min-width: 80px;">Agencia</th>
+                                                <th style="min-width: 80px;">Terminal</th>
+                                                <th style="min-width: 130px;">Horario AM</th>
+                                                <th style="min-width: 130px;">Horario PM</th>
+                                                <th style="min-width: 120px;">Nombre</th>
+                                                <th style="min-width: 80px;">Sistema</th>
+                                                <th style="min-width: 100px;">Ciudad</th>
+                                                <th style="min-width: 100px;">Ruta</th>
+                                                <th style="min-width: 100px;">Operador</th>
+                                                <th style="min-width: 100px;">Coordinador</th>
+                                                <th style="min-width: 80px;">Incentivo</th>
+                                                <th class="text-center" style="min-width: 80px;">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -95,7 +99,7 @@
 
     <!-- Modal para eliminar -->
     <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="deleteModalLabel">Confirmar eliminación</h5>
@@ -104,12 +108,12 @@
                 <div class="modal-body">
                     ¿Está seguro que desea eliminar esta agencia?
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <form id="deleteForm" method="POST" style="display:inline;">
+                <div class="modal-footer d-flex gap-2">
+                    <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancelar</button>
+                    <form id="deleteForm" method="POST" style="display:inline; flex-grow: 1;" class="w-100">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn btn-danger">Eliminar</button>
+                        <button type="submit" class="btn btn-danger w-100">Eliminar</button>
                     </form>
                 </div>
             </div>
@@ -118,7 +122,7 @@
 
     <!-- Modal para importar -->
     <div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <form action="{{ route('agencias.import') }}" method="POST" enctype="multipart/form-data">
                     @csrf
@@ -132,13 +136,13 @@
                             <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls,.csv" required>
                             <div class="form-text">Formatos aceptados: .xlsx, .xls, .csv</div>
                         </div>
-                        <div class="alert alert-info">
-                            <strong>Formato del archivo:</strong>
-                            <ul class="mb-0 mt-2">
+                        <div class="alert alert-info mb-0">
+                            <strong class="d-block mb-2">Formato del archivo:</strong>
+                            <ul class="mb-0 ps-3">
                                 <li>Columna A: Agencia</li>
                                 <li>Columna B: Terminal</li>
-                                <li>Columna C: Horario AM (ej: 7:00 AM / 2:00 PM)</li>
-                                <li>Columna D: Horario PM (ej: 2:00 PM / 9:00 PM)</li>
+                                <li>Columna C: Horario AM</li>
+                                <li>Columna D: Horario PM</li>
                                 <li>Columna E: Nombre Agencia</li>
                                 <li>Columna F: Sistema</li>
                                 <li>Columna G: Ciudad</li>
@@ -148,14 +152,14 @@
                                 <li>Columna K: Aplica Incentivo (SI/NO)</li>
                             </ul>
                         </div>
-                        <a href="{{ route('agencias.template') }}" class="btn btn-sm btn-outline-primary">
-                            <i class="ri-download-line me-1"></i> Descargar Plantilla
-                        </a>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-success">
-                            <i class="ri-upload-2-line me-1"></i> Importar
+                    <div class="modal-footer d-flex gap-2">
+                        <a href="{{ route('agencias.template') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="ri-download-line me-1"></i>Plantilla
+                        </a>
+                        <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success flex-grow-1">
+                            <i class="ri-upload-2-line me-1"></i>Importar
                         </button>
                     </div>
                 </form>
@@ -167,11 +171,31 @@
 @section('script')
 <script>
     $(document).ready(function() {
+        // Configuración responsive de DataTables
+        var responsiveColumns = [
+            { targets: 4, visible: false },  // Horario PM
+            { targets: 9, visible: false },  // Operador
+            { targets: 10, visible: false }  // Coordinador
+        ];
+
+        // En móvil, ocultar más columnas
+        if ($(window).width() < 768) {
+            responsiveColumns = [
+                { targets: 3, visible: false },  // Horario AM
+                { targets: 4, visible: false },  // Horario PM
+                { targets: 6, visible: false },  // Sistema
+                { targets: 8, visible: false },  // Ruta
+                { targets: 9, visible: false },  // Operador
+                { targets: 10, visible: false }  // Coordinador
+            ];
+        }
+
         var table = $('#tableAgencias').DataTable({
             processing: true,
             serverSide: true,
             ajax: '{{ route('agencias.list') }}',
             responsive: true,
+            columnDefs: responsiveColumns,
             scrollX: true,
             columns: [
                 { data: 'id', name: 'id', className: 'text-center' },
@@ -190,7 +214,7 @@
                     name: 'aplica_incentivo',
                     className: 'text-center',
                     render: function(data) {
-                        return data ? 'Sí' : 'No';
+                        return data ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-secondary">No</span>';
                     }
                 },
                 {
@@ -254,6 +278,11 @@
                 html: `{!! implode('<br>', $errors->all()) !!}`
             });
         @endif
+
+        // Reajustar columnas en resize
+        $(window).on('resize', function() {
+            table.columns.adjust().draw();
+        });
     });
 </script>
 @endsection

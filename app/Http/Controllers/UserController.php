@@ -8,9 +8,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('permission:usuarios.view')->only(['index']);
+        $this->middleware('permission:usuarios.list')->only(['list']);
+        $this->middleware('permission:usuarios.create')->only(['create', 'store']);
+        $this->middleware('permission:usuarios.edit')->only(['edit', 'update']);
+        $this->middleware('permission:usuarios.delete')->only(['destroy']);
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -24,7 +34,9 @@ class UserController extends Controller
      */
     public function create()
     {
-        return view('usuarios.create');
+        $roles = Role::orderBy('name')->get();
+
+        return view('usuarios.create', compact('roles'));
     }
 
     /**
@@ -36,12 +48,16 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => ['required', 'confirmed', Password::min(8)],
+            'roles' => 'nullable|array',
+            'roles.*' => 'string|exists:roles,name',
         ]);
 
         $plainPassword = $validated['password'];
         $validated['password'] = Hash::make($plainPassword);
 
         $user = User::create($validated);
+
+        $user->syncRoles($validated['roles'] ?? []);
 
         // Enviar correo con los datos de acceso
         try {
@@ -61,7 +77,10 @@ class UserController extends Controller
      */
     public function edit(User $usuario)
     {
-        return view('usuarios.edit', compact('usuario'));
+        $roles = Role::orderBy('name')->get();
+        $userRoles = $usuario->roles->pluck('name')->toArray();
+
+        return view('usuarios.edit', compact('usuario', 'roles', 'userRoles'));
     }
 
     /**
@@ -73,6 +92,8 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $usuario->id,
             'password' => ['nullable', 'confirmed', Password::min(8)],
+            'roles' => 'nullable|array',
+            'roles.*' => 'string|exists:roles,name',
         ]);
 
         $usuario->name = $validated['name'];
@@ -83,6 +104,8 @@ class UserController extends Controller
         }
 
         $usuario->save();
+
+        $usuario->syncRoles($validated['roles'] ?? []);
 
         return redirect()->route('usuarios.index')
             ->with('success', 'Usuario actualizado exitosamente.');
@@ -110,7 +133,7 @@ class UserController extends Controller
      */
     public function list(Request $request)
     {
-        $query = User::query();
+        $query = User::query()->with('roles');
 
         // Búsqueda
         if ($request->has('search') && $request->search['value']) {
@@ -143,6 +166,7 @@ class UserController extends Controller
                                'id' => $user->id,
                                'name' => $user->name,
                                'email' => $user->email,
+                               'roles' => $user->roles->pluck('name')->implode(', '),
                                'created_at' => $user->created_at?->format('d/m/Y H:i'),
                            ];
                        });

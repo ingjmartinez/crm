@@ -3,6 +3,61 @@
 @section('title', 'Dashboard Financiero')
 
 @section('content')
+    <style>
+        /* Mejorar tablas en móvil */
+        @media (max-width: 767px) {
+            .table {
+                font-size: 0.85rem;
+            }
+            
+            .table thead {
+                font-size: 0.75rem;
+                font-weight: 600;
+            }
+            
+            .table tbody td {
+                padding: 0.5rem 0.25rem !important;
+                word-break: break-word;
+            }
+            
+            /* Ocultar columnas menos importantes en móvil */
+            .table th:nth-child(3),
+            .table td:nth-child(3),
+            .table th:nth-child(4),
+            .table td:nth-child(4) {
+                display: none;
+            }
+            
+            /* Hacer visible la columna de tipo y total */
+            .table th:nth-child(1),
+            .table td:nth-child(1),
+            .table th:nth-child(2),
+            .table td:nth-child(2) {
+                min-width: 60px;
+            }
+        }
+        
+        .dataTables_wrapper {
+            position: relative;
+        }
+        
+        @media (max-width: 767px) {
+            .dataTables_wrapper .dataTables_length,
+            .dataTables_wrapper .dataTables_filter {
+                float: none;
+                text-align: center;
+                margin-bottom: 1rem;
+            }
+            
+            .dataTables_wrapper .dataTables_info,
+            .dataTables_wrapper .dataTables_paginate {
+                float: none;
+                text-align: center;
+                margin-top: 1rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -200,7 +255,12 @@
             columns: tablaVentasColumns,
             paging: true,
             searching: true,
-            ordering: true
+            ordering: true,
+            responsive: true,
+            scrollX: true,
+            columnDefs: [
+                { targets: [2, 3, 4], visible: $(window).width() > 768 }
+            ]
         });
 
         const agenciasTableInstance = $('#tabla-agencias').DataTable({
@@ -208,7 +268,12 @@
             columns: tablaAgenciasColumns,
             paging: true,
             searching: true,
-            ordering: true
+            ordering: true,
+            responsive: true,
+            scrollX: true,
+            columnDefs: [
+                { targets: [1, 2], visible: $(window).width() > 768 }
+            ]
         });
 
         function formatCurrency(value) {
@@ -271,23 +336,23 @@
                     data.tabla.forEach((item, index) => {
                         const color = coloresCards[index % coloresCards.length];
                         const card = document.createElement('div');
-                        card.className = 'col-md-6 col-lg-4 mb-3';
+                        card.className = 'col-12 col-sm-6 col-lg-4 mb-3';
                         card.innerHTML = `
-                            <div class="card shadow-sm" style="border-left: 5px solid ${color};">
-                                <div class="card-body">
-                                    <h5 class="card-title" style="color: ${color};">${item.tipo}</h5>
+                            <div class="card shadow-sm h-100" style="border-left: 5px solid ${color};">
+                                <div class="card-body d-flex flex-column">
+                                    <h5 class="card-title" style="color: ${color}; margin-bottom: 0.75rem;">${item.tipo}</h5>
                                     <div class="mb-2">
-                                        <p class="mb-1"><strong>Total:</strong></p>
-                                        <h4 class="text-primary">${formatCurrency(item.total)}</h4>
+                                        <small class="text-muted d-block" style="font-size: 0.8rem;">Total Vendido</small>
+                                        <h5 class="text-primary mb-0" style="word-break: break-word;">${formatCurrency(item.total)}</h5>
                                     </div>
-                                    <div class="row">
+                                    <div class="row g-2 mt-2">
                                         <div class="col-6">
-                                            <p class="mb-1"><small class="text-muted">Transacciones</small></p>
-                                            <p class="h6">${item.transacciones}</p>
+                                            <small class="text-muted d-block" style="font-size: 0.75rem;">Transacciones</small>
+                                            <p class="mb-0" style="font-weight: 600; font-size: 0.95rem;">${item.transacciones}</p>
                                         </div>
                                         <div class="col-6">
-                                            <p class="mb-1"><small class="text-muted">% Total</small></p>
-                                            <p class="h6">${item.porcentaje.toFixed(2)}%</p>
+                                            <small class="text-muted d-block" style="font-size: 0.75rem;">% del Total</small>
+                                            <p class="mb-0" style="font-weight: 600; font-size: 0.95rem;">${item.porcentaje.toFixed(2)}%</p>
                                         </div>
                                     </div>
                                 </div>

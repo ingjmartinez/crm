@@ -178,6 +178,10 @@
                         $('#tableFaltantes').DataTable({
                             destroy: true,
                             responsive: true,
+                            scrollX: true,
+                            columnDefs: [
+                                { targets: [3, 4], visible: $(window).width() > 768 }
+                            ],
                             dom: 'Bfrtip',
                             buttons: [
                                 'copy', 'csv', 'excel', 'pdf', 'print'
