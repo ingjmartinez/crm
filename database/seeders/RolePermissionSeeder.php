@@ -45,7 +45,7 @@ class RolePermissionSeeder extends Seeder
             $role->syncPermissions($rolePermissions);
         }
 
-        $superAdminEmail = env('SUPERADMIN_EMAIL', 'admin@grupojoselito.com');
+        $superAdminEmail = env('SUPERADMIN_EMAIL', 'admin@joselitogroud.com');
         $superAdmin = User::where('email', $superAdminEmail)->first();
 
         if ($superAdmin) {
