@@ -24,12 +24,15 @@ class Tarea extends Model
         'fecha_inicio',
         'fecha_fin',
         'fecha_completada',
+        'cierre_solicitado_at',
+        'cierre_solicitado_por',
     ];
 
     protected $casts = [
         'fecha_inicio' => 'date',
         'fecha_fin' => 'date',
         'fecha_completada' => 'date',
+        'cierre_solicitado_at' => 'datetime',
         'progreso' => 'integer',
     ];
 
@@ -63,6 +66,11 @@ class Tarea extends Model
     public function comentarios(): HasMany
     {
         return $this->hasMany(TareaComentario::class, 'tarea_id');
+    }
+
+    public function cierreSolicitadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cierre_solicitado_por');
     }
 
     /* ───────────── Accessors ───────────── */

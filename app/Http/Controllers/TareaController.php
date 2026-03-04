@@ -2,12 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Notifications\TareaAsignadaNotification;
+use App\Notifications\TareaCerradaPorAdminNotification;
+use App\Notifications\TareaComentarioNotification;
+use App\Notifications\TareaProgresoActualizadoNotification;
+use App\Notifications\TareaSolicitudCierreNotification;
 use App\Models\Tarea;
 use App\Models\TareaComentario;
 use App\Models\DepartamentoCrm;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Spatie\Permission\Models\Role;
 
 class TareaController extends Controller
 {
@@ -18,6 +24,14 @@ class TareaController extends Controller
     {
         $departamentos = DepartamentoCrm::activos()->orderBy('nombre')->get();
         $usuarios = User::orderBy('name')->get();
+        $rolesCierre = Role::query()
+            ->whereIn('name', ['superadmin', 'admin', 'superior'])
+            ->pluck('name')
+            ->all();
+
+        $esAdminSuperior = auth()->check() && !empty($rolesCierre)
+            ? auth()->user()->hasAnyRole($rolesCierre)
+            : false;
 
         // Estadísticas rápidas
         $stats = [
@@ -28,7 +42,7 @@ class TareaController extends Controller
             'atrasadas' => Tarea::atrasadas()->count(),
         ];
 
-        return view('tareas.index', compact('departamentos', 'usuarios', 'stats'));
+        return view('tareas.index', compact('departamentos', 'usuarios', 'stats', 'esAdminSuperior'));
     }
 
     /**
@@ -87,19 +101,29 @@ class TareaController extends Controller
      */
     public function list(Request $request)
     {
-        $query = Tarea::with(['departamento', 'creador', 'asignado']);
+        $query = Tarea::with(['departamento', 'creador', 'asignado', 'cierreSolicitadoPor']);
 
-        if ($request->filled('departamento_id')) {
+        $tareaId = $request->input('tarea_id');
+
+        if (!empty($tareaId) && is_numeric($tareaId)) {
+            $query->where('id', (int) $tareaId);
+        }
+
+        if (empty($tareaId) && $request->filled('departamento_id')) {
             $query->delDepartamento($request->departamento_id);
         }
-        if ($request->filled('estado')) {
+        if (empty($tareaId) && $request->filled('estado')) {
             $query->where('estado', $request->estado);
         }
 
         // Búsqueda
-        if ($request->has('search') && $request->search['value']) {
+        if (empty($tareaId) && $request->has('search') && $request->search['value']) {
             $search = $request->search['value'];
             $query->where(function ($q) use ($search) {
+                if (is_numeric($search)) {
+                    $q->orWhere('id', (int) $search);
+                }
+
                 $q->where('titulo', 'like', "%{$search}%")
                   ->orWhereHas('departamento', fn($d) => $d->where('nombre', 'like', "%{$search}%"))
                   ->orWhereHas('asignado', fn($u) => $u->where('name', 'like', "%{$search}%"));
@@ -135,6 +159,8 @@ class TareaController extends Controller
                                 'fecha_fin' => $tarea->fecha_fin->format('d/m/Y'),
                                 'atrasada' => $tarea->atrasada,
                                 'dias_atraso' => $tarea->dias_atraso,
+                                'cierre_solicitado_at' => optional($tarea->cierre_solicitado_at)->format('d/m/Y H:i'),
+                                'cierre_solicitado_por' => $tarea->cierreSolicitadoPor?->name,
                             ];
                         });
 
@@ -176,6 +202,13 @@ class TareaController extends Controller
             'tipo' => 'cambio_estado',
         ]);
 
+        if (!empty($tarea->asignado_id) && (int) $tarea->asignado_id !== (int) auth()->id()) {
+            $asignado = User::find($tarea->asignado_id);
+            if ($asignado) {
+                $asignado->notify(new TareaAsignadaNotification($tarea, auth()->user()));
+            }
+        }
+
         return response()->json(['success' => true, 'message' => 'Tarea creada exitosamente.', 'tarea' => $tarea]);
     }
 
@@ -184,12 +217,125 @@ class TareaController extends Controller
      */
     public function show(Tarea $tarea)
     {
-        $tarea->load(['departamento', 'creador', 'asignado', 'subtareas.asignado', 'comentarios.usuario']);
+        $tarea->load(['departamento', 'creador', 'asignado', 'cierreSolicitadoPor', 'subtareas.asignado', 'comentarios.usuario']);
 
         return response()->json([
             'tarea' => $tarea,
             'atrasada' => $tarea->atrasada,
             'dias_atraso' => $tarea->dias_atraso,
+        ]);
+    }
+
+    public function solicitarCierre(Tarea $tarea)
+    {
+        $actor = auth()->user();
+
+        $puedeSolicitar = (int) $actor->id === (int) $tarea->asignado_id || (int) $actor->id === (int) $tarea->user_id;
+        if (!$puedeSolicitar) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo el usuario asignado o creador puede solicitar el cierre.',
+            ], 403);
+        }
+
+        if ((int) $tarea->progreso < 100) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La tarea debe tener 100% de progreso para solicitar cierre.',
+            ], 422);
+        }
+
+        if (in_array($tarea->estado, ['completada', 'cancelada'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta tarea ya está cerrada y no requiere solicitud.',
+            ], 422);
+        }
+
+        $tarea->update([
+            'cierre_solicitado_at' => now(),
+            'cierre_solicitado_por' => $actor->id,
+        ]);
+
+        TareaComentario::create([
+            'tarea_id' => $tarea->id,
+            'user_id' => $actor->id,
+            'comentario' => 'Se solicitó cierre de la tarea al completar 100% del progreso.',
+            'tipo' => 'comentario',
+        ]);
+
+        $rolesCierre = Role::query()
+            ->whereIn('name', ['superadmin', 'admin', 'superior'])
+            ->pluck('name')
+            ->all();
+
+        $admins = empty($rolesCierre)
+            ? collect()
+            : User::role($rolesCierre)->get();
+
+        foreach ($admins as $admin) {
+            if ((int) $admin->id !== (int) $actor->id) {
+                $admin->notify(new TareaSolicitudCierreNotification($tarea, $actor));
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitud de cierre enviada a administración.',
+        ]);
+    }
+
+    public function finalizarPorAdmin(Tarea $tarea)
+    {
+        $actor = auth()->user();
+
+        $rolesCierre = Role::query()
+            ->whereIn('name', ['superadmin', 'admin', 'superior'])
+            ->pluck('name')
+            ->all();
+
+        if (!$actor || empty($rolesCierre) || !$actor->hasAnyRole($rolesCierre)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permisos para finalizar tareas.',
+            ], 403);
+        }
+
+        if ($tarea->estado === 'completada') {
+            return response()->json([
+                'success' => true,
+                'message' => 'La tarea ya estaba finalizada.',
+            ]);
+        }
+
+        $tarea->update([
+            'estado' => 'completada',
+            'progreso' => 100,
+            'fecha_completada' => now()->toDateString(),
+            'cierre_solicitado_at' => $tarea->cierre_solicitado_at ?? now(),
+            'cierre_solicitado_por' => $tarea->cierre_solicitado_por,
+        ]);
+
+        TareaComentario::create([
+            'tarea_id' => $tarea->id,
+            'user_id' => $actor->id,
+            'comentario' => 'Tarea finalizada por administración.',
+            'tipo' => 'cambio_estado',
+        ]);
+
+        $destinatarios = collect([$tarea->asignado_id, $tarea->cierre_solicitado_por])
+            ->filter()
+            ->unique();
+
+        User::whereIn('id', $destinatarios)->get()->each(function ($usuario) use ($tarea, $actor) {
+            if ((int) $usuario->id !== (int) $actor->id) {
+                $usuario->notify(new TareaCerradaPorAdminNotification($tarea, $actor));
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tarea finalizada correctamente por administración.',
         ]);
     }
 
@@ -212,6 +358,7 @@ class TareaController extends Controller
 
         $estadoAnterior = $tarea->estado;
         $progresoAnterior = $tarea->progreso;
+        $asignadoAnterior = $tarea->asignado_id;
 
         // Si se marca como completada, registrar fecha
         if ($validated['estado'] === 'completada' && $estadoAnterior !== 'completada') {
@@ -243,6 +390,29 @@ class TareaController extends Controller
                 'comentario' => "Progreso actualizado de {$progresoAnterior}% a {$validated['progreso']}%.",
                 'tipo' => 'cambio_progreso',
             ]);
+
+            if (!empty($tarea->user_id) && (int) $tarea->user_id !== (int) auth()->id()) {
+                $creador = User::find($tarea->user_id);
+                if ($creador) {
+                    $creador->notify(new TareaProgresoActualizadoNotification(
+                        $tarea,
+                        auth()->user(),
+                        (int) $progresoAnterior,
+                        (int) $validated['progreso']
+                    ));
+                }
+            }
+        }
+
+        if (
+            !empty($validated['asignado_id'])
+            && (int) $validated['asignado_id'] !== (int) $asignadoAnterior
+            && (int) $validated['asignado_id'] !== (int) auth()->id()
+        ) {
+            $nuevoAsignado = User::find($validated['asignado_id']);
+            if ($nuevoAsignado) {
+                $nuevoAsignado->notify(new TareaAsignadaNotification($tarea, auth()->user()));
+            }
         }
 
         return response()->json(['success' => true, 'message' => 'Tarea actualizada exitosamente.']);
@@ -275,7 +445,78 @@ class TareaController extends Controller
 
         $comentario->load('usuario');
 
+        $destinatarios = collect([$tarea->user_id, $tarea->asignado_id])
+            ->filter()
+            ->unique()
+            ->reject(fn($id) => (int) $id === (int) auth()->id())
+            ->values();
+
+        if ($destinatarios->isNotEmpty()) {
+            User::whereIn('id', $destinatarios)->get()->each(function ($usuario) use ($tarea, $validated) {
+                $usuario->notify(new TareaComentarioNotification($tarea, auth()->user(), $validated['comentario']));
+            });
+        }
+
         return response()->json(['success' => true, 'comentario' => $comentario]);
+    }
+
+    public function listNotificaciones()
+    {
+        $user = auth()->user();
+
+        $notificaciones = $user->notifications()
+            ->latest()
+            ->take(15)
+            ->get()
+            ->filter(fn($notification) => ($notification->data['module'] ?? null) === 'tareas')
+            ->values()
+            ->map(function ($notification) {
+                return [
+                    'id' => $notification->id,
+                    'title' => $notification->data['title'] ?? 'Notificación',
+                    'message' => $notification->data['message'] ?? '',
+                    'url' => $notification->data['url'] ?? url('/tareas'),
+                    'task_id' => $notification->data['task_id'] ?? null,
+                    'type' => $notification->data['type'] ?? 'general',
+                    'read_at' => optional($notification->read_at)?->toDateTimeString(),
+                    'created_at' => $notification->created_at->diffForHumans(),
+                ];
+            });
+
+        $noLeidas = $user->unreadNotifications()
+            ->get()
+            ->filter(fn($notification) => ($notification->data['module'] ?? null) === 'tareas')
+            ->count();
+
+        return response()->json([
+            'unread' => $noLeidas,
+            'items' => $notificaciones,
+        ]);
+    }
+
+    public function marcarNotificacionLeida(string $notificationId)
+    {
+        $notification = auth()->user()
+            ->notifications()
+            ->where('id', $notificationId)
+            ->firstOrFail();
+
+        if (is_null($notification->read_at)) {
+            $notification->markAsRead();
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    public function marcarTodasLeidas()
+    {
+        auth()->user()
+            ->unreadNotifications
+            ->filter(fn($notification) => ($notification->data['module'] ?? null) === 'tareas')
+            ->each
+            ->markAsRead();
+
+        return response()->json(['success' => true]);
     }
 
     /**

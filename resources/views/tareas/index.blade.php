@@ -419,6 +419,8 @@ const URL_LIST = '{{ url("/tareas-list") }}';
 const URL_TAREAS = '{{ url("/tareas") }}';
 const URL_STATS = '{{ url("/tareas/stats") }}';
 const URL_DEPTOS = '{{ url("/tareas/departamentos") }}';
+const TAREA_ID_URL = new URLSearchParams(window.location.search).get('tarea_id');
+const ES_ADMIN_SUPERIOR = @json($esAdminSuperior ?? false);
 
 let dataTable;
 let ganttTareas = [];
@@ -427,7 +429,29 @@ $(document).ready(function() {
     cargarGantt();
     initDataTable();
     cargarDepartamentosModal();
+    aplicarFiltroTareaDesdeUrl();
 });
+
+function aplicarFiltroTareaDesdeUrl() {
+    const tareaId = TAREA_ID_URL;
+
+    if (!tareaId) return;
+
+    $('#filtro-departamento').val('');
+    $('#filtro-estado').val('');
+    $('#filtro-asignado').val('');
+    $('#filtro-atrasadas').prop('checked', false);
+
+    const tabLista = document.querySelector('a[href="#tab-lista"]');
+    if (tabLista && window.bootstrap?.Tab) {
+        const instance = bootstrap.Tab.getOrCreateInstance(tabLista);
+        instance.show();
+    }
+
+    if (dataTable) {
+        dataTable.ajax.reload();
+    }
+}
 
 /* ═══════════ FILTROS ═══════════ */
 function getFiltros() {
@@ -563,6 +587,7 @@ function initDataTable() {
             data: function(d) {
                 d.departamento_id = $('#filtro-departamento').val();
                 d.estado = $('#filtro-estado').val();
+                d.tarea_id = TAREA_ID_URL || '';
             }
         },
         responsive: true,
@@ -595,7 +620,17 @@ function initDataTable() {
             { data: 'fecha_inicio' },
             { data: 'fecha_fin' },
             { data: null, orderable:false, searchable:false, className:'text-center', render: function(data,type,row) {
+                let botonCierre = '';
+
+                if (ES_ADMIN_SUPERIOR && row.estado !== 'completada' && row.estado !== 'cancelada') {
+                    botonCierre = '<button class="btn btn-sm btn-soft-success" onclick="finalizarTarea('+row.id+')" title="Finalizar tarea"><i class="ri-checkbox-circle-line"></i></button>';
+                } else if (!ES_ADMIN_SUPERIOR && row.progreso >= 100 && row.estado !== 'completada' && row.estado !== 'cancelada') {
+                    botonCierre = '<button class="btn btn-sm btn-soft-warning" onclick="solicitarCierreTarea('+row.id+')" title="Solicitar cierre al admin"><i class="ri-mail-send-line"></i></button>';
+                }
+
                 return '<div class="d-flex gap-1 justify-content-center">' +
+                    '<button class="btn btn-sm btn-soft-info" onclick="verDetalle('+row.id+')" title="Ver detalle y conversación"><i class="ri-chat-3-line"></i></button>' +
+                    botonCierre +
                     '<button class="btn btn-sm btn-soft-primary" onclick="editarTarea('+row.id+')" title="Editar"><i class="ri-pencil-line"></i></button>' +
                     '<button class="btn btn-sm btn-soft-danger" onclick="confirmarEliminar('+row.id+')" title="Eliminar"><i class="ri-delete-bin-line"></i></button>' +
                 '</div>';
@@ -691,6 +726,61 @@ function editarTarea(id) {
     });
 }
 
+function solicitarCierreTarea(id) {
+    Swal.fire({
+        title: '¿Solicitar cierre?',
+        text: 'Se enviará una notificación al admin/superior para finalizar esta tarea.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, solicitar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        $.ajax({
+            url: URL_TAREAS + '/' + id + '/solicitar-cierre',
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': CSRF },
+            success: function(res) {
+                Swal.fire({ icon:'success', title:'Solicitud enviada', text:res.message, timer:2000, showConfirmButton:false });
+                if (dataTable) dataTable.ajax.reload(null, false);
+                cargarGantt();
+            },
+            error: function(xhr) {
+                Swal.fire('Error', xhr.responseJSON?.message || 'No se pudo solicitar el cierre.', 'error');
+            }
+        });
+    });
+}
+
+function finalizarTarea(id) {
+    Swal.fire({
+        title: 'Finalizar tarea',
+        text: 'Esta acción cerrará definitivamente la tarea.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, finalizar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        $.ajax({
+            url: URL_TAREAS + '/' + id + '/finalizar-admin',
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': CSRF },
+            success: function(res) {
+                Swal.fire({ icon:'success', title:'Tarea finalizada', text:res.message, timer:2000, showConfirmButton:false });
+                if (dataTable) dataTable.ajax.reload(null, false);
+                cargarGantt();
+                actualizarStats();
+            },
+            error: function(xhr) {
+                Swal.fire('Error', xhr.responseJSON?.message || 'No se pudo finalizar la tarea.', 'error');
+            }
+        });
+    });
+}
+
 function verDetalle(id) {
     $('#detalle-body').html('<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>');
     $('#modalDetalle').modal('show');
@@ -717,6 +807,11 @@ function verDetalle(id) {
         html += '<div class="col-md-3"><small class="text-muted d-block">Asignado</small><strong>'+(t.asignado?.name||'Sin asignar')+'</strong></div>';
         html += '<div class="col-md-3"><small class="text-muted d-block">Inicio</small><strong>' + formatDate(t.fecha_inicio) + '</strong></div>';
         html += '<div class="col-md-3"><small class="text-muted d-block">Fin</small><strong>' + formatDate(t.fecha_fin) + '</strong></div>';
+
+        if (t.cierre_solicitado_at) {
+            html += '<div class="col-md-6"><small class="text-muted d-block">Solicitud de cierre</small><strong>' + formatDateTime(t.cierre_solicitado_at) + '</strong></div>';
+            html += '<div class="col-md-6"><small class="text-muted d-block">Solicitado por</small><strong>' + (t.cierre_solicitado_por?.name || 'Usuario') + '</strong></div>';
+        }
 
         html += '<div class="col-12"><label class="form-label mb-1">Progreso '+t.progreso+'%</label>';
         const pColor = t.progreso >= 100 ? 'bg-success' : (t.progreso >= 50 ? 'bg-info' : 'bg-warning');

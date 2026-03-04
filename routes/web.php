@@ -297,9 +297,14 @@ Route::get('/tareas/usuarios', [TareaController::class, 'usuarios'])->name('tare
 Route::post('/tareas/departamentos', [TareaController::class, 'storeDepartamento'])->name('tareas.departamentos.store');
 Route::put('/tareas/departamentos/{departamento}', [TareaController::class, 'updateDepartamento'])->name('tareas.departamentos.update');
 Route::delete('/tareas/departamentos/{departamento}', [TareaController::class, 'destroyDepartamento'])->name('tareas.departamentos.destroy');
+Route::get('/tareas/notificaciones', [TareaController::class, 'listNotificaciones'])->name('tareas.notificaciones');
+Route::post('/tareas/notificaciones/{notificationId}/leer', [TareaController::class, 'marcarNotificacionLeida'])->name('tareas.notificaciones.leer');
+Route::post('/tareas/notificaciones/leer-todas', [TareaController::class, 'marcarTodasLeidas'])->name('tareas.notificaciones.leer-todas');
 
 // CRUD Tareas (rutas con parámetro al final)
 Route::post('/tareas', [TareaController::class, 'store'])->name('tareas.store');
+Route::post('/tareas/{tarea}/solicitar-cierre', [TareaController::class, 'solicitarCierre'])->name('tareas.solicitar-cierre');
+Route::post('/tareas/{tarea}/finalizar-admin', [TareaController::class, 'finalizarPorAdmin'])->name('tareas.finalizar-admin');
 Route::get('/tareas/{tarea}', [TareaController::class, 'show'])->name('tareas.show');
 Route::put('/tareas/{tarea}', [TareaController::class, 'update'])->name('tareas.update');
 Route::delete('/tareas/{tarea}', [TareaController::class, 'destroy'])->name('tareas.destroy');
