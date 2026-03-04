@@ -14,6 +14,8 @@ class Tarea extends Model
     protected $fillable = [
         'titulo',
         'descripcion',
+        'adjunto_path',
+        'adjunto_nombre',
         'departamento_id',
         'user_id',
         'asignado_id',
@@ -34,6 +36,10 @@ class Tarea extends Model
         'fecha_completada' => 'date',
         'cierre_solicitado_at' => 'datetime',
         'progreso' => 'integer',
+    ];
+
+    protected $appends = [
+        'adjunto_url',
     ];
 
     /* ───────────── Relaciones ───────────── */
@@ -123,6 +129,15 @@ class Tarea extends Model
             'cancelada' => 'danger',
             default => 'secondary',
         };
+    }
+
+    public function getAdjuntoUrlAttribute(): ?string
+    {
+        if (empty($this->adjunto_path)) {
+            return null;
+        }
+
+        return asset('storage/' . ltrim($this->adjunto_path, '/'));
     }
 
     /* ───────────── Scopes ───────────── */

@@ -266,6 +266,11 @@
                                 <label class="form-label">Descripción</label>
                                 <textarea class="form-control" id="tarea-descripcion" rows="3" placeholder="Describe la tarea..."></textarea>
                             </div>
+                            <div class="col-12">
+                                <label class="form-label">Adjunto (opcional)</label>
+                                <input type="file" class="form-control" id="tarea-adjunto" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar,.txt">
+                                <small class="text-muted">Tamaño máximo: 10MB</small>
+                            </div>
                             <div class="col-md-4">
                                 <label class="form-label">Departamento <span class="text-danger">*</span></label>
                                 <select class="form-select" id="tarea-departamento" required>
@@ -645,6 +650,7 @@ function initDataTable() {
 function limpiarFormTarea() {
     $('#tarea-id').val('');
     $('#formTarea')[0].reset();
+    $('#tarea-adjunto').val('');
     $('#tarea-prioridad').val('media');
     $('#tarea-progreso').val(0);
     $('#progreso-label').text('0');
@@ -670,22 +676,41 @@ function guardarTarea() {
         return;
     }
 
+    const formData = new FormData();
+    formData.append('titulo', data.titulo);
+    formData.append('descripcion', data.descripcion || '');
+    formData.append('departamento_id', data.departamento_id);
+    formData.append('prioridad', data.prioridad);
+    formData.append('fecha_inicio', data.fecha_inicio);
+    formData.append('fecha_fin', data.fecha_fin);
+
+    if (data.asignado_id) {
+        formData.append('asignado_id', data.asignado_id);
+    }
+
+    const archivoAdjunto = $('#tarea-adjunto')[0]?.files?.[0];
+    if (archivoAdjunto) {
+        formData.append('adjunto', archivoAdjunto);
+    }
+
     let url = URL_TAREAS;
     let method = 'POST';
 
     if (id) {
         url = URL_TAREAS + '/' + id;
-        method = 'PUT';
-        data.estado = $('#tarea-estado').val();
-        data.progreso = $('#tarea-progreso').val();
+        method = 'POST';
+        formData.append('_method', 'PUT');
+        formData.append('estado', $('#tarea-estado').val());
+        formData.append('progreso', $('#tarea-progreso').val());
     }
 
     $.ajax({
         url: url,
         method: method,
         headers: { 'X-CSRF-TOKEN': CSRF },
-        contentType: 'application/json',
-        data: JSON.stringify(data),
+        processData: false,
+        contentType: false,
+        data: formData,
         success: function(res) {
             $('#modalTarea').modal('hide');
             Swal.fire({ icon:'success', title:'¡Éxito!', text:res.message, timer:2000, showConfirmButton:false });
@@ -797,10 +822,19 @@ function verDetalle(id) {
         html += '<span class="badge bg-' + badgeColors[t.estado] + '">' + estadoLabels[t.estado] + '</span>';
         html += ' <span>' + prioIcons[t.prioridad] + '</span>';
         html += '</div>';
-        html += '<div class="col-md-4 text-end"><button class="btn btn-sm btn-primary" onclick="$(\'#modalDetalle\').modal(\'hide\');editarTarea('+t.id+')"><i class="ri-pencil-line me-1"></i>Editar</button></div>';
+        html += '<div class="col-md-4 text-end d-flex gap-2 justify-content-end">';
+        if (ES_ADMIN_SUPERIOR && t.estado !== 'completada' && t.estado !== 'cancelada') {
+            html += '<button class="btn btn-sm btn-success" onclick="$(\'#modalDetalle\').modal(\'hide\');finalizarTarea('+t.id+')"><i class="ri-checkbox-circle-line me-1"></i>Finalizar</button>';
+        }
+        html += '<button class="btn btn-sm btn-primary" onclick="$(\'#modalDetalle\').modal(\'hide\');editarTarea('+t.id+')"><i class="ri-pencil-line me-1"></i>Editar</button>';
+        html += '</div>';
 
         if (t.descripcion) {
             html += '<div class="col-12"><div class="bg-light rounded p-3"><p class="mb-0 text-muted">' + t.descripcion + '</p></div></div>';
+        }
+
+        if (t.adjunto_nombre && t.adjunto_url) {
+            html += '<div class="col-12"><small class="text-muted d-block">Adjunto</small><a href="' + t.adjunto_url + '" target="_blank" class="fw-medium"><i class="ri-attachment-2 me-1"></i>' + t.adjunto_nombre + '</a></div>';
         }
 
         html += '<div class="col-md-3"><small class="text-muted d-block">Departamento</small><span class="badge" style="background:'+(t.departamento?.color||'#405189')+'">'+(t.departamento?.nombre||'-')+'</span></div>';

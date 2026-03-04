@@ -13,6 +13,7 @@ use App\Models\DepartamentoCrm;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
 class TareaController extends Controller
@@ -180,6 +181,7 @@ class TareaController extends Controller
         $validated = $request->validate([
             'titulo' => 'required|string|max:255',
             'descripcion' => 'nullable|string',
+            'adjunto' => 'nullable|file|max:10240',
             'departamento_id' => 'required|exists:departamentos_crm,id',
             'asignado_id' => 'nullable|exists:users,id',
             'tarea_padre_id' => 'nullable|exists:tareas,id',
@@ -187,6 +189,12 @@ class TareaController extends Controller
             'fecha_inicio' => 'required|date',
             'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
         ]);
+
+        if ($request->hasFile('adjunto')) {
+            $archivo = $request->file('adjunto');
+            $validated['adjunto_path'] = $archivo->store('tareas_adjuntos', 'public');
+            $validated['adjunto_nombre'] = $archivo->getClientOriginalName();
+        }
 
         $validated['user_id'] = auth()->id();
         $validated['estado'] = 'pendiente';
@@ -347,6 +355,7 @@ class TareaController extends Controller
         $validated = $request->validate([
             'titulo' => 'required|string|max:255',
             'descripcion' => 'nullable|string',
+            'adjunto' => 'nullable|file|max:10240',
             'departamento_id' => 'required|exists:departamentos_crm,id',
             'asignado_id' => 'nullable|exists:users,id',
             'prioridad' => 'required|in:baja,media,alta,critica',
@@ -355,6 +364,16 @@ class TareaController extends Controller
             'fecha_inicio' => 'required|date',
             'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
         ]);
+
+        if ($request->hasFile('adjunto')) {
+            if (!empty($tarea->adjunto_path)) {
+                Storage::disk('public')->delete($tarea->adjunto_path);
+            }
+
+            $archivo = $request->file('adjunto');
+            $validated['adjunto_path'] = $archivo->store('tareas_adjuntos', 'public');
+            $validated['adjunto_nombre'] = $archivo->getClientOriginalName();
+        }
 
         $estadoAnterior = $tarea->estado;
         $progresoAnterior = $tarea->progreso;
@@ -423,6 +442,10 @@ class TareaController extends Controller
      */
     public function destroy(Tarea $tarea)
     {
+        if (!empty($tarea->adjunto_path)) {
+            Storage::disk('public')->delete($tarea->adjunto_path);
+        }
+
         $tarea->delete();
         return response()->json(['success' => true, 'message' => 'Tarea eliminada exitosamente.']);
     }
