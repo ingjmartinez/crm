@@ -56,11 +56,18 @@
             word-break: break-word;
             margin-right: 0;
         }
+
+        .main-content > .footer {
+            display: none !important;
+        }
     </style>
 
 </head>
 
 <body>
+    @php
+        $appVersion = config('app.version', '1.0.0');
+    @endphp
     <!-- Begin page -->
     <div id="layout-wrapper">
         <header id="page-topbar">
@@ -1039,6 +1046,23 @@
         <div class="vertical-overlay"></div>
 
         @yield('content')
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <script>
+                            document.write(new Date().getFullYear())
+                        </script> © CRM.
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">
+                            Versión {{ $appVersion }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
     </div>
     <!-- END layout-wrapper -->
 
