@@ -1,0 +1,3 @@
+php artisan migrate --path=database/migrations/2026_03_03_090000_add_cierre_solicitud_to_tareas_table.php --force
+
+php artisan migrate --path=database/migrations/2026_03_03_170000_add_adjunto_to_tareas_table.php

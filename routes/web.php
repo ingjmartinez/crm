@@ -17,6 +17,7 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\VentaFlashController;
 use App\Http\Controllers\KpiLotobetController;
+use App\Http\Controllers\ComercialController;
 use App\Http\Controllers\VentasProductosController;
 use App\Http\Controllers\FinanceDashboardController;
 use App\Http\Controllers\PagoAOtraEmpresaController;
@@ -231,6 +232,11 @@ Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-vent
 Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usuarios'));
 Route::get('/reportes-bi/faltantes', fn() => view('reportes-bi.faltantes'));
 
+Route::get('/comercial', [ComercialController::class, 'index'])->name('comercial.index');
+Route::get('/comercial/kpi-ventas', [ComercialController::class, 'kpiVentas'])->name('comercial.kpi-ventas');
+Route::get('/comercial/kpi-ventas-v', [ComercialController::class, 'kpiVentasV'])->name('comercial.kpi-ventas-v');
+Route::get('/comercial/ventas-producto', fn() => view('comercial.ventas-producto'))->name('comercial.ventas-producto');
+
 Route::get('/incentivos', [IncentivosController::class, 'index']);
 Route::get('/incentivos/procesar', [IncentivosController::class, 'procesar']);
 Route::get('/incentivos/list', [IncentivosController::class, 'list']);
@@ -251,6 +257,8 @@ Route::post('/incentivos/save/pago-incentivos-admin', [IncentivosController::cla
 Route::get('/incentivos/reporte-pagos', [IncentivosController::class, 'reportePagos']);
 Route::get('/incentivos/reporte-nuevo-incentivo-view', [IncentivosController::class, 'reporteNuevoIncentivoView']);
 Route::get('/incentivos/reporte-nuevo-incentivo', [IncentivosController::class, 'reporteNuevoIncentivo']);
+Route::get('/incentivos/reporte-nuevo-incentivo-v2-view', [IncentivosController::class, 'reporteNuevoIncentivoV2View']);
+Route::get('/incentivos/reporte-nuevo-incentivo-v2', [IncentivosController::class, 'reporteNuevoIncentivoV2']);
 Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
 
 Route::get('/incentivos/empleados', [EmpleadoController::class, 'incentivos']);

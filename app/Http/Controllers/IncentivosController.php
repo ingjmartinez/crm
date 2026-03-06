@@ -1015,6 +1015,224 @@ class IncentivosController extends Controller
         ]);
     }
 
+    public function reporteNuevoIncentivoV2View()
+    {
+        return view('incentivos.reporte-nuevo-incentivo-v2');
+    }
+
+    public function reporteNuevoIncentivoV2(Request $request)
+    {
+        ini_set('max_execution_time', 600);
+        ini_set('memory_limit', '1G');
+
+        $request->validate([
+            'fecha_ini' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_ini',
+            'sistema' => 'nullable|in:Todos,Lotobet,Lotonet',
+            'min_dias_venta' => 'nullable|integer|min:1',
+            'filtro_cumplimiento' => 'nullable|in:todos,cumplidos,no_cumplidos',
+            'rangos_pago' => 'nullable|string',
+        ]);
+
+        $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
+        $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
+
+        $mesAnterior = Carbon::parse($fechaFinSeleccionada)->subMonthNoOverflow();
+        $evalIni = $mesAnterior->copy()->startOfMonth()->toDateString();
+        $evalFin = $mesAnterior->copy()->endOfMonth()->toDateString();
+
+        $sistema = $request->input('sistema', 'Todos');
+        $minDiasVenta = (int) $request->input('min_dias_venta', 10);
+        $filtroCumplimiento = $request->input('filtro_cumplimiento', 'todos');
+
+        $rangosPagoDefault = [
+            ['desde' => 100001, 'hasta' => 250000, 'pago' => 1000],
+            ['desde' => 250001, 'hasta' => 400000, 'pago' => 2000],
+            ['desde' => 400001, 'hasta' => 550000, 'pago' => 4000],
+            ['desde' => 550001, 'hasta' => 700000, 'pago' => 6000],
+            ['desde' => 700001, 'hasta' => 850000, 'pago' => 8000],
+            ['desde' => 850001, 'hasta' => 1000000, 'pago' => 10000],
+            ['desde' => 1000001, 'hasta' => 1150000, 'pago' => 12000],
+            ['desde' => 1150001, 'hasta' => 1300000, 'pago' => 14000],
+            ['desde' => 1300001, 'hasta' => 1450000, 'pago' => 16000],
+            ['desde' => 1450001, 'hasta' => 1600000, 'pago' => 18000],
+            ['desde' => 1600001, 'hasta' => 1750000, 'pago' => 20000],
+            ['desde' => 1750001, 'hasta' => 1900000, 'pago' => 22000],
+            ['desde' => 1900001, 'hasta' => 2050000, 'pago' => 24000],
+            ['desde' => 2050001, 'hasta' => 2200000, 'pago' => 26000],
+            ['desde' => 2200001, 'hasta' => 2350000, 'pago' => 28000],
+            ['desde' => 2350001, 'hasta' => 2500000, 'pago' => 30000],
+            ['desde' => 2500001, 'hasta' => 2650000, 'pago' => 32000],
+            ['desde' => 2650001, 'hasta' => 2800000, 'pago' => 34000],
+            ['desde' => 2800001, 'hasta' => 2950000, 'pago' => 36000],
+            ['desde' => 2950001, 'hasta' => 3100000, 'pago' => 38000],
+            ['desde' => 3100001, 'hasta' => 3250000, 'pago' => 40000],
+            ['desde' => 3250001, 'hasta' => 3400000, 'pago' => 42000],
+            ['desde' => 3400001, 'hasta' => 3550000, 'pago' => 44000],
+            ['desde' => 3550001, 'hasta' => 3700000, 'pago' => 46000],
+            ['desde' => 3700001, 'hasta' => 3850000, 'pago' => 48000],
+            ['desde' => 3850001, 'hasta' => 5000000, 'pago' => 50000],
+        ];
+
+        $rangosPago = $rangosPagoDefault;
+        $rangosPagoInput = $request->input('rangos_pago');
+        if (is_string($rangosPagoInput) && trim($rangosPagoInput) !== '') {
+            $decoded = json_decode($rangosPagoInput, true);
+            if (is_array($decoded) && count($decoded) > 0) {
+                $sanitized = collect($decoded)
+                    ->map(function ($row) {
+                        if (!is_array($row)) {
+                            return null;
+                        }
+
+                        $desde = isset($row['desde']) ? (float) $row['desde'] : 0;
+                        $hasta = isset($row['hasta']) ? (float) $row['hasta'] : 0;
+                        $pago = isset($row['pago']) ? (float) $row['pago'] : 0;
+
+                        if ($desde < 0 || $hasta < 0 || $pago < 0 || $desde > $hasta) {
+                            return null;
+                        }
+
+                        return [
+                            'desde' => $desde,
+                            'hasta' => $hasta,
+                            'pago' => $pago,
+                        ];
+                    })
+                    ->filter()
+                    ->sortBy('desde')
+                    ->values()
+                    ->all();
+
+                if (!empty($sanitized)) {
+                    $rangosPago = $sanitized;
+                }
+            }
+        }
+
+        $buildBaseQuery = function (string $desde, string $hasta) use ($sistema) {
+            $betQuery = DB::table('vt_usuarios_bet')
+                ->selectRaw("cedula, monto, fecha, 'Lotobet' as sistema")
+                ->whereBetween('fecha', [$desde, $hasta]);
+
+            $netQuery = DB::table('vt_usuarios_net')
+                ->selectRaw("cedula, monto, fecha, 'Lotonet' as sistema")
+                ->whereBetween('fecha', [$desde, $hasta]);
+
+            if ($sistema === 'Lotobet') {
+                return $betQuery;
+            }
+
+            if ($sistema === 'Lotonet') {
+                return $netQuery;
+            }
+
+            return $betQuery->unionAll($netQuery);
+        };
+
+        $rowsUltimoMes = DB::query()
+            ->fromSub($buildBaseQuery($evalIni, $evalFin), 'y')
+            ->selectRaw('y.cedula, SUM(y.monto) AS ventas_ultimo_mes, COUNT(DISTINCT DATE(y.fecha)) AS dias_ventas_ultimo_mes')
+            ->whereNotNull('y.cedula')
+            ->where('y.cedula', '<>', '')
+            ->groupBy('y.cedula')
+            ->get();
+
+        $rowsMesActual = DB::query()
+            ->fromSub($buildBaseQuery($fechaIniSeleccionada, $fechaFinSeleccionada), 'z')
+            ->selectRaw('z.cedula, SUM(z.monto) AS ventas_mes_actual, COUNT(DISTINCT DATE(z.fecha)) AS dias_ventas_mes_actual')
+            ->whereNotNull('z.cedula')
+            ->where('z.cedula', '<>', '')
+            ->groupBy('z.cedula')
+            ->get();
+
+        $ultimoMesByCedula = $rowsUltimoMes->keyBy('cedula');
+        $mesActualByCedula = $rowsMesActual->keyBy('cedula');
+        $cedulas = $ultimoMesByCedula->keys()->merge($mesActualByCedula->keys())->unique()->values();
+
+        $rawData = $cedulas->map(function ($cedula) use ($ultimoMesByCedula, $mesActualByCedula, $minDiasVenta, $rangosPago) {
+            $rowUltimoMes = $ultimoMesByCedula->get($cedula);
+            $rowMesActual = $mesActualByCedula->get($cedula);
+
+            $ventas = $rowUltimoMes ? (float) $rowUltimoMes->ventas_ultimo_mes : 0;
+            $ventasMesActual = $rowMesActual ? (float) $rowMesActual->ventas_mes_actual : 0;
+            $diasMesActual = $rowMesActual ? (int) $rowMesActual->dias_ventas_mes_actual : 0;
+
+            $cumple = $diasMesActual >= $minDiasVenta;
+            $pagoEscala = 0.00;
+
+            if ($cumple) {
+                foreach ($rangosPago as $rango) {
+                    if ($ventasMesActual >= (float) $rango['desde'] && $ventasMesActual <= (float) $rango['hasta']) {
+                        $pagoEscala = (float) $rango['pago'];
+                        break;
+                    }
+                }
+
+                if ($pagoEscala === 0.0 && !empty($rangosPago)) {
+                    $ultimoRango = end($rangosPago);
+                    if ($ventasMesActual >= (float) $ultimoRango['desde']) {
+                        $pagoEscala = (float) $ultimoRango['pago'];
+                    }
+                    reset($rangosPago);
+                }
+            }
+
+            return [
+                'cedula' => $cedula,
+                'ventas_num' => $ventas,
+                'ventas_mes_actual_num' => $ventasMesActual,
+                'dias_ventas_mes_actual' => $diasMesActual,
+                'cumple_bool' => $cumple,
+                'pago_escala_num' => $pagoEscala,
+                'nuevo_incentivo_num' => $pagoEscala,
+            ];
+        })->sortByDesc('ventas_num')->values();
+
+        if ($filtroCumplimiento === 'cumplidos') {
+            $rawData = $rawData->where('cumple_bool', true)->values();
+        } elseif ($filtroCumplimiento === 'no_cumplidos') {
+            $rawData = $rawData->where('cumple_bool', false)->values();
+        }
+
+        $totalVendido = (float) $rawData->sum('ventas_mes_actual_num');
+        $totalIncentivo = (float) $rawData->sum('nuevo_incentivo_num');
+
+        $data = $rawData->map(function ($row) {
+            return [
+                'cedula' => $row['cedula'],
+                'ventas_ultimo_mes' => number_format($row['ventas_num'], 2, '.', ','),
+                'ventas_mes_actual' => number_format($row['ventas_mes_actual_num'], 2, '.', ','),
+                'dias_ventas_mes_actual' => $row['dias_ventas_mes_actual'],
+                'cumple_minimo' => $row['cumple_bool'] ? 'SI' : 'NO',
+                'pago_escala' => number_format($row['pago_escala_num'], 2, '.', ','),
+                'nuevo_incentivo' => number_format($row['nuevo_incentivo_num'], 2, '.', ','),
+            ];
+        })->values();
+
+        return response()->json([
+            'meta' => [
+                'sistema' => $sistema,
+                'fecha_ini' => $request->input('fecha_ini'),
+                'fecha_fin' => $request->input('fecha_fin'),
+                'eval_ini' => $evalIni,
+                'eval_fin' => $evalFin,
+                'min_dias_venta' => $minDiasVenta,
+                'filtro_cumplimiento' => $filtroCumplimiento,
+                'rangos_pago' => $rangosPago,
+                'total_vendido' => $totalVendido,
+                'total_vendido_ultimo_mes' => (float) $rawData->sum('ventas_num'),
+                'total_vendido_mes_actual' => (float) $rawData->sum('ventas_mes_actual_num'),
+                'total_incentivo' => $totalIncentivo,
+                'total_vendido_format' => number_format($totalVendido, 2, '.', ','),
+                'total_vendido_ultimo_mes_format' => number_format((float) $rawData->sum('ventas_num'), 2, '.', ','),
+                'total_vendido_mes_actual_format' => number_format((float) $rawData->sum('ventas_mes_actual_num'), 2, '.', ','),
+                'total_incentivo_format' => number_format($totalIncentivo, 2, '.', ','),
+            ],
+            'data' => $data,
+        ]);
+    }
+
     public function reportePagoIncentivos(Request $request)
     {
         ini_set('max_execution_time', 600); // 10 minutes

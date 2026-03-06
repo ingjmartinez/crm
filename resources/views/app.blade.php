@@ -1031,6 +1031,37 @@
                                             Reporte Nuevo Incentivo
                                         </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/incentivos/reporte-nuevo-incentivo-v2-view') }}" class="nav-link" data-key="t-incentivos-reporte-nuevo-v2">
+                                            Reporte Nuevo Incentivo V2
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#sidebarComercial" class="nav-link collapsed" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="sidebarComercial"
+                                data-key="t-comercial">
+                                <i class="ri-line-chart-line"></i> <span data-key="t-apps">Comercial</span>
+                            </a>
+                            <div class="collapse menu-dropdown" id="sidebarComercial">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ route('comercial.kpi-ventas') }}" class="nav-link" data-key="t-kpi-ventas">
+                                            kpi-ventas
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('comercial.kpi-ventas-v') }}" class="nav-link" data-key="t-kpi-ventas-v">
+                                            kpi-ventas-v
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('comercial.ventas-producto') }}" class="nav-link" data-key="t-ventas-producto">
+                                            Ventas por Producto
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>

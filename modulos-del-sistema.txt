@@ -1,0 +1,282 @@
+CRM - Detalle de módulos desarrollados y flujo funcional (actualizado)
+Fecha: 2026-03-04
+Fuente: rutas web + estructura actual de controladores/vistas
+
+====================================================================
+1) Autenticación y acceso
+====================================================================
+Módulo:
+- Inicio de sesión (login/logout)
+- Recuperación de contraseña por código
+
+Flujo breve:
+1. Usuario entra a /login.
+2. Valida correo y contraseña.
+3. Si olvida clave, solicita código por correo.
+4. Ingresa código + nueva contraseña + confirmación.
+5. Sistema actualiza contraseña y permite acceso.
+
+--------------------------------------------------------------------
+2) Contabilidad (inicio del sistema)
+--------------------------------------------------------------------
+Módulo:
+- Pantalla principal contable
+- API de cuentas y entradas
+
+Flujo breve:
+1. Usuario autenticado entra al home (/).
+2. Consulta cuentas y entradas por API.
+3. Puede crear, actualizar, eliminar y sincronizar cuentas.
+
+--------------------------------------------------------------------
+3) Token / sesión externa (Flash)
+--------------------------------------------------------------------
+Módulo:
+- Generación de token
+- Inicio de sesión por token
+
+Flujo breve:
+1. Sistema genera token.
+2. Se usa token para iniciar sesión externa/controlada.
+3. Redirige al entorno correspondiente.
+
+--------------------------------------------------------------------
+4) Operación Lotobet
+--------------------------------------------------------------------
+Módulo:
+- Ventas por usuario
+- Faltantes
+- Ventas por producto
+- Recargas
+- Premios
+- Pagos (misma empresa, otra empresa, por otra empresa)
+- Asistencias
+
+Flujo breve:
+1. Usuario entra al formulario del submódulo Lotobet.
+2. Consulta registros actuales.
+3. Guarda nuevos registros.
+4. Elimina registros cuando aplique.
+
+--------------------------------------------------------------------
+5) Operación Lotonet
+--------------------------------------------------------------------
+Módulo:
+- Ventas por usuario
+- Faltantes
+- Paquetico
+- Recargas
+- Ventas por producto
+- Premios
+- Pagos (misma empresa, otra empresa, por otra empresa)
+- Asistencias
+
+Flujo breve:
+1. Usuario entra al formulario del submódulo Lotonet.
+2. Consulta registros.
+3. Guarda o actualiza información operativa diaria.
+4. Elimina registros erróneos.
+
+--------------------------------------------------------------------
+6) MAR (ventas)
+--------------------------------------------------------------------
+Módulo:
+- Gestión de ventas MAR
+- Dashboard de ventas MAR
+
+Flujo breve:
+1. Usuario registra o corrige ventas MAR.
+2. Sistema consolida datos por día.
+3. Dashboard muestra resumen y tendencia.
+
+--------------------------------------------------------------------
+7) Empleados
+--------------------------------------------------------------------
+Módulo:
+- Mantenimiento de empleados
+- Sincronización
+- Empleados no regularizados
+- Ventas sin empleado
+
+Flujo breve:
+1. Se listan empleados.
+2. Se crea/edita/elimina registro.
+3. Se puede sincronizar maestra.
+4. Reportes detectan casos faltantes o sin cruce.
+
+--------------------------------------------------------------------
+8) Reportes operativos
+--------------------------------------------------------------------
+Módulo:
+- Ventas usuario BET (lista/excel/pdf)
+- Faltantes BET (lista/excel/pdf)
+- Cuadre de ventas
+- Ventas por agencia y período
+- Ventas por agencia
+- Ventas por cédula
+- Cruce de usuarios
+- Verificador de usuarios (lista/excel)
+
+Flujo breve:
+1. Usuario selecciona filtros (sistema, fechas, cédula/agencia/estado).
+2. Consulta resultados agregados o detalle.
+3. Exporta a Excel/PDF en módulos habilitados.
+
+--------------------------------------------------------------------
+9) Agencias
+--------------------------------------------------------------------
+Módulo:
+- CRUD de agencias
+- Listado/exportación/importación
+- Plantilla de carga
+- Incumplimientos de horario
+- Envío de mini reporte por correo
+
+Flujo breve:
+1. Administración mantiene catálogo de agencias.
+2. Puede importar/exportar estructura.
+3. Mide incumplimientos y dispara comunicación por email.
+
+--------------------------------------------------------------------
+10) Seguridad / Administración
+--------------------------------------------------------------------
+Módulo:
+- Usuarios
+- Roles
+- Permisos
+
+Flujo breve:
+1. Admin crea usuarios.
+2. Asigna roles y permisos granulares.
+3. Controla acceso por módulo/acción.
+
+--------------------------------------------------------------------
+11) Reportes BI
+--------------------------------------------------------------------
+Módulo:
+- Resumen ventas
+- Ventas usuarios
+- Faltantes
+
+Flujo breve:
+1. Usuario accede a vistas BI.
+2. Consulta indicadores resumidos para análisis.
+
+--------------------------------------------------------------------
+12) Incentivos
+--------------------------------------------------------------------
+Módulo:
+- Procesamiento de incentivos
+- Configuración de planes y efectividad
+- Pago de incentivos (agente/coordinador/admin)
+- Reportes de incentivos
+- Relación con empleados para incentivos
+
+Flujo breve:
+1. Usuario procesa cálculo de incentivos.
+2. Ajusta parámetros por plan y perfil.
+3. Consulta listados de pago y detalle.
+4. Emite reportes y valida empleados vinculados.
+
+--------------------------------------------------------------------
+13) Ventas Flash
+--------------------------------------------------------------------
+Módulo:
+- Ventas Flash Lotobet
+- Ventas Flash Lotonet
+- Dashboards Flash
+
+Flujo breve:
+1. Se registran ventas flash.
+2. Se consulta consolidado por dashboard.
+3. Se corrigen o eliminan registros puntuales.
+
+--------------------------------------------------------------------
+14) Dashboards financieros
+--------------------------------------------------------------------
+Módulo:
+- Dashboard Lotobet
+- Dashboard Lotonet
+
+Flujo breve:
+1. Consume datos financieros por sistema.
+2. Presenta resumen y métricas comparables.
+
+--------------------------------------------------------------------
+15) KPI Lotobet
+--------------------------------------------------------------------
+Módulo:
+- KPI principal
+- Data KPI
+- Productos por agencia
+
+Flujo breve:
+1. Usuario abre panel KPI.
+2. Filtra/consulta desempeño.
+3. Analiza comportamiento por agencia/producto.
+
+--------------------------------------------------------------------
+16) Registro de empleados (recurso independiente)
+--------------------------------------------------------------------
+Módulo:
+- Registro-empleados (resource)
+
+Flujo breve:
+1. Gestión formal de altas y mantenimiento del registro.
+2. Uso transversal con incentivos y validación operativa.
+
+--------------------------------------------------------------------
+17) Tareas colaborativas (módulo interno)
+--------------------------------------------------------------------
+Módulo:
+- Tablero Gantt + Lista (DataTable)
+- CRUD de tareas
+- Carga de adjuntos al crear/editar tarea (archivos en storage)
+- Comentarios/historial
+- Departamentos de tareas
+- Notificaciones internas (campanita)
+- Notificaciones por correo (asignación/cierre)
+- Solicitud de cierre por usuario (100% progreso)
+- Finalización por admin/superior
+- Botón de finalizar también disponible en el modal de detalle (admin/superior)
+
+Flujo breve:
+1. Se crea tarea con departamento, asignado, fechas, prioridad y adjunto opcional.
+2. Usuario actualiza progreso/estado y comenta en conversación.
+3. Sistema notifica asignaciones, comentarios y cambios de progreso.
+4. Al 100%, usuario solicita cierre.
+5. Admin/superior revisa y finaliza; sistema notifica y envía correo.
+
+--------------------------------------------------------------------
+18) Layout global y versión de sistema
+--------------------------------------------------------------------
+Módulo:
+- Footer unificado desde layout principal
+- Visualización de versión del sistema desde variable `VERSION` en `.env`
+
+Flujo breve:
+1. Todas las vistas que extienden el layout comparten el mismo footer.
+2. El footer muestra año actual y versión configurada.
+3. Al cambiar `VERSION` en `.env`, se refleja tras limpiar/cachear configuración.
+
+--------------------------------------------------------------------
+19) Infraestructura de despliegue (Docker)
+--------------------------------------------------------------------
+Módulo:
+- Servicios separados: app, web (nginx), db, redis, worker, scheduler.
+- Manejo de archivos adjuntos por `storage/app/public`.
+
+Flujo breve:
+1. App guarda adjuntos en `storage/app/public/tareas_adjuntos`.
+2. Nginx debe tener acceso al mismo storage (volumen compartido o alias correcto).
+3. Ruta pública recomendada para adjuntos: `/storage/tareas_adjuntos/...`.
+4. Si Nginx no ve el volumen, devuelve 404 aunque el archivo exista en app.
+
+====================================================================
+Observaciones generales
+====================================================================
+- La mayoría de módulos operativos usan patrón: Vista + endpoint de listado + save/delete.
+- Los reportes usan filtros por fecha/sistema y en algunos casos exportación.
+- Seguridad está centralizada en usuarios/roles/permisos.
+- El módulo de tareas integra flujo colaborativo completo con alertas y adjuntos.
+- El sistema ahora muestra versión en footer global para control de despliegues.
