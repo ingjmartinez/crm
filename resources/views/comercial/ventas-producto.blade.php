@@ -164,6 +164,25 @@
                                 </table>
                             </div>
                         </div>
+
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Ventas por Ciudad</h5>
+                            </div>
+                            <div class="card-body">
+                                <table id="tableCiudades"
+                                    class="table table-bordered dt-responsive nowrap table-striped align-middle"
+                                    style="width:100%">
+                                    <thead>
+                                        <tr>
+                                            <th>Ciudad</th>
+                                            <th>Total Vendido</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -185,6 +204,12 @@
                         <button id="btnModalAgenciasTodos" class="btn btn-sm btn-outline-secondary">Todos</button>
                         <button id="btnModalAgenciasCumplen" class="btn btn-sm btn-outline-success">Cumplen</button>
                         <button id="btnModalAgenciasNoCumplen" class="btn btn-sm btn-outline-danger">No cumplen</button>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="btnDropdownCiudades" data-bs-toggle="dropdown" aria-expanded="false">
+                                Ciudades
+                            </button>
+                            <ul class="dropdown-menu" id="menuCiudadesModal" aria-labelledby="btnDropdownCiudades" style="max-height: 260px; overflow-y: auto;"></ul>
+                        </div>
                     </div>
                     <span class="badge bg-light text-dark" id="labelModalAgenciasFiltro">Filtro: Todos</span>
                 </div>
@@ -251,11 +276,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnModalAgenciasCumplen = document.getElementById('btnModalAgenciasCumplen');
     const btnModalAgenciasNoCumplen = document.getElementById('btnModalAgenciasNoCumplen');
     const labelModalAgenciasFiltro = document.getElementById('labelModalAgenciasFiltro');
+    const btnDropdownCiudades = document.getElementById('btnDropdownCiudades');
+    const menuCiudadesModal = document.getElementById('menuCiudadesModal');
     let dtProductos      = null;
     let dtAgencias       = null;
+    let dtCiudades       = null;
     let dtModalAgencias  = null;
     let ventasFuente     = [];
     let agenciaSeleccionada = null;
+    let ciudadSeleccionada = null;
     let ventasMinimoConfig = 0;
     let filtroCumplimientoAgencia = 'todos';
     let resumenAgenciaVisibleActual = new Map();
@@ -356,8 +385,13 @@ document.addEventListener('DOMContentLoaded', function () {
             dtAgencias.destroy();
             dtAgencias = null;
         }
+        if (dtCiudades) {
+            dtCiudades.destroy();
+            dtCiudades = null;
+        }
         document.querySelector('#tableProductos tbody').innerHTML = '';
         document.querySelector('#tableAgencias tbody').innerHTML = '';
+        document.querySelector('#tableCiudades tbody').innerHTML = '';
         cardMontoTotal.textContent = 'RD$ 0.00';
         cardTotalAgencias.textContent = '0';
         cardAgenciasCumplen.textContent = '0';
@@ -366,23 +400,65 @@ document.addEventListener('DOMContentLoaded', function () {
         labelMinimoVentas.textContent = `Mínimo: RD$ ${formatMoney(ventasMinimoConfig)}`;
         resumenAgenciaVisibleActual = new Map();
         agenciaSeleccionada = null;
+        ciudadSeleccionada = null;
         filtroCumplimientoAgencia = 'todos';
         updateFiltroLabel();
         btnLimpiarAgencia.classList.add('d-none');
+        btnDropdownCiudades.textContent = 'Ciudades';
+    };
+
+    const clearMainTables = () => {
+        if (dtProductos) { dtProductos.destroy(); dtProductos = null; }
+        if (dtAgencias) { dtAgencias.destroy(); dtAgencias = null; }
+        if (dtCiudades) { dtCiudades.destroy(); dtCiudades = null; }
+        document.querySelector('#tableProductos tbody').innerHTML = '';
+        document.querySelector('#tableAgencias tbody').innerHTML = '';
+        document.querySelector('#tableCiudades tbody').innerHTML = '';
+    };
+
+    const cargarCiudadesEnModal = () => {
+        menuCiudadesModal.innerHTML = '';
+
+        const liTodos = document.createElement('li');
+        const btnTodos = document.createElement('button');
+        btnTodos.type = 'button';
+        btnTodos.className = 'dropdown-item btnSelectCiudad';
+        btnTodos.setAttribute('data-ciudad', '');
+        btnTodos.textContent = 'Todas las ciudades';
+        liTodos.appendChild(btnTodos);
+        menuCiudadesModal.appendChild(liTodos);
+
+        const ciudades = [...new Set((ventasFuente ?? []).map(item => {
+            return (item.ciudad ?? 'SIN CIUDAD').toString().trim() || 'SIN CIUDAD';
+        }))].sort((a, b) => a.localeCompare(b, 'es'));
+
+        ciudades.forEach(ciudad => {
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dropdown-item btnSelectCiudad';
+            btn.setAttribute('data-ciudad', ciudad);
+            btn.textContent = ciudad;
+            li.appendChild(btn);
+            menuCiudadesModal.appendChild(li);
+        });
     };
 
     const renderResumen = (ventas) => {
         const resumenProducto = new Map();
         const resumenAgencia = new Map();
+        const resumenCiudad = new Map();
         let totalVendido = 0;
 
         (ventas ?? []).forEach(item => {
             const descripcion = (item.descripcion ?? 'SIN DESCRIPCIÓN').toString().trim() || 'SIN DESCRIPCIÓN';
             const agencia = (item.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
+            const ciudad = (item.ciudad ?? 'SIN CIUDAD').toString().trim() || 'SIN CIUDAD';
             const monto = Number(item.monto ?? 0);
 
             resumenProducto.set(descripcion, (resumenProducto.get(descripcion) ?? 0) + monto);
             resumenAgencia.set(agencia, (resumenAgencia.get(agencia) ?? 0) + monto);
+            resumenCiudad.set(ciudad, (resumenCiudad.get(ciudad) ?? 0) + monto);
             totalVendido += monto;
         });
 
@@ -398,17 +474,23 @@ document.addEventListener('DOMContentLoaded', function () {
         const agenciasPermitidas = new Set(agenciasFiltradas.map(([agencia]) => agencia));
         const productosOrdenados = [...resumenProducto.entries()]
             .sort((a, b) => b[1] - a[1]);
+        let ciudadesOrdenadas = [...resumenCiudad.entries()]
+            .sort((a, b) => b[1] - a[1]);
 
         if (filtroCumplimientoAgencia !== 'todos') {
             const resumenProductoFiltrado = new Map();
+            const resumenCiudadFiltrado = new Map();
             (ventas ?? []).forEach(item => {
                 const agencia = (item.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
                 if (!agenciasPermitidas.has(agencia)) return;
                 const descripcion = (item.descripcion ?? 'SIN DESCRIPCIÓN').toString().trim() || 'SIN DESCRIPCIÓN';
+                const ciudad = (item.ciudad ?? 'SIN CIUDAD').toString().trim() || 'SIN CIUDAD';
                 const monto = Number(item.monto ?? 0);
                 resumenProductoFiltrado.set(descripcion, (resumenProductoFiltrado.get(descripcion) ?? 0) + monto);
+                resumenCiudadFiltrado.set(ciudad, (resumenCiudadFiltrado.get(ciudad) ?? 0) + monto);
             });
             productosOrdenados.splice(0, productosOrdenados.length, ...[...resumenProductoFiltrado.entries()].sort((a, b) => b[1] - a[1]));
+            ciudadesOrdenadas = [...resumenCiudadFiltrado.entries()].sort((a, b) => b[1] - a[1]);
             totalVendido = [...agenciasFiltradas].reduce((sum, [, total]) => sum + Number(total), 0);
             cardMontoTotal.textContent = `RD$ ${formatMoney(totalVendido)}`;
         }
@@ -435,6 +517,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${getCumplimientoBadge(total)}</td>
             `;
             tbodyAgencias.appendChild(tr);
+        });
+
+        const tbodyCiudades = document.querySelector('#tableCiudades tbody');
+        ciudadesOrdenadas.forEach(([ciudad, total]) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${ciudad}</td>
+                <td>${formatMoney(total)}</td>
+            `;
+            tbodyCiudades.appendChild(tr);
         });
 
         dtProductos = $('#tableProductos').DataTable({
@@ -467,6 +559,21 @@ document.addEventListener('DOMContentLoaded', function () {
             order: [[1, 'desc']],
         });
 
+        dtCiudades = $('#tableCiudades').DataTable({
+            destroy: true,
+            responsive: true,
+            language: {
+                url: '/json/es-DO.json',
+                search: 'Buscar:',
+                lengthMenu: 'Mostrar _MENU_ registros',
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                paginate: { first: 'Primera', last: 'Última', next: 'Siguiente', previous: 'Anterior' }
+            },
+            dom: 'Bfrtip',
+            buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+            order: [[1, 'desc']],
+        });
+
         updateFiltroLabel();
 
         return { resumenAgencia: resumenAgenciaVisibleActual };
@@ -475,6 +582,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const abrirModalAgencias = (resumenAgencia) => {
         modalAgencyEntries = [...resumenAgencia.entries()].sort((a, b) => b[1] - a[1]);
         modalAgencyFilter = 'todos';
+        cargarCiudadesEnModal();
+        btnDropdownCiudades.textContent = ciudadSeleccionada ? `Ciudad: ${ciudadSeleccionada}` : 'Ciudades';
         renderModalAgencias();
 
         const modal = new bootstrap.Modal(document.getElementById('modalAgencias'));
@@ -483,39 +592,70 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const aplicarFiltroAgencia = (agencia) => {
         agenciaSeleccionada = agencia;
+        ciudadSeleccionada = null;
         const ventasFiltradas = (ventasFuente ?? []).filter(item => {
             return (item.agencia_id ?? '').toString().trim() === agencia.toString().trim();
         });
 
-        if (dtProductos) { dtProductos.destroy(); dtProductos = null; }
-        if (dtAgencias) { dtAgencias.destroy(); dtAgencias = null; }
-        document.querySelector('#tableProductos tbody').innerHTML = '';
-        document.querySelector('#tableAgencias tbody').innerHTML = '';
+        clearMainTables();
 
         renderResumen(ventasFiltradas);
         labelFecha.textContent = `Fecha: ${inputFecha.value} | Agencia: ${agencia}`;
         btnLimpiarAgencia.classList.remove('d-none');
     };
 
+    const aplicarFiltroCiudad = (ciudad) => {
+        ciudadSeleccionada = (ciudad ?? '').toString().trim() || null;
+        agenciaSeleccionada = null;
+
+        const ventasFiltradas = ciudadSeleccionada
+            ? (ventasFuente ?? []).filter(item => {
+                const ciudadItem = (item.ciudad ?? 'SIN CIUDAD').toString().trim() || 'SIN CIUDAD';
+                return ciudadItem === ciudadSeleccionada;
+            })
+            : ventasFuente;
+
+        clearMainTables();
+        renderResumen(ventasFiltradas);
+
+        if (ciudadSeleccionada) {
+            labelFecha.textContent = `Fecha: ${inputFecha.value} | Ciudad: ${ciudadSeleccionada}`;
+            btnLimpiarAgencia.classList.remove('d-none');
+            btnDropdownCiudades.textContent = `Ciudad: ${ciudadSeleccionada}`;
+        } else {
+            labelFecha.textContent = 'Fecha: ' + inputFecha.value;
+            btnLimpiarAgencia.classList.add('d-none');
+            btnDropdownCiudades.textContent = 'Ciudades';
+        }
+    };
+
     const refrescarVistaActual = () => {
         if (!ventasFuente.length) return;
 
-        if (dtProductos) { dtProductos.destroy(); dtProductos = null; }
-        if (dtAgencias) { dtAgencias.destroy(); dtAgencias = null; }
-        document.querySelector('#tableProductos tbody').innerHTML = '';
-        document.querySelector('#tableAgencias tbody').innerHTML = '';
+        clearMainTables();
 
         const dataRender = agenciaSeleccionada
             ? ventasFuente.filter(item => (item.agencia_id ?? '').toString().trim() === agenciaSeleccionada.toString().trim())
+            : ciudadSeleccionada
+                ? ventasFuente.filter(item => {
+                    const ciudadItem = (item.ciudad ?? 'SIN CIUDAD').toString().trim() || 'SIN CIUDAD';
+                    return ciudadItem === ciudadSeleccionada;
+                })
             : ventasFuente;
 
         renderResumen(dataRender);
         if (agenciaSeleccionada) {
             labelFecha.textContent = `Fecha: ${inputFecha.value} | Agencia: ${agenciaSeleccionada}`;
             btnLimpiarAgencia.classList.remove('d-none');
+            btnDropdownCiudades.textContent = 'Ciudades';
+        } else if (ciudadSeleccionada) {
+            labelFecha.textContent = `Fecha: ${inputFecha.value} | Ciudad: ${ciudadSeleccionada}`;
+            btnLimpiarAgencia.classList.remove('d-none');
+            btnDropdownCiudades.textContent = `Ciudad: ${ciudadSeleccionada}`;
         } else {
             labelFecha.textContent = 'Fecha: ' + inputFecha.value;
             btnLimpiarAgencia.classList.add('d-none');
+            btnDropdownCiudades.textContent = 'Ciudades';
         }
     };
 
@@ -680,17 +820,27 @@ document.addEventListener('DOMContentLoaded', function () {
         aplicarFiltroAgencia(agencia);
     });
 
+    document.addEventListener('click', function (event) {
+        const target = event.target;
+        if (!target.classList.contains('btnSelectCiudad')) return;
+
+        const ciudad = target.getAttribute('data-ciudad') ?? '';
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalAgencias'));
+        if (modalInstance) modalInstance.hide();
+
+        aplicarFiltroCiudad(ciudad);
+    });
+
     btnLimpiarAgencia.addEventListener('click', function () {
         if (!ventasFuente.length) return;
 
-        if (dtProductos) { dtProductos.destroy(); dtProductos = null; }
-        if (dtAgencias) { dtAgencias.destroy(); dtAgencias = null; }
-        document.querySelector('#tableProductos tbody').innerHTML = '';
-        document.querySelector('#tableAgencias tbody').innerHTML = '';
+        clearMainTables();
 
         renderResumen(ventasFuente);
         labelFecha.textContent = 'Fecha: ' + inputFecha.value;
         agenciaSeleccionada = null;
+        ciudadSeleccionada = null;
+        btnDropdownCiudades.textContent = 'Ciudades';
         btnLimpiarAgencia.classList.add('d-none');
     });
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Agencia;
 use App\Models\Token;
 use App\Models\VtProducto;
 use App\Models\VtProductoNet;
@@ -52,7 +53,58 @@ class VentasProductosController extends Controller
 
         $ventas = json_decode($response, true);
 
-        return response()->json(['ventas' => $ventas['Content'], 'code' => $ventas['code'], 'message' => $ventas['msg']]);
+        $contenido = $ventas['Content'] ?? [];
+        if (!is_array($contenido)) {
+            $contenido = [];
+        }
+
+        $terminales = collect($contenido)
+            ->map(function ($item) {
+                return isset($item['agencia_id']) ? trim((string) $item['agencia_id']) : '';
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        $agencias = Agencia::query()
+            ->select(['terminal', 'ciudad', 'ruta', 'operador', 'coordinador'])
+            ->whereIn('terminal', $terminales)
+            ->get();
+
+        $agenciasByTerminal = [];
+        foreach ($agencias as $agencia) {
+            $terminal = trim((string) ($agencia->terminal ?? ''));
+            if ($terminal === '') {
+                continue;
+            }
+
+            $agenciasByTerminal[$terminal] = [
+                'ciudad' => $agencia->ciudad,
+                'ruta' => $agencia->ruta,
+                'operador' => $agencia->operador,
+                'coordinador' => $agencia->coordinador,
+            ];
+
+            $terminalSinCeros = ltrim($terminal, '0');
+            if ($terminalSinCeros !== '' && !isset($agenciasByTerminal[$terminalSinCeros])) {
+                $agenciasByTerminal[$terminalSinCeros] = $agenciasByTerminal[$terminal];
+            }
+        }
+
+        $ventasEnriquecidas = collect($contenido)->map(function ($item) use ($agenciasByTerminal) {
+            $agenciaId = trim((string) ($item['agencia_id'] ?? ''));
+            $agenciaLookup = $agenciasByTerminal[$agenciaId]
+                ?? $agenciasByTerminal[ltrim($agenciaId, '0')]
+                ?? ['ciudad' => null, 'ruta' => null, 'operador' => null, 'coordinador' => null];
+
+            return array_merge($item, $agenciaLookup);
+        })->values()->all();
+
+        return response()->json([
+            'ventas' => $ventasEnriquecidas,
+            'code' => $ventas['code'] ?? null,
+            'message' => $ventas['msg'] ?? null,
+        ]);
     }
 
     public function saveVentasProductosLotobet(Request $request)
