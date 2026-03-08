@@ -31,14 +31,61 @@ class ComercialController extends Controller
         $kpis = $this->getAcumuladosBet($mes);
         $cumplimiento = $this->buildCumplimiento($kpis, $metasDiarias);
         $resumenAgencias = $this->getResumenVentasAgenciaMensual($mes);
+        $agenciasPorTipo = $this->getCantidadAgenciasConVentaPorTipo($mes);
 
         return view('comercial.kpi-ventas', [
             'kpis' => $kpis,
             'metasDiarias' => $metasDiarias,
             'cumplimiento' => $cumplimiento,
             'resumenAgencias' => $resumenAgencias,
+            'agenciasPorTipo' => $agenciasPorTipo,
             'mesSeleccionado' => $mes,
         ]);
+    }
+
+    private function getCantidadAgenciasConVentaPorTipo(string $mes): array
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+            $mes = now()->format('Y-m');
+        }
+
+        [$year, $month] = explode('-', $mes);
+
+        $rows = DB::table('vt_usuarios_bet')
+            ->selectRaw('LOWER(TRIM(tipo)) AS tipo_normalizado')
+            ->selectRaw('COUNT(DISTINCT TRIM(CAST(agencia_id AS CHAR))) AS total_agencias')
+            ->whereNotNull('agencia_id')
+            ->whereYear('fecha', (int) $year)
+            ->whereMonth('fecha', (int) $month)
+            ->groupBy(DB::raw('LOWER(TRIM(tipo))'))
+            ->get();
+
+        $resultado = [
+            'tradicional' => 0,
+            'no_tradicional' => 0,
+            'recargas' => 0,
+        ];
+
+        foreach ($rows as $row) {
+            $tipo = (string) ($row->tipo_normalizado ?? '');
+            $cantidad = (int) ($row->total_agencias ?? 0);
+
+            if ($tipo === 'tradicional') {
+                $resultado['tradicional'] += $cantidad;
+                continue;
+            }
+
+            if ($tipo === 'no tradicional' || $tipo === 'no_tradicional') {
+                $resultado['no_tradicional'] += $cantidad;
+                continue;
+            }
+
+            if ($tipo === 'recarga' || $tipo === 'recargas') {
+                $resultado['recargas'] += $cantidad;
+            }
+        }
+
+        return $resultado;
     }
 
     public function kpiVentasV(Request $request)
@@ -169,13 +216,29 @@ class ComercialController extends Controller
             })
             ->toArray();
 
-        return $ventasRows->map(function ($row) use ($premiosByAgencia) {
+        $nombresAgenciaByTerminal = DB::table('agencias')
+            ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal")
+            ->selectRaw('TRIM(COALESCE(nombre_agencia, "")) AS nombre_agencia')
+            ->whereNotNull('terminal')
+            ->get()
+            ->mapWithKeys(function ($row) {
+                $terminal = (string) ($row->terminal ?? '');
+                $nombre = (string) ($row->nombre_agencia ?? '');
+
+                return [$terminal => $nombre];
+            })
+            ->toArray();
+
+        return $ventasRows->map(function ($row) use ($premiosByAgencia, $nombresAgenciaByTerminal) {
             $agencia = (string) ($row->agencia ?? 'SIN AGENCIA');
             $totalVendido = (float) ($row->total_vendido ?? 0);
             $premiosPagados = (float) ($premiosByAgencia[$agencia] ?? 0);
+            $nombreAgencia = trim((string) ($nombresAgenciaByTerminal[$agencia] ?? ''));
 
             return [
                 'agencia' => $agencia,
+                'terminal' => $agencia,
+                'nombre_agencia' => $nombreAgencia !== '' ? $nombreAgencia : $agencia,
                 'total_vendido' => $totalVendido,
                 'premios_pagados' => $premiosPagados,
             ];

@@ -144,12 +144,12 @@
                         <div class="card border-primary border-opacity-25">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h6 class="mb-0 text-primary">Meta mensual Tradicional</h6>
-                                    <span class="badge bg-primary-subtle text-primary" id="pct-faltante-tradicional">{{ number_format($cumplimiento['tradicional']['pct_faltante'] ?? 0, 2) }}%</span>
+                                    <h6 class="mb-0 text-primary">Meta mensual Tradicional Por Agencia</h6>
+                                    <span class="badge bg-primary-subtle text-primary" id="pct-faltante-tradicional">{{ number_format($agenciasPorTipo['tradicional'] ?? 0, 0) }} agencias</span>
                                 </div>
                                 <h5 class="fw-semibold mb-2" id="meta-mensual-tradicional">RD$ {{ number_format($cumplimiento['tradicional']['meta_mensual'] ?? 0, 2) }}</h5>
-                                <small class="text-muted d-block">Faltante</small>
-                                <small class="fw-medium text-danger" id="monto-faltante-tradicional">RD$ {{ number_format($cumplimiento['tradicional']['faltante'] ?? 0, 2) }}</small>
+                                <small class="text-muted d-block">Meta Mensual</small>
+                                <small class="fw-medium text-primary" id="monto-faltante-tradicional">RD$ {{ number_format((($cumplimiento['tradicional']['meta_mensual'] ?? 0) * ($agenciasPorTipo['tradicional'] ?? 0)), 2) }}</small>
                                 @php
                                     $deltaTradicional = ($kpis['tradicional'] ?? 0) - ($cumplimiento['tradicional']['meta_mensual'] ?? 0);
                                 @endphp
@@ -163,12 +163,12 @@
                         <div class="card border-info border-opacity-25">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h6 class="mb-0 text-info">Meta mensual No Tradicional</h6>
-                                    <span class="badge bg-info-subtle text-info" id="pct-faltante-no-tradicional">{{ number_format($cumplimiento['no_tradicional']['pct_faltante'] ?? 0, 2) }}%</span>
+                                    <h6 class="mb-0 text-info">Meta mensual No Tradicional Por Agencia</h6>
+                                    <span class="badge bg-info-subtle text-info" id="pct-faltante-no-tradicional">{{ number_format($agenciasPorTipo['no_tradicional'] ?? 0, 0) }} agencias</span>
                                 </div>
                                 <h5 class="fw-semibold mb-2" id="meta-mensual-no-tradicional">RD$ {{ number_format($cumplimiento['no_tradicional']['meta_mensual'] ?? 0, 2) }}</h5>
-                                <small class="text-muted d-block">Faltante</small>
-                                <small class="fw-medium text-danger" id="monto-faltante-no-tradicional">RD$ {{ number_format($cumplimiento['no_tradicional']['faltante'] ?? 0, 2) }}</small>
+                                <small class="text-muted d-block">Meta Mensual</small>
+                                <small class="fw-medium text-primary" id="monto-faltante-no-tradicional">RD$ {{ number_format((($cumplimiento['no_tradicional']['meta_mensual'] ?? 0) * ($agenciasPorTipo['no_tradicional'] ?? 0)), 2) }}</small>
                                 @php
                                     $deltaNoTradicional = ($kpis['no_tradicional'] ?? 0) - ($cumplimiento['no_tradicional']['meta_mensual'] ?? 0);
                                 @endphp
@@ -182,12 +182,12 @@
                         <div class="card border-success border-opacity-25">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h6 class="mb-0 text-success">Meta mensual Recargas</h6>
-                                    <span class="badge bg-success-subtle text-success" id="pct-faltante-recargas">{{ number_format($cumplimiento['recargas']['pct_faltante'] ?? 0, 2) }}%</span>
+                                    <h6 class="mb-0 text-success">Meta mensual Recargas Por Agencia</h6>
+                                    <span class="badge bg-success-subtle text-success" id="pct-faltante-recargas">{{ number_format($agenciasPorTipo['recargas'] ?? 0, 0) }} agencias</span>
                                 </div>
                                 <h5 class="fw-semibold mb-2" id="meta-mensual-recargas">RD$ {{ number_format($cumplimiento['recargas']['meta_mensual'] ?? 0, 2) }}</h5>
-                                <small class="text-muted d-block">Faltante</small>
-                                <small class="fw-medium text-danger" id="monto-faltante-recargas">RD$ {{ number_format($cumplimiento['recargas']['faltante'] ?? 0, 2) }}</small>
+                                <small class="text-muted d-block">Meta Mensual</small>
+                                <small class="fw-medium text-primary" id="monto-faltante-recargas">RD$ {{ number_format((($cumplimiento['recargas']['meta_mensual'] ?? 0) * ($agenciasPorTipo['recargas'] ?? 0)), 2) }}</small>
                                 @php
                                     $deltaRecargas = ($kpis['recargas'] ?? 0) - ($cumplimiento['recargas']['meta_mensual'] ?? 0);
                                 @endphp
@@ -202,11 +202,14 @@
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5 class="card-title mb-0">Rentabilidad por Agencia (Ventas Mensuales)</h5>
                                 <div class="d-flex align-items-center gap-2">
-                                    <select class="form-select form-select-sm" id="filtro-cumplimiento-rentabilidad" style="width: 170px;">
-                                        <option value="todos">Todos</option>
-                                        <option value="cumple">Cumple</option>
-                                        <option value="no_cumple">No cumple</option>
-                                    </select>
+                                    <div class="d-flex flex-column gap-2" style="min-width: 240px;">
+                                        <input type="text" class="form-control form-control-sm" id="buscar-nombre-rentabilidad" placeholder="Buscar por nombre o terminal">
+                                        <select class="form-select form-select-sm" id="filtro-cumplimiento-rentabilidad">
+                                            <option value="todos">Todos</option>
+                                            <option value="cumple">Cumple</option>
+                                            <option value="no_cumple">No cumple</option>
+                                        </select>
+                                    </div>
                                     <span class="badge bg-primary-subtle text-primary" id="label-meta-rentabilidad">Gasto por agencia: RD$ 0.00</span>
                                 </div>
                             </div>
@@ -322,17 +325,24 @@
         const lblPctTrad = document.getElementById('pct-faltante-tradicional');
         const lblPctNoTrad = document.getElementById('pct-faltante-no-tradicional');
         const lblPctRec = document.getElementById('pct-faltante-recargas');
+        const agenciasPorTipo = {
+            tradicional: Number(@json($agenciasPorTipo['tradicional'] ?? 0)),
+            no_tradicional: Number(@json($agenciasPorTipo['no_tradicional'] ?? 0)),
+            recargas: Number(@json($agenciasPorTipo['recargas'] ?? 0)),
+        };
         const lblDeltaTrad = document.getElementById('delta-meta-tradicional');
         const lblDeltaNoTrad = document.getElementById('delta-meta-no-tradicional');
         const lblDeltaRec = document.getElementById('delta-meta-recargas');
         const lblMetaRentabilidad = document.getElementById('label-meta-rentabilidad');
         const tbodyRentabilidad = document.getElementById('tbody-rentabilidad-agencias');
+        const buscarNombreRentabilidad = document.getElementById('buscar-nombre-rentabilidad');
         const filtroCumplimientoRentabilidad = document.getElementById('filtro-cumplimiento-rentabilidad');
         const cardAgenciasCumplenRentabilidad = document.getElementById('card-agencias-cumplen-rentabilidad');
         const cardAgenciasNoCumplenRentabilidad = document.getElementById('card-agencias-no-cumplen-rentabilidad');
 
         const resumenAgencias = @json($resumenAgencias ?? []);
         let estadoFiltroCumplimientoRentabilidad = 'todos';
+        let estadoBusquedaNombreRentabilidad = '';
 
         const acumulados = {
             tradicional: Number(@json($kpis['tradicional'] ?? 0)),
@@ -389,12 +399,18 @@
 
             (resumenAgencias || []).forEach(item => {
                 const agencia = (item?.agencia ?? 'SIN AGENCIA').toString();
+                const terminal = (item?.terminal ?? agencia).toString();
+                const nombreAgencia = (item?.nombre_agencia ?? agencia).toString();
                 const ventas = Number(item?.total_vendido ?? 0);
                 const premiosPagados = Number(item?.premios_pagados ?? 0);
                 const utilidadBruta = ventas - premiosPagados;
                 const gastoAgencia = Number(metaMensual || 0);
                 const gananciaNeta = utilidadBruta - gastoAgencia;
                 const cumple = utilidadBruta >= gastoAgencia;
+                const textoBusqueda = estadoBusquedaNombreRentabilidad.trim().toLowerCase();
+                const coincideBusqueda = !textoBusqueda
+                    || nombreAgencia.toLowerCase().includes(textoBusqueda)
+                    || terminal.toLowerCase().includes(textoBusqueda);
 
                 if (cumple) {
                     totalCumplen += 1;
@@ -402,6 +418,7 @@
                     totalNoCumplen += 1;
                 }
 
+                if (!coincideBusqueda) return;
                 if (estadoFiltroCumplimientoRentabilidad === 'cumple' && !cumple) return;
                 if (estadoFiltroCumplimientoRentabilidad === 'no_cumple' && cumple) return;
 
@@ -409,7 +426,10 @@
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${agencia}</td>
+                    <td>
+                        <div class="fw-medium">${nombreAgencia}</div>
+                        <small class="text-muted">Terminal: ${terminal}</small>
+                    </td>
                     <td>${formatCurrency(ventas)}</td>
                     <td>${formatCurrency(premiosPagados)}</td>
                     <td>${formatCurrency(utilidadBruta)}</td>
@@ -451,10 +471,16 @@
         }
 
         function renderCumplimiento(config) {
-            const metasMensuales = {
+            const metasMensualesPorAgencia = {
                 tradicional: Number(config.tradicional || 0) * 30,
                 no_tradicional: Number(config.no_tradicional || 0) * 30,
                 recargas: Number(config.recargas || 0) * 30,
+            };
+
+            const metasMensuales = {
+                tradicional: metasMensualesPorAgencia.tradicional * Number(agenciasPorTipo.tradicional || 0),
+                no_tradicional: metasMensualesPorAgencia.no_tradicional * Number(agenciasPorTipo.no_tradicional || 0),
+                recargas: metasMensualesPorAgencia.recargas * Number(agenciasPorTipo.recargas || 0),
             };
 
             const faltantes = {
@@ -475,17 +501,17 @@
                 recargas: acumulados.recargas - metasMensuales.recargas,
             };
 
-            if (lblMetaMensualTrad) lblMetaMensualTrad.textContent = formatCurrency(metasMensuales.tradicional);
-            if (lblMetaMensualNoTrad) lblMetaMensualNoTrad.textContent = formatCurrency(metasMensuales.no_tradicional);
-            if (lblMetaMensualRec) lblMetaMensualRec.textContent = formatCurrency(metasMensuales.recargas);
+            if (lblMetaMensualTrad) lblMetaMensualTrad.textContent = formatCurrency(metasMensualesPorAgencia.tradicional);
+            if (lblMetaMensualNoTrad) lblMetaMensualNoTrad.textContent = formatCurrency(metasMensualesPorAgencia.no_tradicional);
+            if (lblMetaMensualRec) lblMetaMensualRec.textContent = formatCurrency(metasMensualesPorAgencia.recargas);
 
-            if (lblFaltanteTrad) lblFaltanteTrad.textContent = formatCurrency(faltantes.tradicional);
-            if (lblFaltanteNoTrad) lblFaltanteNoTrad.textContent = formatCurrency(faltantes.no_tradicional);
-            if (lblFaltanteRec) lblFaltanteRec.textContent = formatCurrency(faltantes.recargas);
+            if (lblFaltanteTrad) lblFaltanteTrad.textContent = formatCurrency(metasMensuales.tradicional);
+            if (lblFaltanteNoTrad) lblFaltanteNoTrad.textContent = formatCurrency(metasMensuales.no_tradicional);
+            if (lblFaltanteRec) lblFaltanteRec.textContent = formatCurrency(metasMensuales.recargas);
 
-            if (lblPctTrad) lblPctTrad.textContent = pctFaltantes.tradicional.toFixed(2) + '%';
-            if (lblPctNoTrad) lblPctNoTrad.textContent = pctFaltantes.no_tradicional.toFixed(2) + '%';
-            if (lblPctRec) lblPctRec.textContent = pctFaltantes.recargas.toFixed(2) + '%';
+            if (lblPctTrad) lblPctTrad.textContent = agenciasPorTipo.tradicional.toLocaleString('es-DO') + ' agencias';
+            if (lblPctNoTrad) lblPctNoTrad.textContent = agenciasPorTipo.no_tradicional.toLocaleString('es-DO') + ' agencias';
+            if (lblPctRec) lblPctRec.textContent = agenciasPorTipo.recargas.toLocaleString('es-DO') + ' agencias';
 
             if (lblDeltaTrad) {
                 lblDeltaTrad.textContent = formatCurrency(deltas.tradicional);
@@ -513,6 +539,13 @@
         if (filtroCumplimientoRentabilidad) {
             filtroCumplimientoRentabilidad.addEventListener('change', function () {
                 estadoFiltroCumplimientoRentabilidad = this.value || 'todos';
+                renderTablaRentabilidad(getMetaRentabilidad());
+            });
+        }
+
+        if (buscarNombreRentabilidad) {
+            buscarNombreRentabilidad.addEventListener('input', function () {
+                estadoBusquedaNombreRentabilidad = this.value || '';
                 renderTablaRentabilidad(getMetaRentabilidad());
             });
         }
