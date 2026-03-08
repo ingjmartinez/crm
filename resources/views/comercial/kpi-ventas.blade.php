@@ -39,6 +39,9 @@
                                         <button type="button" class="btn btn-soft-info ms-2" data-bs-toggle="modal" data-bs-target="#modalMetaDiaria">
                                             <i class="ri-settings-3-line me-1"></i>Configurar meta diaria
                                         </button>
+                                        <button type="button" class="btn btn-soft-primary ms-2" data-bs-toggle="modal" data-bs-target="#modalRentabilidad">
+                                            <i class="ri-funds-line me-1"></i>Rentabilidad
+                                        </button>
                                     </div>
                                 </form>
                             </div>
@@ -117,7 +120,22 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <p class="text-muted mb-0">Fase 1: acumulado por mes.</p>
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                    <div>
+                                        <p class="text-muted mb-1">Fase 1: acumulado por mes</p>
+                                        <small class="text-muted">Resumen de cumplimiento por agencia según gasto configurado.</small>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-4">
+                                        <div>
+                                            <small class="text-muted d-block">Agencias que cumplen</small>
+                                            <h5 class="mb-0 text-success" id="card-agencias-cumplen-rentabilidad">0</h5>
+                                        </div>
+                                        <div>
+                                            <small class="text-muted d-block">Agencias que no cumplen</small>
+                                            <h5 class="mb-0 text-danger" id="card-agencias-no-cumplen-rentabilidad">0</h5>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -132,6 +150,11 @@
                                 <h5 class="fw-semibold mb-2" id="meta-mensual-tradicional">RD$ {{ number_format($cumplimiento['tradicional']['meta_mensual'] ?? 0, 2) }}</h5>
                                 <small class="text-muted d-block">Faltante</small>
                                 <small class="fw-medium text-danger" id="monto-faltante-tradicional">RD$ {{ number_format($cumplimiento['tradicional']['faltante'] ?? 0, 2) }}</small>
+                                @php
+                                    $deltaTradicional = ($kpis['tradicional'] ?? 0) - ($cumplimiento['tradicional']['meta_mensual'] ?? 0);
+                                @endphp
+                                <small class="text-muted d-block mt-2">Acumulado - Meta</small>
+                                <small class="fw-medium {{ $deltaTradicional >= 0 ? 'text-success' : 'text-danger' }}" id="delta-meta-tradicional">RD$ {{ number_format($deltaTradicional, 2) }}</small>
                             </div>
                         </div>
                     </div>
@@ -146,6 +169,11 @@
                                 <h5 class="fw-semibold mb-2" id="meta-mensual-no-tradicional">RD$ {{ number_format($cumplimiento['no_tradicional']['meta_mensual'] ?? 0, 2) }}</h5>
                                 <small class="text-muted d-block">Faltante</small>
                                 <small class="fw-medium text-danger" id="monto-faltante-no-tradicional">RD$ {{ number_format($cumplimiento['no_tradicional']['faltante'] ?? 0, 2) }}</small>
+                                @php
+                                    $deltaNoTradicional = ($kpis['no_tradicional'] ?? 0) - ($cumplimiento['no_tradicional']['meta_mensual'] ?? 0);
+                                @endphp
+                                <small class="text-muted d-block mt-2">Acumulado - Meta</small>
+                                <small class="fw-medium {{ $deltaNoTradicional >= 0 ? 'text-success' : 'text-danger' }}" id="delta-meta-no-tradicional">RD$ {{ number_format($deltaNoTradicional, 2) }}</small>
                             </div>
                         </div>
                     </div>
@@ -160,6 +188,45 @@
                                 <h5 class="fw-semibold mb-2" id="meta-mensual-recargas">RD$ {{ number_format($cumplimiento['recargas']['meta_mensual'] ?? 0, 2) }}</h5>
                                 <small class="text-muted d-block">Faltante</small>
                                 <small class="fw-medium text-danger" id="monto-faltante-recargas">RD$ {{ number_format($cumplimiento['recargas']['faltante'] ?? 0, 2) }}</small>
+                                @php
+                                    $deltaRecargas = ($kpis['recargas'] ?? 0) - ($cumplimiento['recargas']['meta_mensual'] ?? 0);
+                                @endphp
+                                <small class="text-muted d-block mt-2">Acumulado - Meta</small>
+                                <small class="fw-medium {{ $deltaRecargas >= 0 ? 'text-success' : 'text-danger' }}" id="delta-meta-recargas">RD$ {{ number_format($deltaRecargas, 2) }}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 mt-2">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">Rentabilidad por Agencia (Ventas Mensuales)</h5>
+                                <div class="d-flex align-items-center gap-2">
+                                    <select class="form-select form-select-sm" id="filtro-cumplimiento-rentabilidad" style="width: 170px;">
+                                        <option value="todos">Todos</option>
+                                        <option value="cumple">Cumple</option>
+                                        <option value="no_cumple">No cumple</option>
+                                    </select>
+                                    <span class="badge bg-primary-subtle text-primary" id="label-meta-rentabilidad">Gasto por agencia: RD$ 0.00</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-striped align-middle mb-0" id="table-rentabilidad-agencias">
+                                        <thead>
+                                            <tr>
+                                                <th>Agencia</th>
+                                                <th>Ventas</th>
+                                                <th>Premios Pagados</th>
+                                                <th>Utilidad Bruta</th>
+                                                <th>Gasto Agencia</th>
+                                                <th>Ganancia Neta</th>
+                                                <th>Cumplimiento</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-rentabilidad-agencias"></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -195,6 +262,27 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="modal fade" id="modalRentabilidad" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title"><i class="ri-funds-line me-2"></i>Configurar Rentabilidad</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <label class="form-label">Gasto mensual por agencia a cumplir (RD$)</label>
+                                <input type="number" step="0.01" min="0" class="form-control" id="input-meta-rentabilidad" placeholder="0.00">
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-primary" id="btn-guardar-rentabilidad">
+                                    <i class="ri-save-line me-1"></i>Guardar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -204,13 +292,16 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const STORAGE_KEY = 'comercial_kpi_meta_diaria_v1';
+        const STORAGE_KEY_RENTABILIDAD = 'comercial_kpi_meta_rentabilidad_v1';
         const formFiltro = document.getElementById('form-filtro-mes-kpi');
         const botonFiltrar = document.getElementById('btn-filtrar-kpi');
         const btnGuardarMeta = document.getElementById('btn-guardar-meta-diaria');
+        const btnGuardarRentabilidad = document.getElementById('btn-guardar-rentabilidad');
 
         const inputTrad = document.getElementById('input-meta-tradicional');
         const inputNoTrad = document.getElementById('input-meta-no-tradicional');
         const inputRec = document.getElementById('input-meta-recargas');
+        const inputMetaRentabilidad = document.getElementById('input-meta-rentabilidad');
 
         const inputTradHidden = document.getElementById('meta-tradicional-hidden');
         const inputNoTradHidden = document.getElementById('meta-no-tradicional-hidden');
@@ -231,6 +322,17 @@
         const lblPctTrad = document.getElementById('pct-faltante-tradicional');
         const lblPctNoTrad = document.getElementById('pct-faltante-no-tradicional');
         const lblPctRec = document.getElementById('pct-faltante-recargas');
+        const lblDeltaTrad = document.getElementById('delta-meta-tradicional');
+        const lblDeltaNoTrad = document.getElementById('delta-meta-no-tradicional');
+        const lblDeltaRec = document.getElementById('delta-meta-recargas');
+        const lblMetaRentabilidad = document.getElementById('label-meta-rentabilidad');
+        const tbodyRentabilidad = document.getElementById('tbody-rentabilidad-agencias');
+        const filtroCumplimientoRentabilidad = document.getElementById('filtro-cumplimiento-rentabilidad');
+        const cardAgenciasCumplenRentabilidad = document.getElementById('card-agencias-cumplen-rentabilidad');
+        const cardAgenciasNoCumplenRentabilidad = document.getElementById('card-agencias-no-cumplen-rentabilidad');
+
+        const resumenAgencias = @json($resumenAgencias ?? []);
+        let estadoFiltroCumplimientoRentabilidad = 'todos';
 
         const acumulados = {
             tradicional: Number(@json($kpis['tradicional'] ?? 0)),
@@ -262,6 +364,74 @@
 
         function setConfig(config) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        }
+
+        function getMetaRentabilidad() {
+            const raw = localStorage.getItem(STORAGE_KEY_RENTABILIDAD);
+            const value = Number(raw || 0);
+            return Number.isFinite(value) && value >= 0 ? value : 0;
+        }
+
+        function setMetaRentabilidad(value) {
+            localStorage.setItem(STORAGE_KEY_RENTABILIDAD, String(Math.max(0, Number(value || 0))));
+        }
+
+        function renderTablaRentabilidad(metaMensual) {
+            if (!tbodyRentabilidad) return;
+
+            tbodyRentabilidad.innerHTML = '';
+            if (lblMetaRentabilidad) {
+                lblMetaRentabilidad.textContent = 'Gasto por agencia: ' + formatCurrency(metaMensual);
+            }
+
+            let totalCumplen = 0;
+            let totalNoCumplen = 0;
+
+            (resumenAgencias || []).forEach(item => {
+                const agencia = (item?.agencia ?? 'SIN AGENCIA').toString();
+                const ventas = Number(item?.total_vendido ?? 0);
+                const premiosPagados = Number(item?.premios_pagados ?? 0);
+                const utilidadBruta = ventas - premiosPagados;
+                const gastoAgencia = Number(metaMensual || 0);
+                const gananciaNeta = utilidadBruta - gastoAgencia;
+                const cumple = utilidadBruta >= gastoAgencia;
+
+                if (cumple) {
+                    totalCumplen += 1;
+                } else {
+                    totalNoCumplen += 1;
+                }
+
+                if (estadoFiltroCumplimientoRentabilidad === 'cumple' && !cumple) return;
+                if (estadoFiltroCumplimientoRentabilidad === 'no_cumple' && cumple) return;
+
+                const cumplimientoTexto = cumple ? 'Cumple' : 'No cumple';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${agencia}</td>
+                    <td>${formatCurrency(ventas)}</td>
+                    <td>${formatCurrency(premiosPagados)}</td>
+                    <td>${formatCurrency(utilidadBruta)}</td>
+                    <td>${formatCurrency(gastoAgencia)}</td>
+                    <td class="${gananciaNeta >= 0 ? 'text-success' : 'text-danger'} fw-medium">${formatCurrency(gananciaNeta)}</td>
+                    <td>${cumplimientoTexto}</td>
+                `;
+                tbodyRentabilidad.appendChild(tr);
+            });
+
+            if (cardAgenciasCumplenRentabilidad) {
+                cardAgenciasCumplenRentabilidad.textContent = totalCumplen.toLocaleString('es-DO');
+            }
+            if (cardAgenciasNoCumplenRentabilidad) {
+                cardAgenciasNoCumplenRentabilidad.textContent = totalNoCumplen.toLocaleString('es-DO');
+            }
+
+            if (!tbodyRentabilidad.children.length) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="7" class="text-center text-muted">No hay agencias para el filtro seleccionado.</td>';
+                tbodyRentabilidad.appendChild(tr);
+            }
         }
 
         function renderMetas(config) {
@@ -299,6 +469,12 @@
                 recargas: metasMensuales.recargas > 0 ? (faltantes.recargas / metasMensuales.recargas) * 100 : 0,
             };
 
+            const deltas = {
+                tradicional: acumulados.tradicional - metasMensuales.tradicional,
+                no_tradicional: acumulados.no_tradicional - metasMensuales.no_tradicional,
+                recargas: acumulados.recargas - metasMensuales.recargas,
+            };
+
             if (lblMetaMensualTrad) lblMetaMensualTrad.textContent = formatCurrency(metasMensuales.tradicional);
             if (lblMetaMensualNoTrad) lblMetaMensualNoTrad.textContent = formatCurrency(metasMensuales.no_tradicional);
             if (lblMetaMensualRec) lblMetaMensualRec.textContent = formatCurrency(metasMensuales.recargas);
@@ -310,10 +486,36 @@
             if (lblPctTrad) lblPctTrad.textContent = pctFaltantes.tradicional.toFixed(2) + '%';
             if (lblPctNoTrad) lblPctNoTrad.textContent = pctFaltantes.no_tradicional.toFixed(2) + '%';
             if (lblPctRec) lblPctRec.textContent = pctFaltantes.recargas.toFixed(2) + '%';
+
+            if (lblDeltaTrad) {
+                lblDeltaTrad.textContent = formatCurrency(deltas.tradicional);
+                lblDeltaTrad.classList.remove('text-success', 'text-danger');
+                lblDeltaTrad.classList.add(deltas.tradicional >= 0 ? 'text-success' : 'text-danger');
+            }
+            if (lblDeltaNoTrad) {
+                lblDeltaNoTrad.textContent = formatCurrency(deltas.no_tradicional);
+                lblDeltaNoTrad.classList.remove('text-success', 'text-danger');
+                lblDeltaNoTrad.classList.add(deltas.no_tradicional >= 0 ? 'text-success' : 'text-danger');
+            }
+            if (lblDeltaRec) {
+                lblDeltaRec.textContent = formatCurrency(deltas.recargas);
+                lblDeltaRec.classList.remove('text-success', 'text-danger');
+                lblDeltaRec.classList.add(deltas.recargas >= 0 ? 'text-success' : 'text-danger');
+            }
         }
 
         const configInicial = getConfig();
         renderMetas(configInicial);
+        const metaRentabilidadInicial = getMetaRentabilidad();
+        if (inputMetaRentabilidad) inputMetaRentabilidad.value = metaRentabilidadInicial;
+        renderTablaRentabilidad(metaRentabilidadInicial);
+
+        if (filtroCumplimientoRentabilidad) {
+            filtroCumplimientoRentabilidad.addEventListener('change', function () {
+                estadoFiltroCumplimientoRentabilidad = this.value || 'todos';
+                renderTablaRentabilidad(getMetaRentabilidad());
+            });
+        }
 
         if (!formFiltro || !botonFiltrar) return;
 
@@ -350,6 +552,26 @@
                     icon: 'success',
                     title: 'Configuración guardada',
                     text: 'Las metas diarias por producto fueron actualizadas.',
+                    timer: 1700,
+                    showConfirmButton: false
+                });
+            });
+        }
+
+        if (btnGuardarRentabilidad) {
+            btnGuardarRentabilidad.addEventListener('click', function () {
+                const meta = Math.max(0, Number(inputMetaRentabilidad?.value || 0));
+                setMetaRentabilidad(meta);
+                renderTablaRentabilidad(meta);
+
+                const modalEl = document.getElementById('modalRentabilidad');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Rentabilidad actualizada',
+                    text: 'El gasto por agencia fue aplicado a la tabla.',
                     timer: 1700,
                     showConfirmButton: false
                 });

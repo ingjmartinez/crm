@@ -30,11 +30,13 @@ class ComercialController extends Controller
 
         $kpis = $this->getAcumuladosBet($mes);
         $cumplimiento = $this->buildCumplimiento($kpis, $metasDiarias);
+        $resumenAgencias = $this->getResumenVentasAgenciaMensual($mes);
 
         return view('comercial.kpi-ventas', [
             'kpis' => $kpis,
             'metasDiarias' => $metasDiarias,
             'cumplimiento' => $cumplimiento,
+            'resumenAgencias' => $resumenAgencias,
             'mesSeleccionado' => $mes,
         ]);
     }
@@ -123,5 +125,60 @@ class ComercialController extends Controller
         }
 
         return $resultado;
+    }
+
+    private function getResumenVentasAgenciaMensual(string $mes): array
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+            $mes = now()->format('Y-m');
+        }
+
+        [$year, $month] = explode('-', $mes);
+        $fechaInicio = sprintf('%s-%s-01', $year, $month);
+        $fechaFin = date('Y-m-t', strtotime($fechaInicio));
+
+        $ventasRows = DB::table('vt_usuarios_bet')
+            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS agencia")
+            ->selectRaw('SUM(COALESCE(monto, 0)) AS total_vendido')
+            ->whereNotNull('agencia_id')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->groupBy(DB::raw("TRIM(CAST(agencia_id AS CHAR))"))
+            ->orderByDesc('total_vendido')
+            ->get();
+
+        $premiosAotra = DB::table('pagos_aotra_empresa_bet')
+            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS agencia")
+            ->selectRaw('COALESCE(monto, 0) AS monto')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin]);
+
+        $premiosMisma = DB::table('pagos_misma_empresa_bet')
+            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS agencia")
+            ->selectRaw('COALESCE(monto, 0) AS monto')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin]);
+
+        $premiosRows = DB::query()
+            ->fromSub($premiosAotra->unionAll($premiosMisma), 't')
+            ->selectRaw('agencia, SUM(monto) AS premios_pagados')
+            ->groupBy('agencia')
+            ->get();
+
+        $premiosByAgencia = $premiosRows
+            ->mapWithKeys(function ($row) {
+                $agencia = (string) ($row->agencia ?? '');
+                return [$agencia => (float) ($row->premios_pagados ?? 0)];
+            })
+            ->toArray();
+
+        return $ventasRows->map(function ($row) use ($premiosByAgencia) {
+            $agencia = (string) ($row->agencia ?? 'SIN AGENCIA');
+            $totalVendido = (float) ($row->total_vendido ?? 0);
+            $premiosPagados = (float) ($premiosByAgencia[$agencia] ?? 0);
+
+            return [
+                'agencia' => $agencia,
+                'total_vendido' => $totalVendido,
+                'premios_pagados' => $premiosPagados,
+            ];
+        })->toArray();
     }
 }

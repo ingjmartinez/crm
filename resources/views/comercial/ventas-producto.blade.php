@@ -183,6 +183,25 @@
                                 </table>
                             </div>
                         </div>
+
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Ventas por Ruta</h5>
+                            </div>
+                            <div class="card-body">
+                                <table id="tableRutas"
+                                    class="table table-bordered dt-responsive nowrap table-striped align-middle"
+                                    style="width:100%">
+                                    <thead>
+                                        <tr>
+                                            <th>Ruta</th>
+                                            <th>Total Vendido</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -209,6 +228,12 @@
                                 Ciudades
                             </button>
                             <ul class="dropdown-menu" id="menuCiudadesModal" aria-labelledby="btnDropdownCiudades" style="max-height: 260px; overflow-y: auto;"></ul>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="btnDropdownRutas" data-bs-toggle="dropdown" aria-expanded="false">
+                                Rutas
+                            </button>
+                            <ul class="dropdown-menu" id="menuRutasModal" aria-labelledby="btnDropdownRutas" style="max-height: 260px; overflow-y: auto;"></ul>
                         </div>
                     </div>
                     <span class="badge bg-light text-dark" id="labelModalAgenciasFiltro">Filtro: Todos</span>
@@ -278,13 +303,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const labelModalAgenciasFiltro = document.getElementById('labelModalAgenciasFiltro');
     const btnDropdownCiudades = document.getElementById('btnDropdownCiudades');
     const menuCiudadesModal = document.getElementById('menuCiudadesModal');
+    const btnDropdownRutas = document.getElementById('btnDropdownRutas');
+    const menuRutasModal = document.getElementById('menuRutasModal');
     let dtProductos      = null;
     let dtAgencias       = null;
     let dtCiudades       = null;
+    let dtRutas          = null;
     let dtModalAgencias  = null;
     let ventasFuente     = [];
     let agenciaSeleccionada = null;
     let ciudadSeleccionada = null;
+    let rutaSeleccionada = null;
     let ventasMinimoConfig = 0;
     let filtroCumplimientoAgencia = 'todos';
     let resumenAgenciaVisibleActual = new Map();
@@ -389,9 +418,14 @@ document.addEventListener('DOMContentLoaded', function () {
             dtCiudades.destroy();
             dtCiudades = null;
         }
+        if (dtRutas) {
+            dtRutas.destroy();
+            dtRutas = null;
+        }
         document.querySelector('#tableProductos tbody').innerHTML = '';
         document.querySelector('#tableAgencias tbody').innerHTML = '';
         document.querySelector('#tableCiudades tbody').innerHTML = '';
+        document.querySelector('#tableRutas tbody').innerHTML = '';
         cardMontoTotal.textContent = 'RD$ 0.00';
         cardTotalAgencias.textContent = '0';
         cardAgenciasCumplen.textContent = '0';
@@ -401,19 +435,23 @@ document.addEventListener('DOMContentLoaded', function () {
         resumenAgenciaVisibleActual = new Map();
         agenciaSeleccionada = null;
         ciudadSeleccionada = null;
+        rutaSeleccionada = null;
         filtroCumplimientoAgencia = 'todos';
         updateFiltroLabel();
         btnLimpiarAgencia.classList.add('d-none');
         btnDropdownCiudades.textContent = 'Ciudades';
+        btnDropdownRutas.textContent = 'Rutas';
     };
 
     const clearMainTables = () => {
         if (dtProductos) { dtProductos.destroy(); dtProductos = null; }
         if (dtAgencias) { dtAgencias.destroy(); dtAgencias = null; }
         if (dtCiudades) { dtCiudades.destroy(); dtCiudades = null; }
+        if (dtRutas) { dtRutas.destroy(); dtRutas = null; }
         document.querySelector('#tableProductos tbody').innerHTML = '';
         document.querySelector('#tableAgencias tbody').innerHTML = '';
         document.querySelector('#tableCiudades tbody').innerHTML = '';
+        document.querySelector('#tableRutas tbody').innerHTML = '';
     };
 
     const cargarCiudadesEnModal = () => {
@@ -444,21 +482,52 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
+    const cargarRutasEnModal = () => {
+        menuRutasModal.innerHTML = '';
+
+        const liTodos = document.createElement('li');
+        const btnTodos = document.createElement('button');
+        btnTodos.type = 'button';
+        btnTodos.className = 'dropdown-item btnSelectRuta';
+        btnTodos.setAttribute('data-ruta', '');
+        btnTodos.textContent = 'Todas las rutas';
+        liTodos.appendChild(btnTodos);
+        menuRutasModal.appendChild(liTodos);
+
+        const rutas = [...new Set((ventasFuente ?? []).map(item => {
+            return (item.ruta ?? 'SIN RUTA').toString().trim() || 'SIN RUTA';
+        }))].sort((a, b) => a.localeCompare(b, 'es'));
+
+        rutas.forEach(ruta => {
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dropdown-item btnSelectRuta';
+            btn.setAttribute('data-ruta', ruta);
+            btn.textContent = ruta;
+            li.appendChild(btn);
+            menuRutasModal.appendChild(li);
+        });
+    };
+
     const renderResumen = (ventas) => {
         const resumenProducto = new Map();
         const resumenAgencia = new Map();
         const resumenCiudad = new Map();
+        const resumenRuta = new Map();
         let totalVendido = 0;
 
         (ventas ?? []).forEach(item => {
             const descripcion = (item.descripcion ?? 'SIN DESCRIPCIÓN').toString().trim() || 'SIN DESCRIPCIÓN';
             const agencia = (item.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
             const ciudad = (item.ciudad ?? 'SIN CIUDAD').toString().trim() || 'SIN CIUDAD';
+            const ruta = (item.ruta ?? 'SIN RUTA').toString().trim() || 'SIN RUTA';
             const monto = Number(item.monto ?? 0);
 
             resumenProducto.set(descripcion, (resumenProducto.get(descripcion) ?? 0) + monto);
             resumenAgencia.set(agencia, (resumenAgencia.get(agencia) ?? 0) + monto);
             resumenCiudad.set(ciudad, (resumenCiudad.get(ciudad) ?? 0) + monto);
+            resumenRuta.set(ruta, (resumenRuta.get(ruta) ?? 0) + monto);
             totalVendido += monto;
         });
 
@@ -476,21 +545,27 @@ document.addEventListener('DOMContentLoaded', function () {
             .sort((a, b) => b[1] - a[1]);
         let ciudadesOrdenadas = [...resumenCiudad.entries()]
             .sort((a, b) => b[1] - a[1]);
+        let rutasOrdenadas = [...resumenRuta.entries()]
+            .sort((a, b) => b[1] - a[1]);
 
         if (filtroCumplimientoAgencia !== 'todos') {
             const resumenProductoFiltrado = new Map();
             const resumenCiudadFiltrado = new Map();
+            const resumenRutaFiltrado = new Map();
             (ventas ?? []).forEach(item => {
                 const agencia = (item.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
                 if (!agenciasPermitidas.has(agencia)) return;
                 const descripcion = (item.descripcion ?? 'SIN DESCRIPCIÓN').toString().trim() || 'SIN DESCRIPCIÓN';
                 const ciudad = (item.ciudad ?? 'SIN CIUDAD').toString().trim() || 'SIN CIUDAD';
+                const ruta = (item.ruta ?? 'SIN RUTA').toString().trim() || 'SIN RUTA';
                 const monto = Number(item.monto ?? 0);
                 resumenProductoFiltrado.set(descripcion, (resumenProductoFiltrado.get(descripcion) ?? 0) + monto);
                 resumenCiudadFiltrado.set(ciudad, (resumenCiudadFiltrado.get(ciudad) ?? 0) + monto);
+                resumenRutaFiltrado.set(ruta, (resumenRutaFiltrado.get(ruta) ?? 0) + monto);
             });
             productosOrdenados.splice(0, productosOrdenados.length, ...[...resumenProductoFiltrado.entries()].sort((a, b) => b[1] - a[1]));
             ciudadesOrdenadas = [...resumenCiudadFiltrado.entries()].sort((a, b) => b[1] - a[1]);
+            rutasOrdenadas = [...resumenRutaFiltrado.entries()].sort((a, b) => b[1] - a[1]);
             totalVendido = [...agenciasFiltradas].reduce((sum, [, total]) => sum + Number(total), 0);
             cardMontoTotal.textContent = `RD$ ${formatMoney(totalVendido)}`;
         }
@@ -527,6 +602,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${formatMoney(total)}</td>
             `;
             tbodyCiudades.appendChild(tr);
+        });
+
+        const tbodyRutas = document.querySelector('#tableRutas tbody');
+        rutasOrdenadas.forEach(([ruta, total]) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${ruta}</td>
+                <td>${formatMoney(total)}</td>
+            `;
+            tbodyRutas.appendChild(tr);
         });
 
         dtProductos = $('#tableProductos').DataTable({
@@ -574,6 +659,21 @@ document.addEventListener('DOMContentLoaded', function () {
             order: [[1, 'desc']],
         });
 
+        dtRutas = $('#tableRutas').DataTable({
+            destroy: true,
+            responsive: true,
+            language: {
+                url: '/json/es-DO.json',
+                search: 'Buscar:',
+                lengthMenu: 'Mostrar _MENU_ registros',
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                paginate: { first: 'Primera', last: 'Última', next: 'Siguiente', previous: 'Anterior' }
+            },
+            dom: 'Bfrtip',
+            buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+            order: [[1, 'desc']],
+        });
+
         updateFiltroLabel();
 
         return { resumenAgencia: resumenAgenciaVisibleActual };
@@ -583,7 +683,9 @@ document.addEventListener('DOMContentLoaded', function () {
         modalAgencyEntries = [...resumenAgencia.entries()].sort((a, b) => b[1] - a[1]);
         modalAgencyFilter = 'todos';
         cargarCiudadesEnModal();
+        cargarRutasEnModal();
         btnDropdownCiudades.textContent = ciudadSeleccionada ? `Ciudad: ${ciudadSeleccionada}` : 'Ciudades';
+        btnDropdownRutas.textContent = rutaSeleccionada ? `Ruta: ${rutaSeleccionada}` : 'Rutas';
         renderModalAgencias();
 
         const modal = new bootstrap.Modal(document.getElementById('modalAgencias'));
@@ -593,6 +695,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const aplicarFiltroAgencia = (agencia) => {
         agenciaSeleccionada = agencia;
         ciudadSeleccionada = null;
+        rutaSeleccionada = null;
         const ventasFiltradas = (ventasFuente ?? []).filter(item => {
             return (item.agencia_id ?? '').toString().trim() === agencia.toString().trim();
         });
@@ -602,11 +705,14 @@ document.addEventListener('DOMContentLoaded', function () {
         renderResumen(ventasFiltradas);
         labelFecha.textContent = `Fecha: ${inputFecha.value} | Agencia: ${agencia}`;
         btnLimpiarAgencia.classList.remove('d-none');
+        btnDropdownCiudades.textContent = 'Ciudades';
+        btnDropdownRutas.textContent = 'Rutas';
     };
 
     const aplicarFiltroCiudad = (ciudad) => {
         ciudadSeleccionada = (ciudad ?? '').toString().trim() || null;
         agenciaSeleccionada = null;
+        rutaSeleccionada = null;
 
         const ventasFiltradas = ciudadSeleccionada
             ? (ventasFuente ?? []).filter(item => {
@@ -622,9 +728,39 @@ document.addEventListener('DOMContentLoaded', function () {
             labelFecha.textContent = `Fecha: ${inputFecha.value} | Ciudad: ${ciudadSeleccionada}`;
             btnLimpiarAgencia.classList.remove('d-none');
             btnDropdownCiudades.textContent = `Ciudad: ${ciudadSeleccionada}`;
+            btnDropdownRutas.textContent = 'Rutas';
         } else {
             labelFecha.textContent = 'Fecha: ' + inputFecha.value;
             btnLimpiarAgencia.classList.add('d-none');
+            btnDropdownCiudades.textContent = 'Ciudades';
+            btnDropdownRutas.textContent = 'Rutas';
+        }
+    };
+
+    const aplicarFiltroRuta = (ruta) => {
+        rutaSeleccionada = (ruta ?? '').toString().trim() || null;
+        agenciaSeleccionada = null;
+        ciudadSeleccionada = null;
+
+        const ventasFiltradas = rutaSeleccionada
+            ? (ventasFuente ?? []).filter(item => {
+                const rutaItem = (item.ruta ?? 'SIN RUTA').toString().trim() || 'SIN RUTA';
+                return rutaItem === rutaSeleccionada;
+            })
+            : ventasFuente;
+
+        clearMainTables();
+        renderResumen(ventasFiltradas);
+
+        if (rutaSeleccionada) {
+            labelFecha.textContent = `Fecha: ${inputFecha.value} | Ruta: ${rutaSeleccionada}`;
+            btnLimpiarAgencia.classList.remove('d-none');
+            btnDropdownRutas.textContent = `Ruta: ${rutaSeleccionada}`;
+            btnDropdownCiudades.textContent = 'Ciudades';
+        } else {
+            labelFecha.textContent = 'Fecha: ' + inputFecha.value;
+            btnLimpiarAgencia.classList.add('d-none');
+            btnDropdownRutas.textContent = 'Rutas';
             btnDropdownCiudades.textContent = 'Ciudades';
         }
     };
@@ -641,6 +777,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     const ciudadItem = (item.ciudad ?? 'SIN CIUDAD').toString().trim() || 'SIN CIUDAD';
                     return ciudadItem === ciudadSeleccionada;
                 })
+            : rutaSeleccionada
+                ? ventasFuente.filter(item => {
+                    const rutaItem = (item.ruta ?? 'SIN RUTA').toString().trim() || 'SIN RUTA';
+                    return rutaItem === rutaSeleccionada;
+                })
             : ventasFuente;
 
         renderResumen(dataRender);
@@ -648,14 +789,22 @@ document.addEventListener('DOMContentLoaded', function () {
             labelFecha.textContent = `Fecha: ${inputFecha.value} | Agencia: ${agenciaSeleccionada}`;
             btnLimpiarAgencia.classList.remove('d-none');
             btnDropdownCiudades.textContent = 'Ciudades';
+            btnDropdownRutas.textContent = 'Rutas';
         } else if (ciudadSeleccionada) {
             labelFecha.textContent = `Fecha: ${inputFecha.value} | Ciudad: ${ciudadSeleccionada}`;
             btnLimpiarAgencia.classList.remove('d-none');
             btnDropdownCiudades.textContent = `Ciudad: ${ciudadSeleccionada}`;
+            btnDropdownRutas.textContent = 'Rutas';
+        } else if (rutaSeleccionada) {
+            labelFecha.textContent = `Fecha: ${inputFecha.value} | Ruta: ${rutaSeleccionada}`;
+            btnLimpiarAgencia.classList.remove('d-none');
+            btnDropdownRutas.textContent = `Ruta: ${rutaSeleccionada}`;
+            btnDropdownCiudades.textContent = 'Ciudades';
         } else {
             labelFecha.textContent = 'Fecha: ' + inputFecha.value;
             btnLimpiarAgencia.classList.add('d-none');
             btnDropdownCiudades.textContent = 'Ciudades';
+            btnDropdownRutas.textContent = 'Rutas';
         }
     };
 
@@ -831,6 +980,17 @@ document.addEventListener('DOMContentLoaded', function () {
         aplicarFiltroCiudad(ciudad);
     });
 
+    document.addEventListener('click', function (event) {
+        const target = event.target;
+        if (!target.classList.contains('btnSelectRuta')) return;
+
+        const ruta = target.getAttribute('data-ruta') ?? '';
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalAgencias'));
+        if (modalInstance) modalInstance.hide();
+
+        aplicarFiltroRuta(ruta);
+    });
+
     btnLimpiarAgencia.addEventListener('click', function () {
         if (!ventasFuente.length) return;
 
@@ -840,7 +1000,9 @@ document.addEventListener('DOMContentLoaded', function () {
         labelFecha.textContent = 'Fecha: ' + inputFecha.value;
         agenciaSeleccionada = null;
         ciudadSeleccionada = null;
+        rutaSeleccionada = null;
         btnDropdownCiudades.textContent = 'Ciudades';
+        btnDropdownRutas.textContent = 'Rutas';
         btnLimpiarAgencia.classList.add('d-none');
     });
 
