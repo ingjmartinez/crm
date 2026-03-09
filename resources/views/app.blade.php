@@ -1058,6 +1058,11 @@
                                         </a>
                                     </li>
                                     <li class="nav-item">
+                                        <a href="{{ route('comercial.meta-incentivo') }}" class="nav-link" data-key="t-meta-incentivo">
+                                            Meta Incentivo
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
                                         <a href="{{ route('comercial.ventas-producto') }}" class="nav-link" data-key="t-ventas-producto">
                                             Ventas por Producto
                                         </a>

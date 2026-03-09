@@ -87,9 +87,12 @@
 
                     <div class="col-12">
                         <div class="card">
-                            <div class="card-body d-flex justify-content-between align-items-center">
+                            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
                                 <p class="text-muted mb-0">Fase 1 completada: tarjetas acumuladas desde vt_usuarios_bet.</p>
-                                <a href="{{ route('comercial.kpi-ventas') }}" class="btn btn-primary btn-sm">Ir a kpi-ventas</a>
+                                <div class="d-flex gap-2">
+                                    <a href="{{ route('comercial.kpi-ventas') }}" class="btn btn-primary btn-sm">Ir a kpi-ventas</a>
+                                    <a href="{{ route('comercial.meta-incentivo') }}" class="btn btn-info btn-sm">Ir a Meta Incentivo</a>
+                                </div>
                             </div>
                         </div>
                     </div>

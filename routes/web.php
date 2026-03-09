@@ -18,6 +18,7 @@ use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\VentaFlashController;
 use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\ComercialController;
+use App\Http\Controllers\MetaIncentivoController;
 use App\Http\Controllers\VentasProductosController;
 use App\Http\Controllers\FinanceDashboardController;
 use App\Http\Controllers\PagoAOtraEmpresaController;
@@ -235,6 +236,8 @@ Route::get('/reportes-bi/faltantes', fn() => view('reportes-bi.faltantes'));
 Route::get('/comercial', [ComercialController::class, 'index'])->name('comercial.index');
 Route::get('/comercial/kpi-ventas', [ComercialController::class, 'kpiVentas'])->name('comercial.kpi-ventas');
 Route::get('/comercial/kpi-ventas-v', [ComercialController::class, 'kpiVentasV'])->name('comercial.kpi-ventas-v');
+Route::get('/comercial/meta-incentivo', [MetaIncentivoController::class, 'index'])->name('comercial.meta-incentivo');
+Route::get('/comercial/meta-incentivo/export', [MetaIncentivoController::class, 'export'])->name('comercial.meta-incentivo.export');
 Route::get('/comercial/ventas-producto', fn() => view('comercial.ventas-producto'))->name('comercial.ventas-producto');
 
 Route::get('/incentivos', [IncentivosController::class, 'index']);
