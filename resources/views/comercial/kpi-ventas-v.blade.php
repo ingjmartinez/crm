@@ -116,6 +116,73 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="col-12 mt-2">
+                        <div class="card">
+                            <div class="card-header d-flex align-items-center justify-content-between">
+                                <h5 class="card-title mb-0">Tabla de Validación (vt_usuarios_bet)</h5>
+                                <span class="badge bg-light text-dark">Agrupado por fecha</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-striped align-middle mb-0" id="table-validacion-kpi-v">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Registros</th>
+                                                <th>Tradicional</th>
+                                                <th>No Tradicional</th>
+                                                <th>Recargas</th>
+                                                <th>Total General</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @php
+                                                $sumRegistros = 0;
+                                                $sumTradicional = 0;
+                                                $sumNoTradicional = 0;
+                                                $sumRecargas = 0;
+                                                $sumGeneral = 0;
+                                            @endphp
+                                            @forelse(($validacionVentas ?? []) as $fila)
+                                                @php
+                                                    $sumRegistros += (int) ($fila['total_registros'] ?? 0);
+                                                    $sumTradicional += (float) ($fila['total_tradicional'] ?? 0);
+                                                    $sumNoTradicional += (float) ($fila['total_no_tradicional'] ?? 0);
+                                                    $sumRecargas += (float) ($fila['total_recargas'] ?? 0);
+                                                    $sumGeneral += (float) ($fila['total_general'] ?? 0);
+                                                @endphp
+                                                <tr>
+                                                    <td>{{ $fila['fecha'] ?? '' }}</td>
+                                                    <td>{{ number_format((int) ($fila['total_registros'] ?? 0), 0) }}</td>
+                                                    <td>RD$ {{ number_format((float) ($fila['total_tradicional'] ?? 0), 2) }}</td>
+                                                    <td>RD$ {{ number_format((float) ($fila['total_no_tradicional'] ?? 0), 2) }}</td>
+                                                    <td>RD$ {{ number_format((float) ($fila['total_recargas'] ?? 0), 2) }}</td>
+                                                    <td>RD$ {{ number_format((float) ($fila['total_general'] ?? 0), 2) }}</td>
+                                                </tr>
+                                            @empty
+                                                <tr>
+                                                    <td colspan="6" class="text-center text-muted">No hay datos en el rango seleccionado.</td>
+                                                </tr>
+                                            @endforelse
+                                        </tbody>
+                                        @if(!empty($validacionVentas ?? []))
+                                            <tfoot>
+                                                <tr class="fw-semibold">
+                                                    <td>Total</td>
+                                                    <td>{{ number_format($sumRegistros, 0) }}</td>
+                                                    <td>RD$ {{ number_format($sumTradicional, 2) }}</td>
+                                                    <td>RD$ {{ number_format($sumNoTradicional, 2) }}</td>
+                                                    <td>RD$ {{ number_format($sumRecargas, 2) }}</td>
+                                                    <td>RD$ {{ number_format($sumGeneral, 2) }}</td>
+                                                </tr>
+                                            </tfoot>
+                                        @endif
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

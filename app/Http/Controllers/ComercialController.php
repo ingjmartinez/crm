@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -93,23 +94,50 @@ class ComercialController extends Controller
         $fechaInicio = $request->query('fecha_inicio');
         $fechaFin = $request->query('fecha_fin');
 
-        if (!is_string($fechaInicio) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio)) {
-            $fechaInicio = now()->startOfMonth()->format('Y-m-d');
+        $fechaInicioObj = $this->parseFechaOrDefault($fechaInicio, now()->startOfMonth());
+        $fechaFinObj = $this->parseFechaOrDefault($fechaFin, now()->endOfMonth());
+
+        if ($fechaInicioObj->greaterThan($fechaFinObj)) {
+            [$fechaInicioObj, $fechaFinObj] = [$fechaFinObj, $fechaInicioObj];
         }
 
-        if (!is_string($fechaFin) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
-            $fechaFin = now()->endOfMonth()->format('Y-m-d');
-        }
-
-        if ($fechaInicio > $fechaFin) {
-            [$fechaInicio, $fechaFin] = [$fechaFin, $fechaInicio];
-        }
+        $fechaInicio = $fechaInicioObj->format('Y-m-d');
+        $fechaFin = $fechaFinObj->format('Y-m-d');
 
         return view('comercial.kpi-ventas-v', [
             'kpis' => $this->getAcumuladosBetPorRango($fechaInicio, $fechaFin),
+            'validacionVentas' => $this->getValidacionVentasPorRango($fechaInicio, $fechaFin),
             'fechaInicio' => $fechaInicio,
             'fechaFin' => $fechaFin,
         ]);
+    }
+
+    private function getValidacionVentasPorRango(string $fechaInicio, string $fechaFin): array
+    {
+        return DB::table('vt_usuarios_bet')
+            ->selectRaw('fecha')
+            ->selectRaw('COUNT(*) AS total_registros')
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) = 'tradicional' THEN COALESCE(monto, 0) ELSE 0 END) AS total_tradicional")
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) IN ('no tradicional','no_tradicional') THEN COALESCE(monto, 0) ELSE 0 END) AS total_no_tradicional")
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) IN ('recarga','recargas') THEN COALESCE(monto, 0) ELSE 0 END) AS total_recargas")
+            ->selectRaw('SUM(COALESCE(monto, 0)) AS total_general')
+            ->whereNotNull('fecha')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->groupBy('fecha')
+            ->orderBy('fecha')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'fecha' => (string) ($row->fecha ?? ''),
+                    'total_registros' => (int) ($row->total_registros ?? 0),
+                    'total_tradicional' => (float) ($row->total_tradicional ?? 0),
+                    'total_no_tradicional' => (float) ($row->total_no_tradicional ?? 0),
+                    'total_recargas' => (float) ($row->total_recargas ?? 0),
+                    'total_general' => (float) ($row->total_general ?? 0),
+                ];
+            })
+            ->values()
+            ->toArray();
     }
 
     private function getAcumuladosBetPorRango(string $fechaInicio, string $fechaFin): array
@@ -118,8 +146,8 @@ class ComercialController extends Controller
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) = 'tradicional' THEN monto ELSE 0 END) AS tradicional")
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) IN ('no tradicional','no_tradicional') THEN monto ELSE 0 END) AS no_tradicional")
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) IN ('recarga','recargas') THEN monto ELSE 0 END) AS recargas")
-            ->whereDate('fecha', '>=', $fechaInicio)
-            ->whereDate('fecha', '<=', $fechaFin)
+            ->whereNotNull('fecha')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
             ->first();
 
         return [
@@ -127,6 +155,19 @@ class ComercialController extends Controller
             'no_tradicional' => (float) ($acumulados->no_tradicional ?? 0),
             'recargas' => (float) ($acumulados->recargas ?? 0),
         ];
+    }
+
+    private function parseFechaOrDefault($fecha, Carbon $default): Carbon
+    {
+        if (!is_string($fecha) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+            return $default->copy();
+        }
+
+        try {
+            return Carbon::createFromFormat('Y-m-d', $fecha)->startOfDay();
+        } catch (\Throwable $e) {
+            return $default->copy();
+        }
     }
 
     private function getAcumuladosBet(?string $mes = null, ?string $dia = null): array
