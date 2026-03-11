@@ -31,20 +31,24 @@
                                         <h5 class="card-title mb-0">Lista de Agencias</h5>
                                     </div>
                                     <div class="col-12 col-md-6">
-                                        <div class="d-flex flex-column gap-2 gap-md-0">
-                                            <div class="d-flex flex-wrap gap-2 justify-content-md-end">
-                                                <a href="{{ route('agencias.incumplimientos') }}" class="btn btn-warning btn-sm flex-grow-1 flex-md-grow-0">
+                                        <div class="row g-2">
+                                            <div class="col-6 col-md-3 d-grid">
+                                                <a href="{{ route('agencias.incumplimientos') }}" class="btn btn-warning btn-sm">
                                                     <i class="ri-alarm-warning-line align-bottom me-1"></i><span class="d-none d-md-inline">Incumplimientos</span><span class="d-md-none">Incump.</span>
                                                 </a>
-                                                <button type="button" class="btn btn-success btn-sm flex-grow-1 flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#importModal">
+                                            </div>
+                                            <div class="col-6 col-md-3 d-grid">
+                                                <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#importModal">
                                                     <i class="ri-upload-2-line align-bottom me-1"></i><span class="d-none d-md-inline">Importar</span><span class="d-md-none">Imp.</span>
                                                 </button>
                                             </div>
-                                            <div class="d-flex flex-wrap gap-2 justify-content-md-end">
-                                                <a href="{{ route('agencias.export') }}" class="btn btn-info btn-sm flex-grow-1 flex-md-grow-0">
+                                            <div class="col-6 col-md-3 d-grid">
+                                                <a href="{{ route('agencias.export') }}" class="btn btn-info btn-sm">
                                                     <i class="ri-download-2-line align-bottom me-1"></i><span class="d-none d-md-inline">Exportar</span><span class="d-md-none">Exp.</span>
                                                 </a>
-                                                <a href="{{ route('agencias.create') }}" class="btn btn-primary btn-sm flex-grow-1 flex-md-grow-0">
+                                            </div>
+                                            <div class="col-6 col-md-3 d-grid">
+                                                <a href="{{ route('agencias.create') }}" class="btn btn-primary btn-sm">
                                                     <i class="ri-add-line align-bottom me-1"></i><span class="d-none d-md-inline">Nueva</span><span class="d-md-none">+</span>
                                                 </a>
                                             </div>

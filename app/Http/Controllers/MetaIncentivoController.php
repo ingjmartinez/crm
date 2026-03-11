@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\MetaIncentivoExport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -16,7 +17,12 @@ class MetaIncentivoController extends Controller
         @ini_set('max_execution_time', '300');
 
         [$anio, $mes, $sistema, $coordinador, $cumplimiento, $fechaInicio, $fechaFin] = $this->resolveFiltros($request);
-        $reporte = $this->buildReporte($fechaInicio, $fechaFin, $sistema, $coordinador, $cumplimiento);
+        $filtrosAplicados = $request->boolean('aplicar')
+            || $request->hasAny(['anio', 'mes', 'sistema', 'coordinador', 'cumplimiento']);
+
+        $reporte = $filtrosAplicados
+            ? $this->buildReporte($fechaInicio, $fechaFin, $sistema, $coordinador, $cumplimiento)
+            : new Collection();
 
         $sistemas = DB::table('agencias')
             ->select('sistema')
@@ -43,6 +49,7 @@ class MetaIncentivoController extends Controller
             'sistema' => $sistema,
             'coordinador' => $coordinador,
             'cumplimiento' => $cumplimiento,
+            'filtrosAplicados' => $filtrosAplicados,
             'sistemas' => $sistemas,
             'coordinadores' => $coordinadores,
             'fechaInicio' => $fechaInicio->toDateString(),

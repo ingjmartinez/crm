@@ -23,12 +23,13 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <form method="GET" action="{{ route('comercial.meta-incentivo') }}" class="row g-3 align-items-end" id="form-filtro-meta-incentivo">
-                                    <div class="col-md-2">
+                                <form method="GET" action="{{ route('comercial.meta-incentivo') }}" class="row g-2 align-items-end" id="form-filtro-meta-incentivo">
+                                    <input type="hidden" name="aplicar" value="1">
+                                    <div class="col-12 col-md-6 col-xl-2">
                                         <label class="form-label">Año</label>
                                         <input type="number" min="2000" max="2100" name="anio" class="form-control" value="{{ $anio }}" required>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-12 col-md-6 col-xl-2">
                                         <label class="form-label">Mes</label>
                                         <select name="mes" class="form-select" required>
                                             @for($m = 1; $m <= 12; $m++)
@@ -38,7 +39,7 @@
                                             @endfor
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-12 col-md-6 col-xl-2">
                                         <label class="form-label">Sistema</label>
                                         <select name="sistema" class="form-select">
                                             <option value="">Todos</option>
@@ -47,7 +48,7 @@
                                             @endforeach
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-12 col-md-6 col-xl-2">
                                         <label class="form-label">Coordinador</label>
                                         <select name="coordinador" class="form-select">
                                             <option value="">Todos</option>
@@ -56,8 +57,8 @@
                                             @endforeach
                                         </select>
                                     </div>
-                                    <div class="col-md-2">
-                                        <button type="submit" class="btn btn-primary" id="btn-filtrar-meta-incentivo">
+                                    <div class="col-12 col-md-6 col-xl-2 d-grid">
+                                        <button type="submit" class="btn btn-primary w-100" id="btn-filtrar-meta-incentivo">
                                             <i class="ri-filter-3-line me-1"></i>Filtrar
                                         </button>
                                     </div>
@@ -67,9 +68,15 @@
                     </div>
 
                     <div class="col-12">
-                        <div class="alert alert-info py-2 mb-3" role="alert">
-                            <strong>Rango aplicado (3 meses):</strong> {{ $fechaInicio }} al {{ $fechaFin }}
-                        </div>
+                        @if($filtrosAplicados ?? false)
+                            <div class="alert alert-info py-2 mb-3" role="alert">
+                                <strong>Rango aplicado (3 meses):</strong> {{ $fechaInicio }} al {{ $fechaFin }}
+                            </div>
+                        @else
+                            <div class="alert alert-warning py-2 mb-3" role="alert">
+                                <strong>Sin resultados cargados:</strong> selecciona los filtros y presiona <strong>Filtrar</strong> para consultar la información.
+                            </div>
+                        @endif
                     </div>
 
                     <div class="col-12">
@@ -133,17 +140,31 @@
                                         <span class="badge bg-primary">Cumplimiento global agencias: {{ number_format($porcentajeGlobalCumplimientoAgencias, 2) }}%</span>
                                     </div>
                                 </div>
-                                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-                                    <select class="form-select form-select-sm" id="filtro-cumplimiento-meta-incentivo" name="cumplimiento" form="form-filtro-meta-incentivo" style="min-width: 210px;">
-                                        <option value="" {{ ($cumplimiento ?? '') === '' ? 'selected' : '' }}>Todas las agencias</option>
-                                        <option value="cumple" {{ ($cumplimiento ?? '') === 'cumple' ? 'selected' : '' }}>Agencias que cumplen</option>
-                                        <option value="no-cumple" {{ ($cumplimiento ?? '') === 'no-cumple' ? 'selected' : '' }}>Agencias que no cumplen</option>
-                                    </select>
-                                    <input type="text" class="form-control form-control-sm" id="buscar-agencia-meta-incentivo" placeholder="Buscar por nombre o código" style="min-width: 260px;">
-                                    <span class="badge bg-primary-subtle text-primary">{{ number_format(($reporte ?? collect())->count(), 0) }} registros</span>
-                                    <a href="{{ route('comercial.meta-incentivo.export', ['anio' => $anio, 'mes' => $mes, 'sistema' => $sistema, 'coordinador' => ($coordinador ?? ''), 'cumplimiento' => ($cumplimiento ?? '')]) }}" class="btn btn-success btn-sm">
-                                        <i class="ri-file-excel-2-line me-1"></i>Exportar a Excel
-                                    </a>
+                                <div class="row g-2 w-100 mt-2 mt-md-0 justify-content-md-end">
+                                    <div class="col-12 col-md-6 col-xl-3 d-grid">
+                                        <select class="form-select form-select-sm h-100" id="filtro-cumplimiento-meta-incentivo" name="cumplimiento" form="form-filtro-meta-incentivo">
+                                            <option value="" {{ ($cumplimiento ?? '') === '' ? 'selected' : '' }}>Todas las agencias</option>
+                                            <option value="cumple" {{ ($cumplimiento ?? '') === 'cumple' ? 'selected' : '' }}>Agencias que cumplen</option>
+                                            <option value="no-cumple" {{ ($cumplimiento ?? '') === 'no-cumple' ? 'selected' : '' }}>Agencias que no cumplen</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-6 col-xl-3 d-grid">
+                                        <input type="text" class="form-control form-control-sm h-100" id="buscar-agencia-meta-incentivo" placeholder="Buscar por nombre o código">
+                                    </div>
+                                    <div class="col-12 col-md-6 col-xl-3 d-grid">
+                                        <span class="badge bg-primary-subtle text-primary d-flex align-items-center justify-content-center w-100">{{ number_format(($reporte ?? collect())->count(), 0) }} registros</span>
+                                    </div>
+                                    <div class="col-12 col-md-6 col-xl-3 d-grid">
+                                        @if(($filtrosAplicados ?? false) && ($reporte ?? collect())->count() > 0)
+                                            <a href="{{ route('comercial.meta-incentivo.export', ['anio' => $anio, 'mes' => $mes, 'sistema' => $sistema, 'coordinador' => ($coordinador ?? ''), 'cumplimiento' => ($cumplimiento ?? '')]) }}" class="btn btn-success btn-sm w-100">
+                                                <i class="ri-file-excel-2-line me-1"></i>Exportar a Excel
+                                            </a>
+                                        @else
+                                            <button type="button" class="btn btn-success btn-sm w-100" disabled>
+                                                <i class="ri-file-excel-2-line me-1"></i>Exportar a Excel
+                                            </button>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -202,7 +223,9 @@
                                                 </tr>
                                             @empty
                                                 <tr>
-                                                    <td colspan="10" class="text-center text-muted">No hay datos para los filtros seleccionados.</td>
+                                                    <td colspan="10" class="text-center text-muted">
+                                                        {{ ($filtrosAplicados ?? false) ? 'No hay datos para los filtros seleccionados.' : 'Aplique los filtros y presione Filtrar para cargar la información.' }}
+                                                    </td>
                                                 </tr>
                                             @endforelse
                                         </tbody>
