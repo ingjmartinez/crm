@@ -45,8 +45,14 @@
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">&nbsp;</label>
-                                        <button type="button" class="btn btn-primary d-block" id="btnBuscar">
+                                        <button type="button" class="btn btn-primary d-block w-100" id="btnBuscar">
                                             <i class="ri-search-line"></i> Buscar
+                                        </button>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">&nbsp;</label>
+                                        <button type="button" class="btn btn-warning d-block w-100" id="btnDiasFaltantes" data-bs-toggle="modal" data-bs-target="#modalDiasFaltantes" disabled>
+                                            Días faltantes del rango
                                         </button>
                                     </div>
                                 </div>
@@ -83,6 +89,24 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="modal fade" id="modalDiasFaltantes" tabindex="-1" aria-labelledby="modalDiasFaltantesLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="modalDiasFaltantesLabel">Fechas sin ventas en el rango</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div id="mensajeDiasFaltantes" class="alert alert-success mb-3 d-none"></div>
+                                <ul id="listaDiasFaltantes" class="mb-0 ps-3"></ul>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -91,6 +115,106 @@
 @section('script')
     <script>
         let table;
+        let fechasFaltantesGlobal = [];
+
+        function parseFecha(valor) {
+            if (!valor) return null;
+
+            if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+                return new Date(valor + 'T00:00:00');
+            }
+
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(valor)) {
+                const partes = valor.split('/');
+                return new Date(`${partes[2]}-${partes[1]}-${partes[0]}T00:00:00`);
+            }
+
+            return null;
+        }
+
+        function formatoFecha(isoFecha) {
+            const fecha = parseFecha(isoFecha);
+            if (!fecha) return isoFecha;
+            return fecha.toLocaleDateString('es-DO', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        }
+
+        function obtenerFechasFaltantes(fechaInicio, fechaFin, filas) {
+            const inicio = parseFecha(fechaInicio);
+            const fin = parseFecha(fechaFin);
+
+            if (!inicio || !fin || inicio > fin) {
+                return [];
+            }
+
+            const fechasConVenta = new Set();
+
+            (filas || []).forEach(function(fila) {
+                if (!fila || !fila.Fecha || fila.Fecha === 'TOTAL') {
+                    return;
+                }
+
+                const fechaFila = parseFecha(fila.Fecha);
+                if (!fechaFila) {
+                    return;
+                }
+
+                fechasConVenta.add(fechaFila.toISOString().slice(0, 10));
+            });
+
+            const faltantes = [];
+            const cursor = new Date(inicio);
+
+            while (cursor <= fin) {
+                const iso = cursor.toISOString().slice(0, 10);
+                if (!fechasConVenta.has(iso)) {
+                    faltantes.push(iso);
+                }
+                cursor.setDate(cursor.getDate() + 1);
+            }
+
+            return faltantes;
+        }
+
+        function actualizarBotonDiasFaltantes() {
+            const btnDiasFaltantes = document.getElementById('btnDiasFaltantes');
+            if (!btnDiasFaltantes) return;
+
+            if (!fechasFaltantesGlobal.length) {
+                btnDiasFaltantes.textContent = 'No faltan días del rango';
+                btnDiasFaltantes.disabled = true;
+                return;
+            }
+
+            btnDiasFaltantes.textContent = `Faltan ${fechasFaltantesGlobal.length} días del rango`;
+            btnDiasFaltantes.disabled = false;
+        }
+
+        function renderModalDiasFaltantes() {
+            const lista = document.getElementById('listaDiasFaltantes');
+            const mensaje = document.getElementById('mensajeDiasFaltantes');
+
+            if (!lista || !mensaje) return;
+
+            lista.innerHTML = '';
+
+            if (!fechasFaltantesGlobal.length) {
+                mensaje.classList.remove('d-none');
+                mensaje.textContent = 'No hay fechas faltantes para el rango seleccionado.';
+                return;
+            }
+
+            mensaje.classList.add('d-none');
+
+            fechasFaltantesGlobal.forEach(function(fecha) {
+                const li = document.createElement('li');
+                li.textContent = formatoFecha(fecha);
+                lista.appendChild(li);
+            });
+        }
 
         function cargarDatos() {
             const sistema = document.getElementById('sistema').value;
@@ -134,7 +258,11 @@
                         fecha_inicio: fechaInicio,
                         fecha_fin: fechaFin
                     },
-                    dataSrc: '',
+                    dataSrc: function(json) {
+                        fechasFaltantesGlobal = obtenerFechasFaltantes(fechaInicio, fechaFin, json || []);
+                        actualizarBotonDiasFaltantes();
+                        return json || [];
+                    },
                     complete: function() {
                         Swal.close();
                     }
@@ -174,6 +302,9 @@
         }
 
         document.getElementById('btnBuscar').addEventListener('click', cargarDatos);
+        document.getElementById('btnDiasFaltantes').addEventListener('click', renderModalDiasFaltantes);
+
+        actualizarBotonDiasFaltantes();
 
         // Cargar datos automáticamente al inicio
         document.addEventListener('DOMContentLoaded', function() {
