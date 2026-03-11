@@ -44,6 +44,13 @@
             white-space: normal;
         }
 
+        .topbar-task-notif-list {
+            max-height: min(60vh, 360px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+        }
+
         .task-notif-item .flex-grow-1 {
             min-width: 0;
         }
@@ -561,7 +568,7 @@
                                         Marcar todas
                                     </button>
                                 </div>
-                                <div id="topbar-task-notif-list" data-simplebar style="max-height: 320px;"></div>
+                                <div id="topbar-task-notif-list" class="topbar-task-notif-list"></div>
                             </div>
                         </div>
 
