@@ -29,28 +29,42 @@
                                         <label for="fecha" class="form-label mb-1">Fecha</label>
                                         <input type="date" id="fecha" class="form-control" value="{{ now()->toDateString() }}">
                                     </div>
+                                    <div class="col-md-3">
+                                        <label for="coordinador" class="form-label mb-1">Coordinador</label>
+                                        <select id="coordinador" class="form-select">
+                                            <option value="">Todos</option>
+                                            @foreach(($coordinadores ?? []) as $itemCoordinador)
+                                                <option value="{{ $itemCoordinador }}">{{ $itemCoordinador }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
                                     <div class="col-md-2">
                                         <div class="form-check form-switch mt-4">
                                             <input class="form-check-input" type="checkbox" id="soloIncumplidas" checked>
                                             <label class="form-check-label" for="soloIncumplidas">Solo incumplidas</label>
                                         </div>
                                     </div>
-                                    <div class="col-md-7 text-md-end">
-                                        <button class="btn btn-dark" id="btnGenerarTokenLotobet">
-                                            <i class="ri-key-line me-1"></i> Token Lotobet
-                                        </button>
-                                        <button class="btn btn-info text-white" id="btnGenerarTokenLotonet">
-                                            <i class="ri-shield-keyhole-line me-1"></i> Token Lotonet
-                                        </button>
-                                        <button class="btn btn-secondary" id="btnConfigEstados">
-                                            <i class="ri-settings-3-line me-1"></i> Configurar estados
-                                        </button>
-                                        <button class="btn btn-primary" id="btnConsultar">
-                                            <i class="ri-search-line me-1"></i> Consultar APIs
-                                        </button>
-                                        <a href="{{ route('agencias.index') }}" class="btn btn-light">
-                                            <i class="ri-arrow-left-line me-1"></i> Volver
-                                        </a>
+                                    <div class="col-md-4">
+                                        <div class="d-flex flex-wrap justify-content-md-end gap-2">
+                                            <button class="btn btn-dark btn-sm" id="btnGenerarTokenLotobet">
+                                                <i class="ri-key-line me-1"></i> Token Lotobet
+                                            </button>
+                                            <button class="btn btn-info text-white btn-sm" id="btnGenerarTokenLotonet">
+                                                <i class="ri-shield-keyhole-line me-1"></i> Token Lotonet
+                                            </button>
+                                            <button class="btn btn-success btn-sm" id="btnEnviarCoordinador" disabled>
+                                                <i class="ri-mail-send-line me-1"></i> Enviar a coordinador
+                                            </button>
+                                            <button class="btn btn-secondary btn-sm" id="btnConfigEstados">
+                                                <i class="ri-settings-3-line me-1"></i> Configurar estados
+                                            </button>
+                                            <button class="btn btn-primary btn-sm" id="btnConsultar">
+                                                <i class="ri-search-line me-1"></i> Consultar APIs
+                                            </button>
+                                            <a href="{{ route('agencias.index') }}" class="btn btn-light btn-sm">
+                                                <i class="ri-arrow-left-line me-1"></i> Volver
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -64,6 +78,7 @@
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Agencia</th>
+                                                <th>Coordinador</th>
                                                 <th>Entrada AM</th>
                                                 <th>Salida AM</th>
                                                 <th>Entrada PM</th>
@@ -218,6 +233,7 @@
     const URL_DEPTOS = '{{ url('/tareas/departamentos') }}';
     const URL_USUARIOS_TAREAS = '{{ url('/tareas/usuarios') }}';
     const URL_LIST = '{{ route('agencias.asistencia-comparativa.list') }}';
+    const URL_SEND_MAIL_COORD = '{{ route('agencias.asistencia-comparativa.send-mail') }}';
     const URL_TOKEN_BET = '{{ url('/generar-token') }}';
     const URL_TOKEN_NET = '{{ url('/iniciar-session') }}';
     const CFG_STORAGE_KEY = 'asistencia_comparativa_config_estados_v1';
@@ -232,6 +248,9 @@
     };
 
     let configEstados = cargarConfigEstados();
+
+    const selectCoordinador = document.getElementById('coordinador');
+    const btnEnviarCoordinador = document.getElementById('btnEnviarCoordinador');
 
     function clonarConfig(base) {
         return JSON.parse(JSON.stringify(base));
@@ -523,6 +542,7 @@
 
     function cargarData() {
         const fecha = $('#fecha').val();
+        const coordinador = (selectCoordinador?.value || '').trim();
 
         Swal.fire({
             title: 'Consultando APIs...',
@@ -536,7 +556,8 @@
             method: 'GET',
             data: {
                 fecha: fecha,
-                solo_incumplidas: 0
+                solo_incumplidas: 0,
+                coordinador: coordinador,
             },
             success: function(resp) {
                 Swal.close();
@@ -585,6 +606,58 @@
             });
     }
 
+    function actualizarEstadoBotonEnviarCoordinador() {
+        if (!btnEnviarCoordinador || !selectCoordinador) return;
+        btnEnviarCoordinador.disabled = (selectCoordinador.value || '').trim() === '';
+    }
+
+    function enviarReporteCoordinador() {
+        const fecha = $('#fecha').val();
+        const coordinador = (selectCoordinador?.value || '').trim();
+
+        if (!coordinador) {
+            Swal.fire('Requerido', 'Selecciona un coordinador para enviar el reporte.', 'warning');
+            return;
+        }
+
+        Swal.fire({
+            title: '¿Enviar reporte al coordinador?',
+            text: `Se enviará al correo de ${coordinador}.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, enviar',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true,
+        }).then(function (result) {
+            if (!result.isConfirmed) return;
+
+            Swal.fire({
+                title: 'Enviando correo...',
+                text: 'Por favor espera.',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(),
+            });
+
+            $.ajax({
+                url: URL_SEND_MAIL_COORD,
+                method: 'POST',
+                data: {
+                    _token: CSRF,
+                    fecha: fecha,
+                    coordinador: coordinador,
+                    solo_incumplidas: 1,
+                },
+                success: function(resp) {
+                    Swal.fire('Correo enviado', resp?.message || 'Reporte enviado correctamente.', 'success');
+                },
+                error: function(xhr) {
+                    const msg = xhr?.responseJSON?.message || 'No se pudo enviar el correo al coordinador.';
+                    Swal.fire('Error', msg, 'error');
+                }
+            });
+        });
+    }
+
     $(document).ready(function() {
         table = $('#tableIncumplimientos').DataTable({
             data: [],
@@ -594,6 +667,7 @@
                 { data: 'nombre_agencia', render: function(data, type, row) {
                     return (data || row.agencia || '-') + `<div class="text-muted fs-11">Cod: ${row.agencia || '-'}</div>`;
                 }},
+                { data: 'coordinador', defaultContent: '-', className: 'text-center' },
                 { data: 'entrada_am_programada', defaultContent: '-', className: 'text-center', render: function(data) { return data || '-'; }},
                 { data: 'salida_am_programada', defaultContent: '-', className: 'text-center', render: function(data) { return data || '-'; }},
                 { data: 'entrada_pm_programada', defaultContent: '-', className: 'text-center', render: function(data) { return data || '-'; }},
@@ -695,6 +769,11 @@
 
         $('#btnGenerarTokenLotobet').on('click', generarTokenLotobet);
         $('#btnGenerarTokenLotonet').on('click', generarTokenLotonet);
+        $('#btnEnviarCoordinador').on('click', enviarReporteCoordinador);
+        $('#coordinador').on('change', function() {
+            actualizarEstadoBotonEnviarCoordinador();
+            cargarData();
+        });
 
         cargarDepartamentosTareas();
         cargarUsuariosTareas();
@@ -706,6 +785,7 @@
             }
         });
 
+        actualizarEstadoBotonEnviarCoordinador();
         cargarData();
     });
 </script>

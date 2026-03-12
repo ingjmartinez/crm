@@ -2,39 +2,153 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\AsistenciaComparativaCoordinadorMail;
 use App\Models\Agencia;
+use App\Models\CoordinadorOperador;
 use App\Models\Token;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 class AsistenciaComparativaController extends Controller
 {
     public function index(Request $request)
     {
-        return view('agencias.asistencia_comparativa');
+        $coordinadores = CoordinadorOperador::query()
+            ->where('puesto', 'coordinador')
+            ->selectRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) as nombre_completo")
+            ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) <> ''")
+            ->distinct()
+            ->orderBy('nombre_completo')
+            ->pluck('nombre_completo')
+            ->values();
+
+        return view('agencias.asistencia_comparativa', [
+            'coordinadores' => $coordinadores,
+        ]);
     }
 
     public function list(Request $request)
     {
         $fecha = $request->input('fecha', now()->toDateString());
         $soloIncumplidas = $request->input('solo_incumplidas', '1') === '1';
+        $coordinador = trim((string) $request->input('coordinador', ''));
 
         try {
-            $agencias = Agencia::query()
+            $rows = $this->generarListado($fecha, $soloIncumplidas, $coordinador);
+
+            return response()->json([
+                'fecha' => $fecha,
+                'total' => count($rows),
+                'incumplidas' => collect($rows)->where('incumplida', true)->count(),
+                'data' => array_values($rows),
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'data' => [],
+            ], 422);
+        }
+    }
+
+    public function enviarPorCoordinador(Request $request)
+    {
+        $validated = $request->validate([
+            'fecha' => ['required', 'date'],
+            'coordinador' => ['required', 'string', 'max:150'],
+            'solo_incumplidas' => ['nullable', 'in:0,1'],
+        ]);
+
+        $coordinadorNombre = trim((string) $validated['coordinador']);
+        $fecha = (string) $validated['fecha'];
+        $soloIncumplidas = (($validated['solo_incumplidas'] ?? '1') === '1');
+
+        try {
+            $rows = $this->generarListado($fecha, $soloIncumplidas, $coordinadorNombre);
+
+            if (empty($rows)) {
+                return response()->json([
+                    'message' => 'No hay datos para enviar con los filtros seleccionados.',
+                ], 422);
+            }
+
+            $correos = CoordinadorOperador::query()
+                ->where('puesto', 'coordinador')
+                ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) = ?", [$coordinadorNombre])
+                ->whereNotNull('correo')
+                ->whereRaw("TRIM(correo) <> ''")
+                ->pluck('correo')
+                ->map(fn($correo) => trim((string) $correo))
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($correos->isEmpty()) {
+                return response()->json([
+                    'message' => 'El coordinador seleccionado no tiene correo registrado.',
+                ], 422);
+            }
+
+            $payload = [
+                'coordinador' => $coordinadorNombre,
+                'fecha' => Carbon::parse($fecha)->format('d/m/Y'),
+                'rows' => $rows,
+            ];
+
+            Mail::to($correos->all())->send(new AsistenciaComparativaCoordinadorMail($payload));
+
+            return response()->json([
+                'message' => 'Reporte enviado correctamente a: ' . $correos->implode(', '),
+                'total' => count($rows),
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    private function generarListado(string $fecha, bool $soloIncumplidas, string $coordinador = ''): array
+    {
+        $agencias = Agencia::query()
+            ->with([
+                'coordinadoresOperadores' => function ($query) {
+                    $query->where('puesto', 'coordinador')
+                        ->select('coordinador_operador.id', 'nombre', 'apellido', 'correo');
+                }
+            ])
                 ->select('id', 'agencia', 'nombre_agencia', 'terminal', 'horario_am', 'horario_pm')
                 ->whereNotNull('terminal')
                 ->where(function ($q) {
                     $q->whereNotNull('horario_am')
                         ->orWhereNotNull('horario_pm');
                 })
+            ->when($coordinador !== '', function ($query) use ($coordinador) {
+                $query->whereHas('coordinadoresOperadores', function ($subQuery) use ($coordinador) {
+                    $subQuery->where('puesto', 'coordinador')
+                        ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) = ?", [$coordinador]);
+                });
+            })
                 ->get();
 
-            $mapAsistencia = $this->consolidarAsistenciasPorTerminalDesdeApi($fecha);
+        $mapAsistencia = $this->consolidarAsistenciasPorTerminalDesdeApi($fecha);
 
-            $rows = [];
+        $rows = [];
 
-            foreach ($agencias as $agencia) {
+        foreach ($agencias as $agencia) {
+                $coordinadoresAgencia = $agencia->coordinadoresOperadores
+                    ->map(function ($item) {
+                        return trim((string) (($item->nombre ?? '') . ' ' . ($item->apellido ?? '')));
+                    })
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                $coordinadorAgencia = $coordinadoresAgencia->isNotEmpty()
+                    ? $coordinadoresAgencia->implode(', ')
+                    : '-';
+
                 $terminalKey = $this->normalizarTerminal($agencia->terminal);
                 $asistencia = $mapAsistencia[$terminalKey] ?? null;
 
@@ -112,6 +226,7 @@ class AsistenciaComparativaController extends Controller
                     'agencia_id' => $agencia->id,
                     'agencia' => $agencia->agencia,
                     'nombre_agencia' => $agencia->nombre_agencia,
+                    'coordinador' => $coordinadorAgencia,
                     'terminal' => $agencia->terminal,
                     'horario_am' => $agencia->horario_am,
                     'horario_pm' => $agencia->horario_pm,
@@ -136,18 +251,7 @@ class AsistenciaComparativaController extends Controller
                 ];
             }
 
-            return response()->json([
-                'fecha' => $fecha,
-                'total' => count($rows),
-                'incumplidas' => collect($rows)->where('incumplida', true)->count(),
-                'data' => array_values($rows),
-            ]);
-        } catch (Throwable $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'data' => [],
-            ], 422);
-        }
+        return $rows;
     }
 
     private function consolidarAsistenciasPorTerminalDesdeApi(string $fecha): array

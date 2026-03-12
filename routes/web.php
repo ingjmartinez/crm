@@ -116,6 +116,7 @@ Route::get('/delete-asistencias-lotobet', [AsistenciaController::class, 'deleteA
 // Nueva vista para comparar asistencias (lotonet vs lotobet)
 Route::get('/agencias/asistencia-comparativa', [AsistenciaComparativaController::class, 'index'])->name('agencias.asistencia-comparativa');
 Route::get('/agencias/asistencia-comparativa/list', [AsistenciaComparativaController::class, 'list'])->name('agencias.asistencia-comparativa.list');
+Route::post('/agencias/asistencia-comparativa/send-mail', [AsistenciaComparativaController::class, 'enviarPorCoordinador'])->name('agencias.asistencia-comparativa.send-mail');
 
 Route::get('/ventas-por-usuario-lotonet', fn() => view('lotonet.ventas-usuario'));
 Route::get('/faltantes-lotonet', fn() => view('lotonet.faltantes'));
