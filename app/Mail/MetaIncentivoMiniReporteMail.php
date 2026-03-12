@@ -19,8 +19,9 @@ class MetaIncentivoMiniReporteMail extends Mailable
     public function envelope(): Envelope
     {
         $coordinador = $this->data['coordinador'] ?? '-';
-        $mes = str_pad((string) ($this->data['mes'] ?? ''), 2, '0', STR_PAD_LEFT);
-        $anio = $this->data['anio'] ?? now()->format('Y');
+        // Usar el período (mes+1) si está disponible, sino caer al mes original
+        $mes = str_pad((string) ($this->data['periodo_mes'] ?? $this->data['mes'] ?? ''), 2, '0', STR_PAD_LEFT);
+        $anio = $this->data['periodo_anio'] ?? $this->data['anio'] ?? now()->format('Y');
 
         return new Envelope(
             subject: "Mini reporte Meta Incentivo - {$coordinador} ({$mes}/{$anio})",

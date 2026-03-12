@@ -766,6 +766,10 @@
                                             Incumplimientos Horario </a>
                                     </li>
                                     <li class="nav-item">
+                                        <a href="{{ route('agencias.asistencia-comparativa') }}" class="nav-link" data-key="t-asistencia-comparativa">
+                                            Asistencia Comparativa </a>
+                                    </li>
+                                    <li class="nav-item">
                                         <a href="{{ url('/usuarios') }}" class="nav-link" data-key="t-usuarios">
                                             Usuarios </a>
                                     </li>

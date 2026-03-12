@@ -204,10 +204,20 @@ class MetaIncentivoController extends Controller
             ->values()
             ->all();
 
+        // Calcular período mostrado en el mini reporte (siempre un mes adelante)
+        $periodoMes = $mes + 1;
+        $periodoAnio = $anio;
+        if ($periodoMes > 12) {
+            $periodoMes = 1;
+            $periodoAnio++;
+        }
+
         $data = [
             'coordinador' => $coordinadorNombre,
             'anio' => $anio,
             'mes' => $mes,
+            'periodo_mes' => $periodoMes,
+            'periodo_anio' => $periodoAnio,
             'fecha_inicio' => $fechaInicio->format('d/m/Y'),
             'fecha_fin' => $fechaFin->format('d/m/Y'),
             'filas' => $filas,

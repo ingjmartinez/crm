@@ -1,35 +1,36 @@
 <?php
 
-use App\Http\Controllers\Api;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\MarController;
-use App\Http\Controllers\TokenController;
-use App\Http\Controllers\PremioController;
-use App\Http\Controllers\VentasController;
 use App\Http\Controllers\AgenciaController;
-use App\Http\Controllers\ReporteController;
-use App\Http\Controllers\EmpleadoController;
-use App\Http\Controllers\RecargasController;
-use App\Http\Controllers\FaltantesController;
-use App\Http\Controllers\PaqueticoController;
+use App\Http\Controllers\Api;
+use App\Http\Controllers\AsistenciaComparativaController;
 use App\Http\Controllers\AsistenciaController;
-use App\Http\Controllers\IncentivosController;
-use App\Http\Controllers\VentaFlashController;
-use App\Http\Controllers\KpiLotobetController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ComercialController;
-use App\Http\Controllers\MetaIncentivoController;
-use App\Http\Controllers\VentasProductosController;
+use App\Http\Controllers\CoordinadorOperadorController;
+use App\Http\Controllers\EmpleadoController;
+use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
+use App\Http\Controllers\IncentivosController;
+use App\Http\Controllers\KpiLotobetController;
+use App\Http\Controllers\MarController;
+use App\Http\Controllers\MetaIncentivoController;
 use App\Http\Controllers\PagoAOtraEmpresaController;
 use App\Http\Controllers\PagoMismaEmpresaController;
-use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\PagoPorOtraEmpresaController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\TareaController;
-use App\Http\Controllers\RoleController;
+use App\Http\Controllers\PaqueticoController;
 use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\CoordinadorOperadorController;
+use App\Http\Controllers\PremioController;
+use App\Http\Controllers\RecargasController;
+use App\Http\Controllers\RegistroEmpleadoController;
+use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\TareaController;
+use App\Http\Controllers\TokenController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\VentaFlashController;
+use App\Http\Controllers\VentasController;
+use App\Http\Controllers\VentasProductosController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -111,6 +112,10 @@ Route::get('/delete-pagos-porotra-empresa-lotobet', [PagoPorOtraEmpresaControlle
 Route::get('/get-asistencias-lotobet', [AsistenciaController::class, 'getAsistenciasLotobet']);
 Route::get('/save-asistencias-lotobet', [AsistenciaController::class, 'saveAsistenciasLotobet']);
 Route::get('/delete-asistencias-lotobet', [AsistenciaController::class, 'deleteAsistenciasLotobet']);
+
+// Nueva vista para comparar asistencias (lotonet vs lotobet)
+Route::get('/agencias/asistencia-comparativa', [AsistenciaComparativaController::class, 'index'])->name('agencias.asistencia-comparativa');
+Route::get('/agencias/asistencia-comparativa/list', [AsistenciaComparativaController::class, 'list'])->name('agencias.asistencia-comparativa.list');
 
 Route::get('/ventas-por-usuario-lotonet', fn() => view('lotonet.ventas-usuario'));
 Route::get('/faltantes-lotonet', fn() => view('lotonet.faltantes'));

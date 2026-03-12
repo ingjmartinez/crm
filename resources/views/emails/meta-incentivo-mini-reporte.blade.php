@@ -14,7 +14,7 @@
                         <td style="padding:18px 20px; background:#0b5ed7; color:#ffffff;">
                             <h2 style="margin:0; font-size:18px;">Mini reporte Meta Incentivo</h2>
                             <p style="margin:6px 0 0; font-size:13px; opacity:.95;">
-                                Coordinador: <strong>{{ $data['coordinador'] ?? '-' }}</strong> | Período: <strong>{{ str_pad((string) ($data['mes'] ?? ''), 2, '0', STR_PAD_LEFT) }}/{{ $data['anio'] ?? '-' }}</strong>
+                                Coordinador: <strong>{{ $data['coordinador'] ?? '-' }}</strong> | Período: <strong>{{ str_pad((string) ($data['periodo_mes'] ?? $data['mes'] ?? ''), 2, '0', STR_PAD_LEFT) }}/{{ $data['periodo_anio'] ?? $data['anio'] ?? '-' }}</strong>
                             </p>
                         </td>
                     </tr>
