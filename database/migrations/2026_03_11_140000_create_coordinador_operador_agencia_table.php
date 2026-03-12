@@ -10,11 +10,15 @@ return new class extends Migration
     {
         Schema::create('coordinador_operador_agencia', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('coordinador_operador_id')
-                ->constrained('coordinador_operador')
+            $table->integer('coordinador_operador_id')->unsigned();
+            $table->foreign('coordinador_operador_id')
+                ->references('id')
+                ->on('coordinador_operador')
                 ->cascadeOnDelete();
-            $table->foreignId('agencia_id')
-                ->constrained('agencias')
+            $table->integer('agencia_id')->unsigned();
+            $table->foreign('agencia_id')
+                ->references('id')
+                ->on('agencias')
                 ->cascadeOnDelete();
             $table->timestamps();
 
