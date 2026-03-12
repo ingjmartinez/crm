@@ -10,12 +10,12 @@ return new class extends Migration
     {
         Schema::create('coordinador_operador_agencia', function (Blueprint $table) {
             $table->id();
-            $table->integer('coordinador_operador_id')->unsigned();
+            $table->unsignedBigInteger('coordinador_operador_id');
             $table->foreign('coordinador_operador_id')
                 ->references('id')
                 ->on('coordinador_operador')
                 ->cascadeOnDelete();
-            $table->integer('agencia_id')->unsigned();
+            $table->unsignedBigInteger('agencia_id');
             $table->foreign('agencia_id')
                 ->references('id')
                 ->on('agencias')
