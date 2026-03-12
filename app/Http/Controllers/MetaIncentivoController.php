@@ -3,11 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Exports\MetaIncentivoExport;
+use App\Mail\MetaIncentivoMiniReporteMail;
+use App\Models\CoordinadorOperador;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Maatwebsite\Excel\Facades\Excel;
+use Throwable;
 
 class MetaIncentivoController extends Controller
 {
@@ -33,13 +38,13 @@ class MetaIncentivoController extends Controller
             ->pluck('sistema')
             ->values();
 
-        $coordinadores = DB::table('agencias')
-            ->select('coordinador')
-            ->whereNotNull('coordinador')
-            ->whereRaw("TRIM(coordinador) <> ''")
+        $coordinadores = CoordinadorOperador::query()
+            ->where('puesto', 'coordinador')
+            ->selectRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) as nombre_completo")
+            ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) <> ''")
             ->distinct()
-            ->orderBy('coordinador')
-            ->pluck('coordinador')
+            ->orderBy('nombre_completo')
+            ->pluck('nombre_completo')
             ->values();
 
         return view('comercial.meta_incentivo', [
@@ -75,6 +80,179 @@ class MetaIncentivoController extends Controller
         );
 
         return Excel::download(new MetaIncentivoExport($reporte), $fileName);
+    }
+
+    public function enviarMiniReporte(Request $request)
+    {
+        @set_time_limit(120);
+        @ini_set('max_execution_time', '120');
+
+        $inicioProceso = microtime(true);
+
+        $validated = $request->validate([
+            'anio' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'mes' => ['required', 'integer', 'min:1', 'max:12'],
+            'sistema' => ['nullable', 'string', 'max:100'],
+            'coordinador' => ['required', 'string', 'max:150'],
+            'cumplimiento' => ['nullable', 'in:,cumple,no-cumple'],
+        ]);
+
+        $coordinadorNombre = trim((string) $validated['coordinador']);
+        if ($coordinadorNombre === '') {
+            $mensaje = 'Debe seleccionar un coordinador para enviar el mini reporte.';
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['message' => $mensaje], 422);
+            }
+
+            return redirect()->back()->with('error', $mensaje);
+        }
+
+        $requestFiltros = new Request([
+            'anio' => (int) $validated['anio'],
+            'mes' => (int) $validated['mes'],
+            'sistema' => (string) ($validated['sistema'] ?? ''),
+            'coordinador' => $coordinadorNombre,
+            'cumplimiento' => (string) ($validated['cumplimiento'] ?? ''),
+        ]);
+
+        [$anio, $mes, $sistema, $coordinador, $cumplimiento, $fechaInicio, $fechaFin] = $this->resolveFiltros($requestFiltros);
+        $reporte = $this->buildReporte($fechaInicio, $fechaFin, $sistema, $coordinador, $cumplimiento);
+
+        if ($reporte->isEmpty()) {
+            $mensaje = 'No hay datos para enviar en el mini reporte con los filtros seleccionados.';
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['message' => $mensaje], 422);
+            }
+
+            return redirect()->back()->with('error', $mensaje);
+        }
+
+        $correos = CoordinadorOperador::query()
+            ->where('puesto', 'coordinador')
+            ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) = ?", [$coordinadorNombre])
+            ->whereNotNull('correo')
+            ->whereRaw("TRIM(correo) <> ''")
+            ->pluck('correo')
+            ->map(fn($correo) => trim((string) $correo))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($correos->isEmpty()) {
+            $mensaje = 'El coordinador seleccionado no tiene un correo registrado en Coordinador / Operador.';
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['message' => $mensaje], 422);
+            }
+
+            return redirect()->back()->with('error', $mensaje);
+        }
+
+        $estadoPorAgencia = [];
+
+        // Acumular totales por agencia para calcular porcentajes reales
+        foreach ($reporte as $row) {
+            $agenciaKey = (string) ($row->agencia_id ?? $row->nombre_agencia ?? '');
+            if ($agenciaKey === '') {
+                continue;
+            }
+
+            $metaIncremental = (float) ($row->meta_incremental ?? 0);
+            $ventaPosterior = (float) ($row->total_venta_mes_posterior ?? 0);
+            $cumple = $metaIncremental <= 0 || $ventaPosterior >= $metaIncremental;
+
+            if (!array_key_exists($agenciaKey, $estadoPorAgencia)) {
+                $estadoPorAgencia[$agenciaKey] = [
+                    'agencia' => (string) ($row->nombre_agencia ?? $row->agencia_id ?? '-'),
+                    'coordinador' => (string) ($row->coordinador ?? '-'),
+                    'cumple' => true,
+                    'meta_total' => 0.0,
+                    'venta_total' => 0.0,
+                    'codigo' => (string) ($row->agencia_id ?? ''),
+                ];
+            }
+
+            if (!$cumple) {
+                $estadoPorAgencia[$agenciaKey]['cumple'] = false;
+            }
+
+            $estadoPorAgencia[$agenciaKey]['meta_total'] += $metaIncremental;
+            $estadoPorAgencia[$agenciaKey]['venta_total'] += $ventaPosterior;
+        }
+
+        $filas = collect($estadoPorAgencia)
+            ->map(function ($item) {
+                $meta = (float) ($item['meta_total'] ?? 0);
+                $venta = (float) ($item['venta_total'] ?? 0);
+
+                if ($meta <= 0) {
+                    $porcentajeCumplido = 100.0;
+                    $porcentajeFaltante = 0.0;
+                } else {
+                    $porcentajeCumplido = min(100.0, ($venta / $meta) * 100.0);
+                    $porcentajeFaltante = max(0.0, 100.0 - $porcentajeCumplido);
+                }
+
+                $cumplimientoTexto = $item['cumple'] ? 'Cumple 100%' : sprintf('Falta %s%% para alcanzar el 100%%', number_format($porcentajeFaltante, 2));
+
+                return [
+                    'agencia' => $item['agencia'],
+                    'codigo' => $item['codigo'] ?? '',
+                    'coordinador' => $item['coordinador'],
+                    'cumplimiento_meta' => $cumplimientoTexto,
+                ];
+            })
+            ->values()
+            ->all();
+
+        $data = [
+            'coordinador' => $coordinadorNombre,
+            'anio' => $anio,
+            'mes' => $mes,
+            'fecha_inicio' => $fechaInicio->format('d/m/Y'),
+            'fecha_fin' => $fechaFin->format('d/m/Y'),
+            'filas' => $filas,
+        ];
+
+        try {
+            Mail::to($correos->all())->send(new MetaIncentivoMiniReporteMail($data));
+            Log::info('Enviando mini reporte Meta Incentivo', [
+                'coordinador' => $coordinadorNombre,
+                'correos' => $correos->all(),
+                'total_filas_reporte' => $reporte->count(),
+                'total_filas_correo' => count($filas),
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Error enviando mini reporte Meta Incentivo', [
+                'coordinador' => $coordinadorNombre,
+                'correos' => $correos->all(),
+                'error' => $exception->getMessage(),
+            ]);
+
+            $mensaje = 'No se pudo enviar el correo. Verifique la configuración SMTP e intente nuevamente.';
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['message' => $mensaje], 500);
+            }
+
+            return redirect()->back()->with('error', $mensaje);
+        }
+
+        Log::info('Mini reporte Meta Incentivo enviado', [
+            'coordinador' => $coordinadorNombre,
+            'total_filas_original' => $reporte->count(),
+            'total_filas_correo' => count($filas),
+            'duracion_segundos' => round(microtime(true) - $inicioProceso, 2),
+        ]);
+
+        $mensajeExito = 'Mini reporte enviado correctamente a: ' . $correos->implode(', ');
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => $mensajeExito,
+                'coordinador' => $coordinadorNombre,
+                'total_filas' => count($filas),
+            ]);
+        }
+
+        return redirect()->back()->with('success', $mensajeExito);
     }
 
     private function resolveFiltros(Request $request): array
@@ -128,9 +306,14 @@ class MetaIncentivoController extends Controller
             ->leftJoin('catalogo_juegos as cj', function ($join) {
                 $join->whereRaw('TRIM(cj.producto_id) COLLATE utf8mb4_unicode_ci = TRIM(v.producto_id) COLLATE utf8mb4_unicode_ci');
             })
+            ->leftJoin('coordinador_operador_agencia as coa', 'coa.agencia_id', '=', 'a.id')
+            ->leftJoin('coordinador_operador as co', function ($join) {
+                $join->on('co.id', '=', 'coa.coordinador_operador_id')
+                    ->where('co.puesto', '=', 'coordinador');
+            })
             ->selectRaw('a.terminal AS agencia_id')
             ->selectRaw('a.nombre_agencia')
-            ->selectRaw('a.coordinador')
+            ->selectRaw("NULLIF(TRIM(GROUP_CONCAT(DISTINCT CASE WHEN co.id IS NOT NULL THEN TRIM(CONCAT(COALESCE(co.nombre, ''), ' ', COALESCE(co.apellido, ''))) END SEPARATOR ', ')), '') AS coordinador")
             ->selectRaw("COALESCE(NULLIF(TRIM(cj.tipo), ''), 'sin tipo') AS tipo")
             ->selectRaw("SUM(CASE WHEN v.fecha BETWEEN '{$fechaMin}' AND '{$fechaBaseMax}' THEN v.monto ELSE 0 END) AS ventas_3_meses")
             ->selectRaw("(SUM(CASE WHEN v.fecha BETWEEN '{$fechaMin}' AND '{$fechaBaseMax}' THEN v.monto ELSE 0 END) / 3) AS promedio_3_meses")
@@ -141,9 +324,18 @@ class MetaIncentivoController extends Controller
                 $query->where('a.sistema', $sistema);
             })
             ->when($coordinador !== '', function ($query) use ($coordinador) {
-                $query->where('a.coordinador', $coordinador);
+                $query->whereExists(function ($subQuery) use ($coordinador) {
+                    $subQuery->selectRaw('1')
+                        ->from('coordinador_operador_agencia as coa_filter')
+                        ->join('coordinador_operador as co_filter', function ($join) {
+                            $join->on('co_filter.id', '=', 'coa_filter.coordinador_operador_id')
+                                ->where('co_filter.puesto', '=', 'coordinador');
+                        })
+                        ->whereColumn('coa_filter.agencia_id', 'a.id')
+                        ->whereRaw("TRIM(CONCAT(COALESCE(co_filter.nombre, ''), ' ', COALESCE(co_filter.apellido, ''))) = ?", [$coordinador]);
+                });
             })
-            ->groupBy('a.terminal', 'a.nombre_agencia', 'a.coordinador', DB::raw("COALESCE(NULLIF(TRIM(cj.tipo), ''), 'sin tipo')"))
+            ->groupBy('a.terminal', 'a.nombre_agencia', DB::raw("COALESCE(NULLIF(TRIM(cj.tipo), ''), 'sin tipo')"))
             ->havingRaw("SUM(CASE WHEN v.fecha BETWEEN '{$fechaMin}' AND '{$fechaBaseMax}' THEN v.monto ELSE 0 END) > 0");
 
         $reporte = DB::query()

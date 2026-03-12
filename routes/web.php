@@ -29,6 +29,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\TareaController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\CoordinadorOperadorController;
 
 /*
 |--------------------------------------------------------------------------
@@ -225,6 +226,9 @@ Route::post('agencias-incumplimientos-horario/send-mail', [AgenciaController::cl
 
 Route::resource('usuarios', UserController::class)->except(['show']);
 Route::get('usuarios-list', [UserController::class, 'list'])->name('usuarios.list');
+Route::resource('coordinador-operador', CoordinadorOperadorController::class)->except(['show']);
+Route::post('coordinador-operador/{coordinador_operador}/asignar-agencias', [CoordinadorOperadorController::class, 'asignarAgencias'])
+    ->name('coordinador-operador.asignar-agencias');
 
 Route::resource('roles', RoleController::class)->except(['show']);
 Route::resource('permissions', PermissionController::class)->except(['show']);
@@ -238,6 +242,7 @@ Route::get('/comercial/kpi-ventas', [ComercialController::class, 'kpiVentas'])->
 Route::get('/comercial/kpi-ventas-v', [ComercialController::class, 'kpiVentasV'])->name('comercial.kpi-ventas-v');
 Route::get('/comercial/meta-incentivo', [MetaIncentivoController::class, 'index'])->name('comercial.meta-incentivo');
 Route::get('/comercial/meta-incentivo/export', [MetaIncentivoController::class, 'export'])->name('comercial.meta-incentivo.export');
+Route::post('/comercial/meta-incentivo/send-mail', [MetaIncentivoController::class, 'enviarMiniReporte'])->name('comercial.meta-incentivo.send-mail');
 Route::get('/comercial/ventas-producto', fn() => view('comercial.ventas-producto'))->name('comercial.ventas-producto');
 
 Route::get('/incentivos', [IncentivosController::class, 'index']);

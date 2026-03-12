@@ -143,8 +143,19 @@
 
                                         <div class="col-12 col-md-6 mb-3">
                                             <label for="operador" class="form-label">Operador</label>
-                                            <input type="text" class="form-control @error('operador') is-invalid @enderror" 
-                                                   id="operador" name="operador" value="{{ old('operador', $agencia->operador) }}">
+                                            <select class="form-select @error('operador') is-invalid @enderror" id="operador" name="operador">
+                                                <option value="">Seleccione un operador</option>
+                                                @foreach(($operadores ?? []) as $operador)
+                                                    <option value="{{ $operador }}" {{ old('operador', $agencia->operador) === $operador ? 'selected' : '' }}>
+                                                        {{ $operador }}
+                                                    </option>
+                                                @endforeach
+                                                @if(old('operador', $agencia->operador) && !in_array(old('operador', $agencia->operador), ($operadores ?? []), true))
+                                                    <option value="{{ old('operador', $agencia->operador) }}" selected>
+                                                        {{ old('operador', $agencia->operador) }} (actual)
+                                                    </option>
+                                                @endif
+                                            </select>
                                             @error('operador')
                                                 <div class="invalid-feedback">{{ $message }}</div>
                                             @enderror
@@ -152,8 +163,19 @@
 
                                         <div class="col-12 col-md-6 mb-3">
                                             <label for="coordinador" class="form-label">Coordinador</label>
-                                            <input type="text" class="form-control @error('coordinador') is-invalid @enderror" 
-                                                   id="coordinador" name="coordinador" value="{{ old('coordinador', $agencia->coordinador) }}">
+                                            <select class="form-select @error('coordinador') is-invalid @enderror" id="coordinador" name="coordinador">
+                                                <option value="">Seleccione un coordinador</option>
+                                                @foreach(($coordinadores ?? []) as $coordinador)
+                                                    <option value="{{ $coordinador }}" {{ old('coordinador', $agencia->coordinador) === $coordinador ? 'selected' : '' }}>
+                                                        {{ $coordinador }}
+                                                    </option>
+                                                @endforeach
+                                                @if(old('coordinador', $agencia->coordinador) && !in_array(old('coordinador', $agencia->coordinador), ($coordinadores ?? []), true))
+                                                    <option value="{{ old('coordinador', $agencia->coordinador) }}" selected>
+                                                        {{ old('coordinador', $agencia->coordinador) }} (actual)
+                                                    </option>
+                                                @endif
+                                            </select>
                                             @error('coordinador')
                                                 <div class="invalid-feedback">{{ $message }}</div>
                                             @enderror

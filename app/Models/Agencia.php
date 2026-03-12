@@ -32,4 +32,14 @@ class Agencia extends Model
         'updated_at' => 'datetime',
         'aplica_incentivo' => 'boolean',
     ];
+
+    public function coordinadoresOperadores()
+    {
+        return $this->belongsToMany(
+            CoordinadorOperador::class,
+            'coordinador_operador_agencia',
+            'agencia_id',
+            'coordinador_operador_id'
+        )->withTimestamps();
+    }
 }

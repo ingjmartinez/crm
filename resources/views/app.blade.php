@@ -769,6 +769,10 @@
                                         <a href="{{ url('/usuarios') }}" class="nav-link" data-key="t-usuarios">
                                             Usuarios </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('coordinador-operador.index') }}" class="nav-link" data-key="t-coordinador-operador">
+                                            Coordinador / Operador </a>
+                                    </li>
                                     @can('roles.view')
                                         <li class="nav-item">
                                             <a href="{{ route('roles.index') }}" class="nav-link" data-key="t-roles">

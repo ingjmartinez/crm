@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Mail\IncumplimientoHorarioReportMail;
 use App\Models\Agencia;
+use App\Models\CoordinadorOperador;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\AgenciasExport;
 use App\Imports\AgenciasImport;
@@ -27,7 +29,9 @@ class AgenciaController extends Controller
      */
     public function create()
     {
-        return view('agencias.create');
+        [$operadores, $coordinadores] = $this->obtenerOpcionesCoordinadorOperador();
+
+        return view('agencias.create', compact('operadores', 'coordinadores'));
     }
 
     /**
@@ -35,6 +39,8 @@ class AgenciaController extends Controller
      */
     public function store(Request $request)
     {
+        [$operadores, $coordinadores] = $this->obtenerOpcionesCoordinadorOperador();
+
         $validated = $request->validate([
             'agencia' => 'required|string|max:25',
             'terminal' => 'nullable|string|max:25',
@@ -43,12 +49,20 @@ class AgenciaController extends Controller
             'horario_pm' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'ciudad' => 'nullable|string|max:55',
             'ruta' => 'nullable|string|max:55',
-            'operador' => 'nullable|string|max:55',
-            'coordinador' => 'nullable|string|max:55',
+            'operador' => ['nullable', 'string', 'max:55', Rule::in($operadores)],
+            'coordinador' => ['nullable', 'string', 'max:55', Rule::in($coordinadores)],
             'aplica_incentivo' => 'required|boolean',
+        ], [
+            'operador.in' => 'Seleccione un operador válido de la lista.',
+            'coordinador.in' => 'Seleccione un coordinador válido de la lista.',
         ]);
 
-        Agencia::create($validated);
+        $agencia = Agencia::create($validated);
+        $this->sincronizarAsignacionesCoordinadorOperador(
+            $agencia->id,
+            $validated['coordinador'] ?? '',
+            $validated['operador'] ?? ''
+        );
 
         return redirect()->route('agencias.index')
             ->with('success', 'Agencia creada exitosamente.');
@@ -67,7 +81,9 @@ class AgenciaController extends Controller
      */
     public function edit(Agencia $agencia)
     {
-        return view('agencias.edit', compact('agencia'));
+        [$operadores, $coordinadores] = $this->obtenerOpcionesCoordinadorOperador();
+
+        return view('agencias.edit', compact('agencia', 'operadores', 'coordinadores'));
     }
 
     /**
@@ -75,6 +91,8 @@ class AgenciaController extends Controller
      */
     public function update(Request $request, Agencia $agencia)
     {
+        [$operadores, $coordinadores] = $this->obtenerOpcionesCoordinadorOperador();
+
         $validated = $request->validate([
             'agencia' => 'required|string|max:255',
             'nombre_agencia' => 'nullable|string|max:255',
@@ -84,15 +102,90 @@ class AgenciaController extends Controller
             'sistema' => 'nullable|string|max:255',
             'ciudad' => 'nullable|string|max:255',
             'ruta' => 'nullable|string|max:255',
-            'operador' => 'nullable|string|max:255',
-            'coordinador' => 'nullable|string|max:255',
+            'operador' => ['nullable', 'string', 'max:255', Rule::in($operadores)],
+            'coordinador' => ['nullable', 'string', 'max:255', Rule::in($coordinadores)],
             'aplica_incentivo' => 'required|boolean',
+        ], [
+            'operador.in' => 'Seleccione un operador válido de la lista.',
+            'coordinador.in' => 'Seleccione un coordinador válido de la lista.',
         ]);
 
         $agencia->update($validated);
+        $this->sincronizarAsignacionesCoordinadorOperador(
+            $agencia->id,
+            $validated['coordinador'] ?? '',
+            $validated['operador'] ?? ''
+        );
 
         return redirect()->route('agencias.index')
             ->with('success', 'Agencia actualizada exitosamente.');
+    }
+
+    private function sincronizarAsignacionesCoordinadorOperador(int $agenciaId, string $coordinadorNombre = '', string $operadorNombre = ''): void
+    {
+        $this->sincronizarAsignacionPorPuesto($agenciaId, 'coordinador', $coordinadorNombre);
+        $this->sincronizarAsignacionPorPuesto($agenciaId, 'operador', $operadorNombre);
+    }
+
+    private function sincronizarAsignacionPorPuesto(int $agenciaId, string $puesto, string $nombreCompleto): void
+    {
+        $idsPuesto = CoordinadorOperador::query()
+            ->where('puesto', $puesto)
+            ->pluck('id');
+
+        if ($idsPuesto->isNotEmpty()) {
+            DB::table('coordinador_operador_agencia')
+                ->where('agencia_id', $agenciaId)
+                ->whereIn('coordinador_operador_id', $idsPuesto)
+                ->delete();
+        }
+
+        $nombreCompleto = trim($nombreCompleto);
+        if ($nombreCompleto === '') {
+            return;
+        }
+
+        $coordinadorOperadorId = CoordinadorOperador::query()
+            ->where('puesto', $puesto)
+            ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) = ?", [$nombreCompleto])
+            ->value('id');
+
+        if (!$coordinadorOperadorId) {
+            return;
+        }
+
+        DB::table('coordinador_operador_agencia')->insertOrIgnore([
+            'coordinador_operador_id' => $coordinadorOperadorId,
+            'agencia_id' => $agenciaId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function obtenerOpcionesCoordinadorOperador(): array
+    {
+        $registros = CoordinadorOperador::select('nombre', 'apellido', 'puesto')
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get();
+
+        $operadores = $registros
+            ->where('puesto', 'operador')
+            ->map(fn($item) => trim($item->nombre . ' ' . $item->apellido))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $coordinadores = $registros
+            ->where('puesto', 'coordinador')
+            ->map(fn($item) => trim($item->nombre . ' ' . $item->apellido))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return [$operadores, $coordinadores];
     }
 
     /**
