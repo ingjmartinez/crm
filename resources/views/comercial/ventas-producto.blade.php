@@ -59,6 +59,7 @@
                                         <div class="d-flex align-items-end justify-content-between mt-4">
                                             <div>
                                                 <h4 class="fs-22 fw-semibold mb-0" id="cardMontoTotal">RD$ 0.00</h4>
+                                                <small class="text-muted d-block" id="cardPromedioAgencia">Promedio por agencia: RD$ 0.00</small>
                                             </div>
                                             <div class="avatar-sm flex-shrink-0">
                                                 <span class="avatar-title bg-success-subtle rounded fs-3">
@@ -286,6 +287,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const seccion        = document.getElementById('seccionResultados');
     const labelFecha     = document.getElementById('labelFechaAplicada');
     const cardMontoTotal = document.getElementById('cardMontoTotal');
+    const cardPromedioAgencia = document.getElementById('cardPromedioAgencia');
     const cardTotalAgencias = document.getElementById('cardTotalAgencias');
     const btnVerAgencias = document.getElementById('btnVerAgencias');
     const btnConfigVentasMinimo = document.getElementById('btnConfigVentasMinimo');
@@ -321,6 +323,22 @@ document.addEventListener('DOMContentLoaded', function () {
     let modalAgencyFilter = 'todos';
 
     const formatMoney = (value) => Number(value ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 });
+    const normalizarClaveAgencia = (value) => (value ?? '').toString().trim().replace(/^0+/, '');
+    const getAgencyDisplayData = (agenciaId) => {
+        const agenciaIdRaw = (agenciaId ?? '').toString().trim();
+        const agenciaIdNormalized = normalizarClaveAgencia(agenciaIdRaw);
+
+        const venta = (ventasFuente ?? []).find(item => {
+            const itemAgenciaIdRaw = (item?.agencia_id ?? '').toString().trim();
+            return itemAgenciaIdRaw === agenciaIdRaw
+                || normalizarClaveAgencia(itemAgenciaIdRaw) === agenciaIdNormalized;
+        });
+
+        const nombre = (venta?.nombre_agencia ?? venta?.agencia ?? agenciaIdRaw).toString().trim() || agenciaIdRaw;
+        const terminal = (venta?.terminal ?? agenciaIdRaw).toString().trim() || agenciaIdRaw;
+
+        return { nombre, terminal };
+    };
     const cumpleMinimo = (total) => Number(total ?? 0) >= Number(ventasMinimoConfig ?? 0);
 
     const updateFiltroLabel = () => {
@@ -373,9 +391,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const agenciasFiltradas = filtrarModalAgencias();
         agenciasFiltradas.forEach(([agencia, total]) => {
+            const { nombre, terminal } = getAgencyDisplayData(agencia);
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${agencia}</td>
+                <td>
+                    <div class="fw-medium">${nombre}</div>
+                    <small class="text-muted">Terminal: ${terminal}</small>
+                </td>
                 <td>${formatMoney(total)}</td>
                 <td><button class="btn btn-sm btn-primary btnFiltrarAgencia" data-agencia="${agencia}">Ver</button></td>
             `;
@@ -427,6 +449,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelector('#tableCiudades tbody').innerHTML = '';
         document.querySelector('#tableRutas tbody').innerHTML = '';
         cardMontoTotal.textContent = 'RD$ 0.00';
+        cardPromedioAgencia.textContent = 'Promedio por agencia: RD$ 0.00';
         cardTotalAgencias.textContent = '0';
         cardAgenciasCumplen.textContent = '0';
         cardAgenciasNoCumplen.textContent = '0';
@@ -571,6 +594,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         cardTotalAgencias.textContent = agenciasFiltradas.length.toLocaleString('es-DO');
+        const promedioPorAgencia = agenciasFiltradas.length > 0 ? totalVendido / agenciasFiltradas.length : 0;
+        cardPromedioAgencia.textContent = `Promedio por agencia: RD$ ${formatMoney(promedioPorAgencia)}`;
         resumenAgenciaVisibleActual = new Map(agenciasFiltradas);
 
         const tbodyProductos = document.querySelector('#tableProductos tbody');
@@ -585,9 +610,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const tbodyAgencias = document.querySelector('#tableAgencias tbody');
         agenciasFiltradas.forEach(([agencia, total]) => {
+            const { nombre, terminal } = getAgencyDisplayData(agencia);
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${agencia}</td>
+                <td>
+                    <div class="fw-medium">${nombre}</div>
+                    <small class="text-muted">Terminal: ${terminal}</small>
+                </td>
                 <td>${formatMoney(total)}</td>
                 <td>${getCumplimientoBadge(total)}</td>
             `;

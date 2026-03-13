@@ -91,25 +91,77 @@ class ComercialController extends Controller
 
     public function kpiVentasV(Request $request)
     {
-        $fechaInicio = $request->query('fecha_inicio');
-        $fechaFin = $request->query('fecha_fin');
+        $fechaInput = $request->query('fecha')
+            ?? $request->query('fecha_inicio')
+            ?? $request->query('fecha_fin');
 
-        $fechaInicioObj = $this->parseFechaOrDefault($fechaInicio, now()->startOfMonth());
-        $fechaFinObj = $this->parseFechaOrDefault($fechaFin, now()->endOfMonth());
+        $fechaObj = $this->parseFechaOrDefault($fechaInput, now());
+        $fecha = $fechaObj->format('Y-m-d');
+        $fechaSemanaAnterior = $fechaObj->copy()->subWeek()->format('Y-m-d');
+        $fechaMesAnterior = $fechaObj->copy()->subMonthNoOverflow()->format('Y-m-d');
+        $fechaAnioAnterior = $fechaObj->copy()->subYearNoOverflow()->format('Y-m-d');
 
-        if ($fechaInicioObj->greaterThan($fechaFinObj)) {
-            [$fechaInicioObj, $fechaFinObj] = [$fechaFinObj, $fechaInicioObj];
-        }
+        $indicadoresActual = $this->getIndicadoresBetPorRango($fecha, $fecha);
+        $indicadoresSemanaAnterior = $this->getIndicadoresBetPorRango($fechaSemanaAnterior, $fechaSemanaAnterior);
+        $indicadoresMesAnterior = $this->getIndicadoresBetPorRango($fechaMesAnterior, $fechaMesAnterior);
+        $indicadoresAnioAnterior = $this->getIndicadoresBetPorRango($fechaAnioAnterior, $fechaAnioAnterior);
 
-        $fechaInicio = $fechaInicioObj->format('Y-m-d');
-        $fechaFin = $fechaFinObj->format('Y-m-d');
+        $kpis = $this->extractMontosFromIndicadores($indicadoresActual);
+        $ventasSemanaAnterior = $this->extractMontosFromIndicadores($indicadoresSemanaAnterior);
+        $ventasMesAnterior = $this->extractMontosFromIndicadores($indicadoresMesAnterior);
+        $ventasAnioAnterior = $this->extractMontosFromIndicadores($indicadoresAnioAnterior);
+        $comparativasTabla = [
+            $this->buildFilaComparativa('Fecha aplicada', $fecha, $indicadoresActual),
+            $this->buildFilaComparativa('Ventas semana anterior (mismo día)', $fechaSemanaAnterior, $indicadoresSemanaAnterior),
+            $this->buildFilaComparativa('Ventas mes anterior (mismo día)', $fechaMesAnterior, $indicadoresMesAnterior),
+            $this->buildFilaComparativa('Ventas año anterior (mismo día)', $fechaAnioAnterior, $indicadoresAnioAnterior),
+        ];
 
         return view('comercial.kpi-ventas-v', [
-            'kpis' => $this->getAcumuladosBetPorRango($fechaInicio, $fechaFin),
-            'validacionVentas' => $this->getValidacionVentasPorRango($fechaInicio, $fechaFin),
-            'fechaInicio' => $fechaInicio,
-            'fechaFin' => $fechaFin,
+            'kpis' => $kpis,
+            'fecha' => $fecha,
+            'ventasSemanaAnterior' => $ventasSemanaAnterior,
+            'fechaSemanaAnterior' => $fechaSemanaAnterior,
+            'ventasMesAnterior' => $ventasMesAnterior,
+            'fechaMesAnterior' => $fechaMesAnterior,
+            'ventasAnioAnterior' => $ventasAnioAnterior,
+            'fechaAnioAnterior' => $fechaAnioAnterior,
+            'indicadoresActual' => $indicadoresActual,
+            'indicadoresSemanaAnterior' => $indicadoresSemanaAnterior,
+            'indicadoresMesAnterior' => $indicadoresMesAnterior,
+            'indicadoresAnioAnterior' => $indicadoresAnioAnterior,
+            'comparativasTabla' => $comparativasTabla,
         ]);
+    }
+
+    private function extractMontosFromIndicadores(array $indicadores): array
+    {
+        return [
+            'tradicional' => (float) ($indicadores['tradicional']['monto'] ?? 0),
+            'no_tradicional' => (float) ($indicadores['no_tradicional']['monto'] ?? 0),
+            'recargas' => (float) ($indicadores['recargas']['monto'] ?? 0),
+        ];
+    }
+
+    private function buildFilaComparativa(string $titulo, string $fecha, array $indicadores): array
+    {
+        return [
+            'titulo' => $titulo,
+            'fecha' => $fecha,
+            'total_registros' => (int) ($indicadores['totales']['registros'] ?? 0),
+            'total_agencias_con_venta' => (int) ($indicadores['totales']['agencias_con_venta'] ?? 0),
+            'promedio_venta_general' => (float) ($indicadores['totales']['promedio_venta_general'] ?? 0),
+            'total_tradicional' => (float) ($indicadores['tradicional']['monto'] ?? 0),
+            'total_no_tradicional' => (float) ($indicadores['no_tradicional']['monto'] ?? 0),
+            'total_recargas' => (float) ($indicadores['recargas']['monto'] ?? 0),
+            'total_general' => (float) ($indicadores['totales']['monto_general'] ?? 0),
+            'agencias_tradicional' => (int) ($indicadores['tradicional']['agencias'] ?? 0),
+            'agencias_no_tradicional' => (int) ($indicadores['no_tradicional']['agencias'] ?? 0),
+            'agencias_recargas' => (int) ($indicadores['recargas']['agencias'] ?? 0),
+            'promedio_tradicional' => (float) ($indicadores['tradicional']['promedio'] ?? 0),
+            'promedio_no_tradicional' => (float) ($indicadores['no_tradicional']['promedio'] ?? 0),
+            'promedio_recargas' => (float) ($indicadores['recargas']['promedio'] ?? 0),
+        ];
     }
 
     private function getValidacionVentasPorRango(string $fechaInicio, string $fechaFin): array
@@ -154,6 +206,58 @@ class ComercialController extends Controller
             'tradicional' => (float) ($acumulados->tradicional ?? 0),
             'no_tradicional' => (float) ($acumulados->no_tradicional ?? 0),
             'recargas' => (float) ($acumulados->recargas ?? 0),
+        ];
+    }
+
+    private function getIndicadoresBetPorRango(string $fechaInicio, string $fechaFin): array
+    {
+        $row = DB::table('vt_usuarios_bet')
+            ->selectRaw("COUNT(*) AS total_registros")
+            ->selectRaw("SUM(COALESCE(monto, 0)) AS monto_general")
+            ->selectRaw("COUNT(DISTINCT CASE WHEN COALESCE(monto, 0) > 0 AND agencia_id IS NOT NULL THEN TRIM(CAST(agencia_id AS CHAR)) END) AS agencias_con_venta")
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) = 'tradicional' THEN COALESCE(monto, 0) ELSE 0 END) AS monto_tradicional")
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) IN ('no tradicional','no_tradicional') THEN COALESCE(monto, 0) ELSE 0 END) AS monto_no_tradicional")
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) IN ('recarga','recargas') THEN COALESCE(monto, 0) ELSE 0 END) AS monto_recargas")
+            ->selectRaw("COUNT(DISTINCT CASE WHEN LOWER(TRIM(tipo)) = 'tradicional' AND COALESCE(monto, 0) > 0 AND agencia_id IS NOT NULL THEN TRIM(CAST(agencia_id AS CHAR)) END) AS agencias_tradicional")
+            ->selectRaw("COUNT(DISTINCT CASE WHEN LOWER(TRIM(tipo)) IN ('no tradicional','no_tradicional') AND COALESCE(monto, 0) > 0 AND agencia_id IS NOT NULL THEN TRIM(CAST(agencia_id AS CHAR)) END) AS agencias_no_tradicional")
+            ->selectRaw("COUNT(DISTINCT CASE WHEN LOWER(TRIM(tipo)) IN ('recarga','recargas') AND COALESCE(monto, 0) > 0 AND agencia_id IS NOT NULL THEN TRIM(CAST(agencia_id AS CHAR)) END) AS agencias_recargas")
+            ->whereNotNull('fecha')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->first();
+
+        $tradMonto = (float) ($row->monto_tradicional ?? 0);
+        $noTradMonto = (float) ($row->monto_no_tradicional ?? 0);
+        $recargasMonto = (float) ($row->monto_recargas ?? 0);
+
+        $tradAgencias = (int) ($row->agencias_tradicional ?? 0);
+        $noTradAgencias = (int) ($row->agencias_no_tradicional ?? 0);
+        $recargasAgencias = (int) ($row->agencias_recargas ?? 0);
+        $totalRegistros = (int) ($row->total_registros ?? 0);
+        $montoGeneral = (float) ($row->monto_general ?? 0);
+        $agenciasConVenta = (int) ($row->agencias_con_venta ?? 0);
+
+        return [
+            'tradicional' => [
+                'monto' => $tradMonto,
+                'agencias' => $tradAgencias,
+                'promedio' => $tradAgencias > 0 ? $tradMonto / $tradAgencias : 0,
+            ],
+            'no_tradicional' => [
+                'monto' => $noTradMonto,
+                'agencias' => $noTradAgencias,
+                'promedio' => $noTradAgencias > 0 ? $noTradMonto / $noTradAgencias : 0,
+            ],
+            'recargas' => [
+                'monto' => $recargasMonto,
+                'agencias' => $recargasAgencias,
+                'promedio' => $recargasAgencias > 0 ? $recargasMonto / $recargasAgencias : 0,
+            ],
+            'totales' => [
+                'registros' => $totalRegistros,
+                'monto_general' => $montoGeneral,
+                'agencias_con_venta' => $agenciasConVenta,
+                'promedio_venta_general' => $agenciasConVenta > 0 ? $montoGeneral / $agenciasConVenta : 0,
+            ],
         ];
     }
 

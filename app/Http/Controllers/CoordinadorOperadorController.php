@@ -39,7 +39,8 @@ class CoordinadorOperadorController extends Controller
             'puesto' => ['required', 'in:coordinador,operador'],
         ], [
             'cedula.regex' => 'La cédula debe contener exactamente 11 dígitos numéricos.',
-            'telefono.regex' => 'El teléfono debe contener exactamente 10 dígitos numéricos.',
+            'telefono.required' => 'Campo de 10 Digitos obligatorios',
+            'telefono.regex' => 'Campo de 10 Digitos obligatorios',
             'puesto.in' => 'El puesto debe ser coordinador u operador.',
         ]);
 
@@ -67,7 +68,8 @@ class CoordinadorOperadorController extends Controller
             'puesto' => ['required', 'in:coordinador,operador'],
         ], [
             'cedula.regex' => 'La cédula debe contener exactamente 11 dígitos numéricos.',
-            'telefono.regex' => 'El teléfono debe contener exactamente 10 dígitos numéricos.',
+            'telefono.required' => 'Campo de 10 Digitos obligatorios',
+            'telefono.regex' => 'Campo de 10 Digitos obligatorios',
             'puesto.in' => 'El puesto debe ser coordinador u operador.',
         ]);
 

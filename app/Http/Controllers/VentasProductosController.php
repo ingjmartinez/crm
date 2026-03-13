@@ -67,7 +67,7 @@ class VentasProductosController extends Controller
             ->values();
 
         $agencias = Agencia::query()
-            ->select(['terminal', 'ciudad', 'ruta', 'operador', 'coordinador'])
+            ->select(['agencia', 'nombre_agencia', 'terminal', 'ciudad', 'ruta', 'operador', 'coordinador'])
             ->whereIn('terminal', $terminales)
             ->get();
 
@@ -79,6 +79,8 @@ class VentasProductosController extends Controller
             }
 
             $agenciasByTerminal[$terminal] = [
+                'agencia' => $agencia->agencia,
+                'nombre_agencia' => $agencia->nombre_agencia,
                 'ciudad' => $agencia->ciudad,
                 'ruta' => $agencia->ruta,
                 'operador' => $agencia->operador,
@@ -95,7 +97,7 @@ class VentasProductosController extends Controller
             $agenciaId = trim((string) ($item['agencia_id'] ?? ''));
             $agenciaLookup = $agenciasByTerminal[$agenciaId]
                 ?? $agenciasByTerminal[ltrim($agenciaId, '0')]
-                ?? ['ciudad' => null, 'ruta' => null, 'operador' => null, 'coordinador' => null];
+                ?? ['agencia' => null, 'nombre_agencia' => null, 'ciudad' => null, 'ruta' => null, 'operador' => null, 'coordinador' => null];
 
             return array_merge($item, $agenciaLookup);
         })->values()->all();

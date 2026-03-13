@@ -665,7 +665,7 @@
             scrollX: true,
             columns: [
                 { data: 'nombre_agencia', render: function(data, type, row) {
-                    return (data || row.agencia || '-') + `<div class="text-muted fs-11">Cod: ${row.agencia || '-'}</div>`;
+                    return (data || row.agencia || '-') + `<div class="text-muted fs-11">Cod: ${row.terminal || '-'}</div>`;
                 }},
                 { data: 'coordinador', defaultContent: '-', className: 'text-center' },
                 { data: 'entrada_am_programada', defaultContent: '-', className: 'text-center', render: function(data) { return data || '-'; }},
