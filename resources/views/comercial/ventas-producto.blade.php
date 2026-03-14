@@ -8,12 +8,12 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">Ventas por Producto</h4>
+                            <h4 class="mb-sm-0">VENTAS DE NO TRADICIONALES</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="/">Inicio</a></li>
                                     <li class="breadcrumb-item">Comercial</li>
-                                    <li class="breadcrumb-item active">Ventas por Producto</li>
+                                    <li class="breadcrumb-item active">VENTAS DE NO TRADICIONALES</li>
                                 </ol>
                             </div>
                         </div>
@@ -53,7 +53,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center">
                                             <div class="flex-grow-1">
-                                                <p class="text-uppercase fw-medium text-muted mb-0">Monto Total Vendido</p>
+                                                <p class="text-uppercase fw-medium text-muted mb-0">Ventas No Tradicionales</p>
                                             </div>
                                         </div>
                                         <div class="d-flex align-items-end justify-content-between mt-4">
@@ -76,12 +76,21 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center">
                                             <div class="flex-grow-1">
-                                                <p class="text-uppercase fw-medium text-muted mb-0">Total de Agencias (Distinct)</p>
+                                                <p class="text-uppercase fw-medium text-muted mb-0">Agencias con ventas</p>
                                             </div>
                                         </div>
                                         <div class="d-flex align-items-end justify-content-between mt-4">
                                             <div>
-                                                <h4 class="fs-22 fw-semibold mb-0" id="cardTotalAgencias">0</h4>
+                                                <div class="d-flex gap-4">
+                                                    <div>
+                                                        <small class="text-muted d-block">Con ventas</small>
+                                                        <h4 class="fs-22 fw-semibold mb-0" id="cardTotalAgencias">0</h4>
+                                                    </div>
+                                                    <div>
+                                                        <small class="text-muted d-block">Sin ventas</small>
+                                                        <h4 class="fs-22 fw-semibold mb-0" id="cardAgenciasSinVentas">0</h4>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div class="avatar-sm flex-shrink-0">
                                                 <span class="avatar-title bg-info-subtle rounded fs-3">
@@ -114,11 +123,16 @@
                                                 <small class="text-muted d-block">No cumplen</small>
                                                 <h5 class="mb-0 text-danger" id="cardAgenciasNoCumplen">0</h5>
                                             </div>
+                                            <div>
+                                                <small class="text-muted d-block">No registradas</small>
+                                                <h5 class="mb-0 text-warning" id="cardTerminalesNoRegistradas">0</h5>
+                                            </div>
                                         </div>
                                         <div class="mt-3 d-flex gap-2 flex-wrap">
                                             <button id="btnFiltroAgenciasTodos" class="btn btn-sm btn-outline-secondary">Todos</button>
                                             <button id="btnFiltroAgenciasCumplen" class="btn btn-sm btn-outline-success">Cumplen</button>
                                             <button id="btnFiltroAgenciasNoCumplen" class="btn btn-sm btn-outline-danger">No cumplen</button>
+                                            <button id="btnVerTerminalesNoRegistradas" class="btn btn-sm btn-outline-warning d-none">Ver no registradas</button>
                                         </div>
                                     </div>
                                 </div>
@@ -224,6 +238,7 @@
                         <button id="btnModalAgenciasTodos" class="btn btn-sm btn-outline-secondary">Todos</button>
                         <button id="btnModalAgenciasCumplen" class="btn btn-sm btn-outline-success">Cumplen</button>
                         <button id="btnModalAgenciasNoCumplen" class="btn btn-sm btn-outline-danger">No cumplen</button>
+                        <button id="btnModalAgenciasSinVenta" class="btn btn-sm btn-outline-warning">Agencias sin venta</button>
                         <div class="dropdown">
                             <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="btnDropdownCiudades" data-bs-toggle="dropdown" aria-expanded="false">
                                 Ciudades
@@ -279,6 +294,32 @@
     </div>
 </div>
 
+<div class="modal fade" id="modalTerminalesNoRegistradas" tabindex="-1" aria-labelledby="modalTerminalesNoRegistradasLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTerminalesNoRegistradasLabel">Terminales no registradas en Agencias</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table id="tableModalTerminalesNoRegistradas" class="table table-striped table-bordered w-100">
+                        <thead>
+                            <tr>
+                                <th>Terminal</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section('script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -289,19 +330,23 @@ document.addEventListener('DOMContentLoaded', function () {
     const cardMontoTotal = document.getElementById('cardMontoTotal');
     const cardPromedioAgencia = document.getElementById('cardPromedioAgencia');
     const cardTotalAgencias = document.getElementById('cardTotalAgencias');
+    const cardAgenciasSinVentas = document.getElementById('cardAgenciasSinVentas');
     const btnVerAgencias = document.getElementById('btnVerAgencias');
     const btnConfigVentasMinimo = document.getElementById('btnConfigVentasMinimo');
     const btnLimpiarAgencia = document.getElementById('btnLimpiarAgencia');
     const labelMinimoVentas = document.getElementById('labelMinimoVentas');
     const cardAgenciasCumplen = document.getElementById('cardAgenciasCumplen');
     const cardAgenciasNoCumplen = document.getElementById('cardAgenciasNoCumplen');
+    const cardTerminalesNoRegistradas = document.getElementById('cardTerminalesNoRegistradas');
     const labelFiltroCumplimientoAgencia = document.getElementById('labelFiltroCumplimientoAgencia');
     const btnFiltroAgenciasTodos = document.getElementById('btnFiltroAgenciasTodos');
     const btnFiltroAgenciasCumplen = document.getElementById('btnFiltroAgenciasCumplen');
     const btnFiltroAgenciasNoCumplen = document.getElementById('btnFiltroAgenciasNoCumplen');
+    const btnVerTerminalesNoRegistradas = document.getElementById('btnVerTerminalesNoRegistradas');
     const btnModalAgenciasTodos = document.getElementById('btnModalAgenciasTodos');
     const btnModalAgenciasCumplen = document.getElementById('btnModalAgenciasCumplen');
     const btnModalAgenciasNoCumplen = document.getElementById('btnModalAgenciasNoCumplen');
+    const btnModalAgenciasSinVenta = document.getElementById('btnModalAgenciasSinVenta');
     const labelModalAgenciasFiltro = document.getElementById('labelModalAgenciasFiltro');
     const btnDropdownCiudades = document.getElementById('btnDropdownCiudades');
     const menuCiudadesModal = document.getElementById('menuCiudadesModal');
@@ -312,6 +357,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let dtCiudades       = null;
     let dtRutas          = null;
     let dtModalAgencias  = null;
+    let dtModalTerminalesNoRegistradas = null;
     let ventasFuente     = [];
     let agenciaSeleccionada = null;
     let ciudadSeleccionada = null;
@@ -320,7 +366,11 @@ document.addEventListener('DOMContentLoaded', function () {
     let filtroCumplimientoAgencia = 'todos';
     let resumenAgenciaVisibleActual = new Map();
     let modalAgencyEntries = [];
+    let modalAgencyEntriesSinVentas = [];
     let modalAgencyFilter = 'todos';
+    let modalAgencyViewMode = 'con_ventas';
+    let resumenEstadoAgencias = { activas: 0, con_ventas: 0, sin_ventas: 0 };
+    let terminalesNoRegistradas = [];
 
     const formatMoney = (value) => Number(value ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 });
     const normalizarClaveAgencia = (value) => (value ?? '').toString().trim().replace(/^0+/, '');
@@ -371,6 +421,10 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const filtrarModalAgencias = () => {
+        if (modalAgencyViewMode === 'sin_ventas') {
+            return modalAgencyEntriesSinVentas;
+        }
+
         if (modalAgencyFilter === 'cumplen') {
             return modalAgencyEntries.filter(([, total]) => cumpleMinimo(total));
         }
@@ -389,20 +443,49 @@ document.addEventListener('DOMContentLoaded', function () {
         const tbodyModal = document.querySelector('#tableModalAgencias tbody');
         tbodyModal.innerHTML = '';
 
+        const modalTitle = document.getElementById('modalAgenciasLabel');
         const agenciasFiltradas = filtrarModalAgencias();
-        agenciasFiltradas.forEach(([agencia, total]) => {
-            const { nombre, terminal } = getAgencyDisplayData(agencia);
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>
-                    <div class="fw-medium">${nombre}</div>
-                    <small class="text-muted">Terminal: ${terminal}</small>
-                </td>
-                <td>${formatMoney(total)}</td>
-                <td><button class="btn btn-sm btn-primary btnFiltrarAgencia" data-agencia="${agencia}">Ver</button></td>
-            `;
-            tbodyModal.appendChild(tr);
-        });
+
+        if (modalAgencyViewMode === 'sin_ventas') {
+            modalTitle.textContent = 'Agencias sin venta';
+            labelModalAgenciasFiltro.textContent = 'Filtro: Agencias sin venta';
+            agenciasFiltradas.forEach((item) => {
+                const nombre = (item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
+                const terminal = (item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <div class="fw-medium">${nombre}</div>
+                        <small class="text-muted">Terminal: ${terminal}</small>
+                    </td>
+                    <td>${formatMoney(0)}</td>
+                    <td><span class="text-muted">-</span></td>
+                `;
+                tbodyModal.appendChild(tr);
+            });
+        } else {
+            modalTitle.textContent = 'Agencias con Ventas';
+            agenciasFiltradas.forEach(([agencia, total]) => {
+                const { nombre, terminal } = getAgencyDisplayData(agencia);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <div class="fw-medium">${nombre}</div>
+                        <small class="text-muted">Terminal: ${terminal}</small>
+                    </td>
+                    <td>${formatMoney(total)}</td>
+                    <td><button class="btn btn-sm btn-primary btnFiltrarAgencia" data-agencia="${agencia}">Ver</button></td>
+                `;
+                tbodyModal.appendChild(tr);
+            });
+        }
+
+        btnModalAgenciasSinVenta.classList.remove('btn-warning');
+        btnModalAgenciasSinVenta.classList.add('btn-outline-warning');
+        if (modalAgencyViewMode === 'sin_ventas') {
+            btnModalAgenciasSinVenta.classList.remove('btn-outline-warning');
+            btnModalAgenciasSinVenta.classList.add('btn-warning');
+        }
 
         dtModalAgencias = $('#tableModalAgencias').DataTable({
             destroy: true,
@@ -414,10 +497,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
                 paginate: { first: 'Primera', last: 'Última', next: 'Siguiente', previous: 'Anterior' }
             },
-            order: [[1, 'desc']],
+            order: [[modalAgencyViewMode === 'sin_ventas' ? 0 : 1, modalAgencyViewMode === 'sin_ventas' ? 'asc' : 'desc']],
         });
 
-        updateModalFiltroLabel();
+        if (modalAgencyViewMode !== 'sin_ventas') {
+            updateModalFiltroLabel();
+        }
     };
 
     const getCumplimientoBadge = (total) => {
@@ -425,6 +510,63 @@ document.addEventListener('DOMContentLoaded', function () {
         return cumple
             ? '<span class="badge bg-success">CUMPLIÓ</span>'
             : '<span class="badge bg-danger">NO CUMPLE</span>';
+    };
+
+    const aplicarResumenAgencias = (resumen) => {
+        const activas = Number(resumen?.activas ?? 0);
+        const conVentas = Number(resumen?.con_ventas ?? 0);
+        const sinVentas = Number(resumen?.sin_ventas ?? 0);
+        const countNoRegistradas = Number(resumen?.terminales_no_registradas_count ?? 0);
+        terminalesNoRegistradas = Array.isArray(resumen?.terminales_no_registradas)
+            ? [...new Set(resumen.terminales_no_registradas.map(item => (item ?? '').toString().trim()).filter(Boolean))]
+            : [];
+
+        resumenEstadoAgencias = {
+            activas: activas >= 0 ? activas : 0,
+            con_ventas: conVentas >= 0 ? conVentas : 0,
+            sin_ventas: sinVentas >= 0 ? sinVentas : 0,
+        };
+
+        modalAgencyEntriesSinVentas = Array.isArray(resumen?.agencias_sin_ventas)
+            ? resumen.agencias_sin_ventas
+            : [];
+
+        cardTotalAgencias.textContent = resumenEstadoAgencias.con_ventas.toLocaleString('es-DO');
+        cardAgenciasSinVentas.textContent = resumenEstadoAgencias.sin_ventas.toLocaleString('es-DO');
+        cardTerminalesNoRegistradas.textContent = (countNoRegistradas >= 0 ? countNoRegistradas : 0).toLocaleString('es-DO');
+        btnVerTerminalesNoRegistradas.classList.toggle('d-none', terminalesNoRegistradas.length === 0);
+    };
+
+    const abrirModalTerminalesNoRegistradas = () => {
+        if (dtModalTerminalesNoRegistradas) {
+            dtModalTerminalesNoRegistradas.destroy();
+            dtModalTerminalesNoRegistradas = null;
+        }
+
+        const tbody = document.querySelector('#tableModalTerminalesNoRegistradas tbody');
+        tbody.innerHTML = '';
+
+        terminalesNoRegistradas.forEach((terminal) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${terminal}</td>`;
+            tbody.appendChild(tr);
+        });
+
+        dtModalTerminalesNoRegistradas = $('#tableModalTerminalesNoRegistradas').DataTable({
+            destroy: true,
+            responsive: true,
+            language: {
+                url: '/json/es-DO.json',
+                search: 'Buscar:',
+                lengthMenu: 'Mostrar _MENU_ registros',
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                paginate: { first: 'Primera', last: 'Última', next: 'Siguiente', previous: 'Anterior' }
+            },
+            order: [[0, 'asc']],
+        });
+
+        const modal = new bootstrap.Modal(document.getElementById('modalTerminalesNoRegistradas'));
+        modal.show();
     };
 
     const destroyTables = () => {
@@ -451,8 +593,10 @@ document.addEventListener('DOMContentLoaded', function () {
         cardMontoTotal.textContent = 'RD$ 0.00';
         cardPromedioAgencia.textContent = 'Promedio por agencia: RD$ 0.00';
         cardTotalAgencias.textContent = '0';
+        cardAgenciasSinVentas.textContent = '0';
         cardAgenciasCumplen.textContent = '0';
         cardAgenciasNoCumplen.textContent = '0';
+        cardTerminalesNoRegistradas.textContent = '0';
         labelFecha.textContent = '';
         labelMinimoVentas.textContent = `Mínimo: RD$ ${formatMoney(ventasMinimoConfig)}`;
         resumenAgenciaVisibleActual = new Map();
@@ -460,6 +604,9 @@ document.addEventListener('DOMContentLoaded', function () {
         ciudadSeleccionada = null;
         rutaSeleccionada = null;
         filtroCumplimientoAgencia = 'todos';
+        resumenEstadoAgencias = { activas: 0, con_ventas: 0, sin_ventas: 0 };
+        terminalesNoRegistradas = [];
+        btnVerTerminalesNoRegistradas.classList.add('d-none');
         updateFiltroLabel();
         btnLimpiarAgencia.classList.add('d-none');
         btnDropdownCiudades.textContent = 'Ciudades';
@@ -536,6 +683,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const renderResumen = (ventas) => {
         const resumenProducto = new Map();
         const resumenAgencia = new Map();
+        const resumenAgenciaActiva = new Map();
         const resumenCiudad = new Map();
         const resumenRuta = new Map();
         let totalVendido = 0;
@@ -549,18 +697,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
             resumenProducto.set(descripcion, (resumenProducto.get(descripcion) ?? 0) + monto);
             resumenAgencia.set(agencia, (resumenAgencia.get(agencia) ?? 0) + monto);
+            if (Number(item.estatus ?? 0) === 1) {
+                resumenAgenciaActiva.set(agencia, (resumenAgenciaActiva.get(agencia) ?? 0) + monto);
+            }
             resumenCiudad.set(ciudad, (resumenCiudad.get(ciudad) ?? 0) + monto);
             resumenRuta.set(ruta, (resumenRuta.get(ruta) ?? 0) + monto);
             totalVendido += monto;
         });
 
         cardMontoTotal.textContent = `RD$ ${formatMoney(totalVendido)}`;
-        const agenciasCumplen = [...resumenAgencia.entries()].filter(([, total]) => cumpleMinimo(total)).length;
-        const agenciasNoCumplen = [...resumenAgencia.entries()].length - agenciasCumplen;
+        const agenciasCumplen = [...resumenAgenciaActiva.entries()].filter(([, total]) => cumpleMinimo(total)).length;
+        const agenciasNoCumplen = [...resumenAgenciaActiva.entries()].length - agenciasCumplen;
         cardAgenciasCumplen.textContent = agenciasCumplen.toLocaleString('es-DO');
         cardAgenciasNoCumplen.textContent = agenciasNoCumplen.toLocaleString('es-DO');
 
-        const agenciasFiltradas = filtrarResumenAgenciaPorCumplimiento(resumenAgencia)
+        const agenciasFiltradas = filtrarResumenAgenciaPorCumplimiento(resumenAgenciaActiva)
             .sort((a, b) => b[1] - a[1]);
 
         const agenciasPermitidas = new Set(agenciasFiltradas.map(([agencia]) => agencia));
@@ -593,7 +744,13 @@ document.addEventListener('DOMContentLoaded', function () {
             cardMontoTotal.textContent = `RD$ ${formatMoney(totalVendido)}`;
         }
 
-        cardTotalAgencias.textContent = agenciasFiltradas.length.toLocaleString('es-DO');
+        if (resumenEstadoAgencias.con_ventas > 0 || resumenEstadoAgencias.sin_ventas > 0) {
+            cardTotalAgencias.textContent = resumenEstadoAgencias.con_ventas.toLocaleString('es-DO');
+            cardAgenciasSinVentas.textContent = resumenEstadoAgencias.sin_ventas.toLocaleString('es-DO');
+        } else {
+            cardTotalAgencias.textContent = agenciasFiltradas.length.toLocaleString('es-DO');
+            cardAgenciasSinVentas.textContent = '0';
+        }
         const promedioPorAgencia = agenciasFiltradas.length > 0 ? totalVendido / agenciasFiltradas.length : 0;
         cardPromedioAgencia.textContent = `Promedio por agencia: RD$ ${formatMoney(promedioPorAgencia)}`;
         resumenAgenciaVisibleActual = new Map(agenciasFiltradas);
@@ -711,6 +868,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const abrirModalAgencias = (resumenAgencia) => {
         modalAgencyEntries = [...resumenAgencia.entries()].sort((a, b) => b[1] - a[1]);
         modalAgencyFilter = 'todos';
+        modalAgencyViewMode = 'con_ventas';
         cargarCiudadesEnModal();
         cargarRutasEnModal();
         btnDropdownCiudades.textContent = ciudadSeleccionada ? `Ciudad: ${ciudadSeleccionada}` : 'Ciudades';
@@ -907,6 +1065,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
                 ventasFuente = data.ventas;
+                aplicarResumenAgencias(data.resumen_agencias);
                 const { resumenAgencia } = renderResumen(data.ventas);
 
                 labelFecha.textContent = 'Fecha: ' + fecha;
@@ -965,6 +1124,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
                 ventasFuente = data.ventas;
+                aplicarResumenAgencias(data.resumen_agencias);
                 const { resumenAgencia } = renderResumen(data.ventas);
 
                 labelFecha.textContent = 'Fecha: ' + fecha;
@@ -1072,18 +1232,35 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     btnModalAgenciasTodos.addEventListener('click', function () {
+        modalAgencyViewMode = 'con_ventas';
         modalAgencyFilter = 'todos';
         renderModalAgencias();
     });
 
     btnModalAgenciasCumplen.addEventListener('click', function () {
+        modalAgencyViewMode = 'con_ventas';
         modalAgencyFilter = 'cumplen';
         renderModalAgencias();
     });
 
     btnModalAgenciasNoCumplen.addEventListener('click', function () {
+        modalAgencyViewMode = 'con_ventas';
         modalAgencyFilter = 'no_cumplen';
         renderModalAgencias();
+    });
+
+    btnModalAgenciasSinVenta.addEventListener('click', function () {
+        modalAgencyViewMode = 'sin_ventas';
+        renderModalAgencias();
+    });
+
+    btnVerTerminalesNoRegistradas.addEventListener('click', function () {
+        if (!terminalesNoRegistradas.length) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay terminales no registradas para mostrar.', icon: 'info' });
+            return;
+        }
+
+        abrirModalTerminalesNoRegistradas();
     });
 
     labelMinimoVentas.textContent = `Mínimo: RD$ ${formatMoney(ventasMinimoConfig)}`;

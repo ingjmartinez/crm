@@ -140,6 +140,31 @@
                         </div>
                     </div>
 
+                    <div class="col-12 mt-2">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center gap-4 flex-wrap">
+                                    <div>
+                                        <small class="text-muted d-block">Total Ventas</small>
+                                        <h5 class="mb-0" id="card-total-ventas-rentabilidad">RD$ 0.00</h5>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block">Total Premios</small>
+                                        <h5 class="mb-0" id="card-total-premios-rentabilidad">RD$ 0.00</h5>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block">Total Gastos</small>
+                                        <h5 class="mb-0" id="card-total-gastos-rentabilidad">RD$ 0.00</h5>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block">Total Ganancia Neta</small>
+                                        <h5 class="mb-0" id="card-total-ganancia-neta-rentabilidad">RD$ 0.00</h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-xl-4 col-md-6">
                         <div class="card border-primary border-opacity-25">
                             <div class="card-body">
@@ -339,6 +364,10 @@
         const filtroCumplimientoRentabilidad = document.getElementById('filtro-cumplimiento-rentabilidad');
         const cardAgenciasCumplenRentabilidad = document.getElementById('card-agencias-cumplen-rentabilidad');
         const cardAgenciasNoCumplenRentabilidad = document.getElementById('card-agencias-no-cumplen-rentabilidad');
+        const cardTotalVentasRentabilidad = document.getElementById('card-total-ventas-rentabilidad');
+        const cardTotalPremiosRentabilidad = document.getElementById('card-total-premios-rentabilidad');
+        const cardTotalGastosRentabilidad = document.getElementById('card-total-gastos-rentabilidad');
+        const cardTotalGananciaNetaRentabilidad = document.getElementById('card-total-ganancia-neta-rentabilidad');
 
         const resumenAgencias = @json($resumenAgencias ?? []);
         let estadoFiltroCumplimientoRentabilidad = 'todos';
@@ -396,6 +425,10 @@
 
             let totalCumplen = 0;
             let totalNoCumplen = 0;
+            let totalVentas = 0;
+            let totalPremios = 0;
+            let totalGastos = 0;
+            let totalGananciaNeta = 0;
 
             (resumenAgencias || []).forEach(item => {
                 const agencia = (item?.agencia ?? 'SIN AGENCIA').toString();
@@ -418,6 +451,11 @@
                     totalNoCumplen += 1;
                 }
 
+                totalVentas += ventas;
+                totalPremios += premiosPagados;
+                totalGastos += gastoAgencia;
+                totalGananciaNeta += gananciaNeta;
+
                 if (!coincideBusqueda) return;
                 if (estadoFiltroCumplimientoRentabilidad === 'cumple' && !cumple) return;
                 if (estadoFiltroCumplimientoRentabilidad === 'no_cumple' && cumple) return;
@@ -439,6 +477,21 @@
                 `;
                 tbodyRentabilidad.appendChild(tr);
             });
+
+            if (cardTotalVentasRentabilidad) {
+                cardTotalVentasRentabilidad.textContent = formatCurrency(totalVentas);
+            }
+            if (cardTotalPremiosRentabilidad) {
+                cardTotalPremiosRentabilidad.textContent = formatCurrency(totalPremios);
+            }
+            if (cardTotalGastosRentabilidad) {
+                cardTotalGastosRentabilidad.textContent = formatCurrency(totalGastos);
+            }
+            if (cardTotalGananciaNetaRentabilidad) {
+                cardTotalGananciaNetaRentabilidad.textContent = formatCurrency(totalGananciaNeta);
+                cardTotalGananciaNetaRentabilidad.classList.remove('text-success', 'text-danger');
+                cardTotalGananciaNetaRentabilidad.classList.add(totalGananciaNeta >= 0 ? 'text-success' : 'text-danger');
+            }
 
             if (cardAgenciasCumplenRentabilidad) {
                 cardAgenciasCumplenRentabilidad.textContent = totalCumplen.toLocaleString('es-DO');

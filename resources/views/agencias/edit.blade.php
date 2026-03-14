@@ -182,6 +182,17 @@
                                         </div>
 
                                         <div class="col-12 col-md-6 mb-3">
+                                            <label for="estatus" class="form-label">Estatus <span class="text-danger">*</span></label>
+                                            <select class="form-select @error('estatus') is-invalid @enderror" id="estatus" name="estatus" required>
+                                                <option value="1" {{ old('estatus', (int) $agencia->estatus) == 1 ? 'selected' : '' }}>Activo</option>
+                                                <option value="0" {{ old('estatus', (int) $agencia->estatus) == 0 ? 'selected' : '' }}>Inactivo</option>
+                                            </select>
+                                            @error('estatus')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="col-12 col-md-6 mb-3">
                                             <label for="aplica_incentivo" class="form-label">Aplica incentivo <span class="text-danger">*</span></label>
                                             <select class="form-select @error('aplica_incentivo') is-invalid @enderror" id="aplica_incentivo" name="aplica_incentivo" required>
                                                 <option value="1" {{ old('aplica_incentivo', $agencia->aplica_incentivo ? '1' : '0') == '1' ? 'selected' : '' }}>Sí</option>

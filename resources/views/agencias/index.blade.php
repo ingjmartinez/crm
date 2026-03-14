@@ -57,6 +57,23 @@
                                 </div>
                             </div>
                             <div class="card-body p-2 p-md-3">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div>
+                                            <small class="text-muted d-block">Agencias activas</small>
+                                            <h5 class="mb-0 text-success" id="countAgenciasActivas">0</h5>
+                                        </div>
+                                        <div>
+                                            <small class="text-muted d-block">Agencias inactivas</small>
+                                            <h5 class="mb-0 text-danger" id="countAgenciasInactivas">0</h5>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFiltroEstadoTodos">Todos</button>
+                                        <button type="button" class="btn btn-sm btn-outline-success" id="btnFiltroEstadoActivos">Activas</button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" id="btnFiltroEstadoInactivos">Inactivas</button>
+                                    </div>
+                                </div>
                                 <div class="table-responsive">
                                     <table id="tableAgencias" class="table table-bordered table-striped align-middle table-sm" style="width:100%;">
                                         <thead class="table-light">
@@ -72,6 +89,7 @@
                                                 <th style="min-width: 100px;">Ruta</th>
                                                 <th style="min-width: 100px;">Operador</th>
                                                 <th style="min-width: 100px;">Coordinador</th>
+                                                <th style="min-width: 90px;">Estatus</th>
                                                 <th style="min-width: 80px;">Incentivo</th>
                                                 <th class="text-center" style="min-width: 80px;">Acciones</th>
                                             </tr>
@@ -153,7 +171,8 @@
                                 <li>Columna H: Ruta</li>
                                 <li>Columna I: Operador</li>
                                 <li>Columna J: Coordinador</li>
-                                <li>Columna K: Aplica Incentivo (SI/NO)</li>
+                                <li>Columna K: Estatus (1 Activo / 0 Inactivo)</li>
+                                <li>Columna L: Aplica Incentivo (SI/NO)</li>
                             </ul>
                         </div>
                     </div>
@@ -175,6 +194,28 @@
 @section('script')
 <script>
     $(document).ready(function() {
+        var estadoFiltro = 'todos';
+        var countAgenciasActivas = $('#countAgenciasActivas');
+        var countAgenciasInactivas = $('#countAgenciasInactivas');
+
+        function aplicarEstadoBotones() {
+            $('#btnFiltroEstadoTodos').removeClass('btn-secondary').addClass('btn-outline-secondary');
+            $('#btnFiltroEstadoActivos').removeClass('btn-success').addClass('btn-outline-success');
+            $('#btnFiltroEstadoInactivos').removeClass('btn-danger').addClass('btn-outline-danger');
+
+            if (estadoFiltro === 'activo') {
+                $('#btnFiltroEstadoActivos').removeClass('btn-outline-success').addClass('btn-success');
+                return;
+            }
+
+            if (estadoFiltro === 'inactivo') {
+                $('#btnFiltroEstadoInactivos').removeClass('btn-outline-danger').addClass('btn-danger');
+                return;
+            }
+
+            $('#btnFiltroEstadoTodos').removeClass('btn-outline-secondary').addClass('btn-secondary');
+        }
+
         // Configuración responsive de DataTables
         var responsiveColumns = [
             { targets: 4, visible: false },  // Horario PM
@@ -197,7 +238,17 @@
         var table = $('#tableAgencias').DataTable({
             processing: true,
             serverSide: true,
-            ajax: '{{ route('agencias.list') }}',
+            ajax: {
+                url: '{{ route('agencias.list') }}',
+                data: function(d) {
+                    d.estatus_filter = estadoFiltro;
+                },
+                dataSrc: function(json) {
+                    countAgenciasActivas.text((json.total_activas || 0).toLocaleString('es-DO'));
+                    countAgenciasInactivas.text((json.total_inactivas || 0).toLocaleString('es-DO'));
+                    return json.data || [];
+                }
+            },
             responsive: true,
             columnDefs: responsiveColumns,
             scrollX: true,
@@ -213,6 +264,16 @@
                 { data: 'ruta', name: 'ruta', defaultContent: '-' },
                 { data: 'operador', name: 'operador', defaultContent: '-' },
                 { data: 'coordinador', name: 'coordinador', defaultContent: '-' },
+                {
+                    data: 'estatus',
+                    name: 'estatus',
+                    className: 'text-center',
+                    render: function(data) {
+                        return Number(data) === 1
+                            ? '<span class="badge bg-success">Activo</span>'
+                            : '<span class="badge bg-danger">Inactivo</span>';
+                    }
+                },
                 {
                     data: 'aplica_incentivo',
                     name: 'aplica_incentivo',
@@ -244,6 +305,26 @@
                 url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json'
             },
             dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+        });
+
+        aplicarEstadoBotones();
+
+        $('#btnFiltroEstadoTodos').on('click', function() {
+            estadoFiltro = 'todos';
+            aplicarEstadoBotones();
+            table.ajax.reload();
+        });
+
+        $('#btnFiltroEstadoActivos').on('click', function() {
+            estadoFiltro = 'activo';
+            aplicarEstadoBotones();
+            table.ajax.reload();
+        });
+
+        $('#btnFiltroEstadoInactivos').on('click', function() {
+            estadoFiltro = 'inactivo';
+            aplicarEstadoBotones();
+            table.ajax.reload();
         });
 
         // Manejar eliminación

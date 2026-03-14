@@ -26,6 +26,13 @@ class AgenciasImport implements ToModel, WithHeadingRow, WithValidation, SkipsEm
             $aplicaIncentivo = $this->parseAplicaIncentivo($row['aplica incentivo']);
         }
 
+        $estatus = null;
+        if (isset($row['estatus'])) {
+            $estatus = $this->parseEstatus($row['estatus']);
+        } elseif (isset($row['Estatus'])) {
+            $estatus = $this->parseEstatus($row['Estatus']);
+        }
+
         return new Agencia([
             'agencia'        => isset($row['agencia']) ? (string) $row['agencia'] : (isset($row['Agencia']) ? (string) $row['Agencia'] : null),
             'terminal'       => isset($row['terminal']) ? (string) $row['terminal'] : (isset($row['Terminal']) ? (string) $row['Terminal'] : null),
@@ -37,6 +44,7 @@ class AgenciasImport implements ToModel, WithHeadingRow, WithValidation, SkipsEm
             'ruta'           => isset($row['ruta']) ? (string) $row['ruta'] : (isset($row['Ruta']) ? (string) $row['Ruta'] : null),
             'operador'       => isset($row['operador']) ? (string) $row['operador'] : (isset($row['Operador']) ? (string) $row['Operador'] : null),
             'coordinador'    => isset($row['coordinador']) ? (string) $row['coordinador'] : (isset($row['Coordinador']) ? (string) $row['Coordinador'] : null),
+            'estatus' => $estatus ?? 1,
             'aplica_incentivo' => $aplicaIncentivo ?? 1,
         ]);
     }
@@ -54,8 +62,23 @@ class AgenciasImport implements ToModel, WithHeadingRow, WithValidation, SkipsEm
             'ruta' => 'nullable',
             'operador' => 'nullable',
             'coordinador' => 'nullable',
+            'estatus' => 'nullable',
             'aplica_incentivo' => 'nullable',
         ];
+    }
+
+    private function parseEstatus($value): int
+    {
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+
+        $normalized = strtoupper(trim((string) $value));
+        if ($normalized === '1' || $normalized === 'ACTIVO' || $normalized === 'ACTIVE' || $normalized === 'SI' || $normalized === 'S') {
+            return 1;
+        }
+
+        return 0;
     }
 
     private function parseAplicaIncentivo($value): int

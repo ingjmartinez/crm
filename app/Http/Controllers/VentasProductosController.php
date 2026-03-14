@@ -58,17 +58,105 @@ class VentasProductosController extends Controller
             $contenido = [];
         }
 
-        $terminales = collect($contenido)
-            ->map(function ($item) {
-                return isset($item['agencia_id']) ? trim((string) $item['agencia_id']) : '';
-            })
+        $normalizarClave = static function ($value): string {
+            $raw = trim((string) $value);
+            if ($raw === '') {
+                return '';
+            }
+
+            $sinCeros = ltrim($raw, '0');
+            return $sinCeros === '' ? '0' : $sinCeros;
+        };
+
+        $agenciasActivas = Agencia::query()
+            ->select(['agencia', 'nombre_agencia', 'terminal'])
+            ->where('estatus', 1)
+            ->whereNotNull('terminal')
+            ->get();
+
+        $agenciasActivasByTerminal = [];
+        foreach ($agenciasActivas as $agenciaActiva) {
+            $terminalRaw = trim((string) ($agenciaActiva->terminal ?? ''));
+            $terminalNormalizada = $normalizarClave($terminalRaw);
+            if ($terminalNormalizada === '') {
+                continue;
+            }
+
+            if (!isset($agenciasActivasByTerminal[$terminalNormalizada])) {
+                $agenciasActivasByTerminal[$terminalNormalizada] = [
+                    'agencia' => trim((string) ($agenciaActiva->agencia ?? '')),
+                    'nombre_agencia' => trim((string) ($agenciaActiva->nombre_agencia ?? '')),
+                    'terminal' => $terminalRaw !== '' ? $terminalRaw : $terminalNormalizada,
+                ];
+            }
+        }
+
+        $terminalesActivasNormalizadas = collect(array_keys($agenciasActivasByTerminal));
+
+        $terminalesConVentaNormalizadas = collect($contenido)
+            ->map(fn ($item) => $normalizarClave($item['agencia_id'] ?? ''))
             ->filter()
             ->unique()
             ->values();
 
+        $agenciasTabla = Agencia::query()
+            ->select(['terminal'])
+            ->whereNotNull('terminal')
+            ->get();
+
+        $terminalesTablaNormalizadas = $agenciasTabla
+            ->map(fn ($agencia) => $normalizarClave($agencia->terminal ?? ''))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $terminalesNoRegistradasMap = [];
+        foreach ($contenido as $item) {
+            $terminalRaw = trim((string) ($item['agencia_id'] ?? ''));
+            $terminalNormalizada = $normalizarClave($terminalRaw);
+
+            if ($terminalNormalizada === '') {
+                continue;
+            }
+
+            if ($terminalesTablaNormalizadas->contains($terminalNormalizada)) {
+                continue;
+            }
+
+            if (!isset($terminalesNoRegistradasMap[$terminalNormalizada])) {
+                $terminalesNoRegistradasMap[$terminalNormalizada] = $terminalRaw;
+            }
+        }
+
+        $terminalesNoRegistradas = array_values($terminalesNoRegistradasMap);
+
+        $agenciasActivasConVenta = $terminalesActivasNormalizadas
+            ->filter(fn ($terminal) => $terminalesConVentaNormalizadas->contains($terminal))
+            ->count();
+
+        $agenciasSinVentasListado = [];
+        foreach ($agenciasActivasByTerminal as $terminalNormalizada => $agenciaActivaData) {
+            if ($terminalesConVentaNormalizadas->contains($terminalNormalizada)) {
+                continue;
+            }
+
+            $nombreAgencia = $agenciaActivaData['nombre_agencia'] !== ''
+                ? $agenciaActivaData['nombre_agencia']
+                : ($agenciaActivaData['agencia'] !== '' ? $agenciaActivaData['agencia'] : $agenciaActivaData['terminal']);
+
+            $agenciasSinVentasListado[] = [
+                'agencia_id' => $agenciaActivaData['terminal'],
+                'nombre_agencia' => $nombreAgencia,
+                'terminal' => $agenciaActivaData['terminal'],
+            ];
+        }
+
+        $totalAgenciasActivas = $terminalesActivasNormalizadas->count();
+        $agenciasActivasSinVenta = max(0, $totalAgenciasActivas - $agenciasActivasConVenta);
+
         $agencias = Agencia::query()
-            ->select(['agencia', 'nombre_agencia', 'terminal', 'ciudad', 'ruta', 'operador', 'coordinador'])
-            ->whereIn('terminal', $terminales)
+            ->select(['agencia', 'nombre_agencia', 'terminal', 'ciudad', 'ruta', 'operador', 'coordinador', 'estatus'])
+            ->whereNotNull('terminal')
             ->get();
 
         $agenciasByTerminal = [];
@@ -85,6 +173,7 @@ class VentasProductosController extends Controller
                 'ruta' => $agencia->ruta,
                 'operador' => $agencia->operador,
                 'coordinador' => $agencia->coordinador,
+                'estatus' => (int) ($agencia->estatus ?? 0),
             ];
 
             $terminalSinCeros = ltrim($terminal, '0');
@@ -97,13 +186,21 @@ class VentasProductosController extends Controller
             $agenciaId = trim((string) ($item['agencia_id'] ?? ''));
             $agenciaLookup = $agenciasByTerminal[$agenciaId]
                 ?? $agenciasByTerminal[ltrim($agenciaId, '0')]
-                ?? ['agencia' => null, 'nombre_agencia' => null, 'ciudad' => null, 'ruta' => null, 'operador' => null, 'coordinador' => null];
+                ?? ['agencia' => null, 'nombre_agencia' => null, 'ciudad' => null, 'ruta' => null, 'operador' => null, 'coordinador' => null, 'estatus' => 0];
 
             return array_merge($item, $agenciaLookup);
         })->values()->all();
 
         return response()->json([
             'ventas' => $ventasEnriquecidas,
+            'resumen_agencias' => [
+                'activas' => $totalAgenciasActivas,
+                'con_ventas' => $agenciasActivasConVenta,
+                'sin_ventas' => $agenciasActivasSinVenta,
+                'agencias_sin_ventas' => $agenciasSinVentasListado,
+                'terminales_no_registradas_count' => count($terminalesNoRegistradas),
+                'terminales_no_registradas' => $terminalesNoRegistradas,
+            ],
             'code' => $ventas['code'] ?? null,
             'message' => $ventas['msg'] ?? null,
         ]);

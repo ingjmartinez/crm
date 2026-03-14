@@ -51,6 +51,7 @@ class AgenciaController extends Controller
             'ruta' => 'nullable|string|max:55',
             'operador' => ['nullable', 'string', 'max:55', Rule::in($operadores)],
             'coordinador' => ['nullable', 'string', 'max:55', Rule::in($coordinadores)],
+            'estatus' => 'required|integer|in:0,1',
             'aplica_incentivo' => 'required|boolean',
         ], [
             'operador.in' => 'Seleccione un operador válido de la lista.',
@@ -104,6 +105,7 @@ class AgenciaController extends Controller
             'ruta' => 'nullable|string|max:255',
             'operador' => ['nullable', 'string', 'max:255', Rule::in($operadores)],
             'coordinador' => ['nullable', 'string', 'max:255', Rule::in($coordinadores)],
+            'estatus' => 'required|integer|in:0,1',
             'aplica_incentivo' => 'required|boolean',
         ], [
             'operador.in' => 'Seleccione un operador válido de la lista.',
@@ -205,6 +207,13 @@ class AgenciaController extends Controller
     public function list(Request $request)
     {
         $query = Agencia::query();
+        $estatusFilter = $request->input('estatus_filter', 'todos');
+
+        if ($estatusFilter === 'activo') {
+            $query->where('estatus', 1);
+        } elseif ($estatusFilter === 'inactivo') {
+            $query->where('estatus', 0);
+        }
 
         // Si hay búsqueda
         if ($request->has('search') && $request->search['value']) {
@@ -220,6 +229,7 @@ class AgenciaController extends Controller
                   ->orWhere('ruta', 'like', "%{$search}%")
                   ->orWhere('operador', 'like', "%{$search}%")
                                     ->orWhere('coordinador', 'like', "%{$search}%")
+                                    ->orWhere('estatus', 'like', "%{$search}%")
                                     ->orWhere('aplica_incentivo', 'like', "%{$search}%");
             });
         }
@@ -237,11 +247,16 @@ class AgenciaController extends Controller
                           ->take($length)
                           ->get();
 
+        $totalActivas = Agencia::query()->where('estatus', 1)->count();
+        $totalInactivas = Agencia::query()->where('estatus', 0)->count();
+
         return response()->json([
             'draw' => intval($request->input('draw')),
             'recordsTotal' => $totalRecords,
             'recordsFiltered' => $filteredRecords,
-            'data' => $agencias
+            'data' => $agencias,
+            'total_activas' => $totalActivas,
+            'total_inactivas' => $totalInactivas,
         ]);
     }
 
@@ -674,12 +689,13 @@ class AgenciaController extends Controller
             'Ruta',
             'Operador',
             'Coordinador',
+            'Estatus',
             'Aplica Incentivo',
         ];
 
         $data = [
             $headers,
-            ['20907', '5546', '7:00 AM / 2:00 PM', '2:00 PM / 9:00 PM', 'Agencia Ejemplo', 'Lotobet', 'San Pedro', 'Ruta 0501', 'Jose Ruby', 'Aramis', 'SI'],
+            ['20907', '5546', '7:00 AM / 2:00 PM', '2:00 PM / 9:00 PM', 'Agencia Ejemplo', 'Lotobet', 'San Pedro', 'Ruta 0501', 'Jose Ruby', 'Aramis', '1', 'SI'],
         ];
 
         $filename = 'plantilla_agencias.xlsx';

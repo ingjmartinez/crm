@@ -24,12 +24,14 @@ class Agencia extends Model
         'ruta',
         'operador',
         'coordinador',
+        'estatus',
         'aplica_incentivo',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'estatus' => 'integer',
         'aplica_incentivo' => 'boolean',
     ];
 
