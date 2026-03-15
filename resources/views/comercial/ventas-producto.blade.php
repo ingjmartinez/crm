@@ -28,7 +28,7 @@
                                     <div class="col-md-3">
                                         <label class="form-label">Fecha</label>
                                         <input type="date" id="inputFecha" class="form-control"
-                                            value="{{ now()->format('Y-m-d') }}">
+                                            value="{{ now('America/Santo_Domingo')->format('Y-m-d') }}">
                                     </div>
                                     <div class="col-md-9 d-flex gap-2 flex-wrap">
                                         <button id="btnGenerarToken" class="btn btn-secondary">
@@ -100,6 +100,7 @@
                                         </div>
                                         <div class="mt-2">
                                             <button id="btnVerAgencias" class="btn btn-sm btn-outline-info">Ver Detalle</button>
+                                            <button id="btnVerAgenciasSinVenta" class="btn btn-sm btn-outline-warning">Agencias sin venta</button>
                                             <button id="btnConfigVentasMinimo" class="btn btn-sm btn-outline-primary">Ventas mínimo</button>
                                             <button id="btnLimpiarAgencia" class="btn btn-sm btn-outline-secondary d-none">Limpiar Filtro</button>
                                         </div>
@@ -113,6 +114,9 @@
                                         <div class="d-flex align-items-center justify-content-between mb-2">
                                             <p class="text-uppercase fw-medium text-muted mb-0">Cumplimiento de Agencias</p>
                                             <span class="badge bg-light text-dark" id="labelFiltroCumplimientoAgencia">Filtro: Todos</span>
+                                        </div>
+                                        <div class="mb-2">
+                                            <p class="text-uppercase fw-medium text-muted mb-0" id="labelParametroVentasExigida">Ventas exigidas por agencia: <span class="text-primary fw-semibold">RD$ 0.00</span></p>
                                         </div>
                                         <div class="d-flex gap-4 mt-3">
                                             <div>
@@ -238,7 +242,6 @@
                         <button id="btnModalAgenciasTodos" class="btn btn-sm btn-outline-secondary">Todos</button>
                         <button id="btnModalAgenciasCumplen" class="btn btn-sm btn-outline-success">Cumplen</button>
                         <button id="btnModalAgenciasNoCumplen" class="btn btn-sm btn-outline-danger">No cumplen</button>
-                        <button id="btnModalAgenciasSinVenta" class="btn btn-sm btn-outline-warning">Agencias sin venta</button>
                         <div class="dropdown">
                             <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="btnDropdownCiudades" data-bs-toggle="dropdown" aria-expanded="false">
                                 Ciudades
@@ -261,6 +264,38 @@
                                 <th>Agencia</th>
                                 <th>Total Vendido</th>
                                 <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAgenciasSinVenta" tabindex="-1" aria-labelledby="modalAgenciasSinVentaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header d-flex justify-content-between align-items-center">
+                <h5 class="modal-title" id="modalAgenciasSinVentaLabel">Agencias sin venta</h5>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-success btn-sm" id="btnDescargarAgenciasSinVentaExcel">
+                        <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table id="tableModalAgenciasSinVenta" class="table table-striped table-bordered w-100">
+                        <thead>
+                            <tr>
+                                <th>Agencia</th>
+                                <th>Terminal</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -332,9 +367,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const cardTotalAgencias = document.getElementById('cardTotalAgencias');
     const cardAgenciasSinVentas = document.getElementById('cardAgenciasSinVentas');
     const btnVerAgencias = document.getElementById('btnVerAgencias');
+    const btnVerAgenciasSinVenta = document.getElementById('btnVerAgenciasSinVenta');
     const btnConfigVentasMinimo = document.getElementById('btnConfigVentasMinimo');
     const btnLimpiarAgencia = document.getElementById('btnLimpiarAgencia');
     const labelMinimoVentas = document.getElementById('labelMinimoVentas');
+    const labelParametroVentasExigida = document.getElementById('labelParametroVentasExigida');
     const cardAgenciasCumplen = document.getElementById('cardAgenciasCumplen');
     const cardAgenciasNoCumplen = document.getElementById('cardAgenciasNoCumplen');
     const cardTerminalesNoRegistradas = document.getElementById('cardTerminalesNoRegistradas');
@@ -346,7 +383,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnModalAgenciasTodos = document.getElementById('btnModalAgenciasTodos');
     const btnModalAgenciasCumplen = document.getElementById('btnModalAgenciasCumplen');
     const btnModalAgenciasNoCumplen = document.getElementById('btnModalAgenciasNoCumplen');
-    const btnModalAgenciasSinVenta = document.getElementById('btnModalAgenciasSinVenta');
+    const btnDescargarAgenciasSinVentaExcel = document.getElementById('btnDescargarAgenciasSinVentaExcel');
     const labelModalAgenciasFiltro = document.getElementById('labelModalAgenciasFiltro');
     const btnDropdownCiudades = document.getElementById('btnDropdownCiudades');
     const menuCiudadesModal = document.getElementById('menuCiudadesModal');
@@ -357,6 +394,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let dtCiudades       = null;
     let dtRutas          = null;
     let dtModalAgencias  = null;
+    let dtModalAgenciasSinVenta = null;
     let dtModalTerminalesNoRegistradas = null;
     let ventasFuente     = [];
     let agenciaSeleccionada = null;
@@ -368,11 +406,13 @@ document.addEventListener('DOMContentLoaded', function () {
     let modalAgencyEntries = [];
     let modalAgencyEntriesSinVentas = [];
     let modalAgencyFilter = 'todos';
-    let modalAgencyViewMode = 'con_ventas';
     let resumenEstadoAgencias = { activas: 0, con_ventas: 0, sin_ventas: 0 };
     let terminalesNoRegistradas = [];
 
     const formatMoney = (value) => Number(value ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 });
+    const renderVentasExigidaLabel = () => {
+        labelParametroVentasExigida.innerHTML = `Ventas exigidas por agencia: <span class="text-primary fw-semibold">RD$ ${formatMoney(ventasMinimoConfig)}</span>`;
+    };
     const normalizarClaveAgencia = (value) => (value ?? '').toString().trim().replace(/^0+/, '');
     const getAgencyDisplayData = (agenciaId) => {
         const agenciaIdRaw = (agenciaId ?? '').toString().trim();
@@ -421,10 +461,6 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const filtrarModalAgencias = () => {
-        if (modalAgencyViewMode === 'sin_ventas') {
-            return modalAgencyEntriesSinVentas;
-        }
-
         if (modalAgencyFilter === 'cumplen') {
             return modalAgencyEntries.filter(([, total]) => cumpleMinimo(total));
         }
@@ -443,49 +479,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const tbodyModal = document.querySelector('#tableModalAgencias tbody');
         tbodyModal.innerHTML = '';
 
-        const modalTitle = document.getElementById('modalAgenciasLabel');
         const agenciasFiltradas = filtrarModalAgencias();
-
-        if (modalAgencyViewMode === 'sin_ventas') {
-            modalTitle.textContent = 'Agencias sin venta';
-            labelModalAgenciasFiltro.textContent = 'Filtro: Agencias sin venta';
-            agenciasFiltradas.forEach((item) => {
-                const nombre = (item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
-                const terminal = (item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>
-                        <div class="fw-medium">${nombre}</div>
-                        <small class="text-muted">Terminal: ${terminal}</small>
-                    </td>
-                    <td>${formatMoney(0)}</td>
-                    <td><span class="text-muted">-</span></td>
-                `;
-                tbodyModal.appendChild(tr);
-            });
-        } else {
-            modalTitle.textContent = 'Agencias con Ventas';
-            agenciasFiltradas.forEach(([agencia, total]) => {
-                const { nombre, terminal } = getAgencyDisplayData(agencia);
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>
-                        <div class="fw-medium">${nombre}</div>
-                        <small class="text-muted">Terminal: ${terminal}</small>
-                    </td>
-                    <td>${formatMoney(total)}</td>
-                    <td><button class="btn btn-sm btn-primary btnFiltrarAgencia" data-agencia="${agencia}">Ver</button></td>
-                `;
-                tbodyModal.appendChild(tr);
-            });
-        }
-
-        btnModalAgenciasSinVenta.classList.remove('btn-warning');
-        btnModalAgenciasSinVenta.classList.add('btn-outline-warning');
-        if (modalAgencyViewMode === 'sin_ventas') {
-            btnModalAgenciasSinVenta.classList.remove('btn-outline-warning');
-            btnModalAgenciasSinVenta.classList.add('btn-warning');
-        }
+        agenciasFiltradas.forEach(([agencia, total]) => {
+            const { nombre, terminal } = getAgencyDisplayData(agencia);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <div class="fw-medium">${nombre}</div>
+                    <small class="text-muted">Terminal: ${terminal}</small>
+                </td>
+                <td>${formatMoney(total)}</td>
+                <td><button class="btn btn-sm btn-primary btnFiltrarAgencia" data-agencia="${agencia}">Ver</button></td>
+            `;
+            tbodyModal.appendChild(tr);
+        });
 
         dtModalAgencias = $('#tableModalAgencias').DataTable({
             destroy: true,
@@ -497,12 +504,90 @@ document.addEventListener('DOMContentLoaded', function () {
                 info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
                 paginate: { first: 'Primera', last: 'Última', next: 'Siguiente', previous: 'Anterior' }
             },
-            order: [[modalAgencyViewMode === 'sin_ventas' ? 0 : 1, modalAgencyViewMode === 'sin_ventas' ? 'asc' : 'desc']],
+            order: [[1, 'desc']],
         });
 
-        if (modalAgencyViewMode !== 'sin_ventas') {
-            updateModalFiltroLabel();
+        updateModalFiltroLabel();
+    };
+
+    const abrirModalAgenciasSinVenta = () => {
+        if (dtModalAgenciasSinVenta) {
+            dtModalAgenciasSinVenta.destroy();
+            dtModalAgenciasSinVenta = null;
         }
+
+        const tbody = document.querySelector('#tableModalAgenciasSinVenta tbody');
+        tbody.innerHTML = '';
+
+        modalAgencyEntriesSinVentas.forEach((item) => {
+            const nombre = (item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
+            const terminal = (item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${nombre}</td>
+                <td>${terminal}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        dtModalAgenciasSinVenta = $('#tableModalAgenciasSinVenta').DataTable({
+            destroy: true,
+            responsive: true,
+            language: {
+                url: '/json/es-DO.json',
+                search: 'Buscar:',
+                lengthMenu: 'Mostrar _MENU_ registros',
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                paginate: { first: 'Primera', last: 'Última', next: 'Siguiente', previous: 'Anterior' }
+            },
+            order: [[0, 'asc']],
+        });
+
+        const modal = new bootstrap.Modal(document.getElementById('modalAgenciasSinVenta'));
+        modal.show();
+    };
+
+    const descargarAgenciasSinVentaExcel = () => {
+        if (!modalAgencyEntriesSinVentas.length) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para descargar.', icon: 'info' });
+            return;
+        }
+
+        const escapeHtml = (value) => (value ?? '').toString()
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        const filas = modalAgencyEntriesSinVentas.map((item) => {
+            const nombre = escapeHtml(item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA');
+            const terminal = escapeHtml(item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL');
+            return `<tr><td>${nombre}</td><td>${terminal}</td></tr>`;
+        }).join('');
+
+        const tablaHtml = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Agencia</th>
+                        <th>Terminal</th>
+                    </tr>
+                </thead>
+                <tbody>${filas}</tbody>
+            </table>
+        `;
+
+        const blob = new Blob(['\ufeff', tablaHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const enlace = document.createElement('a');
+        const fecha = (inputFecha?.value || '').replace(/-/g, '') || 'sin_fecha';
+        enlace.href = url;
+        enlace.download = `agencias_sin_venta_${fecha}.xls`;
+        document.body.appendChild(enlace);
+        enlace.click();
+        document.body.removeChild(enlace);
+        URL.revokeObjectURL(url);
     };
 
     const getCumplimientoBadge = (total) => {
@@ -599,12 +684,14 @@ document.addEventListener('DOMContentLoaded', function () {
         cardTerminalesNoRegistradas.textContent = '0';
         labelFecha.textContent = '';
         labelMinimoVentas.textContent = `Mínimo: RD$ ${formatMoney(ventasMinimoConfig)}`;
+        renderVentasExigidaLabel();
         resumenAgenciaVisibleActual = new Map();
         agenciaSeleccionada = null;
         ciudadSeleccionada = null;
         rutaSeleccionada = null;
         filtroCumplimientoAgencia = 'todos';
         resumenEstadoAgencias = { activas: 0, con_ventas: 0, sin_ventas: 0 };
+        modalAgencyEntriesSinVentas = [];
         terminalesNoRegistradas = [];
         btnVerTerminalesNoRegistradas.classList.add('d-none');
         updateFiltroLabel();
@@ -868,7 +955,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const abrirModalAgencias = (resumenAgencia) => {
         modalAgencyEntries = [...resumenAgencia.entries()].sort((a, b) => b[1] - a[1]);
         modalAgencyFilter = 'todos';
-        modalAgencyViewMode = 'con_ventas';
         cargarCiudadesEnModal();
         cargarRutasEnModal();
         btnDropdownCiudades.textContent = ciudadSeleccionada ? `Ciudad: ${ciudadSeleccionada}` : 'Ciudades';
@@ -1079,6 +1165,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     abrirModalAgencias(resumenAgencia);
                 };
 
+                btnVerAgenciasSinVenta.onclick = () => {
+                    if (!modalAgencyEntriesSinVentas.length) {
+                        Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para mostrar.', icon: 'info' });
+                        return;
+                    }
+
+                    abrirModalAgenciasSinVenta();
+                };
+
                 Swal.fire({ title: 'Listo', text: 'Datos obtenidos correctamente.', icon: 'success', timer: 1500, showConfirmButton: false });
             })
             .catch(err => {
@@ -1136,6 +1231,15 @@ document.addEventListener('DOMContentLoaded', function () {
                         return;
                     }
                     abrirModalAgencias(resumenAgencia);
+                };
+
+                btnVerAgenciasSinVenta.onclick = () => {
+                    if (!modalAgencyEntriesSinVentas.length) {
+                        Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para mostrar.', icon: 'info' });
+                        return;
+                    }
+
+                    abrirModalAgenciasSinVenta();
                 };
             })
             .catch(err => {
@@ -1205,6 +1309,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const value = Number(document.getElementById('inputVentasMinimo').value ?? 0);
         ventasMinimoConfig = value >= 0 ? value : 0;
         labelMinimoVentas.textContent = `Mínimo: RD$ ${formatMoney(ventasMinimoConfig)}`;
+        renderVentasExigidaLabel();
 
         const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalVentasMinimo'));
         if (modalInstance) modalInstance.hide();
@@ -1232,26 +1337,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     btnModalAgenciasTodos.addEventListener('click', function () {
-        modalAgencyViewMode = 'con_ventas';
         modalAgencyFilter = 'todos';
         renderModalAgencias();
     });
 
     btnModalAgenciasCumplen.addEventListener('click', function () {
-        modalAgencyViewMode = 'con_ventas';
         modalAgencyFilter = 'cumplen';
         renderModalAgencias();
     });
 
     btnModalAgenciasNoCumplen.addEventListener('click', function () {
-        modalAgencyViewMode = 'con_ventas';
         modalAgencyFilter = 'no_cumplen';
         renderModalAgencias();
     });
 
-    btnModalAgenciasSinVenta.addEventListener('click', function () {
-        modalAgencyViewMode = 'sin_ventas';
-        renderModalAgencias();
+    btnVerAgenciasSinVenta.addEventListener('click', function () {
+        if (!modalAgencyEntriesSinVentas.length) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para mostrar.', icon: 'info' });
+            return;
+        }
+
+        abrirModalAgenciasSinVenta();
+    });
+
+    btnDescargarAgenciasSinVentaExcel.addEventListener('click', function () {
+        descargarAgenciasSinVentaExcel();
     });
 
     btnVerTerminalesNoRegistradas.addEventListener('click', function () {
@@ -1264,6 +1374,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     labelMinimoVentas.textContent = `Mínimo: RD$ ${formatMoney(ventasMinimoConfig)}`;
+    renderVentasExigidaLabel();
     updateFiltroLabel();
     updateModalFiltroLabel();
 });

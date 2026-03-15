@@ -13,6 +13,9 @@ class VentasProductosController extends Controller
 {
     public function getVentasProductosLotobet(Request $request)
     {
+        ini_set('memory_limit', '512M');
+        ini_set('max_execution_time', 300);
+        set_time_limit(300);
         header('Content-Type: application/json');
 
         $curl = curl_init();
@@ -53,6 +56,22 @@ class VentasProductosController extends Controller
 
         $ventas = json_decode($response, true);
 
+        if (!is_array($ventas)) {
+            return response()->json([
+                'ventas' => [],
+                'resumen_agencias' => [
+                    'activas' => 0,
+                    'con_ventas' => 0,
+                    'sin_ventas' => 0,
+                    'agencias_sin_ventas' => [],
+                    'terminales_no_registradas_count' => 0,
+                    'terminales_no_registradas' => [],
+                ],
+                'code' => null,
+                'message' => 'Respuesta inválida de API externa',
+            ], 502);
+        }
+
         $contenido = $ventas['Content'] ?? [];
         if (!is_array($contenido)) {
             $contenido = [];
@@ -68,47 +87,57 @@ class VentasProductosController extends Controller
             return $sinCeros === '' ? '0' : $sinCeros;
         };
 
-        $agenciasActivas = Agencia::query()
-            ->select(['agencia', 'nombre_agencia', 'terminal'])
-            ->where('estatus', 1)
+        $agencias = Agencia::query()
+            ->select(['agencia', 'nombre_agencia', 'terminal', 'ciudad', 'ruta', 'operador', 'coordinador', 'estatus'])
             ->whereNotNull('terminal')
             ->get();
 
+        $agenciasByTerminal = [];
         $agenciasActivasByTerminal = [];
-        foreach ($agenciasActivas as $agenciaActiva) {
-            $terminalRaw = trim((string) ($agenciaActiva->terminal ?? ''));
+        $terminalesTablaSet = [];
+        foreach ($agencias as $agencia) {
+            $terminalRaw = trim((string) ($agencia->terminal ?? ''));
             $terminalNormalizada = $normalizarClave($terminalRaw);
             if ($terminalNormalizada === '') {
                 continue;
             }
 
+            $agenciaData = [
+                'agencia' => $agencia->agencia,
+                'nombre_agencia' => $agencia->nombre_agencia,
+                'ciudad' => $agencia->ciudad,
+                'ruta' => $agencia->ruta,
+                'operador' => $agencia->operador,
+                'coordinador' => $agencia->coordinador,
+                'estatus' => (int) ($agencia->estatus ?? 0),
+            ];
+
+            if (!isset($agenciasByTerminal[$terminalNormalizada])) {
+                $agenciasByTerminal[$terminalNormalizada] = $agenciaData;
+            }
+
+            $terminalesTablaSet[$terminalNormalizada] = true;
+
+            if ((int) ($agencia->estatus ?? 0) !== 1) {
+                continue;
+            }
+
             if (!isset($agenciasActivasByTerminal[$terminalNormalizada])) {
                 $agenciasActivasByTerminal[$terminalNormalizada] = [
-                    'agencia' => trim((string) ($agenciaActiva->agencia ?? '')),
-                    'nombre_agencia' => trim((string) ($agenciaActiva->nombre_agencia ?? '')),
+                    'agencia' => trim((string) ($agencia->agencia ?? '')),
+                    'nombre_agencia' => trim((string) ($agencia->nombre_agencia ?? '')),
                     'terminal' => $terminalRaw !== '' ? $terminalRaw : $terminalNormalizada,
                 ];
             }
         }
 
-        $terminalesActivasNormalizadas = collect(array_keys($agenciasActivasByTerminal));
-
-        $terminalesConVentaNormalizadas = collect($contenido)
-            ->map(fn ($item) => $normalizarClave($item['agencia_id'] ?? ''))
-            ->filter()
-            ->unique()
-            ->values();
-
-        $agenciasTabla = Agencia::query()
-            ->select(['terminal'])
-            ->whereNotNull('terminal')
-            ->get();
-
-        $terminalesTablaNormalizadas = $agenciasTabla
-            ->map(fn ($agencia) => $normalizarClave($agencia->terminal ?? ''))
-            ->filter()
-            ->unique()
-            ->values();
+        $terminalesConVentaSet = [];
+        foreach ($contenido as $item) {
+            $terminal = $normalizarClave($item['agencia_id'] ?? '');
+            if ($terminal !== '') {
+                $terminalesConVentaSet[$terminal] = true;
+            }
+        }
 
         $terminalesNoRegistradasMap = [];
         foreach ($contenido as $item) {
@@ -119,7 +148,7 @@ class VentasProductosController extends Controller
                 continue;
             }
 
-            if ($terminalesTablaNormalizadas->contains($terminalNormalizada)) {
+            if (isset($terminalesTablaSet[$terminalNormalizada])) {
                 continue;
             }
 
@@ -130,13 +159,16 @@ class VentasProductosController extends Controller
 
         $terminalesNoRegistradas = array_values($terminalesNoRegistradasMap);
 
-        $agenciasActivasConVenta = $terminalesActivasNormalizadas
-            ->filter(fn ($terminal) => $terminalesConVentaNormalizadas->contains($terminal))
-            ->count();
+        $agenciasActivasConVenta = 0;
+        foreach ($agenciasActivasByTerminal as $terminalNormalizada => $_) {
+            if (isset($terminalesConVentaSet[$terminalNormalizada])) {
+                $agenciasActivasConVenta++;
+            }
+        }
 
         $agenciasSinVentasListado = [];
         foreach ($agenciasActivasByTerminal as $terminalNormalizada => $agenciaActivaData) {
-            if ($terminalesConVentaNormalizadas->contains($terminalNormalizada)) {
+            if (isset($terminalesConVentaSet[$terminalNormalizada])) {
                 continue;
             }
 
@@ -151,45 +183,18 @@ class VentasProductosController extends Controller
             ];
         }
 
-        $totalAgenciasActivas = $terminalesActivasNormalizadas->count();
+        $totalAgenciasActivas = count($agenciasActivasByTerminal);
         $agenciasActivasSinVenta = max(0, $totalAgenciasActivas - $agenciasActivasConVenta);
 
-        $agencias = Agencia::query()
-            ->select(['agencia', 'nombre_agencia', 'terminal', 'ciudad', 'ruta', 'operador', 'coordinador', 'estatus'])
-            ->whereNotNull('terminal')
-            ->get();
-
-        $agenciasByTerminal = [];
-        foreach ($agencias as $agencia) {
-            $terminal = trim((string) ($agencia->terminal ?? ''));
-            if ($terminal === '') {
-                continue;
-            }
-
-            $agenciasByTerminal[$terminal] = [
-                'agencia' => $agencia->agencia,
-                'nombre_agencia' => $agencia->nombre_agencia,
-                'ciudad' => $agencia->ciudad,
-                'ruta' => $agencia->ruta,
-                'operador' => $agencia->operador,
-                'coordinador' => $agencia->coordinador,
-                'estatus' => (int) ($agencia->estatus ?? 0),
-            ];
-
-            $terminalSinCeros = ltrim($terminal, '0');
-            if ($terminalSinCeros !== '' && !isset($agenciasByTerminal[$terminalSinCeros])) {
-                $agenciasByTerminal[$terminalSinCeros] = $agenciasByTerminal[$terminal];
-            }
-        }
-
-        $ventasEnriquecidas = collect($contenido)->map(function ($item) use ($agenciasByTerminal) {
+        $ventasEnriquecidas = array_map(function ($item) use ($agenciasByTerminal, $normalizarClave) {
             $agenciaId = trim((string) ($item['agencia_id'] ?? ''));
-            $agenciaLookup = $agenciasByTerminal[$agenciaId]
-                ?? $agenciasByTerminal[ltrim($agenciaId, '0')]
+            $agenciaNormalizada = $normalizarClave($agenciaId);
+
+            $agenciaLookup = $agenciasByTerminal[$agenciaNormalizada]
                 ?? ['agencia' => null, 'nombre_agencia' => null, 'ciudad' => null, 'ruta' => null, 'operador' => null, 'coordinador' => null, 'estatus' => 0];
 
             return array_merge($item, $agenciaLookup);
-        })->values()->all();
+        }, $contenido);
 
         return response()->json([
             'ventas' => $ventasEnriquecidas,
