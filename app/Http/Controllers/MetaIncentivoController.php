@@ -381,8 +381,8 @@ class MetaIncentivoController extends Controller
             ->selectRaw('r.*')
             ->selectRaw("({$factorBaseSql} * r.promedio_3_meses) AS ventas_base")
             ->selectRaw('COALESCE(n.nivel, "") AS nivel')
-            ->selectRaw('IFNULL(IFNULL(n.incremento_fijo, (r.promedio_3_meses * n.incremento_porcentaje)), 0) AS incremetal')
-            ->selectRaw("(({$factorBaseSql} * r.promedio_3_meses) + IFNULL(IFNULL(n.incremento_fijo, (r.promedio_3_meses * n.incremento_porcentaje)), 0)) AS meta_incremental")
+            ->selectRaw("IFNULL(IFNULL(n.incremento_fijo, (({$factorBaseSql} * r.promedio_3_meses) * n.incremento_porcentaje)), 0) AS incremetal")
+            ->selectRaw("(({$factorBaseSql} * r.promedio_3_meses) + IFNULL(IFNULL(n.incremento_fijo, (({$factorBaseSql} * r.promedio_3_meses) * n.incremento_porcentaje)), 0)) AS meta_incremental")
             ->orderByDesc('r.ventas_3_meses')
             ->get();
 
