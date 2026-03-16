@@ -458,25 +458,67 @@ class ComercialController extends Controller
 
             if (!empty($fechaCorteData)) {
                 $rangoFin = Carbon::parse($fechaCorteData)->toDateString();
-                $rangoInicio = Carbon::parse($fechaCorteData)->subDays($diasObjetivo - 1)->toDateString();
 
-                $filas = DB::table("{$tabla} as v")
-                    ->leftJoin('agencias as a', function ($join) {
-                        $join->whereRaw('TRIM(CAST(a.terminal AS CHAR)) COLLATE utf8mb4_unicode_ci = TRIM(CAST(v.agencia_id AS CHAR)) COLLATE utf8mb4_unicode_ci');
-                    })
+                $ventasDiarias = DB::table("{$tabla} as v")
                     ->selectRaw('TRIM(CAST(v.agencia_id AS CHAR)) AS agencia_id')
-                    ->selectRaw("COALESCE(NULLIF(TRIM(a.nombre_agencia), ''), TRIM(CAST(v.agencia_id AS CHAR))) AS nombre_agencia")
-                    ->selectRaw('COUNT(DISTINCT DATE(v.fecha)) AS dias_con_venta')
-                    ->selectRaw('SUM(COALESCE(v.monto, 0)) AS monto_90_dias')
+                    ->selectRaw('DATE(v.fecha) AS fecha_dia')
+                    ->selectRaw('SUM(COALESCE(v.monto, 0)) AS monto_dia')
                     ->whereNotNull('v.agencia_id')
-                    ->whereBetween('v.fecha', [$rangoInicio, $rangoFin])
+                    ->whereDate('v.fecha', '<=', $rangoFin)
                     ->groupBy(
                         DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'),
-                        DB::raw("COALESCE(NULLIF(TRIM(a.nombre_agencia), ''), TRIM(CAST(v.agencia_id AS CHAR)))")
-                    )
-                    ->havingRaw('COUNT(DISTINCT DATE(v.fecha)) = ?', [$diasObjetivo])
+                        DB::raw('DATE(v.fecha)')
+                    );
+
+                $ventasRankeadas = DB::query()
+                    ->fromSub($ventasDiarias, 'd')
+                    ->selectRaw('d.agencia_id')
+                    ->selectRaw('d.fecha_dia')
+                    ->selectRaw('d.monto_dia')
+                    ->selectRaw('ROW_NUMBER() OVER (PARTITION BY d.agencia_id ORDER BY d.fecha_dia DESC) AS rn');
+
+                $resumenAgencias = DB::query()
+                    ->fromSub($ventasRankeadas, 'r')
+                    ->selectRaw('r.agencia_id')
+                    ->selectRaw("SUM(CASE WHEN r.rn <= {$diasObjetivo} THEN 1 ELSE 0 END) AS dias_con_venta")
+                    ->selectRaw("SUM(CASE WHEN r.rn <= {$diasObjetivo} THEN r.monto_dia ELSE 0 END) AS monto_90_dias")
+                    ->selectRaw("MIN(CASE WHEN r.rn <= {$diasObjetivo} THEN r.fecha_dia ELSE NULL END) AS fecha_inicio_efectiva")
+                    ->groupBy('r.agencia_id')
                     ->orderByDesc('monto_90_dias')
                     ->get();
+
+                $nombresAgencia = DB::table('agencias')
+                    ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal")
+                    ->selectRaw("TRIM(COALESCE(nombre_agencia, '')) AS nombre_agencia")
+                    ->whereNotNull('terminal')
+                    ->get()
+                    ->mapWithKeys(function ($row) {
+                        return [
+                            (string) ($row->terminal ?? '') => (string) ($row->nombre_agencia ?? ''),
+                        ];
+                    });
+
+                $filas = $resumenAgencias
+                    ->map(function ($row) use ($nombresAgencia, $diasObjetivo) {
+                        $agenciaId = (string) ($row->agencia_id ?? '');
+                        $diasConVenta = (int) ($row->dias_con_venta ?? 0);
+                        $diasFaltantes = max(0, $diasObjetivo - $diasConVenta);
+                        $aplica = $diasConVenta >= $diasObjetivo;
+                        $nombreAgencia = trim((string) ($nombresAgencia[$agenciaId] ?? ''));
+
+                        return (object) [
+                            'agencia_id' => $agenciaId,
+                            'nombre_agencia' => $nombreAgencia !== '' ? $nombreAgencia : $agenciaId,
+                            'dias_con_venta' => $diasConVenta,
+                            'dias_faltantes' => $diasFaltantes,
+                            'aplica' => $aplica,
+                            'monto_90_dias' => (float) ($row->monto_90_dias ?? 0),
+                            'fecha_inicio_efectiva' => $row->fecha_inicio_efectiva ?? null,
+                        ];
+                    })
+                    ->values();
+
+                $rangoInicio = $filas->pluck('fecha_inicio_efectiva')->filter()->min();
             }
         }
 
