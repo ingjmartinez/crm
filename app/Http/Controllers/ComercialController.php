@@ -422,6 +422,9 @@ class ComercialController extends Controller
 
     private function buildAgenciaPlanData(Request $request, bool $forzarConsulta = false): array
     {
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
+
         $mes = trim((string) $request->query('mes', now()->format('Y-m')));
         if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
             $mes = now()->format('Y-m');
@@ -452,14 +455,24 @@ class ComercialController extends Controller
         $filas = collect();
 
         if ($filtrosAplicados) {
+            $agenciasDelMesSubquery = DB::table("{$tabla} as vm")
+                ->selectRaw('DISTINCT TRIM(CAST(vm.agencia_id AS CHAR)) AS agencia_id')
+                ->whereNotNull('vm.agencia_id')
+                ->whereBetween('vm.fecha', [$fechaInicioMes->toDateString(), $fechaFinMes->toDateString()]);
+
             $fechaCorteData = DB::table($tabla)
+                ->whereNotNull('agencia_id')
                 ->whereBetween('fecha', [$fechaInicioMes->toDateString(), $fechaFinMes->toDateString()])
-                ->max('fecha');
+                ->orderByDesc('fecha')
+                ->value('fecha');
 
             if (!empty($fechaCorteData)) {
                 $rangoFin = Carbon::parse($fechaCorteData)->toDateString();
 
                 $ventasDiarias = DB::table("{$tabla} as v")
+                    ->joinSub($agenciasDelMesSubquery, 'am', function ($join) {
+                        $join->whereRaw('TRIM(CAST(v.agencia_id AS CHAR)) = am.agencia_id');
+                    })
                     ->selectRaw('TRIM(CAST(v.agencia_id AS CHAR)) AS agencia_id')
                     ->selectRaw('DATE(v.fecha) AS fecha_dia')
                     ->selectRaw('SUM(COALESCE(v.monto, 0)) AS monto_dia')

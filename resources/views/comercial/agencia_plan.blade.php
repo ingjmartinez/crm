@@ -48,13 +48,13 @@
                                         </select>
                                     </div>
                                     <div class="col-12 col-md-4 col-xl-2 d-grid">
-                                        <button type="submit" class="btn btn-primary">
+                                        <button type="submit" class="btn btn-primary" id="btn-generar-data-agencia-plan">
                                             <i class="ri-filter-3-line me-1"></i>Generar Data
                                         </button>
                                     </div>
                                     <div class="col-12 col-md-4 col-xl-3 d-grid">
                                         @if(($filas ?? collect())->count() > 0)
-                                            <a href="{{ route('comercial.agencia-plan.export', ['mes' => $mes, 'sistema' => $sistema]) }}" class="btn btn-success">
+                                            <a href="{{ route('comercial.agencia-plan.export', ['mes' => $mes, 'sistema' => $sistema]) }}" class="btn btn-success" id="btn-exportar-agencia-plan">
                                                 <i class="ri-file-excel-2-line me-1"></i>Exportar a Excel
                                             </a>
                                         @else
@@ -167,6 +167,58 @@
 @section('script')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const formFiltro = document.getElementById('form-filtro-agencia-plan');
+        const btnGenerarData = document.getElementById('btn-generar-data-agencia-plan');
+        const btnExportar = document.getElementById('btn-exportar-agencia-plan');
+
+        if (formFiltro && btnGenerarData) {
+            formFiltro.addEventListener('submit', function () {
+                btnGenerarData.disabled = true;
+
+                Swal.fire({
+                    title: 'Procesando datos...',
+                    html: `
+                        <div class="d-flex align-items-center justify-content-center gap-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" checked disabled>
+                            </div>
+                            <span>Ejecutando consulta de agencias, por favor espere.</span>
+                        </div>
+                    `,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: () => Swal.showLoading(),
+                });
+            });
+        }
+
+        if (btnExportar) {
+            btnExportar.addEventListener('click', function (event) {
+                event.preventDefault();
+                const exportUrl = this.getAttribute('href');
+                if (!exportUrl) {
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Procesando datos...',
+                    html: `
+                        <div class="d-flex align-items-center justify-content-center gap-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" checked disabled>
+                            </div>
+                            <span>Preparando archivo Excel, por favor espere.</span>
+                        </div>
+                    `,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: () => Swal.showLoading(),
+                });
+
+                window.location.href = exportUrl;
+            });
+        }
+
         if (window.$ && $.fn.DataTable && $('#table-agencia-plan').length) {
             $('#table-agencia-plan').DataTable({
                 destroy: true,
