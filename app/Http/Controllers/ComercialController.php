@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\AgenciaPlanExport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ComercialController extends Controller
 {
@@ -388,5 +390,107 @@ class ComercialController extends Controller
                 'premios_pagados' => $premiosPagados,
             ];
         })->toArray();
+    }
+
+    public function agenciaPlan(Request $request)
+    {
+        $contexto = $this->buildAgenciaPlanData($request);
+
+        return view('comercial.agencia_plan', $contexto);
+    }
+
+    public function agenciaPlanExport(Request $request)
+    {
+        $contexto = $this->buildAgenciaPlanData($request, true);
+
+        $fileName = sprintf(
+            'agencia_plan_%s_%s.xlsx',
+            str_replace('-', '', (string) ($contexto['mes'] ?? now()->format('Y-m'))),
+            strtolower((string) ($contexto['sistema'] ?? 'sistema'))
+        );
+
+        return Excel::download(
+            new AgenciaPlanExport(
+                $contexto['filas'] ?? collect(),
+                (string) ($contexto['sistema'] ?? ''),
+                (string) ($contexto['rangoInicio'] ?? ''),
+                (string) ($contexto['rangoFin'] ?? '')
+            ),
+            $fileName
+        );
+    }
+
+    private function buildAgenciaPlanData(Request $request, bool $forzarConsulta = false): array
+    {
+        $mes = trim((string) $request->query('mes', now()->format('Y-m')));
+        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+            $mes = now()->format('Y-m');
+        }
+
+        $sistemas = ['Lotonet', 'Lotobet'];
+        $sistema = trim((string) $request->query('sistema', 'Lotonet'));
+        if (!in_array($sistema, $sistemas, true)) {
+            $sistema = 'Lotonet';
+        }
+
+        $tablaPorSistema = [
+            'Lotonet' => 'vt_usuarios_net',
+            'Lotobet' => 'vt_usuarios_bet',
+        ];
+
+        [$anioSeleccionado, $mesSeleccionado] = explode('-', $mes);
+        $fechaInicioMes = Carbon::create((int) $anioSeleccionado, (int) $mesSeleccionado, 1)->startOfMonth();
+        $fechaFinMes = $fechaInicioMes->copy()->endOfMonth();
+
+        $tabla = $tablaPorSistema[$sistema];
+        $filtrosAplicados = $forzarConsulta || $request->boolean('aplicar');
+        $fechaCorteData = null;
+
+        $diasObjetivo = 90;
+        $rangoInicio = null;
+        $rangoFin = null;
+        $filas = collect();
+
+        if ($filtrosAplicados) {
+            $fechaCorteData = DB::table($tabla)
+                ->whereBetween('fecha', [$fechaInicioMes->toDateString(), $fechaFinMes->toDateString()])
+                ->max('fecha');
+
+            if (!empty($fechaCorteData)) {
+                $rangoFin = Carbon::parse($fechaCorteData)->toDateString();
+                $rangoInicio = Carbon::parse($fechaCorteData)->subDays($diasObjetivo - 1)->toDateString();
+
+                $filas = DB::table("{$tabla} as v")
+                    ->leftJoin('agencias as a', function ($join) {
+                        $join->whereRaw('TRIM(CAST(a.terminal AS CHAR)) COLLATE utf8mb4_unicode_ci = TRIM(CAST(v.agencia_id AS CHAR)) COLLATE utf8mb4_unicode_ci');
+                    })
+                    ->selectRaw('TRIM(CAST(v.agencia_id AS CHAR)) AS agencia_id')
+                    ->selectRaw("COALESCE(NULLIF(TRIM(a.nombre_agencia), ''), TRIM(CAST(v.agencia_id AS CHAR))) AS nombre_agencia")
+                    ->selectRaw('COUNT(DISTINCT DATE(v.fecha)) AS dias_con_venta')
+                    ->selectRaw('SUM(COALESCE(v.monto, 0)) AS monto_90_dias')
+                    ->whereNotNull('v.agencia_id')
+                    ->whereBetween('v.fecha', [$rangoInicio, $rangoFin])
+                    ->groupBy(
+                        DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'),
+                        DB::raw("COALESCE(NULLIF(TRIM(a.nombre_agencia), ''), TRIM(CAST(v.agencia_id AS CHAR)))")
+                    )
+                    ->havingRaw('COUNT(DISTINCT DATE(v.fecha)) = ?', [$diasObjetivo])
+                    ->orderByDesc('monto_90_dias')
+                    ->get();
+            }
+        }
+
+        return [
+            'mes' => $mes,
+            'sistema' => $sistema,
+            'sistemas' => $sistemas,
+            'tablaOrigen' => $tabla,
+            'filtrosAplicados' => $filtrosAplicados,
+            'diasObjetivo' => $diasObjetivo,
+            'fechaCorteData' => $fechaCorteData,
+            'rangoInicio' => $rangoInicio,
+            'rangoFin' => $rangoFin,
+            'filas' => $filas,
+        ];
     }
 }

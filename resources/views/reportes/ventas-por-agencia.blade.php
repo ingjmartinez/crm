@@ -115,6 +115,26 @@
     <script>
         let table;
 
+        function parseMonto(valor) {
+            if (valor === null || valor === undefined || valor === '') return 0;
+            if (typeof valor === 'number') return valor;
+
+            const limpio = String(valor)
+                .replace(/\$/g, '')
+                .replace(/,/g, '')
+                .trim();
+
+            const numero = parseFloat(limpio);
+            return Number.isNaN(numero) ? 0 : numero;
+        }
+
+        function formatoMonto(valor) {
+            return parseMonto(valor).toLocaleString('es-DO', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
         function buscarAgencia() {
             const codigo = document.getElementById('terminal_codigo').value.trim();
             const nombreInput = document.getElementById('agencia_nombre');
@@ -203,7 +223,39 @@
                         periodo: periodo,
                         terminal: terminal
                     },
-                    dataSrc: '',
+                    dataSrc: function(json) {
+                        const filas = Array.isArray(json) ? [...json] : [];
+
+                        const total = filas.reduce((acc, fila) => {
+                            acc.tradicional += parseMonto(fila.tradicional);
+                            acc.no_tradicional += parseMonto(fila.no_tradicional);
+                            acc.recargas += parseMonto(fila.recargas);
+                            acc.paquetico += parseMonto(fila.paquetico);
+                            acc.total += parseMonto(fila.total);
+                            return acc;
+                        }, {
+                            tradicional: 0,
+                            no_tradicional: 0,
+                            recargas: 0,
+                            paquetico: 0,
+                            total: 0
+                        });
+
+                        filas.push({
+                            terminal: '',
+                            coordinador: '',
+                            nombre_agencia: 'TOTAL',
+                            ruta: '',
+                            periodo: '',
+                            tradicional: formatoMonto(total.tradicional),
+                            no_tradicional: formatoMonto(total.no_tradicional),
+                            recargas: formatoMonto(total.recargas),
+                            paquetico: formatoMonto(total.paquetico),
+                            total: formatoMonto(total.total)
+                        });
+
+                        return filas;
+                    },
                     complete: function() {
                         Swal.close();
                     }
@@ -228,10 +280,15 @@
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
                 },
-                order: [[1, 'asc']],
+                ordering: false,
                 paging: false,
                 searching: false,
-                info: false
+                info: false,
+                createdRow: function(row, data) {
+                    if (data.nombre_agencia === 'TOTAL') {
+                        $(row).addClass('table-warning fw-bold');
+                    }
+                }
             });
         }
 

@@ -252,13 +252,13 @@
                                         <thead>
                                             <tr>
                                                 <th>Agencia</th>
-                                                <th>Coordinador</th>
                                                 <th>Tipo</th>
-                                                <th>BaseT</th>
-                                                <th>BaseAjustada</th>
+                                                <th>Ventas Trimestral</th>
+                                                <th>Promedio Trimestral</th>
+                                                <th>Ventas Base</th>
                                                 <th>Nivel</th>
-                                                <th>Incremetal</th>
-                                                <th>Meta Incremental</th>
+                                                <th>Meta Incremetal</th>
+                                                <th>Plan Meta</th>
                                                 <th>{{ $etiquetaMesPosterior }}</th>
                                                 <th>Cumplimiento Meta</th>
                                             </tr>
@@ -279,15 +279,15 @@
                                                         $cumpleMeta = $ventaPosterior >= $metaIncremental;
                                                     }
                                                 @endphp
-                                                <tr data-cumplimiento="{{ $cumpleMeta ? 'cumple' : 'no-cumple' }}" data-agencia-id="{{ $row->agencia_id }}" data-meta="{{ (float) ($row->meta_incremental ?? 0) }}" data-venta="{{ (float) ($row->total_venta_mes_posterior ?? 0) }}">
+                                                <tr data-cumplimiento="{{ $cumpleMeta ? 'cumple' : 'no-cumple' }}" data-agencia-id="{{ $row->agencia_id }}" data-meta="{{ (float) ($row->meta_incremental ?? 0) }}" data-venta="{{ (float) ($row->total_venta_mes_posterior ?? 0) }}" data-coordinador="{{ strtolower(trim((string) ($row->coordinador ?? ''))) }}">
                                                     <td>
                                                         <div class="fw-medium">{{ $row->nombre_agencia }}</div>
                                                         <small class="text-muted">Código: {{ $row->agencia_id }}</small>
                                                     </td>
-                                                    <td>{{ $row->coordinador }}</td>
                                                     <td class="text-capitalize">{{ $row->tipo ?: '-' }}</td>
                                                     <td>RD$ {{ number_format((float) $row->ventas_3_meses, 2) }}</td>
                                                     <td>RD$ {{ number_format((float) $row->promedio_3_meses, 2) }}</td>
+                                                    <td>RD$ {{ number_format((float) ($row->ventas_base ?? 0), 2) }}</td>
                                                     <td>{{ $row->nivel ?: '-' }}</td>
                                                     <td>RD$ {{ number_format((float) $row->incremetal, 2) }}</td>
                                                     <td>RD$ {{ number_format((float) $row->meta_incremental, 2) }}</td>
@@ -360,8 +360,8 @@
                 return true;
             }
 
-            const celdaCoordinador = (fila.children[1] && fila.children[1].innerText ? fila.children[1].innerText : '').toLowerCase().trim();
-            return celdaCoordinador.includes(valorCoordinador);
+            const coordinadorFila = (fila.getAttribute('data-coordinador') || '').toLowerCase().trim();
+            return coordinadorFila.includes(valorCoordinador);
         };
 
         function actualizarTarjetasResumen() {
@@ -546,7 +546,7 @@
                     paginate: { first: 'Primera', last: 'Última', next: 'Siguiente', previous: 'Anterior' }
                 },
                 dom: 'lrtip',
-                order: [[3, 'desc']],
+                order: [[2, 'desc']],
             });
 
             const filtroCumplimientoDt = function (settings, data, dataIndex) {

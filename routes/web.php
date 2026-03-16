@@ -52,8 +52,12 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::middleware('auth')->group(function () {
 
 Route::get('/', function () {
-    return view('contabilidad');
+    return view('inicio');
 });
+
+Route::get('/contabilidad', function () {
+    return view('contabilidad');
+})->name('contabilidad.index');
 
 Route::get('/api-cuentas', [Api::class, 'getCuentas']);
 Route::post('/api-cuentas', [Api::class, 'storeCuenta']);
@@ -246,6 +250,8 @@ Route::get('/reportes-bi/faltantes', fn() => view('reportes-bi.faltantes'));
 Route::get('/comercial', [ComercialController::class, 'index'])->name('comercial.index');
 Route::get('/comercial/kpi-ventas', [ComercialController::class, 'kpiVentas'])->name('comercial.kpi-ventas');
 Route::get('/comercial/kpi-ventas-v', [ComercialController::class, 'kpiVentasV'])->name('comercial.kpi-ventas-v');
+Route::get('/comercial/agencia-plan', [ComercialController::class, 'agenciaPlan'])->name('comercial.agencia-plan');
+Route::get('/comercial/agencia-plan/export', [ComercialController::class, 'agenciaPlanExport'])->name('comercial.agencia-plan.export');
 Route::get('/comercial/meta-incentivo', [MetaIncentivoController::class, 'index'])->name('comercial.meta-incentivo');
 Route::get('/comercial/meta-incentivo/export', [MetaIncentivoController::class, 'export'])->name('comercial.meta-incentivo.export');
 Route::post('/comercial/meta-incentivo/send-mail', [MetaIncentivoController::class, 'enviarMiniReporte'])->name('comercial.meta-incentivo.send-mail');

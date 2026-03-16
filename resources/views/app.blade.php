@@ -740,7 +740,7 @@
                             </div>
                         </li>
                         <li class="nav-item">
-                            <a href="{{ url('/') }}" class="nav-link">
+                            <a href="{{ route('contabilidad.index') }}" class="nav-link">
                                 <i class="ri-dashboard-2-line"></i> <span data-key="t-dashboards">Contabilidad</span>
                             </a>
                         </li>
@@ -1070,6 +1070,11 @@
                                     <li class="nav-item">
                                         <a href="{{ route('comercial.kpi-ventas-v') }}" class="nav-link" data-key="t-kpi-ventas-v">
                                             kpi-ventas-v
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('comercial.agencia-plan') }}" class="nav-link" data-key="t-agencia-plan">
+                                            agencia_plan
                                         </a>
                                     </li>
                                     <li class="nav-item">

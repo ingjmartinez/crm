@@ -292,15 +292,35 @@ class MetaIncentivoController extends Controller
         $fechaPosteriorInicio = $fechaFin->copy()->addDay()->startOfMonth();
         $fechaPosteriorFin = $fechaPosteriorInicio->copy()->endOfMonth();
 
+        $mesEstacionalidad = (int) $fechaPosteriorInicio->month;
+        $anioEstacionalidad = (int) $fechaPosteriorInicio->year;
+
+        $estacionalidadQuery = DB::table('estacionalidad')
+            ->where('vigente', 1)
+            ->where('mes', $mesEstacionalidad);
+
+        if (DB::getSchemaBuilder()->hasColumn('estacionalidad', 'year')) {
+            $estacionalidadQuery->where('year', $anioEstacionalidad);
+        }
+
+        $factorBase = (float) ($estacionalidadQuery->value('factor_base') ?? 1);
+        if ($factorBase <= 0) {
+            $factorBase = 1;
+        }
+
+        $factorBaseSql = number_format($factorBase, 6, '.', '');
+
         $ventasUnion = DB::table('vt_usuarios_net')
             ->selectRaw('TRIM(CAST(agencia_id AS CHAR)) AS agencia_id')
             ->selectRaw('TRIM(CAST(producto_id AS CHAR)) AS producto_id')
+            ->selectRaw("NULLIF(TRIM(tipo), '') AS tipo_origen")
             ->selectRaw('COALESCE(monto, 0) AS monto')
             ->selectRaw('fecha')
             ->unionAll(
                 DB::table('vt_usuarios_bet')
                     ->selectRaw('TRIM(CAST(agencia_id AS CHAR)) AS agencia_id')
                     ->selectRaw('TRIM(CAST(producto_id AS CHAR)) AS producto_id')
+                    ->selectRaw("NULLIF(TRIM(tipo), '') AS tipo_origen")
                     ->selectRaw('COALESCE(monto, 0) AS monto')
                     ->selectRaw('fecha')
             );
@@ -308,6 +328,10 @@ class MetaIncentivoController extends Controller
         $fechaMin = $fechaInicio->toDateString();
         $fechaBaseMax = $fechaFin->toDateString();
         $fechaPosteriorMax = $fechaPosteriorFin->toDateString();
+        $tipoAgrupadoSql = "CASE
+            WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(cj.tipo), ''), NULLIF(TRIM(v.tipo_origen), ''), ''))) IN ('recarga', 'recargas', 'paquetico', 'paqueticos') THEN 'recarga'
+            ELSE COALESCE(NULLIF(TRIM(cj.tipo), ''), NULLIF(TRIM(v.tipo_origen), ''), 'sin tipo')
+        END";
 
         $baseQuery = DB::table('agencias as a')
             ->joinSub($ventasUnion, 'v', function ($join) {
@@ -324,7 +348,7 @@ class MetaIncentivoController extends Controller
             ->selectRaw('a.terminal AS agencia_id')
             ->selectRaw('a.nombre_agencia')
             ->selectRaw("NULLIF(TRIM(GROUP_CONCAT(DISTINCT CASE WHEN co.id IS NOT NULL THEN TRIM(CONCAT(COALESCE(co.nombre, ''), ' ', COALESCE(co.apellido, ''))) END SEPARATOR ', ')), '') AS coordinador")
-            ->selectRaw("COALESCE(NULLIF(TRIM(cj.tipo), ''), 'sin tipo') AS tipo")
+            ->selectRaw("{$tipoAgrupadoSql} AS tipo")
             ->selectRaw("SUM(CASE WHEN v.fecha BETWEEN '{$fechaMin}' AND '{$fechaBaseMax}' THEN v.monto ELSE 0 END) AS ventas_3_meses")
             ->selectRaw("(SUM(CASE WHEN v.fecha BETWEEN '{$fechaMin}' AND '{$fechaBaseMax}' THEN v.monto ELSE 0 END) / 3) AS promedio_3_meses")
             ->selectRaw("SUM(CASE WHEN v.fecha BETWEEN '{$fechaPosteriorInicio->toDateString()}' AND '{$fechaPosteriorMax}' THEN v.monto ELSE 0 END) AS total_venta_mes_posterior")
@@ -345,7 +369,7 @@ class MetaIncentivoController extends Controller
                         ->whereRaw("TRIM(CONCAT(COALESCE(co_filter.nombre, ''), ' ', COALESCE(co_filter.apellido, ''))) = ?", [$coordinador]);
                 });
             })
-            ->groupBy('a.terminal', 'a.nombre_agencia', DB::raw("COALESCE(NULLIF(TRIM(cj.tipo), ''), 'sin tipo')"))
+            ->groupBy('a.terminal', 'a.nombre_agencia', DB::raw($tipoAgrupadoSql))
             ->havingRaw("SUM(CASE WHEN v.fecha BETWEEN '{$fechaMin}' AND '{$fechaBaseMax}' THEN v.monto ELSE 0 END) > 0");
 
         $reporte = DB::query()
@@ -355,9 +379,10 @@ class MetaIncentivoController extends Controller
                     ->whereRaw('r.promedio_3_meses BETWEEN n.rango_min AND n.rango_max');
             })
             ->selectRaw('r.*')
+            ->selectRaw("({$factorBaseSql} * r.promedio_3_meses) AS ventas_base")
             ->selectRaw('COALESCE(n.nivel, "") AS nivel')
             ->selectRaw('IFNULL(IFNULL(n.incremento_fijo, (r.promedio_3_meses * n.incremento_porcentaje)), 0) AS incremetal')
-            ->selectRaw('(r.promedio_3_meses + IFNULL(IFNULL(n.incremento_fijo, (r.promedio_3_meses * n.incremento_porcentaje)), 0)) AS meta_incremental')
+            ->selectRaw("(({$factorBaseSql} * r.promedio_3_meses) + IFNULL(IFNULL(n.incremento_fijo, (r.promedio_3_meses * n.incremento_porcentaje)), 0)) AS meta_incremental")
             ->orderByDesc('r.ventas_3_meses')
             ->get();
 
