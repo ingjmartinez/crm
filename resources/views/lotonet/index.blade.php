@@ -36,6 +36,7 @@
 
                                     <div class="col-3 text-end">
                                         <button id="btnRango" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalRango">Procesar por Rango</button>
+                                        <button id="btnRangoEliminar" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalRango">Eliminar por Rango</button>
                                     </div>
                                 </div>
 
@@ -89,7 +90,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalRangoLabel">Procesar Rango de Fechas</h5>
+                    <h5 class="modal-title" id="modalRangoLabel">Procesar / Eliminar Rango de Fechas</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">

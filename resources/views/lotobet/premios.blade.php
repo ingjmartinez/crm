@@ -96,6 +96,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
                     <button type="button" class="btn btn-primary" id="btnGuardarDataFecha">Registrar Data</button>
+                    <button type="button" class="btn btn-danger" id="btnEliminarDataFecha">Eliminar Data</button>
                 </div>
 
             </div><!-- /.modal-content -->
@@ -342,6 +343,101 @@
                 });
             } finally {
                 btnGuardarDataFecha.disabled = false;
+            }
+        });
+
+        const btnEliminarDataFecha = document.getElementById('btnEliminarDataFecha');
+        btnEliminarDataFecha.addEventListener('click', async () => {
+            const fechaInicio = document.getElementById('fechaInicio').value;
+            const fechaFin = document.getElementById('fechaFin').value;
+            if (!fechaInicio || !fechaFin) {
+                Swal.fire({
+                    title: "Error",
+                    text: "Por favor, selecciona ambas fechas",
+                    icon: "error"
+                });
+                return;
+            }
+
+            const startDate = new Date(fechaInicio);
+            const endDate = new Date(fechaFin);
+
+            if (startDate > endDate) {
+                Swal.fire({
+                    title: "Error",
+                    text: "La fecha de inicio debe ser anterior a la fecha de fin",
+                    icon: "error"
+                });
+                return;
+            }
+
+            const confirmed = await Swal.fire({
+                title: 'Confirmar eliminación',
+                html: `¿Eliminar data desde <strong>${fechaInicio}</strong> hasta <strong>${fechaFin}</strong>?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            });
+            if (!confirmed.isConfirmed) return;
+
+            let responses = [];
+            let currentDate = new Date(startDate);
+            const dates = [];
+
+            while (currentDate <= endDate) {
+                dates.push(currentDate.toISOString().split('T')[0]);
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            btnEliminarDataFecha.disabled = true;
+            try {
+                Swal.fire({
+                    title: "Eliminando información ...",
+                    html: `0 / ${dates.length}`,
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                for (let i = 0; i < dates.length; i++) {
+                    const date = dates[i];
+                    Swal.update({
+                        html: `Eliminando ${date} (${i + 1} / ${dates.length})`
+                    });
+
+                    const response = await fetch(`/delete-premios-lotobet?fecha=${date}`);
+                    if (!response.ok) {
+                        const text = await response.text().catch(() => null);
+                        throw new Error(text || `Error HTTP ${response.status}`);
+                    }
+                    const data = await response.json().catch(() => null);
+
+                    if (data && data.code !== undefined && data.code !== 0) {
+                        throw new Error(data.message || `Error eliminando fecha ${date}`);
+                    }
+
+                    if (!data.total) {
+                        responses.push(data.message);
+                    } else {
+                        responses.push('Fecha: ' + date + ' Total: ' + data.total);
+                    }
+                }
+
+                document.getElementById('btnClose').click();
+                Swal.fire({
+                    title: "Listo",
+                    html: responses.join('<br>'),
+                    icon: "success"
+                });
+            } catch (error) {
+                Swal.fire({
+                    title: "Error",
+                    text: error.message || "Ocurrió un error al procesar las fechas",
+                    icon: "error"
+                });
+            } finally {
+                btnEliminarDataFecha.disabled = false;
             }
         });
     </script>

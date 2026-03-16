@@ -47,6 +47,8 @@
                             <div class="card-body">
                                 <p class="text-uppercase fw-medium text-muted mb-1">Total Incentivo a Pagar</p>
                                 <h4 class="mb-0" id="ni_total_incentivo">0.00</h4>
+                                <div class="d-block mt-1 fw-semibold fs-5 text-primary" id="ni_admin_resumen">Administrativo (0%): 0.00</div>
+                                <div class="mt-2 fw-bold fs-4 text-success" id="ni_total_con_admin">Total a Pagar Final: 0.00</div>
                             </div>
                         </div>
                     </div>
@@ -96,6 +98,9 @@
                                     </div>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigPct">
                                         Configurar %
+                                    </button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigAdminPct">
+                                        % Administrativo
                                     </button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">
                                         Generar Reporte
@@ -163,6 +168,25 @@
             </div>
         </div>
     </div>
+
+    <div id="modalConfigAdminPct" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Configurar % Administrativo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label" for="admin_pct_bruto">% bruto (ejemplo: 9 = 0.9%)</label>
+                    <input type="number" id="admin_pct_bruto" class="form-control" value="0" min="0" step="0.01">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnGuardarAdminPct">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -176,10 +200,17 @@
         let cachedRows = [];
         let cachedMeta = {};
         let cachedSistema = null;
+        let adminPctBruto = 0;
 
         function toNumber(value) {
             if (value === null || value === undefined) return 0;
             return parseFloat(String(value).replace(/,/g, '')) || 0;
+        }
+
+        function formatPercentDisplay(value) {
+            const number = parseFloat(value);
+            if (Number.isNaN(number)) return '0';
+            return Number.isInteger(number) ? String(number) : String(number);
         }
 
         function updateCardsFromData(data) {
@@ -187,6 +218,8 @@
             const totalNoCumplen = data.filter(item => item.cumple_minimo !== 'SI').length;
             const totalVendido = data.reduce((sum, item) => sum + toNumber(item.ventas_mes_actual), 0);
             const totalIncentivo = data.reduce((sum, item) => sum + toNumber(item.nuevo_incentivo), 0);
+            const adminValor = totalIncentivo * (adminPctBruto / 1000);
+            const totalConAdmin = totalIncentivo + adminValor;
 
             document.getElementById('ni_count_cumplen').textContent = totalCumplen;
             document.getElementById('ni_count_no_cumplen').textContent = totalNoCumplen;
@@ -198,6 +231,10 @@
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
+            document.getElementById('ni_admin_resumen').textContent =
+                `Administrativo (${formatPercentDisplay(adminPctBruto)}%): ${adminValor.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('ni_total_con_admin').textContent =
+                `Total a Pagar Final: ${totalConAdmin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
 
         function renderTableFromData(data) {
@@ -318,6 +355,12 @@
                 modal.show();
             });
 
+            document.querySelector('#btnConfigAdminPct').addEventListener('click', function() {
+                document.getElementById('admin_pct_bruto').value = adminPctBruto;
+                const modal = new bootstrap.Modal(document.getElementById('modalConfigAdminPct'));
+                modal.show();
+            });
+
             document.querySelector('#btnGuardarPct').addEventListener('click', function() {
                 pctConfig.pct_1 = parseFloat(document.getElementById('pct_1').value || 0);
                 pctConfig.pct_2 = parseFloat(document.getElementById('pct_2').value || 0);
@@ -328,6 +371,25 @@
                 Swal.fire({
                     title: 'Configuración guardada',
                     text: 'Los porcentajes se aplicarán al generar el reporte.',
+                    icon: 'success'
+                });
+            });
+
+            document.querySelector('#btnGuardarAdminPct').addEventListener('click', function() {
+                adminPctBruto = parseFloat(document.getElementById('admin_pct_bruto').value || 0);
+                bootstrap.Modal.getInstance(document.getElementById('modalConfigAdminPct'))?.hide();
+
+                if (cachedRows.length && cachedSistema === document.getElementById('ni_sistema').value) {
+                    applyLocalFilters(false);
+                } else {
+                    document.getElementById('ni_admin_resumen').textContent =
+                        `Administrativo (${formatPercentDisplay(adminPctBruto)}%): 0.00`;
+                    document.getElementById('ni_total_con_admin').textContent = 'Total a Pagar Final: 0.00';
+                }
+
+                Swal.fire({
+                    title: 'Configuración guardada',
+                    text: 'El % administrativo se aplica sobre el Total Incentivo a Pagar.',
                     icon: 'success'
                 });
             });
