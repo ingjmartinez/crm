@@ -47,6 +47,8 @@
                             <div class="card-body">
                                 <p class="text-uppercase fw-medium text-muted mb-1">Total Incentivo a Pagar</p>
                                 <h4 class="mb-0" id="ni_total_incentivo">0.00</h4>
+                                <div class="d-block mt-1 fw-semibold fs-5 text-primary" id="ni_admin_resumen">Administrativo (0%): 0.00</div>
+                                <div class="mt-2 fw-bold fs-4 text-success" id="ni_total_con_admin">Total a Pagar Final: 0.00</div>
                             </div>
                         </div>
                     </div>
@@ -88,7 +90,13 @@
                                         <label class="mb-0" for="ni_min_dias">Mín. días venta</label>
                                         <input type="number" id="ni_min_dias" class="form-control" value="10" min="1" step="1">
                                     </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="checkTramo2">
+                                        <label class="form-check-label" for="checkTramo2">Usar Tramo 2</label>
+                                    </div>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigPct">Configurar Tramos</button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigPct2">Configurar Tramo2</button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigAdminPct">% Administrativo</button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
                                 </div>
                             </div>
@@ -146,6 +154,56 @@
             </div>
         </div>
     </div>
+
+    <div id="modalConfigPct2" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Configurar Tramo2</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 mb-3">Copia de tramos base. Desde 1,000,001 se aplica porcentaje (default 1%).</div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Ventas Mensual Desde</th>
+                                    <th>Hasta</th>
+                                    <th>Valor (fijo o % desde 1,000,001)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyTramosPago2"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-soft-secondary" id="btnRestaurarTramos2">Restaurar por defecto</button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnGuardarPct2">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalConfigAdminPct" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Configurar % Administrativo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label" for="admin_pct_bruto">% bruto (ejemplo: 9 = 9%)</label>
+                    <input type="number" id="admin_pct_bruto" class="form-control" value="0" min="0" step="0.01">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnGuardarAdminPct">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -182,13 +240,26 @@
     }
 
     let payoutRanges = getDefaultRanges();
+    let payoutRanges2 = getDefaultRanges().map(function (row) {
+        if (row.desde >= 1000001) {
+            return { ...row, pago: 1 };
+        }
+        return { ...row };
+    });
     let cachedRows = [];
     let cachedMeta = {};
     let cachedSistema = null;
+    let adminPctBruto = 0;
 
     function toNumber(value) {
         if (value === null || value === undefined) return 0;
         return parseFloat(String(value).replace(/,/g, '')) || 0;
+    }
+
+    function formatPercentDisplay(value) {
+        const number = parseFloat(value);
+        if (Number.isNaN(number)) return '0';
+        return Number.isInteger(number) ? String(number) : String(number);
     }
 
     function renderRangesTable() {
@@ -201,6 +272,21 @@
                 <td><input type="number" class="form-control tramo-desde" data-idx="${idx}" min="0" step="1" value="${row.desde}"></td>
                 <td><input type="number" class="form-control tramo-hasta" data-idx="${idx}" min="0" step="1" value="${row.hasta}"></td>
                 <td><input type="number" class="form-control tramo-pago" data-idx="${idx}" min="0" step="0.01" value="${row.pago}"></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderRangesTable2() {
+        const tbody = document.getElementById('tbodyTramosPago2');
+        tbody.innerHTML = '';
+
+        payoutRanges2.forEach((row, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="number" class="form-control tramo2-desde" data-idx="${idx}" min="0" step="1" value="${row.desde}"></td>
+                <td><input type="number" class="form-control tramo2-hasta" data-idx="${idx}" min="0" step="1" value="${row.hasta}"></td>
+                <td><input type="number" class="form-control tramo2-pago" data-idx="${idx}" min="0" step="0.01" value="${row.pago}"></td>
             `;
             tbody.appendChild(tr);
         });
@@ -230,16 +316,46 @@
         return ranges.sort((a, b) => a.desde - b.desde);
     }
 
+    function readRangesFromTable2() {
+        const desdeInputs = document.querySelectorAll('.tramo2-desde');
+        const hastaInputs = document.querySelectorAll('.tramo2-hasta');
+        const pagoInputs = document.querySelectorAll('.tramo2-pago');
+
+        const ranges = [];
+        for (let i = 0; i < desdeInputs.length; i++) {
+            const desde = parseFloat(desdeInputs[i].value || 0);
+            const hasta = parseFloat(hastaInputs[i].value || 0);
+            const pago = parseFloat(pagoInputs[i].value || 0);
+
+            if (desde < 0 || hasta < 0 || pago < 0) {
+                throw new Error(`Hay valores negativos en la fila ${i + 1}.`);
+            }
+            if (desde > hasta) {
+                throw new Error(`El valor Desde no puede ser mayor que Hasta en la fila ${i + 1}.`);
+            }
+
+            ranges.push({ desde, hasta, pago });
+        }
+
+        return ranges.sort((a, b) => a.desde - b.desde);
+    }
+
     function updateCardsFromData(data) {
         const totalCumplen = data.filter(item => item.cumple_minimo === 'SI').length;
         const totalNoCumplen = data.filter(item => item.cumple_minimo !== 'SI').length;
         const totalVendido = data.reduce((sum, item) => sum + toNumber(item.ventas_mes_actual), 0);
         const totalIncentivo = data.reduce((sum, item) => sum + toNumber(item.nuevo_incentivo), 0);
+        const adminValor = totalIncentivo * (adminPctBruto / 100);
+        const totalConAdmin = totalIncentivo + adminValor;
 
         document.getElementById('ni_count_cumplen').textContent = totalCumplen;
         document.getElementById('ni_count_no_cumplen').textContent = totalNoCumplen;
         document.getElementById('ni_total_vendido').textContent = totalVendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('ni_total_incentivo').textContent = totalIncentivo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('ni_admin_resumen').textContent =
+            `Administrativo (${formatPercentDisplay(adminPctBruto)}%): ${adminValor.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        document.getElementById('ni_total_con_admin').textContent =
+            `Total a Pagar Final: ${totalConAdmin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
     function renderTableFromData(data) {
@@ -347,9 +463,31 @@
             modal.show();
         });
 
+        document.querySelector('#btnConfigPct2').addEventListener('click', function() {
+            renderRangesTable2();
+            const modal = new bootstrap.Modal(document.getElementById('modalConfigPct2'));
+            modal.show();
+        });
+
+        document.querySelector('#btnConfigAdminPct').addEventListener('click', function() {
+            document.getElementById('admin_pct_bruto').value = adminPctBruto;
+            const modal = new bootstrap.Modal(document.getElementById('modalConfigAdminPct'));
+            modal.show();
+        });
+
         document.querySelector('#btnRestaurarTramos').addEventListener('click', function() {
             payoutRanges = getDefaultRanges();
             renderRangesTable();
+        });
+
+        document.querySelector('#btnRestaurarTramos2').addEventListener('click', function() {
+            payoutRanges2 = getDefaultRanges().map(function (row) {
+                if (row.desde >= 1000001) {
+                    return { ...row, pago: 1 };
+                }
+                return { ...row };
+            });
+            renderRangesTable2();
         });
 
         document.querySelector('#btnGuardarPct').addEventListener('click', function() {
@@ -363,6 +501,37 @@
             bootstrap.Modal.getInstance(document.getElementById('modalConfigPct'))?.hide();
             Swal.fire({ title: 'Configuración guardada', text: 'Los tramos se aplicarán al generar el reporte.', icon: 'success' });
         });
+
+        document.querySelector('#btnGuardarPct2').addEventListener('click', function() {
+            try {
+                payoutRanges2 = readRangesFromTable2();
+            } catch (e) {
+                Swal.fire({ title: 'Validación', text: e.message, icon: 'warning' });
+                return;
+            }
+
+            bootstrap.Modal.getInstance(document.getElementById('modalConfigPct2'))?.hide();
+            Swal.fire({ title: 'Configuración guardada', text: 'Los Tramo2 se aplicarán al generar el reporte.', icon: 'success' });
+        });
+
+        document.querySelector('#btnGuardarAdminPct').addEventListener('click', function() {
+            adminPctBruto = parseFloat(document.getElementById('admin_pct_bruto').value || 0);
+            bootstrap.Modal.getInstance(document.getElementById('modalConfigAdminPct'))?.hide();
+
+            if (cachedRows.length && cachedSistema === document.getElementById('ni_sistema').value) {
+                applyLocalFilters(false);
+            } else {
+                document.getElementById('ni_admin_resumen').textContent =
+                    `Administrativo (${formatPercentDisplay(adminPctBruto)}%): 0.00`;
+                document.getElementById('ni_total_con_admin').textContent = 'Total a Pagar Final: 0.00';
+            }
+
+            Swal.fire({
+                title: 'Configuración guardada',
+                text: 'El % administrativo se aplica sobre el Total Incentivo a Pagar.',
+                icon: 'success'
+            });
+        });
     });
 
     function listNuevoIncentivo(showFilterAlert = false) {
@@ -370,6 +539,7 @@
         const fechaIni = document.getElementById('ni_fecha_ini').value;
         const fechaFin = document.getElementById('ni_fecha_fin').value;
         const minDias = document.getElementById('ni_min_dias').value;
+        const usarTramo2 = document.getElementById('checkTramo2').checked;
 
         if (!fechaIni || !fechaFin) {
             Swal.fire({ title: 'Información', text: 'Debe seleccionar fecha inicio y fecha fin.', icon: 'warning' });
@@ -393,7 +563,8 @@
             fecha_ini: fechaIni,
             fecha_fin: fechaFin,
             min_dias_venta: minDias,
-            rangos_pago: JSON.stringify(payoutRanges),
+            tramo_activo: usarTramo2 ? 'tramo2' : 'tramo1',
+            rangos_pago: JSON.stringify(usarTramo2 ? payoutRanges2 : payoutRanges),
         });
 
         fetch('/incentivos/reporte-nuevo-incentivo-v2?' + params.toString())

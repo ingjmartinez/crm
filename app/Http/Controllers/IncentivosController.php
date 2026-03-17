@@ -1031,6 +1031,7 @@ class IncentivosController extends Controller
             'sistema' => 'nullable|in:Todos,Lotobet,Lotonet',
             'min_dias_venta' => 'nullable|integer|min:1',
             'filtro_cumplimiento' => 'nullable|in:todos,cumplidos,no_cumplidos',
+            'tramo_activo' => 'nullable|in:tramo1,tramo2',
             'rangos_pago' => 'nullable|string',
         ]);
 
@@ -1044,6 +1045,7 @@ class IncentivosController extends Controller
         $sistema = $request->input('sistema', 'Todos');
         $minDiasVenta = (int) $request->input('min_dias_venta', 10);
         $filtroCumplimiento = $request->input('filtro_cumplimiento', 'todos');
+        $tramoActivo = $request->input('tramo_activo', 'tramo1');
 
         $rangosPagoDefault = [
             ['desde' => 100001, 'hasta' => 250000, 'pago' => 1000],
@@ -1150,7 +1152,7 @@ class IncentivosController extends Controller
         $mesActualByCedula = $rowsMesActual->keyBy('cedula');
         $cedulas = $ultimoMesByCedula->keys()->merge($mesActualByCedula->keys())->unique()->values();
 
-        $rawData = $cedulas->map(function ($cedula) use ($ultimoMesByCedula, $mesActualByCedula, $minDiasVenta, $rangosPago) {
+        $rawData = $cedulas->map(function ($cedula) use ($ultimoMesByCedula, $mesActualByCedula, $minDiasVenta, $rangosPago, $tramoActivo) {
             $rowUltimoMes = $ultimoMesByCedula->get($cedula);
             $rowMesActual = $mesActualByCedula->get($cedula);
 
@@ -1164,7 +1166,11 @@ class IncentivosController extends Controller
             if ($cumple) {
                 foreach ($rangosPago as $rango) {
                     if ($ventasMesActual >= (float) $rango['desde'] && $ventasMesActual <= (float) $rango['hasta']) {
-                        $pagoEscala = (float) $rango['pago'];
+                        if ($tramoActivo === 'tramo2' && (float) $rango['desde'] >= 1000001) {
+                            $pagoEscala = $ventasMesActual * ((float) $rango['pago'] / 100);
+                        } else {
+                            $pagoEscala = (float) $rango['pago'];
+                        }
                         break;
                     }
                 }
@@ -1172,7 +1178,11 @@ class IncentivosController extends Controller
                 if ($pagoEscala === 0.0 && !empty($rangosPago)) {
                     $ultimoRango = end($rangosPago);
                     if ($ventasMesActual >= (float) $ultimoRango['desde']) {
-                        $pagoEscala = (float) $ultimoRango['pago'];
+                        if ($tramoActivo === 'tramo2' && (float) $ultimoRango['desde'] >= 1000001) {
+                            $pagoEscala = $ventasMesActual * ((float) $ultimoRango['pago'] / 100);
+                        } else {
+                            $pagoEscala = (float) $ultimoRango['pago'];
+                        }
                     }
                     reset($rangosPago);
                 }
@@ -1219,6 +1229,7 @@ class IncentivosController extends Controller
                 'eval_fin' => $evalFin,
                 'min_dias_venta' => $minDiasVenta,
                 'filtro_cumplimiento' => $filtroCumplimiento,
+                'tramo_activo' => $tramoActivo,
                 'rangos_pago' => $rangosPago,
                 'total_vendido' => $totalVendido,
                 'total_vendido_ultimo_mes' => (float) $rawData->sum('ventas_num'),
