@@ -86,6 +86,8 @@ class VentaGerencialController extends Controller
 
     public function comparativa(Request $request)
     {
+        $debeConsultar = $request->hasAny(['fecha', 'sistema', 'agencia']);
+
         $fecha = trim((string) $request->query('fecha', now()->format('Y-m-d')));
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
             $fecha = now()->format('Y-m-d');
@@ -101,9 +103,18 @@ class VentaGerencialController extends Controller
             $agencia = null;
         }
 
-        $resumenComparativo = $this->getResumenVentasComparativaPorFecha($fecha, $sistema, $agencia);
-        $agenciasDisponibles = $this->getAgenciasDisponiblesComparativa($fecha, $sistema);
-        $tendenciaSemanal = $this->getTendenciaSemanalComparativa($fecha, $sistema, $agencia);
+        $resumenComparativo = [];
+        $agenciasDisponibles = [];
+        $tendenciaSemanal = [
+            'labels' => [],
+            'series' => [],
+        ];
+
+        if ($debeConsultar) {
+            $resumenComparativo = $this->getResumenVentasComparativaPorFecha($fecha, $sistema, $agencia);
+            $agenciasDisponibles = $this->getAgenciasDisponiblesComparativa($fecha, $sistema);
+            $tendenciaSemanal = $this->getTendenciaSemanalComparativa($fecha, $sistema, $agencia);
+        }
 
         return view('gerencia.venta-comparativa', [
             'fechaSeleccionada' => $fecha,
