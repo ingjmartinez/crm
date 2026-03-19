@@ -50,6 +50,11 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
+    Route::get('/gerencia/gerencial', fn() => view('gerencia.gerencial'))->name('gerencia.gerencial');
+    Route::get('/gerencia/venta-gerencial', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'index'])->name('gerencia.venta-gerencial');
+    Route::get('/gerencia/venta-gerencial/export/excel', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'exportExcel'])->name('gerencia.venta-gerencial.export.excel');
+    Route::get('/gerencia/venta-comparativa', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'comparativa'])->name('gerencia.venta-comparativa');
+    Route::get('/gerencia/venta-comparativa/export/excel', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'exportExcelComparativa'])->name('gerencia.venta-comparativa.export.excel');
 
 Route::get('/', function () {
     return view('inicio');

@@ -1089,6 +1089,33 @@
                                     </li>
                                 </ul>
                             </div>
+                            <!-- Menú Gerencia -->
+                            <a href="#sidebarGerencia" class="nav-link collapsed" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="sidebarGerencia"
+                                data-key="t-gerencia">
+                                <i class="ri-briefcase-line"></i> <span data-key="t-gerencia">Gerencia</span>
+                            </a>
+                            <div class="collapse menu-dropdown" id="sidebarGerencia">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ route('gerencia.gerencial') }}" class="nav-link" data-key="t-gerencial">
+                                            Gerencial
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('gerencia.venta-gerencial') }}" class="nav-link" data-key="t-venta-gerencial">
+                                            Venta Gerencial
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('gerencia.venta-comparativa') }}" class="nav-link" data-key="t-venta-comparativa">
+                                            Venta Comparativa
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                                </ul>
+                            </div>
                         </li>
                     </ul>
                 </div>
