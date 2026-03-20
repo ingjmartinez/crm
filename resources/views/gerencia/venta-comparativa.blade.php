@@ -268,8 +268,8 @@
                                                 <th>Agencia</th>
                                                 <th>Ventas Hoy</th>
                                                 <th>Ventas de Ayer</th>
-                                                <th>Ventas Ultimos 2 Dias</th>
-                                                <th>Ventas Ultimos 3 Dias</th>
+                                                <th>Ventas Hace 2 Dias</th>
+                                                <th>Ventas Hace 3 Dias</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -281,8 +281,8 @@
                                                     </td>
                                                     <td>RD$ {{ number_format((float) ($item['ventas_hoy'] ?? 0), 2) }}</td>
                                                     <td>RD$ {{ number_format((float) ($item['ventas_ayer'] ?? 0), 2) }}</td>
-                                                    <td>RD$ {{ number_format((float) ($item['ventas_ultimos_2_dias'] ?? 0), 2) }}</td>
-                                                    <td>RD$ {{ number_format((float) ($item['ventas_ultimos_3_dias'] ?? 0), 2) }}</td>
+                                                    <td>RD$ {{ number_format((float) ($item['ventas_hace_2_dias'] ?? 0), 2) }}</td>
+                                                    <td>RD$ {{ number_format((float) ($item['ventas_hace_3_dias'] ?? 0), 2) }}</td>
                                                 </tr>
                                             @empty
                                                 <tr>

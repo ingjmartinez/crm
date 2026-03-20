@@ -32,8 +32,15 @@
                                     <div class="alert alert-success">{{ session('success') }}</div>
                                 @endif
 
+                                <div class="row mb-3">
+                                    <div class="col-12 col-md-5 col-lg-4">
+                                        <label for="buscarCoordinador" class="form-label">Buscar coordinador</label>
+                                        <input type="text" id="buscarCoordinador" class="form-control" placeholder="Escribe nombre o cédula...">
+                                    </div>
+                                </div>
+
                                 <div class="table-responsive">
-                                    <table class="table table-bordered table-striped align-middle mb-0">
+                                    <table class="table table-bordered table-striped align-middle mb-0" id="tablaCoordinadorOperador">
                                         <thead class="table-light">
                                             <tr>
                                                 <th class="text-center" style="width:80px;">ID</th>
@@ -192,6 +199,26 @@
         const checkboxes = document.querySelectorAll('.checkbox-agencia');
         const buscarTerminalAgencia = document.getElementById('buscarTerminalAgencia');
         const itemsAgencia = document.querySelectorAll('.item-agencia');
+        const buscarCoordinador = document.getElementById('buscarCoordinador');
+        const filasTablaCoordinador = document.querySelectorAll('#tablaCoordinadorOperador tbody tr');
+
+        function filtrarCoordinadorTabla() {
+            const termino = (buscarCoordinador?.value || '').toLowerCase().trim();
+
+            filasTablaCoordinador.forEach(function (fila) {
+                const celdas = fila.querySelectorAll('td');
+                if (!celdas.length || celdas.length < 5) {
+                    return;
+                }
+
+                const nombre = (celdas[1]?.textContent || '').toLowerCase();
+                const apellido = (celdas[2]?.textContent || '').toLowerCase();
+                const cedula = (celdas[4]?.textContent || '').toLowerCase();
+                const coincide = !termino || nombre.includes(termino) || apellido.includes(termino) || `${nombre} ${apellido}`.includes(termino) || cedula.includes(termino);
+
+                fila.style.display = coincide ? '' : 'none';
+            });
+        }
 
         function filtrarAgenciasModal() {
             const termino = (buscarTerminalAgencia?.value || '').toLowerCase().trim();
@@ -226,6 +253,10 @@
 
         if (buscarTerminalAgencia) {
             buscarTerminalAgencia.addEventListener('input', filtrarAgenciasModal);
+        }
+
+        if (buscarCoordinador) {
+            buscarCoordinador.addEventListener('input', filtrarCoordinadorTabla);
         }
 
         document.querySelectorAll('.btn-ver-agencias').forEach(function (button) {
