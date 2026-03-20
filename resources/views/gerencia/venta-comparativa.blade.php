@@ -453,25 +453,37 @@
             dom: 'lrtip'
         });
 
-        function obtenerValorMetrica(fila, metrica) {
-            if (!fila || !fila.dataset) return 0;
-            if (metrica === 'ventasAyer') return Number(fila.dataset.ventasAyer || 0);
-            if (metrica === 'ventasHace2Dias') return Number(fila.dataset.ventasHace2Dias || 0);
-            if (metrica === 'ventasHace3Dias') return Number(fila.dataset.ventasHace3Dias || 0);
-            return Number(fila.dataset.ventasHoy || 0);
+        function indiceMetrica(metrica) {
+            if (metrica === 'ventasAyer') return 2;
+            if (metrica === 'ventasHace2Dias') return 3;
+            if (metrica === 'ventasHace3Dias') return 4;
+            return 1;
+        }
+
+        function parseMonto(texto) {
+            const normalizado = String(texto || '').replace(/[^0-9.-]/g, '');
+            const valor = Number(normalizado);
+            return Number.isFinite(valor) ? valor : 0;
         }
 
         function filasConDatosAplicados() {
             return dataTable.rows({ search: 'applied' }).nodes().toArray().filter(function (fila) {
-                return fila && fila.dataset && Object.prototype.hasOwnProperty.call(fila.dataset, 'ventasHoy');
+                const celdas = fila.querySelectorAll('td');
+                return celdas && celdas.length >= 5;
             });
+        }
+
+        function valorFilaDesdeCeldas(fila, metrica) {
+            const indice = indiceMetrica(metrica);
+            const celdas = fila.querySelectorAll('td');
+            return parseMonto(celdas[indice]?.textContent || '0');
         }
 
         function actualizarConteoCeros() {
             if (!badgeConteoCeros) return;
             const metrica = selectDiaCero?.value || 'ventasHoy';
             const conteo = filasConDatosAplicados().filter(function (fila) {
-                return obtenerValorMetrica(fila, metrica) <= 0;
+                return valorFilaDesdeCeldas(fila, metrica) <= 0;
             }).length;
             badgeConteoCeros.textContent = 'Agencias en cero: ' + conteo.toLocaleString('es-DO');
         }
@@ -481,12 +493,13 @@
             if (!filtroCerosActivo) return true;
 
             const metrica = selectDiaCero?.value || 'ventasHoy';
-            const fila = dataTable.row(dataIndex).node();
-            if (!fila || !fila.dataset || !Object.prototype.hasOwnProperty.call(fila.dataset, 'ventasHoy')) {
+            const indice = indiceMetrica(metrica);
+            const valor = parseMonto(_data?.[indice] || '0');
+            if (!Number.isFinite(valor)) {
                 return false;
             }
 
-            return obtenerValorMetrica(fila, metrica) <= 0;
+            return valor <= 0;
         });
 
         const buscarInput = document.getElementById('buscar-agencia-comparativa');
@@ -518,7 +531,7 @@
             btnDetalleCeros.addEventListener('click', function () {
                 const metrica = selectDiaCero?.value || 'ventasHoy';
                 const ceros = filasConDatosAplicados().filter(function (fila) {
-                    return obtenerValorMetrica(fila, metrica) <= 0;
+                    return valorFilaDesdeCeldas(fila, metrica) <= 0;
                 });
 
                 const tituloMetrica = {
