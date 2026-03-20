@@ -257,8 +257,19 @@
                         </div>
 
                         <div class="card">
-                            <div class="card-header">
+                            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                                 <h5 class="card-title mb-0">Reporte Venta Comparativa ({{ strtoupper($sistemaSeleccionado ?? 'lotobet') }})</h5>
+                                <div class="d-flex align-items-center flex-wrap gap-2">
+                                    <select class="form-select form-select-sm" id="select-dia-cero" style="min-width: 190px;">
+                                        <option value="ventasHoy">Validar cero en Hoy</option>
+                                        <option value="ventasAyer">Validar cero en Ayer</option>
+                                        <option value="ventasHace2Dias">Validar cero en Hace 2 Dias</option>
+                                        <option value="ventasHace3Dias">Validar cero en Hace 3 Dias</option>
+                                    </select>
+                                    <button type="button" class="btn btn-soft-warning btn-sm" id="btn-filtro-ceros">Solo ceros</button>
+                                    <button type="button" class="btn btn-soft-info btn-sm" id="btn-detalle-ceros">Detalle ceros</button>
+                                    <span class="badge bg-warning-subtle text-warning" id="badge-conteo-ceros">Agencias en cero: 0</span>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
@@ -274,7 +285,13 @@
                                         </thead>
                                         <tbody>
                                             @forelse (($resumenComparativo ?? []) as $item)
-                                                <tr>
+                                                <tr
+                                                    data-agencia="{{ $item['agencia'] ?? '' }}"
+                                                    data-nombre-agencia="{{ $item['nombre_agencia'] ?? '' }}"
+                                                    data-ventas-hoy="{{ (float) ($item['ventas_hoy'] ?? 0) }}"
+                                                    data-ventas-ayer="{{ (float) ($item['ventas_ayer'] ?? 0) }}"
+                                                    data-ventas-hace-2-dias="{{ (float) ($item['ventas_hace_2_dias'] ?? 0) }}"
+                                                    data-ventas-hace-3-dias="{{ (float) ($item['ventas_hace_3_dias'] ?? 0) }}">
                                                     <td>
                                                         <div class="fw-medium">{{ $item['nombre_agencia'] ?? ($item['agencia'] ?? 'SIN AGENCIA') }}</div>
                                                         <small class="text-muted">Terminal: {{ $item['terminal'] ?? ($item['agencia'] ?? '-') }}</small>
@@ -410,6 +427,12 @@
             return;
         }
 
+        const selectDiaCero = document.getElementById('select-dia-cero');
+        const btnFiltroCeros = document.getElementById('btn-filtro-ceros');
+        const btnDetalleCeros = document.getElementById('btn-detalle-ceros');
+        const badgeConteoCeros = document.getElementById('badge-conteo-ceros');
+        let filtroCerosActivo = false;
+
         const dataTable = tableElement.DataTable({
             responsive: true,
             pageLength: 25,
@@ -430,12 +453,111 @@
             dom: 'lrtip'
         });
 
+        function obtenerValorMetrica(fila, metrica) {
+            if (!fila || !fila.dataset) return 0;
+            if (metrica === 'ventasAyer') return Number(fila.dataset.ventasAyer || 0);
+            if (metrica === 'ventasHace2Dias') return Number(fila.dataset.ventasHace2Dias || 0);
+            if (metrica === 'ventasHace3Dias') return Number(fila.dataset.ventasHace3Dias || 0);
+            return Number(fila.dataset.ventasHoy || 0);
+        }
+
+        function filasConDatosAplicados() {
+            return dataTable.rows({ search: 'applied' }).nodes().toArray().filter(function (fila) {
+                return fila && fila.dataset && Object.prototype.hasOwnProperty.call(fila.dataset, 'ventasHoy');
+            });
+        }
+
+        function actualizarConteoCeros() {
+            if (!badgeConteoCeros) return;
+            const metrica = selectDiaCero?.value || 'ventasHoy';
+            const conteo = filasConDatosAplicados().filter(function (fila) {
+                return obtenerValorMetrica(fila, metrica) <= 0;
+            }).length;
+            badgeConteoCeros.textContent = 'Agencias en cero: ' + conteo.toLocaleString('es-DO');
+        }
+
+        $.fn.dataTable.ext.search.push(function (settings, _data, dataIndex) {
+            if (settings.nTable !== tableElement[0]) return true;
+            if (!filtroCerosActivo) return true;
+
+            const metrica = selectDiaCero?.value || 'ventasHoy';
+            const fila = dataTable.row(dataIndex).node();
+            if (!fila || !fila.dataset || !Object.prototype.hasOwnProperty.call(fila.dataset, 'ventasHoy')) {
+                return false;
+            }
+
+            return obtenerValorMetrica(fila, metrica) <= 0;
+        });
+
         const buscarInput = document.getElementById('buscar-agencia-comparativa');
         if (buscarInput) {
             buscarInput.addEventListener('input', function () {
                 dataTable.search(this.value || '').draw();
             });
         }
+
+        if (selectDiaCero) {
+            selectDiaCero.addEventListener('change', function () {
+                dataTable.draw();
+                actualizarConteoCeros();
+            });
+        }
+
+        if (btnFiltroCeros) {
+            btnFiltroCeros.addEventListener('click', function () {
+                filtroCerosActivo = !filtroCerosActivo;
+                this.classList.remove('btn-soft-warning', 'btn-warning');
+                this.classList.add(filtroCerosActivo ? 'btn-warning' : 'btn-soft-warning');
+                this.textContent = filtroCerosActivo ? 'Mostrando ceros' : 'Solo ceros';
+                dataTable.draw();
+                actualizarConteoCeros();
+            });
+        }
+
+        if (btnDetalleCeros) {
+            btnDetalleCeros.addEventListener('click', function () {
+                const metrica = selectDiaCero?.value || 'ventasHoy';
+                const ceros = filasConDatosAplicados().filter(function (fila) {
+                    return obtenerValorMetrica(fila, metrica) <= 0;
+                });
+
+                const tituloMetrica = {
+                    ventasHoy: 'Hoy',
+                    ventasAyer: 'Ayer',
+                    ventasHace2Dias: 'Hace 2 dias',
+                    ventasHace3Dias: 'Hace 3 dias'
+                }[metrica] || 'Hoy';
+
+                if (typeof Swal !== 'undefined') {
+                    if (!ceros.length) {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Sin agencias en cero',
+                            text: 'No hay agencias en cero para ' + tituloMetrica + '.',
+                        });
+                        return;
+                    }
+
+                    const html = ceros.map(function (fila) {
+                        const terminal = fila.dataset.agencia || '-';
+                        const nombre = fila.dataset.nombreAgencia || terminal;
+                        return '<div style="text-align:left;border-bottom:1px solid #e2e8f0;padding:6px 0;">' +
+                            '<strong>' + terminal + '</strong> - ' + nombre +
+                            '</div>';
+                    }).join('');
+
+                    Swal.fire({
+                        title: 'Agencias en cero (' + tituloMetrica + ')',
+                        html: '<div style="max-height:300px;overflow:auto;">' + html + '</div>',
+                        width: 640,
+                        confirmButtonText: 'Cerrar'
+                    });
+                }
+            });
+        }
+
+        dataTable.on('draw', actualizarConteoCeros);
+        actualizarConteoCeros();
     });
 </script>
 @endsection
