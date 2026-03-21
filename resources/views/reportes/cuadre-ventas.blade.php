@@ -4,6 +4,16 @@
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
+                <style>
+                    .btn-rojo-claro,
+                    .btn-rojo-claro:hover,
+                    .btn-rojo-claro:focus,
+                    .btn-rojo-claro:active {
+                        background-color: #fc0137 !important;
+                        border-color: #fc0137 !important;
+                        color: #fff !important;
+                    }
+                </style>
                 <!-- start page title -->
                 <div class="row">
                     <div class="col-12">
@@ -183,7 +193,7 @@
             const btnDiasFaltantes = document.getElementById('btnDiasFaltantes');
             if (!btnDiasFaltantes) return;
 
-            btnDiasFaltantes.classList.remove('btn-success', 'btn-warning');
+            btnDiasFaltantes.classList.remove('btn-success', 'btn-rojo-claro');
 
             if (!fechasFaltantesGlobal.length) {
                 btnDiasFaltantes.classList.add('btn-success');
@@ -192,7 +202,7 @@
                 return;
             }
 
-            btnDiasFaltantes.classList.add('btn-warning');
+            btnDiasFaltantes.classList.add('btn-rojo-claro');
             btnDiasFaltantes.textContent = `Faltan ${fechasFaltantesGlobal.length} días del rango`;
             btnDiasFaltantes.disabled = false;
         }
