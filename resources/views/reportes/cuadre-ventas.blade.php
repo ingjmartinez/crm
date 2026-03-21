@@ -51,7 +51,7 @@
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">&nbsp;</label>
-                                        <button type="button" class="btn btn-warning d-block w-100" id="btnDiasFaltantes" data-bs-toggle="modal" data-bs-target="#modalDiasFaltantes" disabled>
+                                        <button type="button" class="btn btn-success d-block w-100" id="btnDiasFaltantes" data-bs-toggle="modal" data-bs-target="#modalDiasFaltantes" disabled>
                                             Días faltantes del rango
                                         </button>
                                     </div>
@@ -183,12 +183,16 @@
             const btnDiasFaltantes = document.getElementById('btnDiasFaltantes');
             if (!btnDiasFaltantes) return;
 
+            btnDiasFaltantes.classList.remove('btn-success', 'btn-warning');
+
             if (!fechasFaltantesGlobal.length) {
+                btnDiasFaltantes.classList.add('btn-success');
                 btnDiasFaltantes.textContent = 'No faltan días del rango';
                 btnDiasFaltantes.disabled = true;
                 return;
             }
 
+            btnDiasFaltantes.classList.add('btn-warning');
             btnDiasFaltantes.textContent = `Faltan ${fechasFaltantesGlobal.length} días del rango`;
             btnDiasFaltantes.disabled = false;
         }
