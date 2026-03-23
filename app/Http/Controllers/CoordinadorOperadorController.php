@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Agencia;
 use App\Models\CoordinadorOperador;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CoordinadorOperadorController extends Controller
 {
@@ -20,7 +21,26 @@ class CoordinadorOperadorController extends Controller
             ->orderBy('agencia')
             ->get();
 
-        return view('coordinador_operador.index', compact('registros', 'agencias'));
+        $asignacionesAgencia = DB::table('coordinador_operador_agencia as coa')
+            ->join('coordinador_operador as co', 'co.id', '=', 'coa.coordinador_operador_id')
+            ->select(
+                'coa.agencia_id',
+                'co.id as coordinador_id',
+                'co.nombre',
+                'co.apellido'
+            )
+            ->get()
+            ->groupBy('agencia_id')
+            ->map(function ($rows) {
+                return $rows->map(function ($row) {
+                    return [
+                        'id' => (int) $row->coordinador_id,
+                        'nombre' => trim(($row->nombre ?? '') . ' ' . ($row->apellido ?? '')),
+                    ];
+                })->values();
+            });
+
+        return view('coordinador_operador.index', compact('registros', 'agencias', 'asignacionesAgencia'));
     }
 
     public function create()
@@ -92,9 +112,39 @@ class CoordinadorOperadorController extends Controller
         $validated = $request->validate([
             'agencias' => ['nullable', 'array'],
             'agencias.*' => ['integer', 'exists:agencias,id'],
+            'confirmar_reasignacion' => ['nullable', 'boolean'],
         ]);
 
-        $coordinador_operador->agencias()->sync($validated['agencias'] ?? []);
+        $agenciasSeleccionadas = collect($validated['agencias'] ?? [])->map(fn($id) => (int) $id)->values();
+
+        $conflictos = DB::table('coordinador_operador_agencia as coa')
+            ->join('coordinador_operador as co', 'co.id', '=', 'coa.coordinador_operador_id')
+            ->join('agencias as a', 'a.id', '=', 'coa.agencia_id')
+            ->whereIn('coa.agencia_id', $agenciasSeleccionadas)
+            ->where('coa.coordinador_operador_id', '!=', $coordinador_operador->id)
+            ->select(
+                'coa.agencia_id',
+                'a.terminal',
+                'co.nombre',
+                'co.apellido'
+            )
+            ->get();
+
+        $confirmarReasignacion = (bool) ($validated['confirmar_reasignacion'] ?? false);
+
+        if ($conflictos->isNotEmpty() && !$confirmarReasignacion) {
+            return redirect()->route('coordinador-operador.index')
+                ->with('error', 'Algunas agencias ya están asignadas a otro coordinador. Confirma la reasignación para moverlas.');
+        }
+
+        if ($conflictos->isNotEmpty() && $confirmarReasignacion) {
+            DB::table('coordinador_operador_agencia')
+                ->whereIn('agencia_id', $conflictos->pluck('agencia_id')->unique()->values())
+                ->where('coordinador_operador_id', '!=', $coordinador_operador->id)
+                ->delete();
+        }
+
+        $coordinador_operador->agencias()->sync($agenciasSeleccionadas->all());
 
         return redirect()->route('coordinador-operador.index')
             ->with('success', 'Agencias asignadas correctamente.');

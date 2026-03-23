@@ -43,6 +43,11 @@
                                                 </button>
                                             </div>
                                             <div class="col-6 col-md-3 d-grid">
+                                                <button type="button" class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#massUpdateModal">
+                                                    <i class="ri-refresh-line align-bottom me-1"></i><span class="d-none d-md-inline">Actualizar masiva</span><span class="d-md-none">Act.</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6 col-md-3 d-grid">
                                                 <a href="{{ route('agencias.export') }}" class="btn btn-info btn-sm">
                                                     <i class="ri-download-2-line align-bottom me-1"></i><span class="d-none d-md-inline">Exportar</span><span class="d-md-none">Exp.</span>
                                                 </a>
@@ -183,6 +188,52 @@
                         <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancelar</button>
                         <button type="submit" class="btn btn-success flex-grow-1">
                             <i class="ri-upload-2-line me-1"></i>Importar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para actualización masiva -->
+    <div class="modal fade" id="massUpdateModal" tabindex="-1" aria-labelledby="massUpdateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form action="{{ route('agencias.mass-update') }}" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="massUpdateModalLabel">Actualización masiva de Agencias</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="mass_update_file" class="form-label">Seleccione el archivo Excel</label>
+                            <input type="file" class="form-control" id="mass_update_file" name="file" accept=".xlsx,.xls,.csv" required>
+                            <div class="form-text">Formatos aceptados: .xlsx, .xls, .csv</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <a href="{{ route('agencias.mass-update-template') }}" class="btn btn-outline-primary btn-sm">
+                                <i class="ri-download-line me-1"></i>Descargar plantilla de actualización
+                            </a>
+                            <div class="form-text mt-1">Use esta plantilla para actualizar solo los campos que necesite por agencia.</div>
+                        </div>
+
+                        <div class="alert alert-warning mb-0">
+                            <strong class="d-block mb-2">Reglas de actualización:</strong>
+                            <ul class="mb-2 ps-3">
+                                <li>Para ubicar la agencia, incluya al menos una columna: ID, Terminal o Agencia.</li>
+                                <li>Solo se actualizan los campos que tengan valor en cada fila.</li>
+                                <li>Si una celda viene vacía, ese campo no se modifica.</li>
+                                <li>Puede actualizar 1, 2 o más campos en el mismo archivo.</li>
+                            </ul>
+                            <small class="text-muted">Campos soportados: Agencia, Terminal, Horario AM, Horario PM, Nombre Agencia, Sistema, Ciudad, Ruta, Operador, Coordinador, Estatus, Aplica Incentivo.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer d-flex gap-2">
+                        <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary flex-grow-1">
+                            <i class="ri-refresh-line me-1"></i>Actualizar masiva
                         </button>
                     </div>
                 </form>
@@ -336,13 +387,36 @@
         });
 
         // Mostrar mensaje de éxito si existe
-        @if(session('success'))
+        @if(session('success') && !session('mass_update_result'))
             Swal.fire({
                 icon: 'success',
                 title: '¡Éxito!',
                 text: '{{ session('success') }}',
                 timer: 3000,
                 showConfirmButton: false
+            });
+        @endif
+
+        // Resumen de actualización masiva con conteo
+        @if(session('mass_update_result'))
+            const massUpdateResult = @json(session('mass_update_result'));
+            Swal.fire({
+                icon: 'info',
+                title: 'Actualización masiva finalizada',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-2">Resumen del archivo procesado:</p>
+                        <ul class="mb-0 ps-3">
+                            <li>Filas procesadas: <strong>${Number(massUpdateResult.procesadas || 0).toLocaleString('es-DO')}</strong></li>
+                            <li>Agencias actualizadas: <strong>${Number(massUpdateResult.actualizadas || 0).toLocaleString('es-DO')}</strong></li>
+                            <li>Sin cambios: <strong>${Number(massUpdateResult.sin_cambios || 0).toLocaleString('es-DO')}</strong></li>
+                            <li>No encontradas: <strong>${Number(massUpdateResult.no_encontradas || 0).toLocaleString('es-DO')}</strong></li>
+                            <li>Filas inválidas: <strong>${Number(massUpdateResult.invalidas || 0).toLocaleString('es-DO')}</strong></li>
+                        </ul>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#0ab39c'
             });
         @endif
 

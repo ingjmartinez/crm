@@ -32,6 +32,10 @@
                                     <div class="alert alert-success">{{ session('success') }}</div>
                                 @endif
 
+                                @if(session('error'))
+                                    <div class="alert alert-danger">{{ session('error') }}</div>
+                                @endif
+
                                 <div class="row mb-3">
                                     <div class="col-12 col-md-5 col-lg-4">
                                         <label for="buscarCoordinador" class="form-label">Buscar coordinador</label>
@@ -81,6 +85,7 @@
                                                                 class="btn btn-info btn-sm btn-asignar-agencias"
                                                                 title="Asignar agencias"
                                                                 data-id="{{ $item->id }}"
+                                                                data-coordinador-id="{{ $item->id }}"
                                                                 data-nombre="{{ $item->nombre }} {{ $item->apellido }}"
                                                                 data-asignadas='@json($item->agencias->pluck('id')->values())'>
                                                                 <i class="ri-building-line"></i>
@@ -123,6 +128,7 @@
             <div class="modal-content">
                 <form id="formAsignarAgencias" method="POST">
                     @csrf
+                    <input type="hidden" name="confirmar_reasignacion" id="confirmarReasignacion" value="0">
                     <div class="modal-header">
                         <h5 class="modal-title" id="asignarAgenciasModalLabel">Asignar agencias</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -137,10 +143,20 @@
                             <input type="text" id="buscarTerminalAgencia" class="form-control" placeholder="Escribe una terminal para filtrar...">
                         </div>
 
+                        <div class="mb-3">
+                            <label for="terminalesMasivos" class="form-label mb-1">Asignación masiva por terminal</label>
+                            <textarea id="terminalesMasivos" class="form-control" rows="4" placeholder="Pega aquí los códigos de terminal desde Excel o TXT (uno por línea, columna o separados por coma)"></textarea>
+                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="btnAplicarTerminalesMasivos">Marcar terminales pegadas</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarTerminalesMasivos">Limpiar pegado</button>
+                            </div>
+                            <small class="text-muted d-block mt-1" id="resumenTerminalesMasivos"></small>
+                        </div>
+
                         <div class="border rounded p-3" style="max-height: 380px; overflow-y: auto;">
                             <div class="row g-2" id="listaAgenciasAsignacion">
                                 @forelse($agencias as $agencia)
-                                    <div class="col-12 col-md-6 item-agencia" data-terminal="{{ strtolower($agencia->terminal ?? '') }}" data-texto="{{ strtolower(($agencia->terminal ?? '') . ' ' . ($agencia->nombre_agencia ?? '')) }}">
+                                    <div class="col-12 col-md-6 item-agencia" data-agencia-id="{{ $agencia->id }}" data-terminal="{{ strtolower($agencia->terminal ?? '') }}" data-texto="{{ strtolower(($agencia->terminal ?? '') . ' ' . ($agencia->nombre_agencia ?? '')) }}">
                                         <div class="form-check">
                                             <input class="form-check-input checkbox-agencia" type="checkbox" name="agencias[]" value="{{ $agencia->id }}" id="agencia_{{ $agencia->id }}">
                                             <label class="form-check-label" for="agencia_{{ $agencia->id }}">
@@ -187,6 +203,7 @@
 @section('script')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const asignacionesAgencia = @json($asignacionesAgencia ?? []);
         const modalElement = document.getElementById('asignarAgenciasModal');
         const modal = new bootstrap.Modal(modalElement);
         const modalVerAgenciasElement = document.getElementById('verAgenciasAsignadasModal');
@@ -201,6 +218,113 @@
         const itemsAgencia = document.querySelectorAll('.item-agencia');
         const buscarCoordinador = document.getElementById('buscarCoordinador');
         const filasTablaCoordinador = document.querySelectorAll('#tablaCoordinadorOperador tbody tr');
+        const terminalesMasivos = document.getElementById('terminalesMasivos');
+        const btnAplicarTerminalesMasivos = document.getElementById('btnAplicarTerminalesMasivos');
+        const btnLimpiarTerminalesMasivos = document.getElementById('btnLimpiarTerminalesMasivos');
+        const resumenTerminalesMasivos = document.getElementById('resumenTerminalesMasivos');
+        const confirmarReasignacion = document.getElementById('confirmarReasignacion');
+
+        function normalizarTerminal(valor) {
+            return String(valor || '').trim().toLowerCase();
+        }
+
+        function extraerTerminalesPegadas(texto) {
+            return Array.from(
+                new Set(
+                    String(texto || '')
+                        .split(/[\s,;|]+/)
+                        .map(normalizarTerminal)
+                        .filter(Boolean)
+                )
+            );
+        }
+
+        function aplicarTerminalesMasivos() {
+            const terminales = extraerTerminalesPegadas(terminalesMasivos?.value || '');
+
+            if (!terminales.length) {
+                if (resumenTerminalesMasivos) {
+                    resumenTerminalesMasivos.textContent = 'No se detectaron terminales para procesar.';
+                }
+                return;
+            }
+
+            const mapaTerminales = new Set(terminales);
+            let encontradas = 0;
+
+            itemsAgencia.forEach(function (item) {
+                const terminalItem = normalizarTerminal(item.dataset.terminal || '');
+                const checkbox = item.querySelector('.checkbox-agencia');
+
+                if (checkbox && terminalItem && mapaTerminales.has(terminalItem)) {
+                    checkbox.checked = true;
+                    encontradas++;
+                }
+            });
+
+            if (resumenTerminalesMasivos) {
+                resumenTerminalesMasivos.textContent = `Terminales procesadas: ${terminales.length}. Coincidencias marcadas: ${encontradas}.`;
+            }
+        }
+
+        function limpiarTerminalesMasivos() {
+            if (terminalesMasivos) {
+                terminalesMasivos.value = '';
+            }
+            if (resumenTerminalesMasivos) {
+                resumenTerminalesMasivos.textContent = '';
+            }
+        }
+
+        function obtenerConflictosSeleccionados(coordinadorIdActual) {
+            const conflictos = [];
+            const asignadasIniciales = new Set(
+                JSON.parse(form?.dataset?.asignadasIniciales || '[]').map(function (id) {
+                    return Number(id);
+                })
+            );
+
+            itemsAgencia.forEach(function (item) {
+                const checkbox = item.querySelector('.checkbox-agencia');
+                if (!checkbox || !checkbox.checked) {
+                    return;
+                }
+
+                const agenciaId = Number(item.dataset.agenciaId || checkbox.value || 0);
+
+                // Solo validamos agencias nuevas marcadas en esta asignacion.
+                if (asignadasIniciales.has(agenciaId)) {
+                    return;
+                }
+
+                const terminal = item.dataset.terminal || '-';
+                const asignados = Array.isArray(asignacionesAgencia[String(agenciaId)])
+                    ? asignacionesAgencia[String(agenciaId)]
+                    : [];
+
+                const asignadosOtros = asignados.filter(function (owner) {
+                    return Number(owner.id) !== Number(coordinadorIdActual);
+                });
+
+                if (asignadosOtros.length) {
+                    conflictos.push({
+                        terminal: terminal || '-',
+                        asignadosOtros: asignadosOtros,
+                    });
+                }
+            });
+
+            return conflictos;
+        }
+
+        function escaparHtml(texto) {
+            return String(texto || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
 
         function filtrarCoordinadorTabla() {
             const termino = (buscarCoordinador?.value || '').toLowerCase().trim();
@@ -236,7 +360,13 @@
                 const asignadas = JSON.parse(this.dataset.asignadas || '[]');
 
                 form.action = `/coordinador-operador/${id}/asignar-agencias`;
+                form.dataset.coordinadorId = String(this.dataset.coordinadorId || id || '0');
+                form.dataset.asignadasIniciales = JSON.stringify(asignadas);
                 nombreAsignacion.textContent = nombre;
+
+                if (confirmarReasignacion) {
+                    confirmarReasignacion.value = '0';
+                }
 
                 checkboxes.forEach(function (checkbox) {
                     checkbox.checked = asignadas.includes(Number(checkbox.value));
@@ -247,9 +377,93 @@
                     filtrarAgenciasModal();
                 }
 
+                limpiarTerminalesMasivos();
+
                 modal.show();
             });
         });
+
+        if (form) {
+            form.addEventListener('submit', function (event) {
+                if (form.dataset.confirmadoReasignacion === '1') {
+                    form.dataset.confirmadoReasignacion = '0';
+                    return;
+                }
+
+                const coordinadorIdActual = Number(form.dataset.coordinadorId || 0);
+                const conflictos = obtenerConflictosSeleccionados(coordinadorIdActual);
+
+                if (!conflictos.length) {
+                    if (confirmarReasignacion) {
+                        confirmarReasignacion.value = '0';
+                    }
+                    return;
+                }
+
+                const detalle = conflictos
+                    .slice(0, 8)
+                    .map(function (conflicto) {
+                        const duenos = conflicto.asignadosOtros
+                            .map(function (owner) { return owner.nombre || 'Coordinador'; })
+                            .join(', ');
+                        return {
+                            terminal: conflicto.terminal,
+                            duenos: duenos,
+                        };
+                    })
+                    .map(function (item) {
+                        return `<li class="mb-1"><strong>${escaparHtml(item.terminal)}</strong>: ${escaparHtml(item.duenos)}</li>`;
+                    })
+                    .join('');
+
+                const excedente = conflictos.length > 8
+                    ? `<p class="text-muted small mt-2 mb-0">... y ${conflictos.length - 8} mas.</p>`
+                    : '';
+
+                event.preventDefault();
+
+                if (window.Swal && typeof window.Swal.fire === 'function') {
+                    const htmlDetalle = `
+                        <p class="mb-2">Estas agencias ya estan asignadas a otro coordinador:</p>
+                        <ul class="text-start ps-3 mb-0">${detalle}</ul>
+                        ${excedente}
+                    `;
+
+                    window.Swal.fire({
+                        icon: 'warning',
+                        title: 'Reasignar agencias',
+                        html: htmlDetalle,
+                        showCancelButton: true,
+                        confirmButtonText: 'Si, mover agencias',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#0ab39c',
+                        cancelButtonColor: '#f06548',
+                        reverseButtons: true,
+                    }).then(function (resultado) {
+                        if (!resultado.isConfirmed) {
+                            if (confirmarReasignacion) {
+                                confirmarReasignacion.value = '0';
+                            }
+                            return;
+                        }
+
+                        if (confirmarReasignacion) {
+                            confirmarReasignacion.value = '1';
+                        }
+
+                        form.dataset.confirmadoReasignacion = '1';
+                        form.submit();
+                    });
+                    return;
+                }
+
+                // Si SweetAlert no esta disponible, no mostramos confirmacion nativa
+                // para evitar el mensaje negro del navegador.
+                if (confirmarReasignacion) {
+                    confirmarReasignacion.value = '0';
+                }
+            });
+        }
 
         if (buscarTerminalAgencia) {
             buscarTerminalAgencia.addEventListener('input', filtrarAgenciasModal);
@@ -257,6 +471,14 @@
 
         if (buscarCoordinador) {
             buscarCoordinador.addEventListener('input', filtrarCoordinadorTabla);
+        }
+
+        if (btnAplicarTerminalesMasivos) {
+            btnAplicarTerminalesMasivos.addEventListener('click', aplicarTerminalesMasivos);
+        }
+
+        if (btnLimpiarTerminalesMasivos) {
+            btnLimpiarTerminalesMasivos.addEventListener('click', limpiarTerminalesMasivos);
         }
 
         document.querySelectorAll('.btn-ver-agencias').forEach(function (button) {

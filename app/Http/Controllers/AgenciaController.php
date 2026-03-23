@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\AgenciasExport;
+use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Imports\AgenciasImport;
 
 class AgenciaController extends Controller
@@ -674,6 +675,194 @@ class AgenciaController extends Controller
     }
 
     /**
+     * Actualizacion masiva selectiva desde Excel.
+     * Solo actualiza los campos con valor en cada fila.
+     */
+    public function massUpdate(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,xls,csv|max:4096',
+        ]);
+
+        try {
+            $import = new AgenciasActualizacionMasivaImport();
+            Excel::import($import, $request->file('file'));
+
+            $rows = $import->rows ?? collect();
+            if ($rows->isEmpty()) {
+                return redirect()->route('agencias.index')
+                    ->with('error', 'El archivo no contiene filas para procesar.');
+            }
+
+            [$operadores, $coordinadores] = $this->obtenerOpcionesCoordinadorOperador();
+            $operadoresSet = collect($operadores)->flip();
+            $coordinadoresSet = collect($coordinadores)->flip();
+
+            $procesadas = 0;
+            $actualizadas = 0;
+            $sinCambios = 0;
+            $noEncontradas = 0;
+            $filasInvalidas = 0;
+
+            foreach ($rows as $rowCollection) {
+                $procesadas++;
+                $row = collect($rowCollection)->toArray();
+
+                $agencia = $this->buscarAgenciaParaActualizacion($row);
+                if (!$agencia) {
+                    $noEncontradas++;
+                    continue;
+                }
+
+                $updates = $this->extraerCamposParaActualizacionMasiva($row);
+
+                if (array_key_exists('operador', $updates) && $updates['operador'] !== '' && !$operadoresSet->has($updates['operador'])) {
+                    $filasInvalidas++;
+                    continue;
+                }
+
+                if (array_key_exists('coordinador', $updates) && $updates['coordinador'] !== '' && !$coordinadoresSet->has($updates['coordinador'])) {
+                    $filasInvalidas++;
+                    continue;
+                }
+
+                if (empty($updates)) {
+                    $sinCambios++;
+                    continue;
+                }
+
+                $agencia->update($updates);
+                $actualizadas++;
+
+                if (array_key_exists('coordinador', $updates) || array_key_exists('operador', $updates)) {
+                    $this->sincronizarAsignacionesCoordinadorOperador(
+                        $agencia->id,
+                        (string) ($agencia->coordinador ?? ''),
+                        (string) ($agencia->operador ?? '')
+                    );
+                }
+            }
+
+            $resultado = [
+                'procesadas' => $procesadas,
+                'actualizadas' => $actualizadas,
+                'sin_cambios' => $sinCambios,
+                'no_encontradas' => $noEncontradas,
+                'invalidas' => $filasInvalidas,
+            ];
+
+            $mensaje = "Actualizacion masiva completada. Actualizadas: {$actualizadas}.";
+
+            return redirect()->route('agencias.index')
+                ->with('success', $mensaje)
+                ->with('mass_update_result', $resultado);
+        } catch (\Exception $e) {
+            return redirect()->route('agencias.index')
+                ->with('error', 'Error en actualizacion masiva: ' . $e->getMessage());
+        }
+    }
+
+    private function buscarAgenciaParaActualizacion(array $row): ?Agencia
+    {
+        $id = $this->valorColumna($row, ['id']);
+        if ($id !== null && $id !== '') {
+            return Agencia::query()->find((int) $id);
+        }
+
+        $terminal = $this->valorColumna($row, ['terminal']);
+        if ($terminal !== null && trim((string) $terminal) !== '') {
+            return Agencia::query()->where('terminal', trim((string) $terminal))->first();
+        }
+
+        $codigoAgencia = $this->valorColumna($row, ['agencia']);
+        if ($codigoAgencia !== null && trim((string) $codigoAgencia) !== '') {
+            return Agencia::query()->where('agencia', trim((string) $codigoAgencia))->first();
+        }
+
+        return null;
+    }
+
+    private function extraerCamposParaActualizacionMasiva(array $row): array
+    {
+        $updates = [];
+
+        $mapeo = [
+            'agencia' => ['agencia'],
+            'terminal' => ['terminal'],
+            'horario_am' => ['horario_am', 'horario am'],
+            'horario_pm' => ['horario_pm', 'horario pm'],
+            'nombre_agencia' => ['nombre_agencia', 'nombre agencia'],
+            'sistema' => ['sistema'],
+            'ciudad' => ['ciudad'],
+            'ruta' => ['ruta'],
+            'operador' => ['operador'],
+            'coordinador' => ['coordinador'],
+            'estatus' => ['estatus'],
+            'aplica_incentivo' => ['aplica_incentivo', 'aplica incentivo'],
+        ];
+
+        foreach ($mapeo as $campo => $aliases) {
+            $valor = $this->valorColumna($row, $aliases);
+
+            if ($valor === null || trim((string) $valor) === '') {
+                continue;
+            }
+
+            if ($campo === 'estatus') {
+                $updates[$campo] = $this->parseEstatus((string) $valor);
+                continue;
+            }
+
+            if ($campo === 'aplica_incentivo') {
+                $updates[$campo] = $this->parseAplicaIncentivo((string) $valor);
+                continue;
+            }
+
+            $updates[$campo] = trim((string) $valor);
+        }
+
+        return $updates;
+    }
+
+    private function valorColumna(array $row, array $aliases): mixed
+    {
+        foreach ($aliases as $alias) {
+            $clave = strtolower(trim((string) $alias));
+            $claveConGuionBajo = str_replace(' ', '_', $clave);
+
+            if (array_key_exists($clave, $row)) {
+                return $row[$clave];
+            }
+
+            if (array_key_exists($claveConGuionBajo, $row)) {
+                return $row[$claveConGuionBajo];
+            }
+        }
+
+        return null;
+    }
+
+    private function parseEstatus(string $value): int
+    {
+        $normalized = strtoupper(trim($value));
+        if ($normalized === '1' || $normalized === 'ACTIVO' || $normalized === 'ACTIVE' || $normalized === 'SI' || $normalized === 'S') {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    private function parseAplicaIncentivo(string $value): int
+    {
+        $normalized = strtoupper(trim($value));
+        if ($normalized === 'SI' || $normalized === 'S' || $normalized === 'YES' || $normalized === 'Y' || $normalized === '1') {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /**
      * Download import template
      */
     public function template()
@@ -701,6 +890,59 @@ class AgenciaController extends Controller
         $filename = 'plantilla_agencias.xlsx';
 
         return Excel::download(new class($data) implements 
+            \Maatwebsite\Excel\Concerns\FromArray,
+            \Maatwebsite\Excel\Concerns\WithStyles,
+            \Maatwebsite\Excel\Concerns\ShouldAutoSize
+        {
+            protected $data;
+
+            public function __construct($data)
+            {
+                $this->data = $data;
+            }
+
+            public function array(): array
+            {
+                return $this->data;
+            }
+
+            public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet)
+            {
+                return [
+                    1 => ['font' => ['bold' => true]],
+                ];
+            }
+        }, $filename);
+    }
+
+    /**
+     * Download template for selective mass update.
+     */
+    public function massUpdateTemplate()
+    {
+        $headers = [
+            'ID',
+            'Terminal',
+            'Agencia',
+            'Nombre Agencia',
+            'Ciudad',
+            'Ruta',
+            'Operador',
+            'Coordinador',
+            'Horario AM',
+            'Horario PM',
+            'Sistema',
+            'Estatus',
+            'Aplica Incentivo',
+        ];
+
+        $data = [
+            $headers,
+        ];
+
+        $filename = 'plantilla_actualizacion_masiva_agencias.xlsx';
+
+        return Excel::download(new class($data) implements
             \Maatwebsite\Excel\Concerns\FromArray,
             \Maatwebsite\Excel\Concerns\WithStyles,
             \Maatwebsite\Excel\Concerns\ShouldAutoSize
