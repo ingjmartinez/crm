@@ -235,6 +235,8 @@ Route::get('agencias-list', [AgenciaController::class, 'list'])->name('agencias.
 Route::get('agencias-export', [AgenciaController::class, 'export'])->name('agencias.export');
 Route::post('agencias-import', [AgenciaController::class, 'import'])->name('agencias.import');
 Route::post('agencias-mass-update', [AgenciaController::class, 'massUpdate'])->name('agencias.mass-update');
+Route::post('agencias-mass-update-preview', [AgenciaController::class, 'massUpdatePreview'])->name('agencias.mass-update-preview');
+Route::get('agencias-no-registradas-venta-fija-semana', [AgenciaController::class, 'noRegistradasVentaFijaSemana'])->name('agencias.no-registradas-venta-fija-semana');
 Route::get('agencias-template', [AgenciaController::class, 'template'])->name('agencias.template');
 Route::get('agencias-mass-update-template', [AgenciaController::class, 'massUpdateTemplate'])->name('agencias.mass-update-template');
 Route::get('agencias-incumplimientos-horario', [AgenciaController::class, 'incumplimientosHorario'])->name('agencias.incumplimientos');

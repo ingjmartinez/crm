@@ -211,11 +211,18 @@ class AgenciaController extends Controller
     {
         $query = Agencia::query();
         $estatusFilter = $request->input('estatus_filter', 'todos');
+        $empresaFilter = $request->input('empresa_filter', 'todas');
 
         if ($estatusFilter === 'activo') {
             $query->where('estatus', 1);
         } elseif ($estatusFilter === 'inactivo') {
             $query->where('estatus', 0);
+        }
+
+        if ($empresaFilter === 'joselito') {
+            $query->whereRaw('LOWER(COALESCE(empresa, "")) LIKE ?', ['%joselito%']);
+        } elseif ($empresaFilter === 'negosur') {
+            $query->whereRaw('LOWER(COALESCE(empresa, "")) LIKE ?', ['%negosur%']);
         }
 
         // Si hay búsqueda
@@ -253,6 +260,8 @@ class AgenciaController extends Controller
 
         $totalActivas = Agencia::query()->where('estatus', 1)->count();
         $totalInactivas = Agencia::query()->where('estatus', 0)->count();
+        $totalJoselito = Agencia::query()->whereRaw('LOWER(COALESCE(empresa, "")) LIKE ?', ['%joselito%'])->count();
+        $totalNegosur = Agencia::query()->whereRaw('LOWER(COALESCE(empresa, "")) LIKE ?', ['%negosur%'])->count();
 
         return response()->json([
             'draw' => intval($request->input('draw')),
@@ -261,6 +270,32 @@ class AgenciaController extends Controller
             'data' => $agencias,
             'total_activas' => $totalActivas,
             'total_inactivas' => $totalInactivas,
+            'total_joselito' => $totalJoselito,
+            'total_negosur' => $totalNegosur,
+        ]);
+    }
+
+    /**
+     * API: Terminales con venta fija de la ultima semana no registradas en agencias.
+     */
+    public function noRegistradasVentaFijaSemana(Request $request)
+    {
+        $fechaCorteInput = trim((string) $request->query('fecha_corte', now()->toDateString()));
+
+        try {
+            $fechaCorte = Carbon::createFromFormat('Y-m-d', $fechaCorteInput)->endOfDay();
+        } catch (\Throwable $e) {
+            $fechaCorte = now()->endOfDay();
+        }
+
+        $resultado = $this->obtenerTerminalesNoRegistradasVentaFija($fechaCorte);
+
+        return response()->json([
+            'ok' => true,
+            'desde' => $resultado['desde'],
+            'hasta' => $resultado['hasta'],
+            'total' => count($resultado['terminales']),
+            'terminales' => $resultado['terminales'],
         ]);
     }
 
@@ -650,6 +685,93 @@ class AgenciaController extends Controller
     }
 
     /**
+     * Devuelve terminales con venta fija en 7 dias que no existen en tabla agencias.
+     */
+    private function obtenerTerminalesNoRegistradasVentaFija(Carbon $fechaCorte): array
+    {
+        $fechaInicio = $fechaCorte->copy()->subDays(6)->startOfDay()->toDateString();
+        $fechaFin = $fechaCorte->copy()->toDateString();
+
+        $terminalesRegistradas = Agencia::query()
+            ->whereNotNull('terminal')
+            ->pluck('terminal')
+            ->map(fn($terminal) => $this->normalizarTerminal((string) $terminal))
+            ->filter(fn($terminal) => $terminal !== '0')
+            ->unique()
+            ->values()
+            ->flip();
+
+        $tiposVentaFija = ['tradicional', 'fija', 'venta fija', 'venta_fija'];
+
+        $ventasBet = DB::table('vt_usuarios_bet')
+            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia_id AS CHAR))), ''), '0') AS terminal_key")
+            ->selectRaw('COALESCE(monto, 0) AS monto')
+            ->selectRaw('fecha AS fecha')
+            ->whereNotNull('agencia_id')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->whereRaw('COALESCE(monto, 0) > 0')
+            ->where(function ($query) use ($tiposVentaFija) {
+                foreach ($tiposVentaFija as $index => $tipo) {
+                    if ($index === 0) {
+                        $query->whereRaw('LOWER(TRIM(COALESCE(tipo, ""))) = ?', [$tipo]);
+                        continue;
+                    }
+
+                    $query->orWhereRaw('LOWER(TRIM(COALESCE(tipo, ""))) = ?', [$tipo]);
+                }
+            });
+
+        $ventasNet = DB::table('vt_usuarios_net')
+            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia_id AS CHAR))), ''), '0') AS terminal_key")
+            ->selectRaw('COALESCE(monto, 0) AS monto')
+            ->selectRaw('fecha AS fecha')
+            ->whereNotNull('agencia_id')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->whereRaw('COALESCE(monto, 0) > 0')
+            ->where(function ($query) use ($tiposVentaFija) {
+                foreach ($tiposVentaFija as $index => $tipo) {
+                    if ($index === 0) {
+                        $query->whereRaw('LOWER(TRIM(COALESCE(tipo, ""))) = ?', [$tipo]);
+                        continue;
+                    }
+
+                    $query->orWhereRaw('LOWER(TRIM(COALESCE(tipo, ""))) = ?', [$tipo]);
+                }
+            });
+
+        $ventasConsolidadas = DB::query()
+            ->fromSub($ventasBet->unionAll($ventasNet), 'v')
+            ->selectRaw('terminal_key')
+            ->selectRaw('COUNT(DISTINCT DATE(fecha)) AS dias_con_venta')
+            ->selectRaw('MAX(fecha) AS ultima_fecha')
+            ->whereRaw('terminal_key <> ?', ['0'])
+            ->groupBy('terminal_key')
+            ->orderBy('terminal_key')
+            ->get();
+
+        $terminalesNoRegistradas = $ventasConsolidadas
+            ->filter(function ($row) use ($terminalesRegistradas) {
+                $terminal = (string) ($row->terminal_key ?? '0');
+                return !$terminalesRegistradas->has($terminal);
+            })
+            ->map(function ($row) {
+                return [
+                    'terminal' => (string) ($row->terminal_key ?? ''),
+                    'dias_con_venta' => (int) ($row->dias_con_venta ?? 0),
+                    'ultima_fecha' => $row->ultima_fecha ? Carbon::parse((string) $row->ultima_fecha)->toDateString() : null,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'desde' => $fechaInicio,
+            'hasta' => $fechaFin,
+            'terminales' => $terminalesNoRegistradas,
+        ];
+    }
+
+    /**
      * Export agencias to Excel
      */
     public function export()
@@ -762,6 +884,67 @@ class AgenciaController extends Controller
         } catch (\Exception $e) {
             return redirect()->route('agencias.index')
                 ->with('error', 'Error en actualizacion masiva: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Previsualiza coincidencias de terminales antes de actualizar masivamente.
+     */
+    public function massUpdatePreview(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,xls,csv|max:4096',
+        ]);
+
+        try {
+            $import = new AgenciasActualizacionMasivaImport();
+            Excel::import($import, $request->file('file'));
+
+            $rows = $import->rows ?? collect();
+            if ($rows->isEmpty()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'El archivo no contiene filas para procesar.',
+                ], 422);
+            }
+
+            $terminales = $rows
+                ->map(function ($rowCollection) {
+                    $row = collect($rowCollection)->toArray();
+                    $terminal = $this->valorColumna($row, ['terminal']);
+                    return trim((string) ($terminal ?? ''));
+                })
+                ->filter(fn($terminal) => $terminal !== '')
+                ->values();
+
+            $terminalesUnicos = $terminales->unique()->values();
+
+            $terminalesEncontradas = Agencia::query()
+                ->whereIn('terminal', $terminalesUnicos)
+                ->pluck('terminal')
+                ->map(fn($terminal) => trim((string) $terminal))
+                ->filter(fn($terminal) => $terminal !== '')
+                ->unique()
+                ->values();
+
+            $terminalesNoEncontradas = $terminalesUnicos
+                ->diff($terminalesEncontradas)
+                ->values();
+
+            return response()->json([
+                'ok' => true,
+                'total_filas' => $rows->count(),
+                'terminales_leidas' => $terminales->count(),
+                'terminales_unicas' => $terminalesUnicos->count(),
+                'encontradas' => $terminalesEncontradas->count(),
+                'no_encontradas' => $terminalesNoEncontradas->count(),
+                'terminales_no_encontradas' => $terminalesNoEncontradas->all(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Error al reconocer terminales: ' . $e->getMessage(),
+            ], 500);
         }
     }
 

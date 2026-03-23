@@ -72,11 +72,28 @@
                                             <small class="text-muted d-block">Agencias inactivas</small>
                                             <h5 class="mb-0 text-danger" id="countAgenciasInactivas">0</h5>
                                         </div>
+                                        <div>
+                                            <small class="text-muted d-block">Agencias Joselito</small>
+                                            <h5 class="mb-0 text-info" id="countAgenciasJoselito">0</h5>
+                                        </div>
+                                        <div>
+                                            <small class="text-muted d-block">Agencias Negosur</small>
+                                            <h5 class="mb-0 text-primary" id="countAgenciasNegosur">0</h5>
+                                        </div>
+                                        <div>
+                                            <small class="text-muted d-block">Agencia no registrada</small>
+                                            <h5 class="mb-0 text-warning" id="countAgenciasNoRegistradas" role="button" title="Ver detalle" style="cursor:pointer; text-decoration: underline; text-decoration-style: dotted;">0</h5>
+                                        </div>
                                     </div>
                                     <div class="d-flex gap-2 flex-wrap">
                                         <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFiltroEstadoTodos">Todos</button>
                                         <button type="button" class="btn btn-sm btn-outline-success" id="btnFiltroEstadoActivos">Activas</button>
                                         <button type="button" class="btn btn-sm btn-outline-danger" id="btnFiltroEstadoInactivos">Inactivas</button>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFiltroEmpresaTodas">Todas empresas</button>
+                                        <button type="button" class="btn btn-sm btn-outline-info" id="btnFiltroEmpresaJoselito">Joselito</button>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnFiltroEmpresaNegosur">Negosur</button>
                                     </div>
                                 </div>
                                 <div class="table-responsive">
@@ -212,7 +229,14 @@
                             <label for="mass_update_file" class="form-label">Seleccione el archivo Excel</label>
                             <input type="file" class="form-control" id="mass_update_file" name="file" accept=".xlsx,.xls,.csv" required>
                             <div class="form-text">Formatos aceptados: .xlsx, .xls, .csv</div>
+                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                <button type="button" class="btn btn-outline-info btn-sm" id="btnPreviewTerminalesMasivo">
+                                    <i class="ri-search-eye-line me-1"></i>Reconocer terminales
+                                </button>
+                            </div>
                         </div>
+
+                        <div class="border rounded p-2 mb-3" id="resultadoPreviewMasivo" style="display:none;"></div>
 
                         <div class="mb-3">
                             <a href="{{ route('agencias.mass-update-template') }}" class="btn btn-outline-primary btn-sm">
@@ -234,11 +258,46 @@
                     </div>
                     <div class="modal-footer d-flex gap-2">
                         <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary flex-grow-1">
+                        <button type="submit" class="btn btn-primary flex-grow-1" id="btnEjecutarUpdateMasivo" disabled>
                             <i class="ri-refresh-line me-1"></i>Actualizar masiva
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="noRegistradasModal" tabindex="-1" aria-labelledby="noRegistradasModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="noRegistradasModalLabel">Terminales no registradas con venta fija</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <span class="text-muted small" id="noRegistradasRangoTexto">Ultima semana</span>
+                        <span class="badge bg-warning-subtle text-warning-emphasis" id="noRegistradasTotalTexto">0 terminales</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0" id="tablaNoRegistradas">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 130px;">Terminal</th>
+                                    <th class="text-end" style="min-width: 120px;">Dias con venta</th>
+                                    <th style="min-width: 120px;">Ultima fecha</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="small text-muted mt-2" id="sinNoRegistradasTexto" style="display:none;">
+                        No hay terminales no registradas para el rango consultado.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
             </div>
         </div>
     </div>
@@ -248,8 +307,91 @@
 <script>
     $(document).ready(function() {
         var estadoFiltro = 'todos';
+        var empresaFiltro = 'todas';
         var countAgenciasActivas = $('#countAgenciasActivas');
         var countAgenciasInactivas = $('#countAgenciasInactivas');
+        var countAgenciasJoselito = $('#countAgenciasJoselito');
+        var countAgenciasNegosur = $('#countAgenciasNegosur');
+        var countAgenciasNoRegistradas = $('#countAgenciasNoRegistradas');
+        var massUpdateModal = $('#massUpdateModal');
+        var massUpdateFile = $('#mass_update_file');
+        var btnPreviewTerminalesMasivo = $('#btnPreviewTerminalesMasivo');
+        var btnEjecutarUpdateMasivo = $('#btnEjecutarUpdateMasivo');
+        var resultadoPreviewMasivo = $('#resultadoPreviewMasivo');
+        var formMassUpdate = $('#massUpdateModal form');
+        var noRegistradasModal = $('#noRegistradasModal');
+        var tablaNoRegistradasBody = $('#tablaNoRegistradas tbody');
+        var noRegistradasRangoTexto = $('#noRegistradasRangoTexto');
+        var noRegistradasTotalTexto = $('#noRegistradasTotalTexto');
+        var sinNoRegistradasTexto = $('#sinNoRegistradasTexto');
+        var previewMasivoStats = null;
+        var enviandoMassUpdate = false;
+        var noRegistradasStats = null;
+        var noRegistradasCargadas = false;
+
+        function escapeHtml(value) {
+            return $('<div>').text(value ?? '').html();
+        }
+
+        function renderNoRegistradasModal() {
+            var items = (noRegistradasStats && noRegistradasStats.terminales) ? noRegistradasStats.terminales : [];
+            var total = Number(noRegistradasStats && noRegistradasStats.total ? noRegistradasStats.total : 0);
+            var desde = noRegistradasStats && noRegistradasStats.desde ? noRegistradasStats.desde : '';
+            var hasta = noRegistradasStats && noRegistradasStats.hasta ? noRegistradasStats.hasta : '';
+
+            noRegistradasRangoTexto.text(desde && hasta ? ('Rango: ' + desde + ' a ' + hasta) : 'Ultima semana');
+            noRegistradasTotalTexto.text(total.toLocaleString('es-DO') + ' terminales');
+
+            if (!items.length) {
+                tablaNoRegistradasBody.html('');
+                sinNoRegistradasTexto.show();
+                return;
+            }
+
+            sinNoRegistradasTexto.hide();
+
+            var rowsHtml = items.map(function(item) {
+                return `
+                    <tr>
+                        <td>${escapeHtml(item.terminal || '-')}</td>
+                        <td class="text-end">${Number(item.dias_con_venta || 0).toLocaleString('es-DO')}</td>
+                        <td>${escapeHtml(item.ultima_fecha || '-')}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tablaNoRegistradasBody.html(rowsHtml);
+        }
+
+        function cargarNoRegistradasVentaFija(mostrarError) {
+            $.ajax({
+                url: '{{ route('agencias.no-registradas-venta-fija-semana') }}',
+                method: 'GET',
+                success: function(response) {
+                    noRegistradasStats = response || null;
+                    var total = Number(response && response.total ? response.total : 0);
+                    countAgenciasNoRegistradas.text(total.toLocaleString('es-DO'));
+
+                    if (noRegistradasModal.hasClass('show')) {
+                        renderNoRegistradasModal();
+                    }
+                },
+                error: function() {
+                    noRegistradasStats = null;
+                    countAgenciasNoRegistradas.text('0');
+
+                    if (!mostrarError) {
+                        return;
+                    }
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'No se pudo cargar el listado de terminales no registradas.'
+                    });
+                }
+            });
+        }
 
         function aplicarEstadoBotones() {
             $('#btnFiltroEstadoTodos').removeClass('btn-secondary').addClass('btn-outline-secondary');
@@ -269,8 +411,27 @@
             $('#btnFiltroEstadoTodos').removeClass('btn-outline-secondary').addClass('btn-secondary');
         }
 
+        function aplicarEmpresaBotones() {
+            $('#btnFiltroEmpresaTodas').removeClass('btn-secondary').addClass('btn-outline-secondary');
+            $('#btnFiltroEmpresaJoselito').removeClass('btn-info').addClass('btn-outline-info');
+            $('#btnFiltroEmpresaNegosur').removeClass('btn-primary').addClass('btn-outline-primary');
+
+            if (empresaFiltro === 'joselito') {
+                $('#btnFiltroEmpresaJoselito').removeClass('btn-outline-info').addClass('btn-info');
+                return;
+            }
+
+            if (empresaFiltro === 'negosur') {
+                $('#btnFiltroEmpresaNegosur').removeClass('btn-outline-primary').addClass('btn-primary');
+                return;
+            }
+
+            $('#btnFiltroEmpresaTodas').removeClass('btn-outline-secondary').addClass('btn-secondary');
+        }
+
         // Configuración responsive de DataTables
         var responsiveColumns = [
+            { targets: 3, visible: false },  // Horario AM (oculta para ganar espacio)
             { targets: 4, visible: false },  // Horario PM
             { targets: 10, visible: false },  // Operador
             { targets: 11, visible: false }  // Coordinador
@@ -295,10 +456,13 @@
                 url: '{{ route('agencias.list') }}',
                 data: function(d) {
                     d.estatus_filter = estadoFiltro;
+                    d.empresa_filter = empresaFiltro;
                 },
                 dataSrc: function(json) {
                     countAgenciasActivas.text((json.total_activas || 0).toLocaleString('es-DO'));
                     countAgenciasInactivas.text((json.total_inactivas || 0).toLocaleString('es-DO'));
+                    countAgenciasJoselito.text((json.total_joselito || 0).toLocaleString('es-DO'));
+                    countAgenciasNegosur.text((json.total_negosur || 0).toLocaleString('es-DO'));
                     return json.data || [];
                 }
             },
@@ -358,10 +522,35 @@
             language: {
                 url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json'
             },
-            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
+            initComplete: function() {
+                // Carga secuencial: primero DataTable, luego no registradas para evitar sensación de bloqueo.
+                if (!noRegistradasCargadas) {
+                    noRegistradasCargadas = true;
+                    window.setTimeout(function() {
+                        cargarNoRegistradasVentaFija(false);
+                    }, 120);
+                }
+            }
         });
 
         aplicarEstadoBotones();
+        aplicarEmpresaBotones();
+
+        countAgenciasNoRegistradas.on('click', function() {
+            if (!noRegistradasStats) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Consultando datos',
+                    text: 'Se esta cargando el detalle. Intente nuevamente en unos segundos.'
+                });
+                cargarNoRegistradasVentaFija(false);
+                return;
+            }
+
+            renderNoRegistradasModal();
+            noRegistradasModal.modal('show');
+        });
 
         $('#btnFiltroEstadoTodos').on('click', function() {
             estadoFiltro = 'todos';
@@ -379,6 +568,33 @@
             estadoFiltro = 'inactivo';
             aplicarEstadoBotones();
             table.ajax.reload();
+        });
+
+        $('#btnFiltroEmpresaTodas').on('click', function() {
+            empresaFiltro = 'todas';
+            aplicarEmpresaBotones();
+            table.ajax.reload();
+        });
+
+        $('#btnFiltroEmpresaJoselito').on('click', function() {
+            empresaFiltro = 'joselito';
+            aplicarEmpresaBotones();
+            table.ajax.reload();
+        });
+
+        $('#btnFiltroEmpresaNegosur').on('click', function() {
+            empresaFiltro = 'negosur';
+            aplicarEmpresaBotones();
+            table.ajax.reload();
+        });
+
+        noRegistradasModal.on('show.bs.modal', function() {
+            if (!noRegistradasStats) {
+                cargarNoRegistradasVentaFija(false);
+                return;
+            }
+
+            renderNoRegistradasModal();
         });
 
         // Manejar eliminación
@@ -444,6 +660,164 @@
         // Reajustar columnas en resize
         $(window).on('resize', function() {
             table.columns.adjust().draw();
+        });
+
+        massUpdateModal.on('show.bs.modal', function() {
+            btnEjecutarUpdateMasivo.prop('disabled', true);
+            resultadoPreviewMasivo.hide().html('');
+            previewMasivoStats = null;
+            enviandoMassUpdate = false;
+        });
+
+        massUpdateFile.on('change', function() {
+            btnEjecutarUpdateMasivo.prop('disabled', true);
+            resultadoPreviewMasivo.hide().html('');
+            previewMasivoStats = null;
+            enviandoMassUpdate = false;
+        });
+
+        btnPreviewTerminalesMasivo.on('click', function() {
+            var fileInput = massUpdateFile[0];
+            if (!fileInput || !fileInput.files || !fileInput.files.length) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Archivo requerido',
+                    text: 'Selecciona un archivo antes de reconocer terminales.'
+                });
+                return;
+            }
+
+            var formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('_token', '{{ csrf_token() }}');
+
+            Swal.fire({
+                title: 'Reconociendo terminales',
+                text: 'Analizando archivo, por favor espere...',
+                allowOutsideClick: false,
+                didOpen: function() {
+                    Swal.showLoading();
+                }
+            });
+
+            $.ajax({
+                url: '{{ route('agencias.mass-update-preview') }}',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    Swal.close();
+                    previewMasivoStats = response || null;
+
+                    var noEncontradas = response.terminales_no_encontradas || [];
+                    var listado = noEncontradas.length
+                        ? `<details><summary class="text-danger" style="cursor:pointer;">Detalle de no encontradas (${noEncontradas.length})</summary><div class="small mt-2" style="max-height: 120px; overflow-y:auto;"><ul class="mb-0 ps-3">${noEncontradas.map(function(t){ return `<li>${$('<div>').text(t).html()}</li>`; }).join('')}</ul></div></details>`
+                        : '<small class="text-success">Todas las terminales leídas existen en la tabla de agencias.</small>';
+
+                    resultadoPreviewMasivo
+                        .html(`
+                            <div class="small">
+                                <div><strong>Filas en archivo:</strong> ${Number(response.total_filas || 0).toLocaleString('es-DO')}</div>
+                                <div><strong>Terminales leídas:</strong> ${Number(response.terminales_leidas || 0).toLocaleString('es-DO')}</div>
+                                <div><strong>Terminales únicas:</strong> ${Number(response.terminales_unicas || 0).toLocaleString('es-DO')}</div>
+                                <div><strong>Coinciden en agencias:</strong> ${Number(response.encontradas || 0).toLocaleString('es-DO')}</div>
+                                <div><strong>No existen en agencias:</strong> ${Number(response.no_encontradas || 0).toLocaleString('es-DO')}</div>
+                                <div class="mt-2">${listado}</div>
+                            </div>
+                        `)
+                        .show();
+
+                    btnEjecutarUpdateMasivo.prop('disabled', false);
+                },
+                error: function(xhr) {
+                    Swal.close();
+                    previewMasivoStats = null;
+                    var msg = xhr?.responseJSON?.message || 'No se pudo reconocer terminales del archivo.';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error de reconocimiento',
+                        text: msg
+                    });
+                    btnEjecutarUpdateMasivo.prop('disabled', true);
+                    resultadoPreviewMasivo.hide().html('');
+                }
+            });
+        });
+
+        formMassUpdate.on('submit', function(event) {
+            if (enviandoMassUpdate) {
+                return;
+            }
+
+            if (!previewMasivoStats) {
+                event.preventDefault();
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Reconocimiento requerido',
+                    text: 'Primero debes reconocer terminales antes de ejecutar la actualización masiva.'
+                });
+                return;
+            }
+
+            event.preventDefault();
+            enviandoMassUpdate = true;
+
+            const totalFilas = Number(previewMasivoStats.total_filas || 0);
+            const terminalesUnicas = Number(previewMasivoStats.terminales_unicas || 0);
+            const noEncontradas = Number(previewMasivoStats.no_encontradas || 0);
+
+            Swal.fire({
+                title: 'Procesando actualización masiva',
+                html: `
+                    <div class="text-start">
+                        <div><strong>Filas:</strong> ${totalFilas.toLocaleString('es-DO')}</div>
+                        <div><strong>Terminales únicas:</strong> ${terminalesUnicas.toLocaleString('es-DO')}</div>
+                        <div><strong>No encontradas:</strong> ${noEncontradas.toLocaleString('es-DO')}</div>
+                        <div class="mt-3">
+                            <div class="progress" style="height: 10px;">
+                                <div id="massUpdateProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <small class="text-muted d-block mt-2" id="massUpdateProgressText">Preparando proceso... 0%</small>
+                        </div>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: function() {
+                    Swal.showLoading();
+
+                    var progress = 0;
+                    var progressBar = document.getElementById('massUpdateProgressBar');
+                    var progressText = document.getElementById('massUpdateProgressText');
+                    var fakeProgressInterval = window.setInterval(function() {
+                        progress = Math.min(progress + 4, 92);
+
+                        if (progressBar) {
+                            progressBar.style.width = progress + '%';
+                        }
+
+                        if (progressText) {
+                            progressText.textContent = 'Procesando actualización... ' + progress + '%';
+                        }
+
+                        if (progress >= 92) {
+                            window.clearInterval(fakeProgressInterval);
+                        }
+                    }, 160);
+
+                    Swal.getPopup().__fakeProgressInterval = fakeProgressInterval;
+                },
+                willClose: function() {
+                    var popup = Swal.getPopup();
+                    if (popup && popup.__fakeProgressInterval) {
+                        window.clearInterval(popup.__fakeProgressInterval);
+                    }
+                }
+            });
+
+            this.submit();
         });
     });
 </script>
