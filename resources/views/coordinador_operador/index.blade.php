@@ -151,6 +151,7 @@
                                 <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarTerminalesMasivos">Limpiar pegado</button>
                             </div>
                             <small class="text-muted d-block mt-1" id="resumenTerminalesMasivos"></small>
+                            <div class="mt-2" id="detalleTerminalesNoCoinciden"></div>
                         </div>
 
                         <div class="border rounded p-3" style="max-height: 380px; overflow-y: auto;">
@@ -222,6 +223,7 @@
         const btnAplicarTerminalesMasivos = document.getElementById('btnAplicarTerminalesMasivos');
         const btnLimpiarTerminalesMasivos = document.getElementById('btnLimpiarTerminalesMasivos');
         const resumenTerminalesMasivos = document.getElementById('resumenTerminalesMasivos');
+        const detalleTerminalesNoCoinciden = document.getElementById('detalleTerminalesNoCoinciden');
         const confirmarReasignacion = document.getElementById('confirmarReasignacion');
 
         function normalizarTerminal(valor) {
@@ -250,6 +252,11 @@
             }
 
             const mapaTerminales = new Set(terminales);
+            const terminalesDisponibles = new Set(
+                Array.from(itemsAgencia)
+                    .map(function (item) { return normalizarTerminal(item.dataset.terminal || ''); })
+                    .filter(Boolean)
+            );
             let encontradas = 0;
 
             itemsAgencia.forEach(function (item) {
@@ -265,6 +272,31 @@
             if (resumenTerminalesMasivos) {
                 resumenTerminalesMasivos.textContent = `Terminales procesadas: ${terminales.length}. Coincidencias marcadas: ${encontradas}.`;
             }
+
+            const noCoinciden = terminales.filter(function (terminal) {
+                return !terminalesDisponibles.has(terminal);
+            });
+
+            if (detalleTerminalesNoCoinciden) {
+                if (!noCoinciden.length) {
+                    detalleTerminalesNoCoinciden.innerHTML = '<small class="text-success">Detalle: todos los códigos coinciden con la tabla de agencias.</small>';
+                } else {
+                    const listado = noCoinciden
+                        .map(function (terminal) {
+                            return `<li>${escaparHtml(terminal)}</li>`;
+                        })
+                        .join('');
+
+                    detalleTerminalesNoCoinciden.innerHTML = `
+                        <details>
+                            <summary class="text-danger" style="cursor:pointer;">Detalle: ${noCoinciden.length} terminal(es) no coinciden con la tabla de agencias</summary>
+                            <div class="small text-muted mt-2" style="max-height: 130px; overflow-y: auto;">
+                                <ul class="mb-0 ps-3">${listado}</ul>
+                            </div>
+                        </details>
+                    `;
+                }
+            }
         }
 
         function limpiarTerminalesMasivos() {
@@ -273,6 +305,9 @@
             }
             if (resumenTerminalesMasivos) {
                 resumenTerminalesMasivos.textContent = '';
+            }
+            if (detalleTerminalesNoCoinciden) {
+                detalleTerminalesNoCoinciden.innerHTML = '';
             }
         }
 
