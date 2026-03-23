@@ -124,6 +124,15 @@
                                         </div>
 
                                         <div class="col-12 col-md-6 mb-3">
+                                            <label for="empresa" class="form-label">Empresa</label>
+                                            <input type="text" class="form-control @error('empresa') is-invalid @enderror"
+                                                   id="empresa" name="empresa" maxlength="60" value="{{ old('empresa', $agencia->empresa) }}">
+                                            @error('empresa')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="col-12 col-md-6 mb-3">
                                             <label for="ciudad" class="form-label">Ciudad</label>
                                             <input type="text" class="form-control @error('ciudad') is-invalid @enderror" 
                                                    id="ciudad" name="ciudad" value="{{ old('ciudad', $agencia->ciudad) }}">

@@ -20,6 +20,7 @@ class Agencia extends Model
         'horario_am',
         'horario_pm',
         'sistema',
+        'empresa',
         'ciudad',
         'ruta',
         'operador',

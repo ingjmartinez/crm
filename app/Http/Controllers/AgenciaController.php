@@ -50,6 +50,7 @@ class AgenciaController extends Controller
             'horario_pm' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'ciudad' => 'nullable|string|max:55',
             'ruta' => 'nullable|string|max:55',
+            'empresa' => 'nullable|string|max:60',
             'operador' => ['nullable', 'string', 'max:55', Rule::in($operadores)],
             'coordinador' => ['nullable', 'string', 'max:55', Rule::in($coordinadores)],
             'estatus' => 'required|integer|in:0,1',
@@ -102,6 +103,7 @@ class AgenciaController extends Controller
             'horario_am' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'horario_pm' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'sistema' => 'nullable|string|max:255',
+            'empresa' => 'nullable|string|max:60',
             'ciudad' => 'nullable|string|max:255',
             'ruta' => 'nullable|string|max:255',
             'operador' => ['nullable', 'string', 'max:255', Rule::in($operadores)],
@@ -226,6 +228,7 @@ class AgenciaController extends Controller
                                     ->orWhere('horario_am', 'like', "%{$search}%")
                                     ->orWhere('horario_pm', 'like', "%{$search}%")
                   ->orWhere('sistema', 'like', "%{$search}%")
+                                      ->orWhere('empresa', 'like', "%{$search}%")
                   ->orWhere('ciudad', 'like', "%{$search}%")
                   ->orWhere('ruta', 'like', "%{$search}%")
                   ->orWhere('operador', 'like', "%{$search}%")
@@ -793,6 +796,7 @@ class AgenciaController extends Controller
             'horario_pm' => ['horario_pm', 'horario pm'],
             'nombre_agencia' => ['nombre_agencia', 'nombre agencia'],
             'sistema' => ['sistema'],
+            'empresa' => ['empresa'],
             'ciudad' => ['ciudad'],
             'ruta' => ['ruta'],
             'operador' => ['operador'],
@@ -874,6 +878,7 @@ class AgenciaController extends Controller
             'Horario PM',
             'Nombre Agencia',
             'Sistema',
+            'Empresa',
             'Ciudad',
             'Ruta',
             'Operador',
@@ -884,7 +889,7 @@ class AgenciaController extends Controller
 
         $data = [
             $headers,
-            ['20907', '5546', '7:00 AM / 2:00 PM', '2:00 PM / 9:00 PM', 'Agencia Ejemplo', 'Lotobet', 'San Pedro', 'Ruta 0501', 'Jose Ruby', 'Aramis', '1', 'SI'],
+            ['20907', '5546', '7:00 AM / 2:00 PM', '2:00 PM / 9:00 PM', 'Agencia Ejemplo', 'Lotobet', 'Grupo A', 'San Pedro', 'Ruta 0501', 'Jose Ruby', 'Aramis', '1', 'SI'],
         ];
 
         $filename = 'plantilla_agencias.xlsx';
@@ -925,6 +930,7 @@ class AgenciaController extends Controller
             'Terminal',
             'Agencia',
             'Nombre Agencia',
+            'Empresa',
             'Ciudad',
             'Ruta',
             'Operador',

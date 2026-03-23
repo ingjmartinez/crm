@@ -90,6 +90,7 @@
                                                 <th style="min-width: 130px;">Horario PM</th>
                                                 <th style="min-width: 120px;">Nombre</th>
                                                 <th style="min-width: 80px;">Sistema</th>
+                                                <th style="min-width: 110px;">Empresa</th>
                                                 <th style="min-width: 100px;">Ciudad</th>
                                                 <th style="min-width: 100px;">Ruta</th>
                                                 <th style="min-width: 100px;">Operador</th>
@@ -172,12 +173,13 @@
                                 <li>Columna D: Horario PM</li>
                                 <li>Columna E: Nombre Agencia</li>
                                 <li>Columna F: Sistema</li>
-                                <li>Columna G: Ciudad</li>
-                                <li>Columna H: Ruta</li>
-                                <li>Columna I: Operador</li>
-                                <li>Columna J: Coordinador</li>
-                                <li>Columna K: Estatus (1 Activo / 0 Inactivo)</li>
-                                <li>Columna L: Aplica Incentivo (SI/NO)</li>
+                                <li>Columna G: Empresa</li>
+                                <li>Columna H: Ciudad</li>
+                                <li>Columna I: Ruta</li>
+                                <li>Columna J: Operador</li>
+                                <li>Columna K: Coordinador</li>
+                                <li>Columna L: Estatus (1 Activo / 0 Inactivo)</li>
+                                <li>Columna M: Aplica Incentivo (SI/NO)</li>
                             </ul>
                         </div>
                     </div>
@@ -227,7 +229,7 @@
                                 <li>Si una celda viene vacía, ese campo no se modifica.</li>
                                 <li>Puede actualizar 1, 2 o más campos en el mismo archivo.</li>
                             </ul>
-                            <small class="text-muted">Campos soportados: Agencia, Terminal, Horario AM, Horario PM, Nombre Agencia, Sistema, Ciudad, Ruta, Operador, Coordinador, Estatus, Aplica Incentivo.</small>
+                            <small class="text-muted">Campos soportados: Agencia, Terminal, Horario AM, Horario PM, Nombre Agencia, Sistema, Empresa, Ciudad, Ruta, Operador, Coordinador, Estatus, Aplica Incentivo.</small>
                         </div>
                     </div>
                     <div class="modal-footer d-flex gap-2">
@@ -270,8 +272,8 @@
         // Configuración responsive de DataTables
         var responsiveColumns = [
             { targets: 4, visible: false },  // Horario PM
-            { targets: 9, visible: false },  // Operador
-            { targets: 10, visible: false }  // Coordinador
+            { targets: 10, visible: false },  // Operador
+            { targets: 11, visible: false }  // Coordinador
         ];
 
         // En móvil, ocultar más columnas
@@ -280,9 +282,9 @@
                 { targets: 3, visible: false },  // Horario AM
                 { targets: 4, visible: false },  // Horario PM
                 { targets: 6, visible: false },  // Sistema
-                { targets: 8, visible: false },  // Ruta
-                { targets: 9, visible: false },  // Operador
-                { targets: 10, visible: false }  // Coordinador
+                { targets: 9, visible: false },  // Ruta
+                { targets: 10, visible: false },  // Operador
+                { targets: 11, visible: false }  // Coordinador
             ];
         }
 
@@ -311,6 +313,7 @@
                 { data: 'horario_pm', name: 'horario_pm', defaultContent: '-' },
                 { data: 'nombre_agencia', name: 'nombre_agencia', defaultContent: '-' },
                 { data: 'sistema', name: 'sistema', defaultContent: '-' },
+                { data: 'empresa', name: 'empresa', defaultContent: '-' },
                 { data: 'ciudad', name: 'ciudad', defaultContent: '-' },
                 { data: 'ruta', name: 'ruta', defaultContent: '-' },
                 { data: 'operador', name: 'operador', defaultContent: '-' },
