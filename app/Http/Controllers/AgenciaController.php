@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\IncumplimientoHorarioReportMail;
 use App\Models\Agencia;
 use App\Models\CoordinadorOperador;
+use App\Models\OperadorRuta;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -128,14 +129,14 @@ class AgenciaController extends Controller
 
     private function sincronizarAsignacionesCoordinadorOperador(int $agenciaId, string $coordinadorNombre = '', string $operadorNombre = ''): void
     {
-        $this->sincronizarAsignacionPorPuesto($agenciaId, 'coordinador', $coordinadorNombre);
-        $this->sincronizarAsignacionPorPuesto($agenciaId, 'operador', $operadorNombre);
+        $this->sincronizarAsignacionCoordinador($agenciaId, $coordinadorNombre);
+        $this->sincronizarAsignacionOperadorRuta($agenciaId, $operadorNombre);
     }
 
-    private function sincronizarAsignacionPorPuesto(int $agenciaId, string $puesto, string $nombreCompleto): void
+    private function sincronizarAsignacionCoordinador(int $agenciaId, string $nombreCompleto): void
     {
         $idsPuesto = CoordinadorOperador::query()
-            ->where('puesto', $puesto)
+            ->where('puesto', 'coordinador')
             ->pluck('id');
 
         if ($idsPuesto->isNotEmpty()) {
@@ -151,7 +152,7 @@ class AgenciaController extends Controller
         }
 
         $coordinadorOperadorId = CoordinadorOperador::query()
-            ->where('puesto', $puesto)
+            ->where('puesto', 'coordinador')
             ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) = ?", [$nombreCompleto])
             ->value('id');
 
@@ -167,14 +168,54 @@ class AgenciaController extends Controller
         ]);
     }
 
+    private function sincronizarAsignacionOperadorRuta(int $agenciaId, string $nombreCompleto): void
+    {
+        $idsPuesto = OperadorRuta::query()
+            ->where('puesto', 'operador')
+            ->pluck('id');
+
+        if ($idsPuesto->isNotEmpty()) {
+            DB::table('operador_ruta_agencia')
+                ->where('agencia_id', $agenciaId)
+                ->whereIn('operador_ruta_id', $idsPuesto)
+                ->delete();
+        }
+
+        $nombreCompleto = trim($nombreCompleto);
+        if ($nombreCompleto === '') {
+            return;
+        }
+
+        $operadorRutaId = OperadorRuta::query()
+            ->where('puesto', 'operador')
+            ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) = ?", [$nombreCompleto])
+            ->value('id');
+
+        if (!$operadorRutaId) {
+            return;
+        }
+
+        DB::table('operador_ruta_agencia')->insertOrIgnore([
+            'operador_ruta_id' => $operadorRutaId,
+            'agencia_id' => $agenciaId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     private function obtenerOpcionesCoordinadorOperador(): array
     {
-        $registros = CoordinadorOperador::select('nombre', 'apellido', 'puesto')
+        $registrosOperadorRuta = OperadorRuta::select('nombre', 'apellido', 'puesto')
             ->orderBy('nombre')
             ->orderBy('apellido')
             ->get();
 
-        $operadores = $registros
+        $registrosCoordinador = CoordinadorOperador::select('nombre', 'apellido', 'puesto')
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get();
+
+        $operadores = $registrosOperadorRuta
             ->where('puesto', 'operador')
             ->map(fn($item) => trim($item->nombre . ' ' . $item->apellido))
             ->filter()
@@ -182,7 +223,7 @@ class AgenciaController extends Controller
             ->values()
             ->all();
 
-        $coordinadores = $registros
+        $coordinadores = $registrosCoordinador
             ->where('puesto', 'coordinador')
             ->map(fn($item) => trim($item->nombre . ' ' . $item->apellido))
             ->filter()

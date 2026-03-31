@@ -63,12 +63,9 @@
 
                                         <div class="col-md-6">
                                             <label class="form-label">Puesto <span class="text-danger">*</span></label>
-                                            <select name="puesto" class="form-select @error('puesto') is-invalid @enderror" required>
-                                                <option value="">Seleccione</option>
-                                                <option value="coordinador" @selected(old('puesto') === 'coordinador')>Coordinador</option>
-                                                <option value="operador" @selected(old('puesto') === 'operador')>Operador</option>
-                                            </select>
-                                            @error('puesto')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                            <input type="hidden" name="puesto" value="coordinador">
+                                            <input type="text" class="form-control" value="Coordinador" readonly>
+                                            @error('puesto')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                                         </div>
                                     </div>
 

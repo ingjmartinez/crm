@@ -4,6 +4,18 @@
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
+                <style>
+                    .acciones-lotonet .btn {
+                        width: auto;
+                    }
+
+                    @media (max-width: 767.98px) {
+                        .acciones-lotonet .btn {
+                            width: 100%;
+                            min-height: 44px;
+                        }
+                    }
+                </style>
 
                 <div class="row">
                     <div class="col-12">
@@ -20,23 +32,25 @@
                                 <h5 class="card-title mb-0">Ejecutar todas las tareas por fecha</h5>
                             </div>
                             <div class="card-body">
-                                <div class="row mb-3">
-                                    <div class="col-3">
+                                <div class="row g-2 mb-3 acciones-lotonet align-items-end">
+                                    <div class="col-12 col-lg-2 d-grid">
                                         <button id="btnGenerarToken" class="btn btn-secondary">Iniciar Sesión</button>
                                     </div>
 
-                                    <div class="col-2">
+                                    <div class="col-12 col-md-4 col-lg-2">
+                                        <label for="inputFecha" class="form-label mb-1">Fecha</label>
                                         <input type="date" id="inputFecha" class="form-control">
                                     </div>
 
-                                    <div class="col-4">
+                                    <div class="col-12 col-lg-4 d-grid d-md-flex gap-2">
                                         <button id="btnProcesarUno" class="btn btn-primary">Procesar Fecha</button>
                                         <button id="btnEliminarFecha" class="btn btn-danger">Eliminar Fecha</button>
                                     </div>
 
-                                    <div class="col-3 text-end">
+                                    <div class="col-12 col-md-8 col-lg-4 d-grid d-md-flex gap-2">
                                         <button id="btnRango" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalRango">Procesar por Rango</button>
                                         <button id="btnRangoEliminar" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalRango">Eliminar por Rango</button>
+                                        <button id="btnConfigAuto" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalConfigAuto">Configurar</button>
                                     </div>
                                 </div>
 
@@ -112,6 +126,42 @@
         </div>
     </div>
 
+    <div id="modalConfigAuto" class="modal fade" tabindex="-1" aria-labelledby="modalConfigAutoLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalConfigAutoLabel">Configurar auto proceso Lotonet</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="cfgEnabledLotonet">
+                        <label class="form-check-label" for="cfgEnabledLotonet">Habilitar ejecucion automatica</label>
+                    </div>
+                    <div class="mb-3">
+                        <label for="cfgHoraLotonet" class="form-label">Hora</label>
+                        <input type="time" class="form-control" id="cfgHoraLotonet">
+                    </div>
+                    <div class="mb-0">
+                        <label for="cfgCorreoLotonet" class="form-label">Correo destino</label>
+                        <input type="email" class="form-control" id="cfgCorreoLotonet" placeholder="correo@dominio.com">
+                    </div>
+                    <div class="mt-3">
+                        <label for="cfgDiaLotonet" class="form-label">Fecha a procesar</label>
+                        <select class="form-select" id="cfgDiaLotonet">
+                            <option value="0">Mismo dia</option>
+                            <option value="-1">Dia de ayer</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" id="btnGuardarConfigLotonet" class="btn btn-primary">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 @endsection
 
 @section('script')
@@ -129,6 +179,9 @@
             { name: 'Ventas por producto', url: '/save-ventas-producto-lotonet' },
             { name: 'Ventas por usuario', url: '/save-ventas-usuarios-lotonet' }
         ];
+
+        const sistemaAuto = 'lotonet';
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
 
         const logContainer = document.getElementById('logContainer');
 
@@ -173,6 +226,63 @@
 
         // Initialize status table on load
         initStatusTable();
+
+        async function loadAutoConfig() {
+            try {
+                const res = await fetch(`/auto-proceso/${sistemaAuto}/config`);
+                const cfg = await res.json();
+                document.getElementById('cfgEnabledLotonet').checked = !!cfg.enabled;
+                document.getElementById('cfgHoraLotonet').value = cfg.hora ? String(cfg.hora).slice(0, 5) : '';
+                document.getElementById('cfgCorreoLotonet').value = cfg.correo || '';
+                document.getElementById('cfgDiaLotonet').value = String(cfg.process_day_offset ?? 0);
+            } catch (e) {
+                addLog('No se pudo cargar la configuracion automatica: ' + e.message, 'error');
+            }
+        }
+
+        async function saveAutoConfig() {
+            const payload = {
+                enabled: document.getElementById('cfgEnabledLotonet').checked,
+                hora: document.getElementById('cfgHoraLotonet').value || null,
+                correo: document.getElementById('cfgCorreoLotonet').value || null,
+                process_day_offset: Number(document.getElementById('cfgDiaLotonet').value || 0),
+            };
+
+            const res = await fetch(`/auto-proceso/${sistemaAuto}/config`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const raw = await res.text();
+            let data = {};
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                data = {};
+            }
+            if (!res.ok) {
+                const serverMsg = data.message || (typeof data.error === 'string' ? data.error : '');
+                const fallback = raw ? raw.substring(0, 200) : '';
+                throw new Error(serverMsg || `HTTP ${res.status}: ${fallback || 'No se pudo guardar la configuracion'}`);
+            }
+
+            Swal.fire({ title: 'Listo', text: 'Configuracion guardada', icon: 'success' });
+            addLog('Configuracion automatica guardada');
+        }
+
+        document.getElementById('btnConfigAuto').addEventListener('click', loadAutoConfig);
+        document.getElementById('btnGuardarConfigLotonet').addEventListener('click', async () => {
+            try {
+                await saveAutoConfig();
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: e.message || e, icon: 'error' });
+            }
+        });
 
         document.getElementById('btnGenerarToken').addEventListener('click', () => {
             fetch('/iniciar-session')

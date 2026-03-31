@@ -4,6 +4,22 @@
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
+                <style>
+                    .acciones-lotobet .btn {
+                        width: auto;
+                    }
+
+                    @media (max-width: 767.98px) {
+                        .acciones-lotobet .btn {
+                            width: 100%;
+                        }
+
+                        .acciones-lotobet .btn {
+                            min-height: 44px;
+                        }
+                    }
+                </style>
+
                 <!-- start page title -->
                 <div class="row">
                     <div class="col-12">
@@ -28,20 +44,21 @@
                                 <h5 class="card-title mb-0">Configurar Token</h5>
                             </div>
                             <div class="card-body">
-                                <div class="row mb-5">
-                                    <div class="col-3">
+                                <div class="row g-2 mb-3 acciones-lotobet align-items-end">
+                                    <div class="col-12 col-lg-4 d-grid d-md-flex gap-2">
                                         <button id="btnGenerarToken" class="btn btn-primary">Generar Token</button>
                                         <button id="btnGenerarData" class="btn btn-primary">Generar Data</button>
                                     </div>
 
-                                    <div class="col-2">
+                                    <div class="col-12 col-md-4 col-lg-2">
+                                        <label for="inputFecha" class="form-label mb-1">Fecha</label>
                                         <input type="date" id="inputFecha" class="form-control">
                                     </div>
-                                    <div class="col-3">
+                                    <div class="col-12 col-lg-4 d-grid d-md-flex gap-2">
                                         <button id="btnGuardarData" class="btn btn-primary">Guardar Data</button>
                                         <button id="btnEliminarData" class="btn btn-danger">Eliminar Data</button>
                                     </div>
-                                    <div class="col-4 text-end">
+                                    <div class="col-12 col-md-8 col-lg-2 d-grid">
                                         <button id="btnConsultar" type="button" class="btn btn-primary"
                                             data-bs-toggle="modal" data-bs-target="#myModal">Generar Data Por Fecha</button>
                                     </div>

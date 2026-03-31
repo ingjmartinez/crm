@@ -773,6 +773,12 @@
                                         <a href="{{ url('/usuarios') }}" class="nav-link" data-key="t-usuarios">
                                             Usuarios </a>
                                     </li>
+                                    @if(auth()->check() && auth()->user()->hasRole('superadmin'))
+                                        <li class="nav-item">
+                                            <a href="{{ route('superadmin.sesiones.index') }}" class="nav-link" data-key="t-superadmin-sesiones">
+                                                Sesiones de Usuarios </a>
+                                        </li>
+                                    @endif
                                     <li class="nav-item">
                                         <a href="{{ route('coordinador-operador.index') }}" class="nav-link" data-key="t-coordinador-operador">
                                             Coordinador / Operador </a>
@@ -1049,6 +1055,47 @@
                                     <li class="nav-item">
                                         <a href="{{ url('/incentivos/reporte-nuevo-incentivo-v2-view') }}" class="nav-link" data-key="t-incentivos-reporte-nuevo-v2">
                                             Reporte Nuevo Incentivo V2
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#sidebarOperaciones" class="nav-link collapsed" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="sidebarOperaciones"
+                                data-key="t-operaciones">
+                                <i class="ri-settings-3-line"></i> <span data-key="t-apps">Operaciones</span>
+                            </a>
+                            <div class="collapse menu-dropdown" id="sidebarOperaciones">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ route('operador-ruta.index') }}" class="nav-link" data-key="t-operaciones-operador-ruta">
+                                            Operador_Ruta
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('ruta.index') }}" class="nav-link" data-key="t-operaciones-ruta">
+                                            Ruta
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('operaciones.panel') }}" class="nav-link" data-key="t-operaciones-panel">
+                                            Panel Operativo
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('operaciones.gestion') }}" class="nav-link" data-key="t-operaciones-gestion">
+                                            Gestion Operativa
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('operaciones.reporte.diario') }}" class="nav-link" data-key="t-operaciones-reporte-diario">
+                                            Reporte Diario
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('operaciones.reporte.mensual') }}" class="nav-link" data-key="t-operaciones-reporte-mensual">
+                                            Reporte Mensual
                                         </a>
                                     </li>
                                 </ul>

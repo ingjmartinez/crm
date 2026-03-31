@@ -57,6 +57,29 @@
                 font-size: 0.85rem;
             }
         }
+
+        .tipo-card-wrap {
+            margin-bottom: 0.5rem;
+        }
+
+        .tipo-card {
+            height: auto;
+        }
+
+        .tipo-card .card-body {
+            padding: 0.65rem 0.8rem;
+        }
+
+        .tipo-card .card-title {
+            font-size: 0.95rem;
+            line-height: 1.2;
+        }
+
+        @media (max-width: 767.98px) {
+            .tipo-card {
+                height: auto;
+            }
+        }
     </style>
     <div class="main-content">
         <div class="page-content">
@@ -82,6 +105,14 @@
                     <div class="col-12 col-md-4 col-lg-3">
                         <label for="fecha_fin" class="form-label">Fecha Fin</label>
                         <input type="date" id="fecha_fin" class="form-control" value="{{ date('Y-m-d') }}">
+                    </div>
+                    <div class="col-12 col-md-4 col-lg-3">
+                        <label for="empresa" class="form-label">Empresa</label>
+                        <select id="empresa" class="form-select">
+                            <option value="todas" selected>Todas</option>
+                            <option value="negosur">Negosur</option>
+                            <option value="joselito">Joselito</option>
+                        </select>
                     </div>
                     <div class="col-12 col-md-4 col-lg-3 col-xl-2 d-flex align-items-end">
                         <button id="filtrar-btn" class="btn btn-primary w-100">Filtrar</button>
@@ -119,7 +150,10 @@
                             <div class="card-body">
                                 <h5 class="card-title">Total Agencias</h5>
                                 <h3 id="kpi-agencias" class="text-warning">0</h3>
+                                <div class="small text-muted">Agencias en cero: <span id="kpi-agencias-cero">0</span></div>
                                 <div class="mt-2">
+                                    <button id="btn-ver-agencias-cero" class="btn btn-sm btn-outline-secondary">Ver Agencias en Cero</button>
+                                    <button id="btn-export-agencias-cero-dia" class="btn btn-sm btn-outline-dark">Exportar por Día</button>
                                     <button id="btn-ver-agencias" class="btn btn-sm btn-outline-warning">Ver Detalle</button>
                                 </div>
                             </div>
@@ -161,32 +195,6 @@
                     </div>
                 </div>
 
-                <!-- Tabla -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card shadow-sm">
-                            <div class="card-header">
-                                <h5>Detalle por Tipo</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table id="tabla-ventas" class="table table-striped">
-                                        <thead>
-                                            <tr>
-                                                <th>Tipo</th>
-                                                <th>Total Ventas</th>
-                                                <th>Transacciones</th>
-                                                <th>Promedio</th>
-                                                <th>% del Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -221,6 +229,36 @@
     </div>
 </div>
 
+<!-- Modal para Agencias en Cero -->
+<div class="modal fade" id="modalAgenciasCero" tabindex="-1" aria-labelledby="modalAgenciasCeroLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAgenciasCeroLabel">Agencias en Cero</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table id="tabla-agencias-cero" class="table w-100 table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID Agencia</th>
+                                <th>Nombre</th>
+                                <th>Total Ventas</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section('script')
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -231,38 +269,23 @@
     <script>
         let chartDiarioInstance = null;
         let chartDiarioBarInstance = null;
-        let tableInstance = null;
         let agenciasData = [];
+        let agenciasCeroData = [];
         let currentAgenciaId = null;
         const badgeAgencia = document.getElementById('badge-agencia');
         const badgeAgenciaText = document.getElementById('agencia-id-badge');
         const limpiarAgenciaBtn = document.getElementById('btn-limpiar-agencia');
-        const tablaVentasColumns = [
-            { title: 'Tipo' },
-            { title: 'Total Ventas' },
-            { title: 'Transacciones' },
-            { title: 'Promedio' },
-            { title: '% del Total' }
-        ];
         const tablaAgenciasColumns = [
             { title: 'ID Agencia' },
             { title: 'Total Ventas' },
             { title: 'Acción', orderable: false, searchable: false }
         ];
-
-        tableInstance = $('#tabla-ventas').DataTable({
-            data: [],
-            columns: tablaVentasColumns,
-            paging: true,
-            searching: true,
-            ordering: true,
-            responsive: true,
-            scrollX: true,
-            columnDefs: [
-                { targets: [2, 3, 4], visible: $(window).width() > 768 }
-            ],
-            language: { url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json' }
-        });
+        const tablaAgenciasCeroColumns = [
+            { title: 'ID Agencia' },
+            { title: 'Nombre' },
+            { title: 'Total Ventas' },
+            { title: 'Acción', orderable: false, searchable: false }
+        ];
 
         const agenciasTableInstance = $('#tabla-agencias').DataTable({
             data: [],
@@ -277,6 +300,19 @@
             ],
             language: { url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json' }
         });
+        const agenciasCeroTableInstance = $('#tabla-agencias-cero').DataTable({
+            data: [],
+            columns: tablaAgenciasCeroColumns,
+            paging: true,
+            searching: true,
+            ordering: true,
+            responsive: true,
+            scrollX: true,
+            columnDefs: [
+                { targets: [2, 3], visible: $(window).width() > 768 }
+            ],
+            language: { url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json' }
+        });
 
         function formatCurrency(value) {
             return new Intl.NumberFormat('es-DO', {
@@ -285,10 +321,11 @@
             }).format(value);
         }
 
-        function loadData(fecha_inicio, fecha_fin, agencia_id = null) {
+        function loadData(fecha_inicio, fecha_fin, agencia_id = null, empresa = null) {
             currentAgenciaId = agencia_id;
+            const empresaValue = empresa || document.getElementById('empresa').value || 'todas';
             
-            let url = `/ventas-lotobet-dashboard/data?fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`;
+            let url = `/ventas-lotobet-dashboard/data?fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}&empresa=${encodeURIComponent(empresaValue)}`;
             if (agencia_id) {
                 url += `&agencia_id=${agencia_id}`;
             }
@@ -307,8 +344,9 @@
                 .then(response => response.json())
                 .then(data => {
                     Swal.close();
-                    if (!agencia_id && Array.isArray(data.agencias)) {
-                        agenciasData = data.agencias;
+                    if (!agencia_id) {
+                        agenciasData = Array.isArray(data.agencias) ? data.agencias : [];
+                        agenciasCeroData = Array.isArray(data.agencias_cero) ? data.agencias_cero : [];
                     }
 
                     // Mostrar/ocultar badge de agencia
@@ -328,6 +366,7 @@
                     document.getElementById('kpi-ticket').textContent = formatCurrency(data.kpis.ticket_promedio);
                     if (!agencia_id) {
                         document.getElementById('kpi-agencias').textContent = data.kpis.total_agencias;
+                        document.getElementById('kpi-agencias-cero').textContent = data.kpis.agencias_en_cero ?? 0;
                     }
 
                     // Cards por tipo
@@ -338,9 +377,9 @@
                     data.tabla.forEach((item, index) => {
                         const color = coloresCards[index % coloresCards.length];
                         const card = document.createElement('div');
-                        card.className = 'col-12 col-sm-6 col-lg-4 mb-3';
+                        card.className = 'col-12 col-sm-6 col-lg-4 tipo-card-wrap';
                         card.innerHTML = `
-                            <div class="card shadow-sm h-100" style="border-left: 5px solid ${color};">
+                            <div class="card shadow-sm tipo-card" style="border-left: 5px solid ${color};">
                                 <div class="card-body d-flex flex-column">
                                     <h5 class="card-title" style="color: ${color}; margin-bottom: 0.75rem;">${item.tipo}</h5>
                                     <div class="mb-2">
@@ -471,14 +510,6 @@
                         }
                     });
 
-                    // Tabla
-                    tableInstance.clear().rows.add(data.tabla.map(row => [
-                        row.tipo,
-                        formatCurrency(row.total),
-                        row.transacciones,
-                        formatCurrency(row.promedio),
-                        row.porcentaje.toFixed(2) + '%'
-                    ])).draw();
                 })
                 .catch(error => {
                     Swal.close();
@@ -494,7 +525,8 @@
         document.getElementById('filtrar-btn').addEventListener('click', function() {
             const fecha_inicio = document.getElementById('fecha_inicio').value;
             const fecha_fin = document.getElementById('fecha_fin').value;
-            loadData(fecha_inicio, fecha_fin);
+            const empresa = document.getElementById('empresa').value;
+            loadData(fecha_inicio, fecha_fin, null, empresa);
         });
 
         limpiarAgenciaBtn.addEventListener('click', function() {
@@ -503,8 +535,9 @@
             }
             const fecha_inicio = document.getElementById('fecha_inicio').value;
             const fecha_fin = document.getElementById('fecha_fin').value;
+            const empresa = document.getElementById('empresa').value;
             currentAgenciaId = null;
-            loadData(fecha_inicio, fecha_fin);
+            loadData(fecha_inicio, fecha_fin, null, empresa);
         });
 
         // Evento para ver detalle de agencias
@@ -529,6 +562,39 @@
             const modal = new bootstrap.Modal(document.getElementById('modalAgencias'));
             modal.show();
         });
+        document.getElementById('btn-ver-agencias-cero').addEventListener('click', function() {
+            if (agenciasCeroData.length === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Sin agencias en cero',
+                    text: 'No hay agencias en cero en el rango de fechas seleccionado.',
+                });
+                return;
+            }
+
+            agenciasCeroTableInstance.clear().rows.add(agenciasCeroData.map(agencia => [
+                agencia.agencia_id,
+                agencia.nombre_agencia || agencia.agencia_id,
+                formatCurrency(agencia.total ?? 0),
+                `<button class="btn btn-sm btn-primary btn-filtrar-agencia" data-agencia-id="${agencia.agencia_id}">Ver Gráficos</button>`
+            ])).draw();
+
+            const modalCero = new bootstrap.Modal(document.getElementById('modalAgenciasCero'));
+            modalCero.show();
+        });
+        document.getElementById('btn-export-agencias-cero-dia').addEventListener('click', function() {
+            const fecha_inicio = document.getElementById('fecha_inicio').value;
+            const fecha_fin = document.getElementById('fecha_fin').value;
+            const empresa = document.getElementById('empresa').value;
+            const params = new URLSearchParams({
+                fecha_inicio,
+                fecha_fin,
+                empresa,
+                plataforma: 'bet',
+            });
+
+            window.location.href = `/ventas-lotobet-dashboard/export-agencias-cero-por-dia?${params.toString()}`;
+        });
 
         // Evento para filtrar por agencia (delegado)
         document.addEventListener('click', function(e) {
@@ -536,21 +602,21 @@
                 const agenciaId = e.target.getAttribute('data-agencia-id');
                 const fecha_inicio = document.getElementById('fecha_inicio').value;
                 const fecha_fin = document.getElementById('fecha_fin').value;
+                const empresa = document.getElementById('empresa').value;
 
                 // Cerrar modal
                 const modal = bootstrap.Modal.getInstance(document.getElementById('modalAgencias'));
-                modal.hide();
+                if (modal) {
+                    modal.hide();
+                }
+                const modalCero = bootstrap.Modal.getInstance(document.getElementById('modalAgenciasCero'));
+                if (modalCero) {
+                    modalCero.hide();
+                }
 
                 // Cargar datos de la agencia
-                loadData(fecha_inicio, fecha_fin, agenciaId);
+                loadData(fecha_inicio, fecha_fin, agenciaId, empresa);
             }
-        });
-
-        document.getElementById('filtrar-btn').addEventListener('click', function() {
-            const fecha_inicio = document.getElementById('fecha_inicio').value;
-            const fecha_fin = document.getElementById('fecha_fin').value;
-            currentAgenciaId = null;
-            loadData(fecha_inicio, fecha_fin);
         });
 
         // Cargar datos iniciales

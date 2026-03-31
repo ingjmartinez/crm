@@ -1,0 +1,138 @@
+INVENTARIO TECNICO DE BASE DE DATOS
+Generado: 2026-03-30 20:21:21
+Base de datos: crm
+====================================================================================================
+
+1) RESUMEN GENERAL
+- Total de tablas en DB: 79
+- Total de migraciones ejecutadas (tabla migrations): 30
+- Total de archivos de migracion en repo: 30
+- Session lifetime (min): 120
+
+Hallazgo principal: la base esta en estado hibrido (muchas tablas manuales fuera de migraciones).
+
+2) TABLAS MAS GRANDES (Top 20 por tamano)
+tabla | engine | rows | size_mb | data_mb | index_mb | total_indexes | has_primary
+----------------------------------------------------------------------------------------------------
+ventas_producto_net | InnoDB | 63289635 | 4217.00 | 4217.00 | 0.00 | 0 | 0
+vt_usuarios_net | InnoDB | 50867021 | 3988.02 | 3988.02 | 0.00 | 1 | 1
+ventas_producto_bet | InnoDB | 16935834 | 1546.98 | 1546.98 | 0.00 | 1 | 1
+vt_usuarios_bet | InnoDB | 13151432 | 1306.00 | 1306.00 | 0.00 | 1 | 1
+premios_bet | InnoDB | 11230924 | 802.00 | 802.00 | 0.00 | 1 | 1
+premios_net | InnoDB | 9725064 | 604.00 | 604.00 | 0.00 | 1 | 1
+pagos_misma_empresa_net | MyISAM | 5210070 | 369.72 | 318.72 | 50.99 | 1 | 1
+recargas_net | InnoDB | 3541808 | 301.81 | 301.81 | 0.00 | 1 | 1
+paquetico_net | InnoDB | 2753689 | 280.80 | 280.80 | 0.00 | 1 | 1
+asistencias_net | InnoDB | 1420433 | 219.73 | 219.73 | 0.00 | 1 | 1
+pagos_misma_empresa_bet | InnoDB | 818750 | 71.59 | 71.59 | 0.00 | 1 | 1
+recargas_bet | InnoDB | 643328 | 59.58 | 59.58 | 0.00 | 1 | 1
+pagos_aotra_empresa_bet | InnoDB | 641659 | 55.58 | 55.58 | 0.00 | 1 | 1
+pagos_porotra_empresa_net | MyISAM | 786973 | 52.11 | 44.41 | 7.70 | 1 | 1
+pagos_aotra_empresa_net | MyISAM | 432473 | 28.30 | 24.07 | 4.23 | 1 | 1
+pagos_porotra_empresa_bet | InnoDB | 325953 | 26.55 | 26.55 | 0.00 | 1 | 1
+asistencias_bet | InnoDB | 284208 | 21.55 | 21.55 | 0.00 | 1 | 1
+efectividad_usuarios | InnoDB | 65599 | 10.02 | 10.02 | 0.00 | 1 | 1
+empleados | MyISAM | 14635 | 6.10 | 5.95 | 0.15 | 1 | 1
+plan_agencias_distribucion | InnoDB | 27283 | 5.02 | 5.02 | 0.00 | 1 | 1
+
+3) TABLAS GRANDES (>= 500MB)
+- ventas_producto_net (4217.00 MB, engine InnoDB)
+- vt_usuarios_net (3988.02 MB, engine InnoDB)
+- ventas_producto_bet (1546.98 MB, engine InnoDB)
+- vt_usuarios_bet (1306.00 MB, engine InnoDB)
+- premios_bet (802.00 MB, engine InnoDB)
+- premios_net (604.00 MB, engine InnoDB)
+
+4) TABLAS CON ENGINE MyISAM (recomendado migrar a InnoDB)
+- pagos_misma_empresa_net (369.72 MB)
+- pagos_porotra_empresa_net (52.11 MB)
+- pagos_aotra_empresa_net (28.30 MB)
+- empleados (6.10 MB)
+- incentivo_temporal (4.79 MB)
+- detalle_cuentas (2.63 MB)
+- ventas_flash_bet (0.64 MB)
+- distribucion_incentivos (0.32 MB)
+- plan_agencia (0.06 MB)
+- cuentas_contables (0.04 MB)
+- notifications (0.02 MB)
+- permissions (0.01 MB)
+- roles (0.01 MB)
+- model_has_roles (0.01 MB)
+- tareas (0.01 MB)
+- tarea_comentarios (0.01 MB)
+- rutas (0.01 MB)
+- reporte_diario_rutas (0.01 MB)
+- ruta_agencia (0.01 MB)
+- coordinador_operador_agencia (0.00 MB)
+- niveles (0.00 MB)
+- operador_ruta_agencia (0.00 MB)
+- model_has_permissions (0.00 MB)
+- role_has_permissions (0.00 MB)
+- coordinador_operador (0.00 MB)
+- operador_ruta (0.00 MB)
+- auto_proceso_configs (0.00 MB)
+- distribucion_porcentajes (0.00 MB)
+- estacionalidad (0.00 MB)
+- departamentos_crm (0.00 MB)
+- coordinador (0.00 MB)
+- incentivo_temporal_c (0.00 MB)
+- porcentaje_administrativo (0.00 MB)
+- incentivo_resultados (0.00 MB)
+- incentivo_jobs (0.00 MB)
+- departamentos (0.00 MB)
+
+5) TABLAS SIN PRIMARY KEY
+- departamentos
+- distribucion_incentivos
+- incentivo_temporal
+- tokens
+- ventas_producto_net
+
+6) TABLAS GRANDES CON POCOS INDICES (>=100MB y <=1 indice)
+- ventas_producto_net (4217.00 MB, indexes: 0)
+- vt_usuarios_net (3988.02 MB, indexes: 1)
+- ventas_producto_bet (1546.98 MB, indexes: 1)
+- vt_usuarios_bet (1306.00 MB, indexes: 1)
+- premios_bet (802.00 MB, indexes: 1)
+- premios_net (604.00 MB, indexes: 1)
+- pagos_misma_empresa_net (369.72 MB, indexes: 1)
+- recargas_net (301.81 MB, indexes: 1)
+- paquetico_net (280.80 MB, indexes: 1)
+- asistencias_net (219.73 MB, indexes: 1)
+
+7) GUIA DE NORMALIZACION POR FASES (SIN PARAR EL SISTEMA)
+Fase 0 - Backup y control:
+- Hacer backup completo (estructura + data).
+- Congelar cambios de estructura manuales.
+
+Fase 1 - Baseline de esquema:
+- Ejecutar y guardar: php artisan db:show --counts
+- Ejecutar y guardar: php artisan migrate:status
+- Crear documento maestro de tablas (este inventario).
+
+Fase 2 - Tablas core de la app (prioridad alta):
+- users, roles/permisos, agencias, rutas, operador_ruta, reporte_diario_rutas, tareas, coordinador_operador.
+- Asegurar migraciones para estructura completa.
+- Unificar engine a InnoDB en tablas transaccionales.
+
+Fase 3 - Indices de rendimiento (prioridad media):
+- Crear migraciones solo de indices para tablas de consulta frecuente.
+- Empezar por columnas de filtro real (fecha, agencia_id, cedula, ruta_id, producto_id).
+- Aplicar primero en staging y medir.
+
+Fase 4 - Historicas masivas (prioridad controlada):
+- vt_usuarios_*, ventas_producto_*, premios_*, recargas_*, pagos_*.
+- No recrear de cero en produccion: hacer cambios incrementales y por ventana.
+
+Fase 5 - Regla de oro hacia adelante:
+- Ningun cambio estructural sin migracion.
+- Todo indice nuevo debe venir en migracion con nombre claro.
+
+8) SI QUIERES RECONSTRUIR TODO DESDE CERO (RECOMENDACION REALISTA)
+- Hazlo por dominios, no todo junto.
+- Primero core transaccional (app interna).
+- Segundo historico/BI en procesos separados.
+- Mantener ETL/replicacion durante la transicion.
+
+9) PROXIMO PASO SUGERIDO
+- Generar un Plan de Migracion por tabla (prioridad, riesgo, downtime esperado, SQL de rollback).
