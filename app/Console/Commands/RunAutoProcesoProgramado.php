@@ -20,8 +20,6 @@ class RunAutoProcesoProgramado extends Command
     {
         $now = Carbon::now(config('app.timezone'));
         $currentTime = $now->format('H:i');
-        $fechaProceso = $now->format('Y-m-d');
-
         $configs = AutoProcesoConfig::query()
             ->where('enabled', true)
             ->whereNotNull('hora')
@@ -43,8 +41,9 @@ class RunAutoProcesoProgramado extends Command
                 }
             }
 
-            $offset = (int) ($config->process_day_offset ?? 0);
-            $fechaProceso = $now->copy()->addDays($offset)->format('Y-m-d');
+            $fechaProceso = $config->process_date
+                ? $config->process_date->format('Y-m-d')
+                : $now->copy()->addDays((int) ($config->process_day_offset ?? 0))->format('Y-m-d');
 
             $this->info("Procesando {$config->sistema} para {$fechaProceso}");
 

@@ -220,7 +220,7 @@
                                                 <i class="ri-file-excel-2-line me-1"></i>Exportar a Excel
                                             </a>
                                         @else
-                                            <button type="button" class="btn btn-success btn-sm w-100" disabled>
+                                            <button type="button" class="btn btn-success btn-sm w-100" id="btn-exportar-meta-incentivo-bloqueado">
                                                 <i class="ri-file-excel-2-line me-1"></i>Exportar a Excel
                                             </button>
                                         @endif
@@ -234,12 +234,12 @@
                                                 <input type="hidden" name="sistema" value="{{ $sistema }}">
                                                 <input type="hidden" name="coordinador" value="{{ $coordinador ?? '' }}" id="input-coordinador-enviar-mail-meta-incentivo">
                                                 <input type="hidden" name="cumplimiento" value="{{ $cumplimiento ?? '' }}">
-                                                <button type="submit" class="btn btn-primary btn-sm w-100" id="btn-enviar-mail-meta-incentivo" {{ empty($coordinador) ? 'disabled' : '' }}>
+                                                <button type="submit" class="btn btn-primary btn-sm w-100" id="btn-enviar-mail-meta-incentivo">
                                                     <i class="ri-mail-send-line me-1"></i>Enviar por correo
                                                 </button>
                                             </form>
                                         @else
-                                            <button type="button" class="btn btn-primary btn-sm w-100" disabled>
+                                            <button type="button" class="btn btn-primary btn-sm w-100" id="btn-enviar-mail-meta-incentivo-bloqueado">
                                                 <i class="ri-mail-send-line me-1"></i>Enviar por correo
                                             </button>
                                         @endif
@@ -252,6 +252,7 @@
                                         <thead>
                                             <tr>
                                                 <th>Agencia</th>
+                                                <th>Coordinador</th>
                                                 <th>Tipo</th>
                                                 <th>Ventas Trimestral</th>
                                                 <th>Promedio Trimestral</th>
@@ -284,6 +285,7 @@
                                                         <div class="fw-medium">{{ $row->nombre_agencia }}</div>
                                                         <small class="text-muted">Código: {{ $row->agencia_id }}</small>
                                                     </td>
+                                                    <td>{{ $row->coordinador ?: '-' }}</td>
                                                     <td class="text-capitalize">{{ $row->tipo ?: '-' }}</td>
                                                     <td>RD$ {{ number_format((float) $row->ventas_3_meses, 2) }}</td>
                                                     <td>RD$ {{ number_format((float) $row->promedio_3_meses, 2) }}</td>
@@ -302,7 +304,7 @@
                                                 </tr>
                                             @empty
                                                 <tr>
-                                                    <td colspan="10" class="text-center text-muted">
+                                                    <td colspan="11" class="text-center text-muted">
                                                         {{ ($filtrosAplicados ?? false) ? 'No hay datos para los filtros seleccionados.' : 'Aplique los filtros y presione Filtrar para cargar la información.' }}
                                                     </td>
                                                 </tr>
@@ -341,6 +343,8 @@
         const formEnviarCorreo = document.getElementById('form-enviar-mail-meta-incentivo');
         const btnEnviarCorreo = document.getElementById('btn-enviar-mail-meta-incentivo');
         const inputCoordinadorEnviarCorreo = document.getElementById('input-coordinador-enviar-mail-meta-incentivo');
+        const btnExportarBloqueado = document.getElementById('btn-exportar-meta-incentivo-bloqueado');
+        const btnEnviarBloqueado = document.getElementById('btn-enviar-mail-meta-incentivo-bloqueado');
         let dt = null;
 
         if (!formFiltro || !btnFiltrar) return;
@@ -473,7 +477,6 @@
 
             const coordinadorSeleccionado = (selectCoordinador.value || '').trim();
             inputCoordinadorEnviarCorreo.value = coordinadorSeleccionado;
-            btnEnviarCorreo.disabled = coordinadorSeleccionado === '';
         }
 
         if (selectCoordinador) {
@@ -484,6 +487,12 @@
         if (formEnviarCorreo && btnEnviarCorreo) {
             formEnviarCorreo.addEventListener('submit', function (event) {
                 event.preventDefault();
+                const coordinadorSeleccionado = (selectCoordinador?.value || '').trim();
+
+                if (coordinadorSeleccionado === '') {
+                    Swal.fire('Falta seleccionar coordinador', 'Para enviar por correo debes elegir un coordinador en el filtro.', 'warning');
+                    return;
+                }
 
                 Swal.fire({
                     title: '¿Enviar mini reporte por correo?',
@@ -534,6 +543,18 @@
             });
         }
 
+        if (btnExportarBloqueado) {
+            btnExportarBloqueado.addEventListener('click', function () {
+                Swal.fire('Exportación no disponible', 'Primero aplica filtros para cargar datos y luego podrás exportar a Excel.', 'info');
+            });
+        }
+
+        if (btnEnviarBloqueado) {
+            btnEnviarBloqueado.addEventListener('click', function () {
+                Swal.fire('Envío no disponible', 'Primero aplica filtros para cargar datos y luego podrás enviar el mini reporte.', 'info');
+            });
+        }
+
         if (window.$ && $.fn.DataTable && $('#table-meta-incentivo').length) {
             dt = $('#table-meta-incentivo').DataTable({
                 destroy: true,
@@ -546,7 +567,7 @@
                     paginate: { first: 'Primera', last: 'Última', next: 'Siguiente', previous: 'Anterior' }
                 },
                 dom: 'lrtip',
-                order: [[2, 'desc']],
+                order: [[3, 'desc']],
             });
 
             const filtroCumplimientoDt = function (settings, data, dataIndex) {

@@ -740,9 +740,24 @@
                             </div>
                         </li>
                         <li class="nav-item">
-                            <a href="{{ route('contabilidad.index') }}" class="nav-link">
-                                <i class="ri-dashboard-2-line"></i> <span data-key="t-dashboards">Contabilidad</span>
+                            <a class="nav-link menu-link collapsed" href="#sidebarContabilidad" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="sidebarContabilidad">
+                                <i class="ri-dashboard-2-line"></i> <span data-key="t-contabilidad">Contabilidad</span>
                             </a>
+                            <div class="collapse menu-dropdown" id="sidebarContabilidad">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ route('contabilidad.index') }}" class="nav-link">
+                                            <span data-key="t-contabilidad-inicio">Inicio</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('contabilidad.reportes.comisiones') }}" class="nav-link">
+                                            <span data-key="t-contabilidad-comisiones">Comisiones</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
                         </li>
                         <li class="nav-item">
                             <a href="{{ url('/tareas') }}" class="nav-link">

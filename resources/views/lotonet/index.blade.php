@@ -153,6 +153,11 @@
                             <option value="-1">Dia de ayer</option>
                         </select>
                     </div>
+                    <div class="mt-3">
+                        <label for="cfgFechaEspecificaLotonet" class="form-label">Fecha especifica (opcional)</label>
+                        <input type="date" class="form-control" id="cfgFechaEspecificaLotonet">
+                        <small class="text-muted">Si defines una fecha especifica, tiene prioridad sobre "Fecha a procesar".</small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
@@ -235,6 +240,7 @@
                 document.getElementById('cfgHoraLotonet').value = cfg.hora ? String(cfg.hora).slice(0, 5) : '';
                 document.getElementById('cfgCorreoLotonet').value = cfg.correo || '';
                 document.getElementById('cfgDiaLotonet').value = String(cfg.process_day_offset ?? 0);
+                document.getElementById('cfgFechaEspecificaLotonet').value = cfg.process_date ? String(cfg.process_date).slice(0, 10) : '';
             } catch (e) {
                 addLog('No se pudo cargar la configuracion automatica: ' + e.message, 'error');
             }
@@ -246,6 +252,7 @@
                 hora: document.getElementById('cfgHoraLotonet').value || null,
                 correo: document.getElementById('cfgCorreoLotonet').value || null,
                 process_day_offset: Number(document.getElementById('cfgDiaLotonet').value || 0),
+                process_date: document.getElementById('cfgFechaEspecificaLotonet').value || null,
             };
 
             const res = await fetch(`/auto-proceso/${sistemaAuto}/config`, {

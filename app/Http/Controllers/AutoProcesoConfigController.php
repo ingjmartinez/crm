@@ -32,6 +32,7 @@ class AutoProcesoConfigController extends Controller
             'hora' => ['nullable', 'date_format:H:i'],
             'correo' => ['nullable', 'email'],
             'process_day_offset' => ['nullable', 'integer', 'in:0,-1'],
+            'process_date' => ['nullable', 'date'],
         ]);
 
         if (!empty($validated['enabled'])) {
@@ -54,19 +55,25 @@ class AutoProcesoConfigController extends Controller
         $newHora = $validated['hora'] ?? null;
         $newCorreo = $validated['correo'] ?? null;
         $newOffset = (int) ($validated['process_day_offset'] ?? 0);
+        $newProcessDate = $validated['process_date'] ?? null;
 
         $currentHora = $config->hora ? substr((string) $config->hora, 0, 5) : null;
+        $currentProcessDate = $config->process_date
+            ? $config->process_date->format('Y-m-d')
+            : null;
         $shouldResetLastRun =
             ((bool) $config->enabled !== $newEnabled)
             || ($currentHora !== $newHora)
             || (($config->correo ?? null) !== $newCorreo)
-            || ((int) ($config->process_day_offset ?? 0) !== $newOffset);
+            || ((int) ($config->process_day_offset ?? 0) !== $newOffset)
+            || ($currentProcessDate !== $newProcessDate);
 
         $payload = [
             'enabled' => $newEnabled,
             'hora' => $newHora,
             'correo' => $newCorreo,
             'process_day_offset' => $newOffset,
+            'process_date' => $newProcessDate,
         ];
 
         if ($shouldResetLastRun) {

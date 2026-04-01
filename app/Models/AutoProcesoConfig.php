@@ -14,6 +14,7 @@ class AutoProcesoConfig extends Model
         'hora',
         'correo',
         'process_day_offset',
+        'process_date',
         'last_run_at',
         'last_status',
         'last_summary',
@@ -22,6 +23,7 @@ class AutoProcesoConfig extends Model
     protected $casts = [
         'enabled' => 'boolean',
         'process_day_offset' => 'integer',
+        'process_date' => 'date',
         'last_run_at' => 'datetime',
         'last_summary' => 'array',
     ];

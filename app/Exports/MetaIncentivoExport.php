@@ -34,11 +34,25 @@ class MetaIncentivoExport implements FromCollection, WithHeadings, WithMapping, 
             'BaseT',
             'BaseAjustada',
             'Total Venta Mes Posterior',
+            'Cumplimiento Meta',
         ];
     }
 
     public function map($row): array
     {
+        $metaIncremental = (float) ($row->meta_incremental ?? 0);
+        $ventaPosterior = (float) ($row->total_venta_mes_posterior ?? 0);
+
+        if ($metaIncremental <= 0) {
+            $cumplimientoMeta = 'Cumple 100%';
+        } elseif ($ventaPosterior >= $metaIncremental) {
+            $cumplimientoMeta = 'Cumple 100%';
+        } else {
+            $porcentajeCumplido = min(100, ($ventaPosterior / $metaIncremental) * 100);
+            $porcentajeFaltante = max(0, 100 - $porcentajeCumplido);
+            $cumplimientoMeta = sprintf('Falta %s%% para alcanzar el 100%%', number_format($porcentajeFaltante, 2));
+        }
+
         return [
             (string) ($row->agencia_id ?? ''),
             (string) ($row->nombre_agencia ?? ''),
@@ -50,6 +64,7 @@ class MetaIncentivoExport implements FromCollection, WithHeadings, WithMapping, 
             (float) ($row->ventas_3_meses ?? 0),
             (float) ($row->promedio_3_meses ?? 0),
             (float) ($row->total_venta_mes_posterior ?? 0),
+            $cumplimientoMeta,
         ];
     }
 

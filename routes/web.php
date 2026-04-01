@@ -66,9 +66,10 @@ Route::get('/', function () {
     return view('inicio');
 });
 
-Route::get('/contabilidad', function () {
-    return view('contabilidad');
-})->name('contabilidad.index');
+Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
+    Route::view('/', 'contabilidad.index')->name('index');
+    Route::view('/reportes/comisiones', 'contabilidad.reportes.comisiones')->name('reportes.comisiones');
+});
 
 Route::get('/api-cuentas', [Api::class, 'getCuentas']);
 Route::post('/api-cuentas', [Api::class, 'storeCuenta']);
