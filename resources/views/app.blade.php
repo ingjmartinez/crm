@@ -637,7 +637,11 @@
                 <div class="container-fluid">
                     <div id="two-column-menu"></div>
                     <ul class="navbar-nav" id="navbar-nav">
-                        <li class="menu-title"><span data-key="t-menu">Menu</span></li>
+                        <li class="menu-title">
+                            <a href="{{ url('/') }}" class="text-reset text-decoration-none">
+                                <span data-key="t-menu">Inicio</span>
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarDash" data-bs-toggle="collapse"
                                 role="button" aria-expanded="true" aria-controls="sidebarDash">
@@ -783,6 +787,10 @@
                                     <li class="nav-item">
                                         <a href="{{ route('agencias.asistencia-comparativa') }}" class="nav-link" data-key="t-asistencia-comparativa">
                                             Asistencia Comparativa </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('mantenimiento.catalogo-juegos.index') }}" class="nav-link" data-key="t-catalogo-juegos">
+                                            Catálogo de Juegos </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{{ url('/usuarios') }}" class="nav-link" data-key="t-usuarios">

@@ -7,6 +7,7 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AutoProcesoConfigController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ComercialController;
+use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\FaltantesController;
@@ -263,6 +264,16 @@ Route::post('coordinador-operador/{coordinador_operador}/asignar-agencias', [Coo
 
 Route::resource('roles', RoleController::class)->except(['show']);
 Route::resource('permissions', PermissionController::class)->except(['show']);
+
+Route::prefix('mantenimiento')->name('mantenimiento.')->group(function () {
+    Route::get('/catalogo-juegos', [CatalogoJuegoController::class, 'index'])->name('catalogo-juegos.index');
+    Route::get('/catalogo-juegos/detectar-nuevos', [CatalogoJuegoController::class, 'detectarNuevos'])->name('catalogo-juegos.detectar-nuevos');
+    Route::get('/catalogo-juegos/comparativo-sql', [CatalogoJuegoController::class, 'comparativoSql'])->name('catalogo-juegos.comparativo-sql');
+    Route::post('/catalogo-juegos/insertar-detectados', [CatalogoJuegoController::class, 'insertarDetectados'])->name('catalogo-juegos.insertar-detectados');
+    Route::post('/catalogo-juegos', [CatalogoJuegoController::class, 'store'])->name('catalogo-juegos.store');
+    Route::put('/catalogo-juegos/{catalogoJuego}', [CatalogoJuegoController::class, 'update'])->name('catalogo-juegos.update');
+    Route::delete('/catalogo-juegos/{catalogoJuego}', [CatalogoJuegoController::class, 'destroy'])->name('catalogo-juegos.destroy');
+});
 
 Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-ventas'));
 Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usuarios'));
