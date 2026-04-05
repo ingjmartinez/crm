@@ -203,6 +203,7 @@ Route::get('/ventas-mar-dashboard/data', [MarController::class, 'dashboardVentas
 
 Route::get('/empleados', [EmpleadoController::class, 'index']);
 Route::get('/empleados/list', [EmpleadoController::class, 'list']);
+Route::get('/empleados/dashboard', [EmpleadoController::class, 'dashboard']);
 Route::get('/empleados/show/{id}', [EmpleadoController::class, 'show']);
 Route::post('/empleados/store', [EmpleadoController::class, 'store']);
 Route::get('/empleados/destroy/{id}', [EmpleadoController::class, 'destroy']);

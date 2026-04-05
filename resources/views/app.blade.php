@@ -720,7 +720,7 @@
                             <a href="#sidebarEmpleados" class="nav-link collapsed" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="sidebarEmpleados"
                                 data-key="t-invoices">
-                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Empleados</span>
+                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Recursos Humanos</span>
                             </a>
                             <div class="collapse menu-dropdown" id="sidebarEmpleados">
                                 <ul class="nav nav-sm flex-column">

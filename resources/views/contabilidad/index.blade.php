@@ -484,5 +484,195 @@
                 });
 
         }
+
+        function parseFechaIso(fecha) {
+            const partes = String(fecha || '').split('-').map(Number);
+            if (partes.length !== 3) {
+                return null;
+            }
+
+            const [anio, mes, dia] = partes;
+            if (!anio || !mes || !dia) {
+                return null;
+            }
+
+            return new Date(anio, mes - 1, dia);
+        }
+
+        function formatFechaIso(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function listarFechasRango(fechaInicio, fechaFin) {
+            const inicio = parseFechaIso(fechaInicio);
+            const fin = parseFechaIso(fechaFin);
+            const fechas = [];
+
+            if (!inicio || !fin) {
+                return fechas;
+            }
+
+            const cursor = new Date(inicio);
+            while (cursor <= fin) {
+                fechas.push(formatFechaIso(cursor));
+                cursor.setDate(cursor.getDate() + 1);
+            }
+
+            return fechas;
+        }
+
+        function actualizarSwalProgresoEntradas(cuenta, fechaActual, completados, total) {
+            if (typeof Swal === 'undefined' || !Swal.isVisible()) {
+                return;
+            }
+
+            const porcentaje = total > 0 ? Math.min(100, Math.round((completados / total) * 100)) : 0;
+            const html = Swal.getHtmlContainer();
+            if (!html) {
+                return;
+            }
+
+            html.innerHTML = `
+                <div class="text-start">
+                    <div><strong>Cuenta:</strong> ${cuenta}</div>
+                    <div><strong>Progreso:</strong> ${completados} de ${total} dias (${porcentaje}%)</div>
+                    <div class="progress mt-2" style="height:10px;">
+                        <div class="progress-bar" role="progressbar" style="width:${porcentaje}%;" aria-valuenow="${porcentaje}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="text-muted small mt-2">Procesando ${fechaActual}</div>
+                </div>
+            `;
+        }
+
+        async function consultarEntradasDia(cuenta, fecha) {
+            const response = await fetch("/api-entradas?fecha_inicio=" + encodeURIComponent(fecha) + "&fecha_fin=" + encodeURIComponent(fecha) + "&cuenta=" + encodeURIComponent(cuenta));
+            const contentType = response.headers.get("content-type");
+            let data;
+
+            if (contentType && contentType.includes("application/json")) {
+                data = await response.json();
+            } else {
+                const text = await response.text();
+                try {
+                    data = JSON.parse(text);
+                } catch {
+                    throw new Error(text || "No hay nada encontrado");
+                }
+            }
+
+            if (!response.ok) {
+                throw new Error(data?.message || ("No se pudo consultar la fecha " + fecha));
+            }
+
+            return Array.isArray(data?.result?.Det) ? data.result.Det : [];
+        }
+
+        async function verDetalle() {
+            let cuenta = document.getElementById('cuenta').value;
+            let fechaInicio = document.getElementById('fechaInicio').value;
+            let fechaFin = document.getElementById('fechaFin').value;
+
+            if (!cuenta) {
+                alert("Por favor, seleccione una cuenta.");
+                return;
+            }
+
+            if (!fechaInicio || !fechaFin) {
+                alert("Por favor, seleccione el rango de fechas.");
+                return;
+            }
+
+            if (fechaInicio > fechaFin) {
+                alert("La fecha inicio no puede ser mayor que la fecha fin.");
+                return;
+            }
+
+            const fechas = listarFechasRango(fechaInicio, fechaFin);
+
+            try {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Consultando entradas',
+                        html: '<div class="text-start"><strong>Preparando consulta...</strong></div>',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        didOpen: function () {
+                            Swal.showLoading();
+                        }
+                    });
+                }
+
+                const detalles = [];
+
+                for (let index = 0; index < fechas.length; index += 1) {
+                    const fecha = fechas[index];
+                    actualizarSwalProgresoEntradas(cuenta, fecha, index, fechas.length);
+                    const items = await consultarEntradasDia(cuenta, fecha);
+                    items.forEach(function (item) {
+                        detalles.push(item);
+                    });
+                    actualizarSwalProgresoEntradas(cuenta, fecha, index + 1, fechas.length);
+                }
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.close();
+                }
+
+                if (!detalles.length) {
+                    alert("No hay datos encontrados en la respuesta");
+                    return;
+                }
+
+                const tableBody = document.querySelector('#tableDetalleCuenta tbody');
+                tableBody.innerHTML = '';
+
+                detalles.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.NoAsiento}</td>
+                        <td>${item.Fecha}</td>
+                        <td>${item.Ref}</td>
+                        <td>${item.NoRef}</td>
+                        <td>${item.Debito}</td>
+                        <td>${item.Credito}</td>
+                        <td>${item.Descripcion}</td>
+                        <td>${item.Grupo}</td>
+                        <td>${item.SubGrupo}</td>
+                        <td>${item.Division}</td>
+                        <td>${item.CentroCosto}</td>
+                        <td>${item.Conciliado}</td>
+                        <td>${item.Modulo}</td>
+                        <td>${item.FechaGrabado}</td>
+                        <td>${item.CreadoPor}</td>
+                        <td>${item.FechaModificado}</td>
+                        <td>${item.ModificadoPor}</td>
+                        <td>${item.RefDesc}</td>
+                        <td>${item.Sociedad}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+                document.getElementById('btnClose').click();
+
+                $('#tableDetalleCuenta').DataTable({
+                    destroy: true,
+                    responsive: true,
+                    scrollX: true,
+                    columnDefs: [
+                        { targets: [3, 4, 5, 6, 7, 8, 9, 10, 11], visible: $(window).width() > 992 }
+                    ],
+                    dom: 'Bfrtip',
+                    buttons: ['copy', 'csv', 'excel', 'pdf', 'print']
+                });
+            } catch (error) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.close();
+                }
+                alert("Error en la petición: " + error.message);
+            }
+        }
     </script>
 @endsection

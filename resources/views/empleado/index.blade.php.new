@@ -127,7 +127,7 @@
                                         </span>
                                     </div>
                                 </div>
-                                <div class="text-muted small">Masa salarial mensual solo de empleados activos.</div>
+                                <div class="text-muted small">Masa salarial mensual total del filtro actual.</div>
                             </div>
                         </div>
                     </div>
@@ -170,7 +170,7 @@
                     <div class="col-xl-6">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-header bg-transparent border-0">
-                                <h5 class="card-title mb-0">Participacion salarial por empresa</h5>
+                                <h5 class="card-title mb-0">Resumen salarial por empresa</h5>
                             </div>
                             <div class="card-body">
                                 <div id="chartSalarioEmpresa" style="min-height: 320px;"></div>
@@ -253,7 +253,7 @@
 @endsection
 
 @section('script')
-    <script src="{{ asset('libs/apexcharts/apexcharts.min.js') }}"></script>
+    <script src="{{ asset('public/libs/apexcharts/apexcharts.min.js') }}"></script>
     <script>
         let chartEstado = null;
         let chartSalarioCiudad = null;
@@ -336,71 +336,33 @@
                 dataLabels: { enabled: false }
             });
 
-            const salarioEmpresaSeries = salarioEmpresa.series || [];
-            const salarioEmpresaTotal = salarioEmpresaSeries.reduce(function (acc, item) {
-                return acc + Number(item || 0);
-            }, 0);
-            const salarioEmpresaPorcentaje = salarioEmpresaSeries.map(function (value) {
-                if (salarioEmpresaTotal <= 0) {
-                    return 0;
-                }
-
-                return Number(((Number(value || 0) / salarioEmpresaTotal) * 100).toFixed(2));
-            });
-
             chartSalarioEmpresa = new ApexCharts(document.querySelector('#chartSalarioEmpresa'), {
-                chart: { type: 'donut', height: 320, toolbar: { show: false } },
-                series: salarioEmpresaPorcentaje,
+                chart: { type: 'radialBar', height: 320, toolbar: { show: false } },
+                series: (salarioEmpresa.series || []).map(function (value, _index, arr) {
+                    const max = Math.max(...arr, 1);
+                    return Math.round((Number(value || 0) / max) * 100);
+                }),
                 labels: salarioEmpresa.labels || [],
                 colors: ['#6366f1', '#f59e0b'],
-                legend: {
-                    show: true,
-                    position: 'bottom',
-                    formatter: function (seriesName, opts) {
-                        const porcentaje = salarioEmpresaPorcentaje[opts.seriesIndex] || 0;
-                        const monto = salarioEmpresaSeries[opts.seriesIndex] || 0;
-                        return seriesName + ' - ' + porcentaje.toFixed(2) + '% ($' + formatoMonto(monto) + ')';
-                    }
-                },
-                dataLabels: {
-                    enabled: true,
-                    formatter: function (value) {
-                        return value.toFixed(1) + '%';
-                    }
-                },
-                tooltip: {
-                    y: {
-                        formatter: function (_value, opts) {
-                            const indice = opts.seriesIndex;
-                            const porcentaje = salarioEmpresaPorcentaje[indice] || 0;
-                            const monto = salarioEmpresaSeries[indice] || 0;
-                            return porcentaje.toFixed(2) + '% | $' + formatoMonto(monto);
-                        }
-                    }
-                },
                 plotOptions: {
-                    pie: {
-                        donut: {
-                            size: '70%',
-                            labels: {
+                    radialBar: {
+                        dataLabels: {
+                            name: { fontSize: '14px' },
+                            value: {
+                                fontSize: '16px',
+                                formatter: function (value, opts) {
+                                    const indice = opts.seriesIndex;
+                                    return '$' + formatoMonto((salarioEmpresa.series || [])[indice] || 0);
+                                }
+                            },
+                            total: {
                                 show: true,
-                                name: {
-                                    show: true,
-                                    fontSize: '16px'
-                                },
-                                value: {
-                                    show: true,
-                                    fontSize: '18px',
-                                    formatter: function (value) {
-                                        return Number(value || 0).toFixed(2) + '%';
-                                    }
-                                },
-                                total: {
-                                    show: true,
-                                    label: 'Total',
-                                    formatter: function () {
-                                        return '$' + formatoMonto(salarioEmpresaTotal);
-                                    }
+                                label: 'Total',
+                                formatter: function () {
+                                    const total = (salarioEmpresa.series || []).reduce(function (acc, item) {
+                                        return acc + Number(item || 0);
+                                    }, 0);
+                                    return '$' + formatoMonto(total);
                                 }
                             }
                         }
@@ -419,7 +381,7 @@
             document.getElementById('kpi-total-empleados').textContent = Number(resumen.total_empleados || 0).toLocaleString('en-US');
             document.getElementById('kpi-activos').textContent = Number(resumen.activos || 0).toLocaleString('en-US');
             document.getElementById('kpi-inactivos').textContent = Number(resumen.inactivos || 0).toLocaleString('en-US');
-            document.getElementById('kpi-salario-total').textContent = '$' + formatoMonto(resumen.salario_mensual_activos || 0);
+            document.getElementById('kpi-salario-total').textContent = '$' + formatoMonto(resumen.salario_mensual_total || 0);
         }
 
         function renderTablaCiudades(payload) {
@@ -564,4 +526,3 @@
         });
     </script>
 @endsection
-

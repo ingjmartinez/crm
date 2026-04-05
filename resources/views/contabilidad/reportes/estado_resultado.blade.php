@@ -554,7 +554,7 @@
 
                 let y = 36;
                 doc.setFontSize(20);
-                doc.text('Estado de Resultado', margin, y);
+                doc.text('Estado de Resultado Grupo Joselito', margin, y);
                 y += 20;
                 doc.setFontSize(10);
                 doc.setTextColor(90, 90, 90);

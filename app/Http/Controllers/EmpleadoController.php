@@ -15,11 +15,13 @@ class EmpleadoController extends Controller
         return view('empleado.index');
     }
 
-    public function list()
+    public function list(Request $request)
     {
-        $empleados = Empleado::select(
+        $empresa = trim((string) $request->query('empresa', ''));
+
+        $query = Empleado::select(
             DB::raw("CASE WHEN companyid = '168'
-                THEN 'Joselito'
+                THEN 'Grupo Joselito'
                 ELSE 'Negosur'
             END AS company"),
             'empleadoid',
@@ -27,9 +29,111 @@ class EmpleadoController extends Controller
             'apellidos',
             'fechaingreso',
             'fechasalida',
-            'cedula'
-        )->get();
+            'cedula',
+            'ciudad',
+            'salariomensual'
+        );
+
+        if (in_array($empresa, ['168', '169'], true)) {
+            $query->where('companyid', $empresa);
+        }
+
+        $empleados = $query->get();
         return response()->json($empleados);
+    }
+
+    public function dashboard(Request $request)
+    {
+        $empresa = trim((string) $request->query('empresa', ''));
+
+        $query = Empleado::query();
+        if (in_array($empresa, ['168', '169'], true)) {
+            $query->where('companyid', $empresa);
+        }
+
+        $empleados = $query->get([
+            'companyid',
+            'empleadoid',
+            'nombres',
+            'apellidos',
+            'fechaingreso',
+            'fechasalida',
+            'ciudad',
+            'salariomensual',
+        ]);
+
+        $normalizados = $empleados->map(function ($empleado) {
+            $fechaSalida = trim((string) ($empleado->fechasalida ?? ''));
+            $salario = is_numeric($empleado->salariomensual) ? (float) $empleado->salariomensual : 0.0;
+            $ciudad = trim((string) ($empleado->ciudad ?? '')) ?: 'Sin ciudad';
+
+            return [
+                'companyid' => (string) $empleado->companyid,
+                'company' => (string) $empleado->companyid === '168' ? 'Grupo Joselito' : 'Negosur',
+                'activo' => $fechaSalida === '',
+                'ciudad' => $ciudad,
+                'salario' => $salario,
+            ];
+        });
+
+        $activos = $normalizados->where('activo', true);
+        $inactivos = $normalizados->where('activo', false);
+
+        $salarioPorCiudad = $normalizados
+            ->groupBy('ciudad')
+            ->map(function ($items, $ciudad) {
+                return [
+                    'ciudad' => $ciudad,
+                    'salario' => round($items->sum('salario'), 2),
+                    'empleados' => $items->count(),
+                    'activos' => $items->where('activo', true)->count(),
+                    'inactivos' => $items->where('activo', false)->count(),
+                ];
+            })
+            ->sortByDesc('salario')
+            ->values();
+
+        $salarioPorEmpresa = $activos
+            ->groupBy('company')
+            ->map(function ($items, $empresaNombre) {
+                return [
+                    'empresa' => $empresaNombre,
+                    'salario' => round($items->sum('salario'), 2),
+                    'empleados' => $items->count(),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'resumen' => [
+                'total_empleados' => $normalizados->count(),
+                'activos' => $activos->count(),
+                'inactivos' => $inactivos->count(),
+                'salario_mensual_total' => round($normalizados->sum('salario'), 2),
+                'salario_mensual_activos' => round($activos->sum('salario'), 2),
+                'salario_mensual_inactivos' => round($inactivos->sum('salario'), 2),
+                'salario_promedio' => round($normalizados->avg('salario') ?: 0, 2),
+            ],
+            'charts' => [
+                'estado' => [
+                    'labels' => ['Activos', 'Inactivos'],
+                    'series' => [$activos->count(), $inactivos->count()],
+                ],
+                'salario_ciudad' => [
+                    'labels' => $salarioPorCiudad->pluck('ciudad')->take(10)->values(),
+                    'series' => $salarioPorCiudad->pluck('salario')->take(10)->values(),
+                ],
+                'empleados_ciudad' => [
+                    'labels' => $salarioPorCiudad->pluck('ciudad')->take(10)->values(),
+                    'series' => $salarioPorCiudad->pluck('empleados')->take(10)->values(),
+                ],
+                'salario_empresa' => [
+                    'labels' => $salarioPorEmpresa->pluck('empresa')->values(),
+                    'series' => $salarioPorEmpresa->pluck('salario')->values(),
+                ],
+            ],
+            'detalle_ciudad' => $salarioPorCiudad->take(12)->values(),
+        ]);
     }
 
     public function sincronizar(Request $request)
