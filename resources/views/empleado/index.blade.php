@@ -25,7 +25,7 @@
                                 <div class="row align-items-center g-4">
                                     <div class="col-lg-7">
                                         <span class="badge rounded-pill bg-white bg-opacity-10 text-white mb-3">Mini Dashboard RRHH</span>
-                                        <h2 class="fw-semibold text-white mb-2">Vista moderna de empleados, estatus y masa salarial</h2>
+                                        <h2 class="fw-semibold text-white mb-2">Vista de Empleados, estatus y masa salariales</h2>
                                         <p class="mb-0 text-white text-opacity-75">
                                             Filtra por empresa y analiza empleados activos, inactivos y salario mensual agrupado por ciudad.
                                         </p>
