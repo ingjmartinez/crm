@@ -760,6 +760,11 @@
                                             <span data-key="t-contabilidad-comisiones">Comisiones</span>
                                         </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('contabilidad.reportes.estado-resultado') }}" class="nav-link">
+                                            <span data-key="t-contabilidad-estado-resultado">Estado de Resultado</span>
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>

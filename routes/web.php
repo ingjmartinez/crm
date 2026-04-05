@@ -7,6 +7,8 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AutoProcesoConfigController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ComercialController;
+use App\Http\Controllers\ContabilidadReporteController;
+use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\EmpleadoController;
@@ -70,7 +72,10 @@ Route::get('/', function () {
 Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
     Route::view('/', 'contabilidad.index')->name('index');
     Route::view('/reportes/comisiones', 'contabilidad.reportes.comisiones')->name('reportes.comisiones');
-});
+    Route::get('/reportes/estado-resultado', [ContabilidadEstadoResultadoController::class, 'index'])->name('reportes.estado-resultado');
+    Route::get('/reportes/estado-resultado/meta', [ContabilidadEstadoResultadoController::class, 'meta'])->name('reportes.estado-resultado.meta');
+    Route::get('/reportes/estado-resultado/data', [ContabilidadEstadoResultadoController::class, 'data'])->name('reportes.estado-resultado.data');
+  });
 
 Route::get('/api-cuentas', [Api::class, 'getCuentas']);
 Route::post('/api-cuentas', [Api::class, 'storeCuenta']);
