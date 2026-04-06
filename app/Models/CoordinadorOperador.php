@@ -20,6 +20,13 @@ class CoordinadorOperador extends Model
         'puesto',
     ];
 
+    public function getCedulaAttribute($value): string
+    {
+        $cedula = preg_replace('/\D/', '', (string) $value);
+
+        return str_pad($cedula, 11, '0', STR_PAD_LEFT);
+    }
+
     public function agencias()
     {
         return $this->belongsToMany(

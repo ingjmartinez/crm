@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Reporte de Faltantes Lotobet</title>
+    <title>Reporte de Faltantes {{ $sistema ?? 'Lotobet' }}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -56,14 +56,14 @@
 </head>
 <body>
     <div class="header">
-        <h1>Reporte de Faltantes Lotobet</h1>
-        <p>Fecha de Generación: {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }}</p>
+        <h1>Reporte de Faltantes {{ $sistema ?? 'Lotobet' }}</h1>
+        <p>Fecha de Generacion: {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }}</p>
     </div>
 
     <table>
         <thead>
             <tr>
-                <th>Cédula</th>
+                <th>Cedula</th>
                 <th>Nombre Empleado</th>
                 <th class="text-center">Cantidad de Faltantes</th>
                 <th class="text-end">Monto Total</th>
@@ -81,7 +81,7 @@
                 @endphp
                 <tr>
                     <td>{{ $registro->identificacion }}</td>
-                    <td>{{ trim($registro->nombre_empleado) ?? 'Sin especificar' }}</td>
+                    <td>{{ trim($registro->nombre_empleado) ?: 'Sin especificar' }}</td>
                     <td class="text-center">{{ $registro->cantidad_faltantes }}</td>
                     <td class="text-end">${{ number_format($registro->total_monto, 2, '.', ',') }}</td>
                 </tr>

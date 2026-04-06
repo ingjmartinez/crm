@@ -92,33 +92,79 @@ class ReporteController extends Controller
         return view('reportes.faltantes-bet');
     }
 
+    private function getFaltantesConfig(?string $tipo = 'all'): array
+    {
+        $tipo = strtolower($tipo ?? 'all');
+
+        if ($tipo === 'all') {
+            return [
+                'tipo' => 'all',
+                'tabla' => 'faltantes',
+                'nombre' => 'Todos los sistemas',
+            ];
+        }
+
+        if ($tipo === 'net') {
+            return [
+                'tipo' => 'net',
+                'tabla' => 'faltantes_net',
+                'nombre' => 'Lotonet',
+            ];
+        }
+
+        return [
+            'tipo' => 'bet',
+            'tabla' => 'faltantes_bet',
+            'nombre' => 'Lotobet',
+        ];
+    }
+
+    private function faltantesBaseQuery(string $tipo)
+    {
+        if ($tipo !== 'all') {
+            return DB::table($this->getFaltantesConfig($tipo)['tabla']);
+        }
+
+        $faltantesBet = DB::table('faltantes_bet')
+            ->select('agencia_id', 'identificacion', 'faltante_id', 'monto', 'fecha');
+
+        $faltantesNet = DB::table('faltantes_net')
+            ->select('agencia_id', 'identificacion', 'faltante_id', 'monto', 'fecha');
+
+        return DB::query()->fromSub($faltantesBet->unionAll($faltantesNet), 'faltantes');
+    }
+
     public function listFaltantesBet(Request $request)
     {
         header('Content-Type: application/json');
 
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
+        $config = $this->getFaltantesConfig($request->input('tipo'));
+        $tabla = $config['tabla'];
 
-        $query = DB::table('faltantes_bet')
-            ->leftJoin('empleados', 'faltantes_bet.identificacion', '=', 'empleados.cedula')
+        $query = $this->faltantesBaseQuery($config['tipo'])
+            ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
             ->select(
-                'faltantes_bet.agencia_id',
-                'faltantes_bet.identificacion',
+                $tabla . '.agencia_id',
+                $tabla . '.identificacion',
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
-                DB::raw('COUNT(faltantes_bet.faltante_id) as cantidad_faltantes'),
-                DB::raw('SUM(faltantes_bet.monto) as total_monto')
+                DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
+                DB::raw("SUM($tabla.monto) as total_monto"),
+                DB::raw("GROUP_CONCAT(DISTINCT DATE_FORMAT($tabla.fecha, '%d/%m/%Y') ORDER BY $tabla.fecha SEPARATOR ', ') as fechas_faltantes"),
+                DB::raw("GROUP_CONCAT(CONCAT(DATE_FORMAT($tabla.fecha, '%d/%m/%Y'), '|', COALESCE($tabla.monto, 0)) ORDER BY $tabla.fecha SEPARATOR ';;') as detalles_faltantes")
             )
-            ->whereNotNull('faltantes_bet.identificacion')
-            ->where('faltantes_bet.identificacion', '!=', '');
+            ->whereNotNull($tabla . '.identificacion')
+            ->where($tabla . '.identificacion', '!=', '');
 
         if ($fechaInicio && $fechaFin) {
-            $query->whereBetween('faltantes_bet.fecha', [$fechaInicio, $fechaFin]);
+            $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
         }
 
         $registros = $query
-            ->groupBy('faltantes_bet.agencia_id', 'faltantes_bet.identificacion', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla . '.agencia_id', $tabla . '.identificacion', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
-            ->paginate(50);
+            ->paginate(10);
 
         return $registros->toJson();
     }
@@ -130,28 +176,31 @@ class ReporteController extends Controller
 
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
+        $config = $this->getFaltantesConfig($request->input('tipo'));
+        $tabla = $config['tabla'];
 
-        $query = DB::table('faltantes_bet')
-            ->leftJoin('empleados', 'faltantes_bet.identificacion', '=', 'empleados.cedula')
+        $query = $this->faltantesBaseQuery($config['tipo'])
+            ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
             ->select(
-                'faltantes_bet.identificacion',
+                $tabla . '.identificacion',
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
-                DB::raw('COUNT(faltantes_bet.faltante_id) as cantidad_faltantes'),
-                DB::raw('SUM(faltantes_bet.monto) as total_monto')
+                DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
+                DB::raw("SUM($tabla.monto) as total_monto"),
+                DB::raw("GROUP_CONCAT(DISTINCT DATE_FORMAT($tabla.fecha, '%d/%m/%Y') ORDER BY $tabla.fecha SEPARATOR ', ') as fechas_faltantes")
             )
-            ->whereNotNull('faltantes_bet.identificacion')
-            ->where('faltantes_bet.identificacion', '!=', '');
+            ->whereNotNull($tabla . '.identificacion')
+            ->where($tabla . '.identificacion', '!=', '');
 
         if ($fechaInicio && $fechaFin) {
-            $query->whereBetween('faltantes_bet.fecha', [$fechaInicio, $fechaFin]);
+            $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
         }
 
         $registros = $query
-            ->groupBy('faltantes_bet.identificacion', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla . '.identificacion', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->get();
 
-        $fileName = 'faltantes_bet_' . now()->format('Ymd_His') . '.xlsx';
+        $fileName = 'faltantes_' . $config['tipo'] . '_' . now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(new \App\Exports\FaltantesBetExport($registros), $fileName);
     }
@@ -162,31 +211,36 @@ class ReporteController extends Controller
 
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
+        $config = $this->getFaltantesConfig($request->input('tipo'));
+        $tabla = $config['tabla'];
 
-        $query = DB::table('faltantes_bet')
-            ->leftJoin('empleados', 'faltantes_bet.identificacion', '=', 'empleados.cedula')
+        $query = $this->faltantesBaseQuery($config['tipo'])
+            ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
             ->select(
-                'faltantes_bet.identificacion',
+                $tabla . '.identificacion',
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
-                DB::raw('COUNT(faltantes_bet.faltante_id) as cantidad_faltantes'),
-                DB::raw('SUM(faltantes_bet.monto) as total_monto')
+                DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
+                DB::raw("SUM($tabla.monto) as total_monto"),
+                DB::raw("GROUP_CONCAT(DISTINCT DATE_FORMAT($tabla.fecha, '%d/%m/%Y') ORDER BY $tabla.fecha SEPARATOR ', ') as fechas_faltantes")
             )
-            ->whereNotNull('faltantes_bet.identificacion')
-            ->where('faltantes_bet.identificacion', '!=', '');
+            ->whereNotNull($tabla . '.identificacion')
+            ->where($tabla . '.identificacion', '!=', '');
 
         if ($fechaInicio && $fechaFin) {
-            $query->whereBetween('faltantes_bet.fecha', [$fechaInicio, $fechaFin]);
+            $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
         }
 
         $registros = $query
-            ->groupBy('faltantes_bet.identificacion', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla . '.identificacion', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->get();
 
-        $pdf = Pdf::loadView('reportes.faltantes-bet-pdf', compact('registros'))
+        $sistema = $config['nombre'];
+
+        $pdf = Pdf::loadView('reportes.faltantes-bet-pdf', compact('registros', 'sistema'))
             ->setPaper('A4', 'portrait');
 
-        return $pdf->download('reporte_faltantes_bet.pdf');
+        return $pdf->download('reporte_faltantes_' . $config['tipo'] . '.pdf');
     }
 
     public function cuadreVentas(Request $request)

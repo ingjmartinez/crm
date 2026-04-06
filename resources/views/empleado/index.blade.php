@@ -505,6 +505,18 @@
         }
 
         document.querySelector("#btnSincronizar").addEventListener("click", function () {
+            const empresa = document.getElementById('empresa').value;
+
+            if (!empresa) {
+                Swal.fire({
+                    title: 'Empresa requerida',
+                    text: 'Debe seleccionar una empresa antes de sincronizar empleados.',
+                    icon: 'warning',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+
             Swal.fire({
                 title: "Sincronizando: 0% ...",
                 icon: 'info',
@@ -523,7 +535,6 @@
                 textSwal.innerHTML = "Sincronizando: " + percent + "%";
             }, 1000);
 
-            let empresa = document.getElementById('empresa').value || '168';
             fetch('/empleados/sincronizar?empresa=' + empresa)
                 .then(response => response.json())
                 .then(() => {
