@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\VwUsuariosUnion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class EmpleadoController extends Controller
 {
@@ -82,11 +83,13 @@ class EmpleadoController extends Controller
         $salarioPorCiudad = $normalizados
             ->groupBy('ciudad')
             ->map(function ($items, $ciudad) {
+                $activosCiudad = $items->where('activo', true);
+
                 return [
                     'ciudad' => $ciudad,
-                    'salario' => round($items->sum('salario'), 2),
+                    'salario' => round($activosCiudad->sum('salario'), 2),
                     'empleados' => $items->count(),
-                    'activos' => $items->where('activo', true)->count(),
+                    'activos' => $activosCiudad->count(),
                     'inactivos' => $items->where('activo', false)->count(),
                 ];
             })
@@ -138,111 +141,182 @@ class EmpleadoController extends Controller
 
     public function sincronizar(Request $request)
     {
-        ini_set('max_execution_time', 600); // Aumentar el tiempo máximo de entrada a 5 min
-        $empresa = $request->query('empresa');
+        ini_set('max_execution_time', 600);
+        ini_set('memory_limit', '512M');
+        $empresa = trim((string) $request->query('empresa', ''));
 
-        // Consumimos la API externa con Http::get()
-        $response = Http::withoutVerifying()->get('https://apisj.azurewebsites.net/ApiSJ/RRHH/Empleados/Listar', [
-            'strToken' => '87eb2d56-25f3-4d46-9cb0-73c07a550bd2',
-            'intIdEmpresa' => $empresa,
-        ]);
+        if (!in_array($empresa, ['168', '169'], true)) {
+            return response()->json(['error' => 'Empresa invalida. Debe ser 168 o 169.'], 422);
+        }
+
+        try {
+            $response = Http::withoutVerifying()
+                ->connectTimeout(20)
+                ->timeout(180)
+                ->acceptJson()
+                ->get('https://apisj.azurewebsites.net/ApiSJ/RRHH/Empleados/Listar', [
+                    'strToken' => '87eb2d56-25f3-4d46-9cb0-73c07a550bd2',
+                    'intIdEmpresa' => $empresa,
+                ]);
+        } catch (\Throwable $e) {
+            Log::error('Error consultando API de empleados', [
+                'empresa' => $empresa,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['error' => 'No se pudo consultar el servicio de empleados.'], 502);
+        }
 
         if ($response->failed()) {
-            return response()->json(['error' => 'No se pudo obtener la información'], 500);
+            return response()->json([
+                'error' => 'No se pudo obtener la informacion de empleados',
+                'status' => $response->status(),
+            ], 502);
         }
 
         $empleados = $response->json();
 
-        foreach ($empleados as $e) {
-            $e = array_change_key_case($e, CASE_UPPER);
-            if (empty($e['COMPANYID']) || empty($e['EMPLEADOID'])) {
-                continue; // Saltar si faltan datos clave
+        if (!is_array($empleados)) {
+            Log::error('API de empleados no devolvio un arreglo JSON valido', [
+                'empresa' => $empresa,
+                'status' => $response->status(),
+                'content_type' => $response->header('Content-Type'),
+                'body_preview' => substr($response->body(), 0, 500),
+            ]);
+
+            return response()->json(['error' => 'Respuesta invalida del servicio de empleados.'], 502);
+        }
+
+        $columnasActualizables = array_values(array_filter((new Empleado())->getFillable(), function ($columna) {
+            return $columna !== 'empleadoid';
+        }));
+
+        $lote = [];
+        $procesados = 0;
+        $omitidos = 0;
+
+        try {
+            foreach ($empleados as $e) {
+                $e = array_change_key_case((array) $e, CASE_UPPER);
+                if (empty($e['EMPLEADOID'])) {
+                    $omitidos++;
+                    continue;
+                }
+
+                $lote[] = $this->mapearEmpleadoApi($e, $empresa);
+                $procesados++;
+
+                if (count($lote) >= 50) {
+                    Empleado::upsert($lote, ['companyid', 'empleadoid'], $columnasActualizables);
+                    $lote = [];
+                }
             }
 
-            Empleado::updateOrCreate(
-                [
-                    'companyid'  => $e['COMPANYID'],
-                    'empleadoid' => $e['EMPLEADOID'],
-                ],
-                [
-                    'nombres'                  => $e['NOMBRES'] ?? null,
-                    'apellidos'                => $e['APELLIDOS'] ?? null,
-                    'idposicion'               => $e['IDPOSICION'] ?? null,
-                    'posicion'                 => $e['POSICION'] ?? null,
-                    'salariomensual'           => $e['SALARIOMENSUAL'] ?? null,
-                    'iddepto'                  => $e['IDDEPTO'] ?? null,
-                    'depto'                    => $e['DEPTO'] ?? null,
-                    'idciudad'                 => $e['IDCIUDAD'] ?? null,
-                    'ciudad'                   => $e['CIUDAD'] ?? null,
-                    'idpais'                   => $e['IDPAIS'] ?? null,
-                    'pais'                     => $e['PAIS'] ?? null,
-                    'ctabanco'                 => $e['CTABANCO'] ?? null,
-                    'tipodocidentidad'         => $e['TIPODOCIDENTIDAD'] ?? null,
-                    'cedula'                   => $e['CEDULA'] ?? null,
-                    'sexo'                     => $e['SEXO'] ?? null,
-                    'estadocivil'              => $e['ESTADOCIVIL'] ?? null,
-                    'nohijos'                  => $e['NOHIJOS'] ?? null,
-                    'direccion'                => $e['DIRECCION'] ?? null,
-                    'tel1'                     => $e['TEL1'] ?? null,
-                    'tel2'                     => $e['TEL2'] ?? null,
-                    'email'                    => $e['EMAIL'] ?? null,
-                    'profesion1'               => $e['PROFESION1'] ?? null,
-                    'profesion2'               => $e['PROFESION2'] ?? null,
-                    'fechanacimiento'          => $e['FECHANACIMIENTO'] ?? null,
-                    'fechaingreso'             => $e['FECHAINGRESO'] ?? null,
-                    'fechasalida'              => $e['FECHASALIDA'] ?? null,
-                    'iniciovacaciones'         => $e['INICIOVACACIONES'] ?? null,
-                    'finalvacaciones'          => $e['FINALVACACIONES'] ?? null,
-                    'clienteid'                => $e['CLIENTEID'] ?? null,
-                    'codigovendedor'           => $e['CODIGOVENDEDOR'] ?? null,
-                    'chofer'                   => $e['CHOFER'] ?? null,
-                    'bombero'                  => $e['BOMBERO'] ?? null,
-                    'creadopor'                => $e['CREADOPOR'] ?? null,
-                    'modificadopor'            => $e['MODIFICADOPOR'] ?? null,
-                    'fechagrabado'             => $e['FECHAGRABADO'] ?? null,
-                    'fechamodificado'          => $e['FECHAMODIFICADO'] ?? null,
-                    'atributoprn'              => $e['ATRIBUTOPRN'] ?? null,
-                    'idsucursalturno'          => $e['IDSUCURSALTURNO'] ?? null,
-                    'moduloturno'              => $e['MODULOTURNO'] ?? null,
-                    'idturno'                  => $e['IDTURNO'] ?? null,
-                    'nocalcularsalario'        => $e['NOCALCULARSALARIO'] ?? null,
-                    'turnorotativo'            => $e['TURNOROTATIVO'] ?? null,
-                    'porcientocomision'        => $e['PORCIENTOCOMISION'] ?? null,
-                    'enporciento'              => $e['ENPORCIENTO'] ?? null,
-                    'cuenta'                   => $e['CUENTA'] ?? null,
-                    'cobrador'                 => $e['COBRADOR'] ?? null,
-                    'mozo'                     => $e['MOZO'] ?? null,
-                    'clavemozo'                => $e['CLAVEMOZO'] ?? null,
-                    'lavador'                  => $e['LAVADOR'] ?? null,
-                    'idsistemaviejo'           => $e['IDSISTEMAVIEJO'] ?? null,
-                    'viapago'                  => $e['VIAPAGO'] ?? null,
-                    'idcentrocosto'            => $e['IDCENTROCOSTO'] ?? null,
-                    'cuentanav'                => $e['CUENTANAV'] ?? null,
-                    'idbanco'                  => $e['IDBANCO'] ?? null,
-                    'viapago_banco'            => $e['VIAPAGO_BANCO'] ?? null,
-                    'idcalendario'             => $e['IDCALENDARIO'] ?? null,
-                    'preaviso'                 => $e['PREAVISO'] ?? null,
-                    'cesantia'                 => $e['CESANTIA'] ?? null,
-                    'vacaciones'               => $e['VACACIONES'] ?? null,
-                    'navidad'                  => $e['NAVIDAD'] ?? null,
-                    'viapago_bancoemp'         => $e['VIAPAGO_BANCOEMP'] ?? null,
-                    'tipocuenta'               => $e['TIPOCUENTA'] ?? null,
-                    'cuentagastoinfotep'       => $e['CUENTAGASTOINFOTEP'] ?? null,
-                    'cuentagastoriesgolaboral' => $e['CUENTAGASTORIESGOLABORAL'] ?? null,
-                    'rutafoto'                 => $e['RUTAFOTO'] ?? null,
-                    'enperiodo_prepost_natal'  => $e['ENPERIODO_PREPOST_NATAL'] ?? null,
-                    'en_licencia_medica'       => $e['EN_LICENCIA_MEDICA'] ?? null,
-                    'tipo_empleado'            => $e['TIPO_EMPLEADO'] ?? null,
-                    'idplaza'                  => $e['IDPLAZA'] ?? null,
-                    'doctor'                   => $e['DOCTOR'] ?? null,
-                ]
-            );
+            if (!empty($lote)) {
+                Empleado::upsert($lote, ['companyid', 'empleadoid'], $columnasActualizables);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error sincronizando empleados', [
+                'empresa' => $empresa,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['error' => 'Error guardando empleados en la base de datos.'], 500);
+        }
+
+        if ($procesados === 0) {
+            return response()->json([
+                'message' => 'No se recibieron registros validos para sincronizar.',
+                'total' => count($empleados),
+                'procesados' => 0,
+                'omitidos' => $omitidos,
+            ]);
         }
 
         return response()->json([
             'message' => 'Datos sincronizados correctamente',
-            'total' => count($empleados)
+            'total' => count($empleados),
+            'procesados' => $procesados,
+            'omitidos' => $omitidos,
         ]);
+    }
+
+    private function mapearEmpleadoApi(array $e, string $empresa): array
+    {
+        return [
+            'companyid'                => $e['COMPANYID'] ?? $empresa,
+            'empleadoid'               => $e['EMPLEADOID'],
+            'nombres'                  => $e['NOMBRES'] ?? null,
+            'apellidos'                => $e['APELLIDOS'] ?? null,
+            'idposicion'               => $e['IDPOSICION'] ?? null,
+            'posicion'                 => $e['POSICION'] ?? null,
+            'salariomensual'           => $e['SALARIOMENSUAL'] ?? null,
+            'iddepto'                  => $e['IDDEPTO'] ?? null,
+            'depto'                    => $e['DEPTO'] ?? null,
+            'idciudad'                 => $e['IDCIUDAD'] ?? null,
+            'ciudad'                   => $e['CIUDAD'] ?? null,
+            'idpais'                   => $e['IDPAIS'] ?? null,
+            'pais'                     => $e['PAIS'] ?? null,
+            'ctabanco'                 => $e['CTABANCO'] ?? null,
+            'tipodocidentidad'         => $e['TIPODOCIDENTIDAD'] ?? null,
+            'cedula'                   => $e['CEDULA'] ?? null,
+            'sexo'                     => $e['SEXO'] ?? null,
+            'estadocivil'              => $e['ESTADOCIVIL'] ?? null,
+            'nohijos'                  => $e['NOHIJOS'] ?? null,
+            'direccion'                => $e['DIRECCION'] ?? null,
+            'tel1'                     => $e['TEL1'] ?? null,
+            'tel2'                     => $e['TEL2'] ?? null,
+            'email'                    => $e['EMAIL'] ?? null,
+            'profesion1'               => $e['PROFESION1'] ?? null,
+            'profesion2'               => $e['PROFESION2'] ?? null,
+            'fechanacimiento'          => $e['FECHANACIMIENTO'] ?? null,
+            'fechaingreso'             => $e['FECHAINGRESO'] ?? null,
+            'fechasalida'              => $e['FECHASALIDA'] ?? null,
+            'iniciovacaciones'         => $e['INICIOVACACIONES'] ?? null,
+            'finalvacaciones'          => $e['FINALVACACIONES'] ?? null,
+            'clienteid'                => $e['CLIENTEID'] ?? null,
+            'codigovendedor'           => $e['CODIGOVENDEDOR'] ?? null,
+            'chofer'                   => $e['CHOFER'] ?? null,
+            'bombero'                  => $e['BOMBERO'] ?? null,
+            'creadopor'                => $e['CREADOPOR'] ?? null,
+            'modificadopor'            => $e['MODIFICADOPOR'] ?? null,
+            'fechagrabado'             => $e['FECHAGRABADO'] ?? null,
+            'fechamodificado'          => $e['FECHAMODIFICADO'] ?? null,
+            'atributoprn'              => $e['ATRIBUTOPRN'] ?? null,
+            'idsucursalturno'          => $e['IDSUCURSALTURNO'] ?? null,
+            'moduloturno'              => $e['MODULOTURNO'] ?? null,
+            'idturno'                  => $e['IDTURNO'] ?? null,
+            'nocalcularsalario'        => $e['NOCALCULARSALARIO'] ?? null,
+            'turnorotativo'            => $e['TURNOROTATIVO'] ?? null,
+            'porcientocomision'        => $e['PORCIENTOCOMISION'] ?? null,
+            'enporciento'              => $e['ENPORCIENTO'] ?? null,
+            'cuenta'                   => $e['CUENTA'] ?? null,
+            'cobrador'                 => $e['COBRADOR'] ?? null,
+            'mozo'                     => $e['MOZO'] ?? null,
+            'clavemozo'                => $e['CLAVEMOZO'] ?? null,
+            'lavador'                  => $e['LAVADOR'] ?? null,
+            'idsistemaviejo'           => $e['IDSISTEMAVIEJO'] ?? null,
+            'viapago'                  => $e['VIAPAGO'] ?? null,
+            'idcentrocosto'            => $e['IDCENTROCOSTO'] ?? null,
+            'cuentanav'                => $e['CUENTANAV'] ?? null,
+            'idbanco'                  => $e['IDBANCO'] ?? null,
+            'viapago_banco'            => $e['VIAPAGO_BANCO'] ?? null,
+            'idcalendario'             => $e['IDCALENDARIO'] ?? null,
+            'preaviso'                 => $e['PREAVISO'] ?? null,
+            'cesantia'                 => $e['CESANTIA'] ?? null,
+            'vacaciones'               => $e['VACACIONES'] ?? null,
+            'navidad'                  => $e['NAVIDAD'] ?? null,
+            'viapago_bancoemp'         => $e['VIAPAGO_BANCOEMP'] ?? null,
+            'tipocuenta'               => $e['TIPOCUENTA'] ?? null,
+            'cuentagastoinfotep'       => $e['CUENTAGASTOINFOTEP'] ?? null,
+            'cuentagastoriesgolaboral' => $e['CUENTAGASTORIESGOLABORAL'] ?? null,
+            'rutafoto'                 => $e['RUTAFOTO'] ?? null,
+            'enperiodo_prepost_natal'  => $e['ENPERIODO_PREPOST_NATAL'] ?? null,
+            'en_licencia_medica'       => $e['EN_LICENCIA_MEDICA'] ?? null,
+            'tipo_empleado'            => $e['TIPO_EMPLEADO'] ?? null,
+            'idplaza'                  => $e['IDPLAZA'] ?? null,
+            'doctor'                   => $e['DOCTOR'] ?? null,
+        ];
     }
 
     public function store(Request $request)

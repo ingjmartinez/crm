@@ -27,7 +27,7 @@
                                         <span class="badge rounded-pill bg-white bg-opacity-10 text-white mb-3">Mini Dashboard RRHH</span>
                                         <h2 class="fw-semibold text-white mb-2">Vista de Empleados, estatus y masa salariales</h2>
                                         <p class="mb-0 text-white text-opacity-75">
-                                            Filtra por empresa y analiza empleados activos, inactivos y salario mensual agrupado por ciudad.
+                                            Filtra por empresa y analiza usuarios activos, inactivos y salario mensual de usuarios activos agrupado por ciudad.
                                         </p>
                                     </div>
                                     <div class="col-lg-5">
@@ -127,7 +127,7 @@
                                         </span>
                                     </div>
                                 </div>
-                                <div class="text-muted small">Masa salarial mensual solo de empleados activos.</div>
+                                <div class="text-muted small">Masa salarial mensual solo de usuarios activos.</div>
                             </div>
                         </div>
                     </div>
@@ -147,7 +147,7 @@
                     <div class="col-xl-8">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-header bg-transparent border-0">
-                                <h5 class="card-title mb-0">Salario mensual por ciudad</h5>
+                                <h5 class="card-title mb-0">Salario mensual por ciudad de usuarios activos</h5>
                             </div>
                             <div class="card-body">
                                 <div id="chartSalarioCiudad" style="min-height: 320px;"></div>
@@ -283,6 +283,35 @@
             }
         }
 
+        async function parsearRespuestaJson(response, contextoError) {
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            const cuerpo = await response.text();
+            let payload = null;
+
+            if (cuerpo) {
+                try {
+                    payload = JSON.parse(cuerpo);
+                } catch (_errorParse) {
+                    payload = null;
+                }
+            }
+
+            if (!response.ok) {
+                const mensajeServidor = payload?.message || payload?.error || '';
+                const mensajeNoJson = !contentType.includes('application/json')
+                    ? 'El servidor devolvio HTML/no JSON. Revisa storage/logs/laravel.log.'
+                    : '';
+                const detalle = [mensajeServidor, mensajeNoJson].filter(Boolean).join(' | ');
+                throw new Error(contextoError + ' (HTTP ' + response.status + ')' + (detalle ? ': ' + detalle : ''));
+            }
+
+            if (!payload) {
+                throw new Error(contextoError + ': Respuesta no valida en formato JSON.');
+            }
+
+            return payload;
+        }
+
         function renderCharts(payload) {
             const estado = payload?.charts?.estado || { labels: [], series: [] };
             const salarioCiudad = payload?.charts?.salario_ciudad || { labels: [], series: [] };
@@ -306,7 +335,7 @@
 
             chartSalarioCiudad = new ApexCharts(document.querySelector('#chartSalarioCiudad'), {
                 chart: { type: 'bar', height: 320, toolbar: { show: false } },
-                series: [{ name: 'Salario mensual', data: salarioCiudad.series || [] }],
+                series: [{ name: 'Salario mensual de usuarios activos', data: salarioCiudad.series || [] }],
                 xaxis: { categories: salarioCiudad.labels || [] },
                 colors: ['#3b82f6'],
                 plotOptions: { bar: { borderRadius: 6, horizontal: false, columnWidth: '45%' } },
@@ -447,8 +476,12 @@
             const empresa = obtenerEmpresaActual();
             actualizarBadgeEmpresa();
 
-            fetch('/empleados/dashboard?empresa=' + encodeURIComponent(empresa))
-                .then(response => response.json())
+            fetch('/empleados/dashboard?empresa=' + encodeURIComponent(empresa), {
+                headers: {
+                    'Accept': 'application/json',
+                },
+            })
+                .then(response => parsearRespuestaJson(response, 'Error al cargar dashboard de empleados'))
                 .then(payload => {
                     renderResumen(payload);
                     renderCharts(payload);
@@ -463,8 +496,12 @@
         function list() {
             const empresa = obtenerEmpresaActual();
 
-            fetch("/empleados/list?empresa=" + encodeURIComponent(empresa))
-                .then(response => response.json())
+            fetch("/empleados/list?empresa=" + encodeURIComponent(empresa), {
+                headers: {
+                    'Accept': 'application/json',
+                },
+            })
+                .then(response => parsearRespuestaJson(response, 'Error al cargar listado de empleados'))
                 .then(data => {
                     const tableBody = document.querySelector('#tableEmpleados tbody');
                     tableBody.innerHTML = '';
@@ -535,8 +572,12 @@
                 textSwal.innerHTML = "Sincronizando: " + percent + "%";
             }, 1000);
 
-            fetch('/empleados/sincronizar?empresa=' + empresa)
-                .then(response => response.json())
+            fetch('/empleados/sincronizar?empresa=' + empresa, {
+                headers: {
+                    'Accept': 'application/json',
+                },
+            })
+                .then(response => parsearRespuestaJson(response, 'Error durante la sincronizacion de empleados'))
                 .then(() => {
                     textSwal.innerHTML = "Sincronizando: 100%";
                     clearInterval(interval);
@@ -553,7 +594,7 @@
                     clearInterval(interval);
                     Swal.fire({
                         title: "Error",
-                        text: error,
+                        text: error?.message || 'No fue posible sincronizar empleados.',
                         icon: "warning"
                     });
                 });
@@ -575,4 +616,3 @@
         });
     </script>
 @endsection
-
