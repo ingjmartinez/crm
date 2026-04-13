@@ -37,6 +37,17 @@
                                         </div>
 
                                         <div class="col-md-6">
+                                            <label class="form-label">Empresa <span class="text-danger">*</span></label>
+                                            <select name="empresa" class="form-select @error('empresa') is-invalid @enderror" required>
+                                                <option value="">Seleccione una empresa</option>
+                                                @foreach (($empresas ?? []) as $empresa)
+                                                    <option value="{{ $empresa }}" @selected((string) old('empresa', $registro->empresa) === (string) $empresa)>{{ $empresa }}</option>
+                                                @endforeach
+                                            </select>
+                                            @error('empresa')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        </div>
+
+                                        <div class="col-md-6">
                                             <label class="form-label">Operador asignado <span class="text-danger">*</span></label>
                                             <select name="operador_ruta_id" class="form-select @error('operador_ruta_id') is-invalid @enderror" required>
                                                 <option value="">Seleccione un operador</option>

@@ -49,6 +49,7 @@
                                             <tr>
                                                 <th class="text-center" style="width:80px;">ID</th>
                                                 <th>Nombre de Ruta</th>
+                                                <th>Empresa</th>
                                                 <th>Operador Asignado</th>
                                                 <th class="text-center">Agencias Asignadas</th>
                                                 <th class="text-center" style="width:140px;">Acciones</th>
@@ -59,6 +60,7 @@
                                                 <tr>
                                                     <td class="text-center">{{ $item->id }}</td>
                                                     <td>{{ $item->nombre_ruta }}</td>
+                                                    <td>{{ $item->empresa ?: '-' }}</td>
                                                     <td>{{ trim((($item->operadorAsignado->nombre ?? '') . ' ' . ($item->operadorAsignado->apellido ?? ''))) ?: '-' }}</td>
                                                     <td class="text-center">
                                                         <button
@@ -97,7 +99,7 @@
                                                 </tr>
                                             @empty
                                                 <tr>
-                                                    <td colspan="5" class="text-center text-muted">No hay registros disponibles.</td>
+                                                    <td colspan="6" class="text-center text-muted">No hay registros disponibles.</td>
                                                 </tr>
                                             @endforelse
                                         </tbody>
@@ -363,8 +365,9 @@
                 }
 
                 const nombreRuta = (celdas[1]?.textContent || '').toLowerCase();
-                const operador = (celdas[2]?.textContent || '').toLowerCase();
-                const coincide = !termino || nombreRuta.includes(termino) || operador.includes(termino);
+                const empresa = (celdas[2]?.textContent || '').toLowerCase();
+                const operador = (celdas[3]?.textContent || '').toLowerCase();
+                const coincide = !termino || nombreRuta.includes(termino) || empresa.includes(termino) || operador.includes(termino);
 
                 fila.style.display = coincide ? '' : 'none';
             });

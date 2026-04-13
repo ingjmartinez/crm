@@ -26,13 +26,14 @@ class ReporteDiarioRutaExport implements FromCollection, WithHeadings, WithMappi
     {
         return [
             'Fecha',
+            'Serial Ruta',
             'Ruta',
+            'Empresa',
             'Operador',
             'Monto Procesado',
             'Monto Entregado',
             'Gasto',
             'Diferencia',
-            'Correo Operador',
             'Estatus',
             'Observacion',
         ];
@@ -44,13 +45,14 @@ class ReporteDiarioRutaExport implements FromCollection, WithHeadings, WithMappi
 
         return [
             optional($row->fecha)->format('d/m/Y') ?? '',
+            (string) ($row->serial_ruta ?? '-'),
             (string) ($row->ruta->nombre_ruta ?? '-'),
+            (string) ($row->ruta->empresa ?? '-'),
             $operador !== '' ? $operador : '-',
             number_format((float) $row->procesado, 2, '.', ''),
             number_format((float) $row->entregado, 2, '.', ''),
             number_format((float) ($row->gasto ?? 0), 2, '.', ''),
             number_format((float) $row->diferencia, 2, '.', ''),
-            (string) ($row->correo_destino ?? ''),
             abs((float) $row->diferencia) > 0.00001 ? 'Pendiente' : 'Completada',
             (string) ($row->observacion ?? ''),
         ];

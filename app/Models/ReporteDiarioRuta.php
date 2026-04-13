@@ -13,6 +13,7 @@ class ReporteDiarioRuta extends Model
 
     protected $fillable = [
         'fecha',
+        'serial_ruta',
         'ruta_id',
         'operador_ruta_id',
         'banco_nombre',

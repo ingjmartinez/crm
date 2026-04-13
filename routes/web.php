@@ -7,13 +7,15 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AutoProcesoConfigController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ComercialController;
-use App\Http\Controllers\ContabilidadReporteController;
 use App\Http\Controllers\ContabilidadEstadoResultadoController;
+use App\Http\Controllers\ContabilidadFlujoRutaController;
+use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
+use App\Http\Controllers\InicioController;
 use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\MarController;
@@ -65,16 +67,23 @@ Route::middleware('auth')->group(function () {
     Route::get('/gerencia/venta-comparativa', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'comparativa'])->name('gerencia.venta-comparativa');
     Route::get('/gerencia/venta-comparativa/export/excel', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'exportExcelComparativa'])->name('gerencia.venta-comparativa.export.excel');
 
-Route::get('/', function () {
-    return view('inicio');
-});
+Route::get('/', [InicioController::class, 'index'])->name('inicio.index');
+Route::get('/inicio/ventas-data', [InicioController::class, 'ventasData'])->name('inicio.ventas-data');
 
 Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
     Route::view('/', 'contabilidad.index')->name('index');
+    Route::get('/electricidad', [ContabilidadElectricidadController::class, 'index'])->name('electricidad');
+    Route::get('/electricidad/data', [ContabilidadElectricidadController::class, 'data'])->name('electricidad.data');
+    Route::post('/electricidad', [ContabilidadElectricidadController::class, 'store'])->name('electricidad.store');
+    Route::put('/electricidad/{electricidad}', [ContabilidadElectricidadController::class, 'update'])->name('electricidad.update');
+    Route::delete('/electricidad/{electricidad}', [ContabilidadElectricidadController::class, 'destroy'])->name('electricidad.destroy');
     Route::view('/reportes/comisiones', 'contabilidad.reportes.comisiones')->name('reportes.comisiones');
     Route::get('/reportes/estado-resultado', [ContabilidadEstadoResultadoController::class, 'index'])->name('reportes.estado-resultado');
     Route::get('/reportes/estado-resultado/meta', [ContabilidadEstadoResultadoController::class, 'meta'])->name('reportes.estado-resultado.meta');
     Route::get('/reportes/estado-resultado/data', [ContabilidadEstadoResultadoController::class, 'data'])->name('reportes.estado-resultado.data');
+    Route::get('/reportes/flujo-ruta', [ContabilidadFlujoRutaController::class, 'index'])->name('reportes.flujo-ruta');
+    Route::get('/reportes/flujo-ruta/meta', [ContabilidadFlujoRutaController::class, 'meta'])->name('reportes.flujo-ruta.meta');
+    Route::get('/reportes/flujo-ruta/data', [ContabilidadFlujoRutaController::class, 'data'])->name('reportes.flujo-ruta.data');
   });
 
 Route::get('/api-cuentas', [Api::class, 'getCuentas']);
@@ -322,6 +331,8 @@ Route::resource('operaciones/ruta', RutaController::class)
     ->except(['show'])
     ->parameters(['ruta' => 'ruta'])
     ->names('ruta');
+Route::get('operaciones/ruta/{ruta}/detalle', [RutaController::class, 'detalle'])
+    ->name('ruta.detalle');
 Route::post('operaciones/ruta/{ruta}/asignar-agencias', [RutaController::class, 'asignarAgencias'])
     ->name('ruta.asignar-agencias');
 

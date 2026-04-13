@@ -19,6 +19,44 @@
                     </div>
                 </div>
 
+                @php
+                    $ventasTipos = $ventasInicio['tipos'] ?? [];
+                    $ventaTradicional = (float) ($ventasTipos['tradicional']['total'] ?? 0);
+                    $ventaNoTradicional = (float) ($ventasTipos['no_tradicional']['total'] ?? 0);
+                    $ventaRecargas = (float) ($ventasTipos['recargas']['total'] ?? 0);
+                    $agenciasConVenta = (int) ($ventasInicio['agencias_con_venta'] ?? 0);
+                @endphp
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <form method="GET" action="{{ route('inicio.index') }}" class="row g-3 align-items-end">
+                                    <div class="col-12 col-md-4 col-lg-3">
+                                        <label for="fecha" class="form-label">Fecha de ventas</label>
+                                        <input
+                                            type="date"
+                                            id="fecha"
+                                            name="fecha"
+                                            class="form-control"
+                                            value="{{ $fechaSeleccionadaVentas ?? now()->subDay()->format('Y-m-d') }}"
+                                            max="{{ now()->format('Y-m-d') }}">
+                                    </div>
+                                    <div class="col-12 col-md-8 col-lg-4 d-grid d-md-flex gap-2">
+                                        <button type="submit" class="btn btn-primary">Filtrar</button>
+                                        <a href="{{ route('inicio.index') }}" class="btn btn-light">Ayer</a>
+                                    </div>
+                                    <div class="col-12 col-lg-5">
+                                        <div class="alert alert-info mb-0 py-2">
+                                            Mostrando ventas del dia <strong>{{ \Carbon\Carbon::parse($fechaSeleccionadaVentas ?? now()->subDay()->toDateString())->format('d/m/Y') }}</strong>.
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-xl-12">
                         <div class="card crm-widget">
@@ -32,7 +70,7 @@
                                                     <i class="ri-store-2-line display-6 text-muted"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0"><span class="counter-value" data-target="197">0</span></h2>
+                                                    <h2 class="mb-0"><span class="counter-value" data-target="{{ $agenciasConVenta }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>
@@ -58,7 +96,7 @@
                                                     <i class="ri-line-chart-line display-6 text-muted"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0"><span class="counter-value" data-target="32.89">0</span>%</h2>
+                                                    <h2 class="mb-0">RD$ <span class="counter-value" data-target="{{ round($ventaTradicional, 2) }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>
@@ -71,7 +109,7 @@
                                                     <i class="ri-money-dollar-circle-line display-6 text-muted"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0">$<span class="counter-value" data-target="1596.5">0</span></h2>
+                                                    <h2 class="mb-0">RD$ <span class="counter-value" data-target="{{ round($ventaNoTradicional, 2) }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>
@@ -84,7 +122,7 @@
                                                     <i class="ri-shopping-bag-3-line display-6 text-muted"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0"><span class="counter-value" data-target="2659">0</span></h2>
+                                                    <h2 class="mb-0">RD$ <span class="counter-value" data-target="{{ round($ventaRecargas, 2) }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>

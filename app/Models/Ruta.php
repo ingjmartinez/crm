@@ -13,6 +13,7 @@ class Ruta extends Model
 
     protected $fillable = [
         'nombre_ruta',
+        'empresa',
         'operador_ruta_id',
     ];
 

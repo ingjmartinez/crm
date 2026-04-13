@@ -4,6 +4,18 @@
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
+                <style>
+                    .acciones-mar-ventas .btn {
+                        width: auto;
+                    }
+
+                    @media (max-width: 767.98px) {
+                        .acciones-mar-ventas .btn {
+                            width: 100%;
+                            min-height: 44px;
+                        }
+                    }
+                </style>
 
                 <!-- start page title -->
                 <div class="row">
@@ -29,19 +41,20 @@
                                 <h5 class="card-title mb-0">Configurar Token</h5>
                             </div>
                             <div class="card-body">
-                                <div class="row mb-5">
-                                    <div class="col-2">
+                                <div class="row g-2 mb-3 acciones-mar-ventas align-items-end">
+                                    <div class="col-12 col-lg-2 d-grid">
                                         <button id="btnGenerarData" class="btn btn-primary">Generar Data</button>
                                     </div>
 
-                                    <div class="col-2">
+                                    <div class="col-12 col-md-4 col-lg-2">
+                                        <label for="inputFecha" class="form-label mb-1">Fecha</label>
                                         <input type="date" id="inputFecha" class="form-control">
                                     </div>
-                                    <div class="col-3">
+                                    <div class="col-12 col-lg-4 d-grid d-md-flex gap-2">
                                         <button id="btnGuardarData" class="btn btn-primary">Guardar Data</button>
                                         <button id="btnEliminarData" class="btn btn-danger">Eliminar Data</button>
                                     </div>
-                                    <div class="col-4 text-end">
+                                    <div class="col-12 col-md-8 col-lg-4 d-grid">
                                         <button id="btnConsultar" type="button" class="btn btn-primary"
                                             data-bs-toggle="modal" data-bs-target="#myModal">Generar Data Por Fecha</button>
                                     </div>
@@ -183,46 +196,50 @@
 
                         data.datos.forEach(item => {
                             const row = document.createElement('tr');
-                            row.innerHTML = `
-                                <td>${item.Dia}</td>
-                                <td>${item.EDiFecha}</td>
-                                <td>${item.GrupoID}</td>
-                                <td>${item.GruNombre}</td>
-                                <td>${item.RiferoID}</td>
-                                <td>${item.RifNombre}</td>
-                                <td>${item.BancaID}</td>
-                                <td>${item.BanNombre}</td>
-                                <td>${item.BanContacto}</td>
-                                <td>${item.BanComisionQ}</td>
-                                <td>${item.BanComisionP}</td>
-                                <td>${item.BanComisionT}</td>
-                                <td>${item.BanVComision}</td>
-                                <td>${item.PagoDeOtra}</td>
-                                <td>${item.PagoEnOtra}</td>
-                                <td>${item.PagosPendiente}</td>
-                                <td>${item.DiasPendiente}</td>
-                                <td>${item.VTarjComisionBanca}</td>
-                                <td>${item.VTarjComision}</td>
-                                <td>${item.VTarjetas}</td>
-                                <td>${item.CVQuinielas}</td>
-                                <td>${item.VQuinielas}</td>
-                                <td>${item.CVPales}</td>
-                                <td>${item.CVTripletas}</td>
-                                <td>${item.VPales}</td>
-                                <td>${item.VTripletas}</td>
-                                <td>${item.CPrimero}</td>
-                                <td>${item.CSegundo}</td>
-                                <td>${item.CTercero}</td>
-                                <td>${item.CPales}</td>
-                                <td>${item.CTripletas}</td>
-                                <td>${item.MPrimero}</td>
-                                <td>${item.MSegundo}</td>
-                                <td>${item.MTercero}</td>
-                                <td>${item.MPales}</td>
-                                <td>${item.MTripletas}</td>
-                                <td>${item.RifDescuento}</td>
-                                <td>${item.ISRRetenido}</td>
-                            `;
+                            const columnas = [
+                                ['Dia', item.Dia],
+                                ['EDiFecha', item.EDiFecha],
+                                ['GrupoID', item.GrupoID],
+                                ['GruNombre', item.GruNombre],
+                                ['RiferoID', item.RiferoID],
+                                ['RifNombre', item.RifNombre],
+                                ['BancaID', item.BancaID],
+                                ['BanNombre', item.BanNombre],
+                                ['BanContacto', item.BanContacto],
+                                ['BanComisionQ', item.BanComisionQ],
+                                ['BanComisionP', item.BanComisionP],
+                                ['BanComisionT', item.BanComisionT],
+                                ['BanVComision', item.BanVComision],
+                                ['PagoDeOtra', item.PagoDeOtra],
+                                ['PagoEnOtra', item.PagoEnOtra],
+                                ['PagosPendiente', item.PagosPendiente],
+                                ['DiasPendiente', item.DiasPendiente],
+                                ['VTarjComisionBanca', item.VTarjComisionBanca],
+                                ['VTarjComision', item.VTarjComision],
+                                ['VTarjetas', item.VTarjetas],
+                                ['CVQuinielas', item.CVQuinielas],
+                                ['VQuinielas', item.VQuinielas],
+                                ['CVPales', item.CVPales],
+                                ['CVTripletas', item.CVTripletas],
+                                ['VPales', item.VPales],
+                                ['VTripletas', item.VTripletas],
+                                ['CPrimero', item.CPrimero],
+                                ['CSegundo', item.CSegundo],
+                                ['CTercero', item.CTercero],
+                                ['CPales', item.CPales],
+                                ['CTripletas', item.CTripletas],
+                                ['MPrimero', item.MPrimero],
+                                ['MSegundo', item.MSegundo],
+                                ['MTercero', item.MTercero],
+                                ['MPales', item.MPales],
+                                ['MTripletas', item.MTripletas],
+                                ['RifDescuento', item.RifDescuento],
+                                ['ISRRetenido', item.ISRRetenido],
+                            ];
+
+                            row.innerHTML = columnas.map(([label, value]) =>
+                                `<td data-label="${label}">${value ?? ''}</td>`
+                            ).join('');
                             tableBody.appendChild(row);
                         });
 

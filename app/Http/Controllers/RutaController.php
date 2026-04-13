@@ -62,17 +62,22 @@ class RutaController extends Controller
             ->orderBy('apellido')
             ->get();
 
-        return view('operaciones.ruta.create', compact('operadores'));
+        $empresas = $this->getOpcionesEmpresa();
+
+        return view('operaciones.ruta.create', compact('operadores', 'empresas'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'nombre_ruta' => ['required', 'string', 'max:100', 'unique:rutas,nombre_ruta'],
+            'empresa' => ['required', 'in:Negosur,Joselito'],
             'operador_ruta_id' => ['required', 'integer', 'exists:operador_ruta,id'],
         ], [
             'nombre_ruta.required' => 'El nombre de ruta es obligatorio.',
             'nombre_ruta.unique' => 'Ya existe una ruta con ese nombre.',
+            'empresa.required' => 'Debe seleccionar una empresa.',
+            'empresa.in' => 'La empresa seleccionada no es valida.',
             'operador_ruta_id.required' => 'Debe seleccionar un operador.',
         ]);
 
@@ -90,10 +95,12 @@ class RutaController extends Controller
             ->orderBy('nombre')
             ->orderBy('apellido')
             ->get();
+        $empresas = $this->getOpcionesEmpresa();
 
         return view('operaciones.ruta.edit', [
             'registro' => $ruta,
             'operadores' => $operadores,
+            'empresas' => $empresas,
         ]);
     }
 
@@ -101,10 +108,13 @@ class RutaController extends Controller
     {
         $validated = $request->validate([
             'nombre_ruta' => ['required', 'string', 'max:100', 'unique:rutas,nombre_ruta,' . $ruta->id],
+            'empresa' => ['required', 'in:Negosur,Joselito'],
             'operador_ruta_id' => ['required', 'integer', 'exists:operador_ruta,id'],
         ], [
             'nombre_ruta.required' => 'El nombre de ruta es obligatorio.',
             'nombre_ruta.unique' => 'Ya existe una ruta con ese nombre.',
+            'empresa.required' => 'Debe seleccionar una empresa.',
+            'empresa.in' => 'La empresa seleccionada no es valida.',
             'operador_ruta_id.required' => 'Debe seleccionar un operador.',
         ]);
 
@@ -162,5 +172,26 @@ class RutaController extends Controller
 
         return redirect()->route('ruta.index')
             ->with('success', 'Agencias asignadas correctamente.');
+    }
+
+    public function detalle(Ruta $ruta)
+    {
+        $ruta->loadMissing('operadorAsignado:id,nombre,apellido,correo');
+
+        $operador = $ruta->operadorAsignado;
+        $nombreOperador = trim((($operador->nombre ?? '') . ' ' . ($operador->apellido ?? '')));
+
+        return response()->json([
+            'ruta_id' => (int) $ruta->id,
+            'empresa' => (string) ($ruta->empresa ?? ''),
+            'operador_id' => (string) ($ruta->operador_ruta_id ?? ''),
+            'operador_nombre' => $nombreOperador,
+            'operador_correo' => (string) ($operador->correo ?? ''),
+        ]);
+    }
+
+    private function getOpcionesEmpresa(): array
+    {
+        return ['Negosur', 'Joselito'];
     }
 }

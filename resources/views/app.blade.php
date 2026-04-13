@@ -765,6 +765,16 @@
                                             <span data-key="t-contabilidad-estado-resultado">Estado de Resultado</span>
                                         </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('contabilidad.reportes.flujo-ruta') }}" class="nav-link">
+                                            <span data-key="t-contabilidad-flujo-ruta">Flujo de ruta</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('contabilidad.electricidad') }}" class="nav-link">
+                                            <span data-key="t-contabilidad-electricidad">Electricidad</span>
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>

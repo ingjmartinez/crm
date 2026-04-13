@@ -60,6 +60,7 @@ class OperacionesReporteDiarioController extends Controller
         $validated = $request->validate([
             'accion' => ['required', 'in:guardar,guardar_enviar'],
             'fecha' => ['required', 'date'],
+            'serial_ruta' => ['required', 'string', 'max:20', 'regex:/^\d{1,20}$/'],
             'ruta_id' => ['required', 'integer', 'exists:rutas,id'],
             'operador_ruta_id' => ['required', 'integer', 'exists:operador_ruta,id'],
             'banco_nombre' => ['nullable', 'string', 'max:150'],
@@ -90,6 +91,7 @@ class OperacionesReporteDiarioController extends Controller
 
         $reporte = ReporteDiarioRuta::create([
             'fecha' => $validated['fecha'],
+            'serial_ruta' => $validated['serial_ruta'],
             'ruta_id' => $ruta->id,
             'operador_ruta_id' => $operador->id,
             'banco_nombre' => $validated['banco_nombre'] ?? null,
@@ -192,6 +194,17 @@ class OperacionesReporteDiarioController extends Controller
         $reporte_diario_ruta->diferencia = $procesado - ($entregado + $gasto);
         $reporte_diario_ruta->save();
 
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => 'Depositos y gastos actualizados correctamente.',
+                'entregado' => number_format((float) $reporte_diario_ruta->entregado, 2, '.', ''),
+                'procesado' => number_format((float) $reporte_diario_ruta->procesado, 2, '.', ''),
+                'gasto' => number_format((float) ($reporte_diario_ruta->gasto ?? 0), 2, '.', ''),
+                'diferencia' => number_format((float) $reporte_diario_ruta->diferencia, 2, '.', ''),
+                'estatus' => abs((float) $reporte_diario_ruta->diferencia) > 0.00001 ? 'Pendiente' : 'Completada',
+            ]);
+        }
+
         return redirect()->route('operaciones.reporte.diario', [
             'fecha' => optional($reporte_diario_ruta->fecha)->toDateString(),
         ])->with('success', 'Depositos y gastos actualizados correctamente.');
@@ -240,6 +253,10 @@ class OperacionesReporteDiarioController extends Controller
         return response()->json([
             'id' => $reporte_diario_ruta->id,
             'banco_nombre' => $reporte_diario_ruta->banco_nombre,
+            'entregado' => number_format((float) $reporte_diario_ruta->entregado, 2, '.', ''),
+            'procesado' => number_format((float) $reporte_diario_ruta->procesado, 2, '.', ''),
+            'gasto' => number_format((float) ($reporte_diario_ruta->gasto ?? 0), 2, '.', ''),
+            'diferencia' => number_format((float) $reporte_diario_ruta->diferencia, 2, '.', ''),
             'entregado_url' => $urlEntregado,
             'diferencia_url' => $urlDiferencia,
         ]);
@@ -340,6 +357,7 @@ class OperacionesReporteDiarioController extends Controller
         $payload = [
             'fecha' => optional($reporte->fecha)->format('d/m/Y') ?? now()->format('d/m/Y'),
             'ruta' => $reporte->ruta->nombre_ruta ?? '-',
+            'empresa' => $reporte->ruta->empresa ?? '-',
             'operador' => trim((($operador->nombre ?? '') . ' ' . ($operador->apellido ?? ''))),
             'entregado' => number_format((float) $reporte->entregado, 2),
             'procesado' => number_format((float) $reporte->procesado, 2),
@@ -373,7 +391,7 @@ class OperacionesReporteDiarioController extends Controller
     {
         return ReporteDiarioRuta::query()
             ->with([
-                'ruta:id,nombre_ruta',
+                'ruta:id,nombre_ruta,empresa',
                 'operador:id,nombre,apellido,correo',
             ])
             ->whereDate('fecha', $fechaFiltro)
