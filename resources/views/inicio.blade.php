@@ -2,6 +2,81 @@
 
 @section('content')
     <link href="{{ asset('libs/swiper/swiper-bundle.min.css') }}" rel="stylesheet" />
+    <style>
+        .kpi-card {
+            min-height: 142px;
+        }
+
+        .kpi-icon {
+            font-size: 2.35rem;
+            line-height: 1;
+        }
+
+        .kpi-value {
+            font-size: clamp(1.85rem, 2vw, 2.6rem);
+            line-height: 1.05;
+            white-space: nowrap;
+        }
+
+        .kpi-currency {
+            font-size: clamp(1.35rem, 1.55vw, 1.95rem);
+            line-height: 1.05;
+            white-space: nowrap;
+        }
+
+        .rank-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 46px;
+            height: 28px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            background: rgba(148, 163, 184, 0.22);
+            color: #e2e8f0;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+        }
+
+        .rank-badge.rank-1 {
+            background: var(--vz-primary);
+            color: #ffffff;
+            border-color: var(--vz-primary);
+        }
+
+        .rank-badge.rank-2 {
+            background: var(--vz-success);
+            color: #ffffff;
+            border-color: var(--vz-success);
+        }
+
+        .rank-badge.rank-3 {
+            background: var(--vz-warning);
+            color: #111827;
+            border-color: var(--vz-warning);
+        }
+
+        html[data-layout-mode="dark"] .rank-badge,
+        html[data-bs-theme="dark"] .rank-badge {
+            color: #ffffff;
+        }
+
+        html[data-layout-mode="light"] .rank-badge,
+        html[data-bs-theme="light"] .rank-badge {
+            color: #111827;
+        }
+
+        @media (max-width: 1400px) {
+            .kpi-value {
+                font-size: clamp(1.55rem, 2vw, 2.1rem);
+            }
+
+            .kpi-currency {
+                font-size: clamp(1.05rem, 1.35vw, 1.45rem);
+            }
+        }
+    </style>
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -24,14 +99,30 @@
                     $ventaTradicional = (float) ($ventasTipos['tradicional']['total'] ?? 0);
                     $ventaNoTradicional = (float) ($ventasTipos['no_tradicional']['total'] ?? 0);
                     $ventaRecargas = (float) ($ventasTipos['recargas']['total'] ?? 0);
+                    $agenciasTradicional = (int) ($ventasTipos['tradicional']['agencias'] ?? 0);
+                    $agenciasNoTradicional = (int) ($ventasTipos['no_tradicional']['agencias'] ?? 0);
+                    $agenciasRecargas = (int) ($ventasTipos['recargas']['agencias'] ?? 0);
                     $agenciasConVenta = (int) ($ventasInicio['agencias_con_venta'] ?? 0);
+                    $agenciasSinVenta = (int) ($ventasInicio['agencias_sin_venta'] ?? 0);
+                    $productosNoTradicionales = $ventasInicio['productos_no_tradicionales'] ?? [];
+                    $productosTradicionalesTop = $ventasInicio['productos_tradicionales_top'] ?? [];
+                    $balanceMensual = $ventasInicio['balance_mensual'] ?? ['dias' => [], 'ingresos' => [], 'gastos' => [], 'margen' => [], 'periodo' => ['inicio' => null, 'fin' => null]];
+                    $balanceIngresosTotal = array_sum($balanceMensual['ingresos'] ?? []);
+                    $balanceGastosTotal = array_sum($balanceMensual['gastos'] ?? []);
+                    $balanceMargenTotal = array_sum($balanceMensual['margen'] ?? []);
+                    $balancePeriodoInicio = !empty($balanceMensual['periodo']['inicio'])
+                        ? \Carbon\Carbon::parse($balanceMensual['periodo']['inicio'])->format('d/m/Y')
+                        : '-';
+                    $balancePeriodoFin = !empty($balanceMensual['periodo']['fin'])
+                        ? \Carbon\Carbon::parse($balanceMensual['periodo']['fin'])->format('d/m/Y')
+                        : '-';
                 @endphp
 
                 <div class="row mb-3">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <form method="GET" action="{{ route('inicio.index') }}" class="row g-3 align-items-end">
+                                <form id="inicioFiltroForm" method="GET" action="{{ route('inicio.index') }}" class="row g-3 align-items-end">
                                     <div class="col-12 col-md-4 col-lg-3">
                                         <label for="fecha" class="form-label">Fecha de ventas</label>
                                         <input
@@ -42,11 +133,19 @@
                                             value="{{ $fechaSeleccionadaVentas ?? now()->subDay()->format('Y-m-d') }}"
                                             max="{{ now()->format('Y-m-d') }}">
                                     </div>
-                                    <div class="col-12 col-md-8 col-lg-4 d-grid d-md-flex gap-2">
-                                        <button type="submit" class="btn btn-primary">Filtrar</button>
-                                        <a href="{{ route('inicio.index') }}" class="btn btn-light">Ayer</a>
+                                    <div class="col-12 col-md-4 col-lg-3">
+                                        <label for="empresa" class="form-label">Empresa</label>
+                                        <select id="empresa" name="empresa" class="form-select">
+                                            <option value="todos" {{ ($empresaSeleccionada ?? 'todos') === 'todos' ? 'selected' : '' }}>Todos</option>
+                                            @foreach (($empresasFiltro ?? []) as $empresa)
+                                                <option value="{{ $empresa }}" {{ ($empresaSeleccionada ?? 'todos') === $empresa ? 'selected' : '' }}>{{ $empresa }}</option>
+                                            @endforeach
+                                        </select>
                                     </div>
-                                    <div class="col-12 col-lg-5">
+                                    <div class="col-12 col-md-4 col-lg-2 d-grid d-md-flex gap-2">
+                                        <button type="submit" class="btn btn-primary">Filtrar</button>
+                                    </div>
+                                    <div class="col-12 col-lg-4">
                                         <div class="alert alert-info mb-0 py-2">
                                             Mostrando ventas del dia <strong>{{ \Carbon\Carbon::parse($fechaSeleccionadaVentas ?? now()->subDay()->toDateString())->format('d/m/Y') }}</strong>.
                                         </div>
@@ -61,68 +160,68 @@
                     <div class="col-xl-12">
                         <div class="card crm-widget">
                             <div class="card-body p-0">
-                                <div class="row row-cols-xxl-5 row-cols-md-3 row-cols-1 g-0">
+                                <div class="row row-cols-xxl-5 row-cols-xl-5 row-cols-md-2 row-cols-1 g-0">
                                     <div class="col">
-                                        <div class="py-4 px-3">
+                                        <div class="py-4 px-3 kpi-card">
                                             <h5 class="text-muted text-uppercase fs-13">Agencias con ventas <i class="ri-arrow-up-circle-line text-success fs-18 float-end align-middle"></i></h5>
                                             <div class="d-flex align-items-center">
                                                 <div class="flex-shrink-0">
-                                                    <i class="ri-store-2-line display-6 text-muted"></i>
+                                                    <i class="ri-store-2-line text-muted kpi-icon"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0"><span class="counter-value" data-target="{{ $agenciasConVenta }}">0</span></h2>
+                                                    <h2 class="mb-0 kpi-value"><span class="counter-value" data-target="{{ $agenciasConVenta }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col">
-                                        <div class="mt-3 mt-md-0 py-4 px-3">
+                                        <div class="mt-3 mt-md-0 py-4 px-3 kpi-card">
                                             <h5 class="text-muted text-uppercase fs-13">Agencias sin ventas <i class="ri-arrow-up-circle-line text-success fs-18 float-end align-middle"></i></h5>
                                             <div class="d-flex align-items-center">
                                                 <div class="flex-shrink-0">
-                                                    <i class="ri-store-3-line display-6 text-muted"></i>
+                                                    <i class="ri-store-3-line text-muted kpi-icon"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0">$<span class="counter-value" data-target="489.4">0</span>k</h2>
+                                                    <h2 class="mb-0 kpi-value"><span class="counter-value" data-target="{{ $agenciasSinVenta }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col">
-                                        <div class="mt-3 mt-md-0 py-4 px-3">
+                                        <div class="mt-3 mt-md-0 py-4 px-3 kpi-card">
                                             <h5 class="text-muted text-uppercase fs-13">Tradicional <i class="ri-arrow-down-circle-line text-danger fs-18 float-end align-middle"></i></h5>
                                             <div class="d-flex align-items-center">
                                                 <div class="flex-shrink-0">
-                                                    <i class="ri-line-chart-line display-6 text-muted"></i>
+                                                    <i class="ri-line-chart-line text-muted kpi-icon"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0">RD$ <span class="counter-value" data-target="{{ round($ventaTradicional, 2) }}">0</span></h2>
+                                                    <h2 class="mb-0 kpi-currency">RD$ <span class="counter-value" data-target="{{ round($ventaTradicional, 2) }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col">
-                                        <div class="mt-3 mt-lg-0 py-4 px-3">
+                                        <div class="mt-3 mt-lg-0 py-4 px-3 kpi-card">
                                             <h5 class="text-muted text-uppercase fs-13">No Tradicional <i class="ri-arrow-up-circle-line text-success fs-18 float-end align-middle"></i></h5>
                                             <div class="d-flex align-items-center">
                                                 <div class="flex-shrink-0">
-                                                    <i class="ri-money-dollar-circle-line display-6 text-muted"></i>
+                                                    <i class="ri-money-dollar-circle-line text-muted kpi-icon"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0">RD$ <span class="counter-value" data-target="{{ round($ventaNoTradicional, 2) }}">0</span></h2>
+                                                    <h2 class="mb-0 kpi-currency">RD$ <span class="counter-value" data-target="{{ round($ventaNoTradicional, 2) }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col">
-                                        <div class="mt-3 mt-lg-0 py-4 px-3">
+                                        <div class="mt-3 mt-lg-0 py-4 px-3 kpi-card">
                                             <h5 class="text-muted text-uppercase fs-13">Recargas <i class="ri-arrow-down-circle-line text-danger fs-18 float-end align-middle"></i></h5>
                                             <div class="d-flex align-items-center">
                                                 <div class="flex-shrink-0">
-                                                    <i class="ri-shopping-bag-3-line display-6 text-muted"></i>
+                                                    <i class="ri-shopping-bag-3-line text-muted kpi-icon"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-3">
-                                                    <h2 class="mb-0">RD$ <span class="counter-value" data-target="{{ round($ventaRecargas, 2) }}">0</span></h2>
+                                                    <h2 class="mb-0 kpi-currency">RD$ <span class="counter-value" data-target="{{ round($ventaRecargas, 2) }}">0</span></h2>
                                                 </div>
                                             </div>
                                         </div>
@@ -140,39 +239,43 @@
                                 <h4 class="card-title mb-0 flex-grow-1">Ventas de Productos</h4>
                             </div>
                             <div class="card-body pb-0">
-                                <div id="sales-forecast-chart" data-colors='["--vz-primary", "--vz-success", "--vz-warning"]' class="apex-charts" dir="ltr"></div>
+                                <div
+                                    id="sales-forecast-chart"
+                                    data-colors='["--vz-primary", "--vz-success", "--vz-warning"]'
+                                    data-series='{{ json_encode([round($ventaTradicional, 2), round($ventaNoTradicional, 2), round($ventaRecargas, 2)]) }}'
+                                    data-agencias='{{ json_encode([$agenciasTradicional, $agenciasNoTradicional, $agenciasRecargas]) }}'
+                                    class="apex-charts"
+                                    dir="ltr"></div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="col-xxl-3 col-md-6">
-                        <div class="card card-height-100">
-                            <div class="card-header align-items-center d-flex">
-                                <h4 class="card-title mb-0 flex-grow-1">Tipo de venta</h4>
-                            </div>
-                            <div class="card-body pb-0">
-                                <div id="deal-type-charts" data-colors='["--vz-warning", "--vz-danger", "--vz-success"]' class="apex-charts" dir="ltr"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-xxl-6">
+                    <div class="col-xxl-9 col-md-6">
                         <div class="card card-height-100">
                             <div class="card-header align-items-center d-flex">
                                 <h4 class="card-title mb-0 flex-grow-1">Resumen de balance</h4>
+                                <span class="badge bg-info-subtle text-info">Periodo: {{ $balancePeriodoInicio }} - {{ $balancePeriodoFin }}</span>
                             </div>
                             <div class="card-body px-0">
-                                <div id="revenue-expenses-charts" data-colors='["--vz-success", "--vz-danger", "--vz-warning"]' class="apex-charts" dir="ltr"></div>
+                                <div
+                                    id="revenue-expenses-charts"
+                                    data-colors='["--vz-success", "--vz-danger", "--vz-warning"]'
+                                    data-categories='{{ json_encode($balanceMensual["dias"] ?? []) }}'
+                                    data-ingresos='{{ json_encode($balanceMensual["ingresos"] ?? []) }}'
+                                    data-gastos='{{ json_encode($balanceMensual["gastos"] ?? []) }}'
+                                    data-margen='{{ json_encode($balanceMensual["margen"] ?? []) }}'
+                                    class="apex-charts"
+                                    dir="ltr"></div>
 
                                 <ul class="list-inline main-chart text-center mb-0 mt-2">
                                     <li class="list-inline-item chart-border-left me-0 border-0">
-                                        <h4 class="text-primary">$584k <span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-success me-1"></i>Ingresos</span></h4>
+                                        <h4 class="text-primary">RD$ {{ number_format((float) $balanceIngresosTotal, 2) }} <span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-success me-1"></i>Tradicional</span></h4>
                                     </li>
                                     <li class="list-inline-item chart-border-left me-0">
-                                        <h4>$497k<span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-danger me-1"></i>Gastos</span></h4>
+                                        <h4>RD$ {{ number_format((float) $balanceGastosTotal, 2) }}<span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-danger me-1"></i>No Tradicional</span></h4>
                                     </li>
                                     <li class="list-inline-item chart-border-left me-0">
-                                        <h4><span data-plugin="counterup">3.6</span>%<span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-warning me-1"></i>Margen de ganancia</span></h4>
+                                        <h4>RD$ {{ number_format((float) $balanceMargenTotal, 2) }}<span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-warning me-1"></i>Recargas</span></h4>
                                     </li>
                                 </ul>
                             </div>
@@ -184,231 +287,61 @@
                     <div class="col-12">
                         <h4 class="mb-3">Productos No Tradicionales</h4>
                     </div>
-                    <div class="col-lg-12">
-                        <div class="swiper cryptoSlider">
-                            <div class="swiper-wrapper">
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">Mega Chance</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$1,523,647</h5>
-                                                    <p class="text-success fs-13 fw-medium mb-0">+13.11%<span class="text-muted ms-2 fs-10 text-uppercase">(btc)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-success", "--vz-transparent"]' dir="ltr" id="bitcoin_sparkline_charts"></div>
-                                                </div>
-                                            </div>
+                    @if (count($productosNoTradicionales) === 0)
+                        <div class="col-12">
+                            <div class="alert alert-warning">No hay productos no tradicionales con ventas para la fecha/filtro seleccionado.</div>
+                        </div>
+                    @else
+                        @foreach ($productosNoTradicionales as $producto)
+                            @php
+                                $rank = $loop->iteration;
+                                $rankClass = $rank <= 3 ? 'rank-' . $rank : '';
+                            @endphp
+                            <div class="col-12 col-md-6 col-xl-4 col-xxl-3 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <h6 class="mb-0 fs-14 text-uppercase pe-2">{{ $producto['nombre'] }}</h6>
+                                            <span class="rank-badge {{ $rankClass }}">#{{ $rank }}</span>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">Chance Exp</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$2,145,687</h5>
-                                                    <p class="text-success fs-13 fw-medium mb-0">+15.08%<span class="text-muted ms-2 fs-10 text-uppercase">(ltc)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-success", "--vz-transparent"]' dir="ltr" id="litecoin_sparkline_charts"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">Chance Exp Ext</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$3,312,870</h5>
-                                                    <p class="text-success fs-13 fw-medium mb-0">+08.57%<span class="text-muted ms-2 fs-10 text-uppercase">(etc)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-success", "--vz-transparent"]' dir="ltr" id="eathereum_sparkline_charts"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">ruleta express</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$1,820,045</h5>
-                                                    <p class="text-danger fs-13 fw-medium mb-0">-09.21%<span class="text-muted ms-2 fs-10 text-uppercase">(bnb)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-danger", "--vz-transparent"]' dir="ltr" id="binance_sparkline_charts"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">color ruleta express</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$9,458,153</h5>
-                                                    <p class="text-success fs-13 fw-medium mb-0">+12.07%<span class="text-muted ms-2 fs-10 text-uppercase">(dash)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-success", "--vz-transparent"]' dir="ltr" id="dash_sparkline_charts"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">doble chance exp</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$5,201,458</h5>
-                                                    <p class="text-success fs-13 fw-medium mb-0">+14.99%<span class="text-muted ms-2 fs-10 text-uppercase">(usdt)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-success", "--vz-transparent"]' dir="ltr" id="tether_sparkline_charts"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">doble chance express extraordinario</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$1,523,647</h5>
-                                                    <p class="text-success fs-13 fw-medium mb-0">+13.11%<span class="text-muted ms-2 fs-10 text-uppercase">(nt1)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-success", "--vz-transparent"]' dir="ltr" id="nueva_sparkline_charts_1"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">triple chance express extraordinario</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$2,145,687</h5>
-                                                    <p class="text-success fs-13 fw-medium mb-0">+15.08%<span class="text-muted ms-2 fs-10 text-uppercase">(nt2)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-success", "--vz-transparent"]' dir="ltr" id="nueva_sparkline_charts_2"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">extra lotto</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$3,312,870</h5>
-                                                    <p class="text-success fs-13 fw-medium mb-0">+08.57%<span class="text-muted ms-2 fs-10 text-uppercase">(nt3)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-success", "--vz-transparent"]' dir="ltr" id="nueva_sparkline_charts_3"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="swiper-slide">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="float-end">
-                                                <span class="text-muted fs-18"><i class="mdi mdi-dots-horizontal"></i></span>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <h6 class="mb-0 fs-14">power lotto</h6>
-                                            </div>
-                                            <div class="row align-items-end g-0">
-                                                <div class="col-6">
-                                                    <h5 class="mb-1 mt-4">$1,820,045</h5>
-                                                    <p class="text-danger fs-13 fw-medium mb-0">-09.21%<span class="text-muted ms-2 fs-10 text-uppercase">(nt4)</span></p>
-                                                </div>
-                                                <div class="col-6">
-                                                    <div class="apex-charts crypto-widget" data-colors='["--vz-danger", "--vz-transparent"]' dir="ltr" id="nueva_sparkline_charts_4"></div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <h4 class="mb-2">RD$ {{ number_format((float) ($producto['total'] ?? 0), 2) }}</h4>
+                                        <p class="text-muted mb-0">Agencias con venta: <span class="fw-semibold text-info">{{ (int) ($producto['agencias'] ?? 0) }}</span></p>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        @endforeach
+                    @endif
+                </div>
+
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <h4 class="mb-3">Productos Tradicionales (Top 10)</h4>
                     </div>
+                    @if (count($productosTradicionalesTop) === 0)
+                        <div class="col-12">
+                            <div class="alert alert-warning">No hay productos tradicionales con ventas para la fecha/filtro seleccionado.</div>
+                        </div>
+                    @else
+                        @foreach ($productosTradicionalesTop as $producto)
+                            @php
+                                $rank = $loop->iteration;
+                                $rankClass = $rank <= 3 ? 'rank-' . $rank : '';
+                            @endphp
+                            <div class="col-12 col-md-6 col-xl-4 col-xxl-3 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <h6 class="mb-0 fs-14 text-uppercase pe-2">{{ $producto['nombre'] }}</h6>
+                                            <span class="rank-badge {{ $rankClass }}">#{{ $rank }}</span>
+                                        </div>
+                                        <h4 class="mb-2">RD$ {{ number_format((float) ($producto['total'] ?? 0), 2) }}</h4>
+                                        <p class="text-muted mb-0">Agencias con venta: <span class="fw-semibold text-info">{{ (int) ($producto['agencias'] ?? 0) }}</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    @endif
+                </div>
                 </div>
             </div>
         </div>
@@ -422,6 +355,49 @@
     <script src="{{ asset('js/pages/dashboard-crypto.init.js') }}"></script>
     <script>
         (function () {
+            const bootFiltroConCarga = () => {
+                const form = document.getElementById('inicioFiltroForm');
+                const fechaInput = document.getElementById('fecha');
+                const empresaSelect = document.getElementById('empresa');
+
+                if (!form) return;
+
+                const showLoadingAlert = () => {
+                    if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') return;
+
+                    Swal.fire({
+                        title: 'Cargando data...',
+                        text: 'Espere un momento por favor.',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                };
+
+                form.addEventListener('submit', () => {
+                    showLoadingAlert();
+                });
+
+                const triggerSubmit = () => {
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.submit();
+                    }
+                };
+
+                if (fechaInput) {
+                    fechaInput.addEventListener('change', triggerSubmit);
+                }
+
+                if (empresaSelect) {
+                    empresaSelect.addEventListener('change', triggerSubmit);
+                }
+            };
+
             const bootExtraCards = () => {
                 if (typeof ApexCharts === 'undefined' || typeof getChartColorsArray !== 'function') return;
 
@@ -463,8 +439,12 @@
             };
 
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', bootExtraCards);
+                document.addEventListener('DOMContentLoaded', () => {
+                    bootFiltroConCarga();
+                    bootExtraCards();
+                });
             } else {
+                bootFiltroConCarga();
                 bootExtraCards();
             }
         })();

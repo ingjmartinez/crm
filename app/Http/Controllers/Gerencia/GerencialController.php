@@ -285,9 +285,81 @@ SQL;
             })
             ->values();
 
+        $sqlDetalleTransicionesAgencias = <<<'SQL'
+WITH ventas_agencia_unificadas AS (
+    SELECT
+        agencia_id,
+        SUM(monto) AS monto,
+        MONTH(fecha) AS mes
+    FROM vt_usuarios_bet
+    WHERE YEAR(fecha) = ?
+      AND MONTH(fecha) IN (?, ?)
+    GROUP BY agencia_id, MONTH(fecha)
+
+    UNION ALL
+
+    SELECT
+        agencia_id,
+        SUM(monto) AS monto,
+        MONTH(fecha) AS mes
+    FROM vt_usuarios_net
+    WHERE YEAR(fecha) = ?
+      AND MONTH(fecha) IN (?, ?)
+    GROUP BY agencia_id, MONTH(fecha)
+),
+agencias_clasificadas AS (
+    SELECT
+        agencia_id,
+        mes,
+        CASE
+            WHEN SUM(monto) >= ? THEN 'A'
+            WHEN SUM(monto) >= ? THEN 'B'
+            WHEN SUM(monto) >= ? THEN 'C'
+            ELSE 'D'
+        END AS categoria
+    FROM ventas_agencia_unificadas
+    GROUP BY agencia_id, mes
+),
+mes_inicio AS (
+    SELECT agencia_id, categoria AS categoria_inicio
+    FROM agencias_clasificadas
+    WHERE mes = ?
+),
+mes_fin AS (
+    SELECT agencia_id, categoria AS categoria_fin
+    FROM agencias_clasificadas
+    WHERE mes = ?
+)
+SELECT
+    TRIM(CAST(i.agencia_id AS CHAR)) AS codigo_agencia,
+    COALESCE(NULLIF(TRIM(a.nombre_agencia), ''), CONCAT('Agencia ', TRIM(CAST(i.agencia_id AS CHAR)))) AS nombre_agencia,
+    i.categoria_inicio,
+    COALESCE(f.categoria_fin, 'D') AS categoria_fin
+FROM mes_inicio i
+LEFT JOIN mes_fin f ON f.agencia_id = i.agencia_id
+LEFT JOIN agencias a ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(i.agencia_id AS CHAR))
+ORDER BY
+    FIELD(i.categoria_inicio, 'A', 'B', 'C', 'D'),
+    FIELD(COALESCE(f.categoria_fin, 'D'), 'A', 'B', 'C', 'D'),
+    nombre_agencia,
+    codigo_agencia
+SQL;
+
+        $detalleTransicionesAgencias = collect(DB::select($sqlDetalleTransicionesAgencias, $bindingsTransicionesAgencias))
+            ->map(function ($row) {
+                return [
+                    'codigo_agencia' => (string) ($row->codigo_agencia ?? ''),
+                    'nombre_agencia' => (string) ($row->nombre_agencia ?? ''),
+                    'categoria_inicio' => (string) ($row->categoria_inicio ?? ''),
+                    'categoria_fin' => (string) ($row->categoria_fin ?? ''),
+                ];
+            })
+            ->values();
+
         return response()->json([
             'data' => $resultados,
             'transiciones_agencias' => $transicionesAgencias,
+            'transiciones_agencias_detalle' => $detalleTransicionesAgencias,
             'meta' => [
                 'anio' => $anio,
                 'mes_inicio' => $mesInicio,

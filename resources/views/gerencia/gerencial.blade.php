@@ -250,12 +250,55 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="modal-detalle-movimientos" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-md-down">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-detalle-movimientos-titulo">Detalle de movimiento de agencias</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 mb-3">
+                        <div class="fw-semibold mb-1">Referencia de clasificacion por monto</div>
+                        <div class="d-flex flex-wrap gap-2" id="referencia-rangos-categorias"></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <div class="text-muted" id="modal-detalle-movimientos-resumen">0 agencias</div>
+                        <button type="button" class="btn btn-success btn-sm" id="btn-exportar-detalle-excel">
+                            <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-sm align-middle mb-0 w-100" id="table-detalle-movimientos" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 160px;">Codigo agencia</th>
+                                    <th>Nombre agencia</th>
+                                    <th style="width: 140px;">Categoria inicio</th>
+                                    <th style="width: 200px;">Rango inicio</th>
+                                    <th style="width: 140px;">Categoria fin</th>
+                                    <th style="width: 200px;">Rango fin</th>
+                                    <th style="width: 170px;">Movimiento</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
     <!-- jsPDF y AutoTable desde CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.7.0/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 @php
     $configuracionInicial = $configuracionClasificacion ?? [
         'agencia' => ['A' => 150000, 'B' => 110000, 'C' => 60001, 'D' => 60000],
@@ -811,6 +854,77 @@
                 bajanDetalle: document.getElementById('cat-d-bajan-detalle'),
             },
         };
+        const modalDetalleMovimientosElement = document.getElementById('modal-detalle-movimientos');
+        const modalDetalleMovimientosTitulo = document.getElementById('modal-detalle-movimientos-titulo');
+        const modalDetalleMovimientosResumen = document.getElementById('modal-detalle-movimientos-resumen');
+        const btnExportarDetalleExcel = document.getElementById('btn-exportar-detalle-excel');
+        const referenciaRangosCategorias = document.getElementById('referencia-rangos-categorias');
+
+        let detalleTransicionesAgencias = [];
+        let detalleActualModal = [];
+        const modalDetalleMovimientos = (window.bootstrap && modalDetalleMovimientosElement)
+            ? new bootstrap.Modal(modalDetalleMovimientosElement)
+            : null;
+
+        const dataTableDetalleMovimientos = $('#table-detalle-movimientos').DataTable({
+            responsive: true,
+            scrollX: true,
+            autoWidth: false,
+            pageLength: 10,
+            lengthChange: false,
+            searching: false,
+            info: true,
+            order: [[1, 'asc'], [0, 'asc']],
+            data: [],
+            columns: [
+                { data: 'codigo_agencia', defaultContent: '-', className: 'text-nowrap' },
+                {
+                    data: 'nombre_agencia',
+                    defaultContent: '-',
+                    render: function (data) {
+                        return renderTextoTruncado(data || '-', 280);
+                    }
+                },
+                { data: 'categoria_inicio', defaultContent: '-', className: 'text-center text-nowrap' },
+                {
+                    data: 'rango_inicio',
+                    defaultContent: '-',
+                    render: function (data) {
+                        return renderTextoTruncado(data || '-', 210);
+                    }
+                },
+                { data: 'categoria_fin', defaultContent: '-', className: 'text-center text-nowrap' },
+                {
+                    data: 'rango_fin',
+                    defaultContent: '-',
+                    render: function (data) {
+                        return renderTextoTruncado(data || '-', 210);
+                    }
+                },
+                { data: 'movimiento', defaultContent: '-', className: 'text-nowrap' }
+            ],
+            columnDefs: [
+                { targets: 0, width: '140px', responsivePriority: 2 },
+                { targets: 1, width: '280px', responsivePriority: 1 },
+                { targets: 2, width: '120px', responsivePriority: 3 },
+                { targets: 3, width: '220px', responsivePriority: 5 },
+                { targets: 4, width: '120px', responsivePriority: 4 },
+                { targets: 5, width: '220px', responsivePriority: 6 },
+                { targets: 6, width: '130px', responsivePriority: 2 }
+            ],
+            language: {
+                paginate: {
+                    first: 'Primero',
+                    last: 'Ultimo',
+                    next: 'Siguiente',
+                    previous: 'Anterior'
+                },
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ agencias',
+                infoEmpty: 'Mostrando 0 a 0 de 0 agencias',
+                emptyTable: 'No hay agencias para este movimiento'
+            }
+        });
+
         const mapMeses = {
             1: 'Enero',
             2: 'Febrero',
@@ -860,6 +974,56 @@
             return Number(valor || 0).toLocaleString('en-US');
         }
 
+        function escapeHtml(texto) {
+            return String(texto ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderTextoTruncado(valor, maxWidthPx) {
+            const texto = String(valor ?? '-');
+            const limpio = escapeHtml(texto);
+            return '<span class="d-inline-block text-truncate align-middle" style="max-width:' + maxWidthPx + 'px;" title="' + limpio + '">' + limpio + '</span>';
+        }
+
+        function getRangoCategoria(categoria) {
+            const cat = String(categoria || '').toUpperCase();
+            const cfg = configuracion.agencia || { A: 0, B: 0, C: 0, D: 0 };
+
+            if (cat === 'A') {
+                return '>= ' + formatoEntero(cfg.A);
+            }
+
+            if (cat === 'B') {
+                return '>= ' + formatoEntero(cfg.B) + ' y < ' + formatoEntero(cfg.A);
+            }
+
+            if (cat === 'C') {
+                return '>= ' + formatoEntero(cfg.C) + ' y < ' + formatoEntero(cfg.B);
+            }
+
+            if (cat === 'D') {
+                return '<= ' + formatoEntero(cfg.D);
+            }
+
+            return '-';
+        }
+
+        function renderReferenciaRangosModal() {
+            if (!referenciaRangosCategorias) return;
+
+            referenciaRangosCategorias.innerHTML = '';
+            ['A', 'B', 'C', 'D'].forEach(function (cat) {
+                const span = document.createElement('span');
+                span.className = 'badge bg-light text-dark border';
+                span.textContent = cat + ': ' + getRangoCategoria(cat);
+                referenciaRangosCategorias.appendChild(span);
+            });
+        }
+
         function cargarConfiguracionEnModal() {
             inputCfgAgenciaA.value = configuracion.agencia.A;
             inputCfgAgenciaB.value = configuracion.agencia.B;
@@ -906,6 +1070,140 @@
             const agenteValida = cfg.agente.A > cfg.agente.B && cfg.agente.B > cfg.agente.C && cfg.agente.C > cfg.agente.D && cfg.agente.D > 0;
 
             return agenciaValida && agenteValida;
+        }
+
+        function resolverTipoMovimiento(categoriaInicio, categoriaFin) {
+            const orden = ['A', 'B', 'C', 'D'];
+            const inicio = String(categoriaInicio || '').toUpperCase();
+            const fin = String(categoriaFin || '').toUpperCase();
+            const idxInicio = orden.indexOf(inicio);
+            const idxFin = orden.indexOf(fin);
+
+            if (idxInicio === -1 || idxFin === -1) {
+                return '';
+            }
+
+            if (idxFin < idxInicio) {
+                return 'suben';
+            }
+
+            if (idxFin > idxInicio) {
+                return 'bajan';
+            }
+
+            return 'igual';
+        }
+
+        function abrirModalDetalleMovimiento(categoria, tipoMovimiento) {
+            const categoriaBase = String(categoria || '').toUpperCase();
+            const tipoBase = String(tipoMovimiento || '').toLowerCase();
+
+            if (tipoBase !== 'suben' && tipoBase !== 'bajan') {
+                return;
+            }
+
+            detalleActualModal = detalleTransicionesAgencias
+                .filter(function (item) {
+                    const catInicio = String(item.categoria_inicio || '').toUpperCase();
+                    const mov = resolverTipoMovimiento(item.categoria_inicio, item.categoria_fin);
+                    return catInicio === categoriaBase && mov === tipoBase;
+                })
+                .map(function (item) {
+                    return {
+                        codigo_agencia: item.codigo_agencia || '-',
+                        nombre_agencia: item.nombre_agencia || '-',
+                        categoria_inicio: item.categoria_inicio || '-',
+                        rango_inicio: getRangoCategoria(item.categoria_inicio),
+                        categoria_fin: item.categoria_fin || '-',
+                        rango_fin: getRangoCategoria(item.categoria_fin),
+                        movimiento: tipoBase === 'suben' ? 'Subio' : (tipoBase === 'bajan' ? 'Bajo' : 'Sin cambios')
+                    };
+                });
+
+            dataTableDetalleMovimientos.clear();
+            dataTableDetalleMovimientos.rows.add(detalleActualModal).draw();
+
+            const tipoTexto = tipoBase === 'suben' ? 'subieron' : (tipoBase === 'bajan' ? 'bajaron' : 'sin cambios');
+            if (modalDetalleMovimientosTitulo) {
+                modalDetalleMovimientosTitulo.textContent = 'Agencias categoria ' + categoriaBase + ' que ' + tipoTexto;
+            }
+            if (modalDetalleMovimientosResumen) {
+                modalDetalleMovimientosResumen.textContent = detalleActualModal.length + ' agencias encontradas';
+            }
+
+            renderReferenciaRangosModal();
+
+            if (modalDetalleMovimientos) {
+                modalDetalleMovimientos.show();
+            }
+        }
+
+        function exportarDetalleActualExcel() {
+            if (!detalleActualModal.length) {
+                Swal.fire('Sin datos', 'No hay agencias para exportar en este detalle.', 'warning');
+                return;
+            }
+
+            const filas = detalleActualModal.map(function (item) {
+                return {
+                    codigo_agencia: item.codigo_agencia,
+                    nombre_agencia: item.nombre_agencia,
+                    categoria_inicio: item.categoria_inicio,
+                    rango_inicio: item.rango_inicio,
+                    categoria_fin: item.categoria_fin,
+                    rango_fin: item.rango_fin,
+                    movimiento: item.movimiento
+                };
+            });
+
+            if (typeof XLSX !== 'undefined' && XLSX.utils) {
+                const ws = XLSX.utils.json_to_sheet(filas);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Detalle');
+                XLSX.writeFile(wb, 'detalle_movimiento_agencias.xlsx');
+                return;
+            }
+
+            const headers = ['codigo_agencia', 'nombre_agencia', 'categoria_inicio', 'rango_inicio', 'categoria_fin', 'rango_fin', 'movimiento'];
+            const csv = [headers.join(',')]
+                .concat(filas.map(function (row) {
+                    return headers.map(function (key) {
+                        const value = String(row[key] ?? '').replace(/"/g, '""');
+                        return '"' + value + '"';
+                    }).join(',');
+                }))
+                .join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'detalle_movimiento_agencias.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function conectarClicksAnalisis() {
+            ['A', 'B', 'C', 'D'].forEach(function (categoria) {
+                const ref = analisisRefs[categoria];
+                if (!ref) return;
+
+                ['suben', 'bajan'].forEach(function (tipo) {
+                    const nodo = ref[tipo];
+                    if (!nodo || nodo.dataset.modalBound === '1') return;
+
+                    nodo.dataset.modalBound = '1';
+                    nodo.addEventListener('click', function () {
+                        const total = Number(nodo.dataset.total || 0);
+                        if (total <= 0) {
+                            return;
+                        }
+                        abrirModalDetalleMovimiento(categoria, tipo);
+                    });
+                });
+            });
         }
 
         function actualizarTarjetasAnalisisAgencias(transiciones) {
@@ -962,9 +1260,23 @@
             ['A', 'B', 'C', 'D'].forEach(function (cat) {
                 const ref = analisisRefs[cat];
                 if (!ref) return;
-                if (ref.suben) ref.suben.textContent = String(resumen[cat].suben);
-                if (ref.bajan) ref.bajan.textContent = String(resumen[cat].bajan);
-                if (ref.igual) ref.igual.textContent = String(resumen[cat].igual);
+                if (ref.suben) {
+                    ref.suben.textContent = String(resumen[cat].suben);
+                    ref.suben.dataset.total = String(resumen[cat].suben);
+                    ref.suben.style.cursor = resumen[cat].suben > 0 ? 'pointer' : 'default';
+                    ref.suben.classList.toggle('text-decoration-underline', resumen[cat].suben > 0);
+                }
+                if (ref.bajan) {
+                    ref.bajan.textContent = String(resumen[cat].bajan);
+                    ref.bajan.dataset.total = String(resumen[cat].bajan);
+                    ref.bajan.style.cursor = resumen[cat].bajan > 0 ? 'pointer' : 'default';
+                    ref.bajan.classList.toggle('text-decoration-underline', resumen[cat].bajan > 0);
+                }
+                if (ref.igual) {
+                    ref.igual.textContent = String(resumen[cat].igual);
+                    ref.igual.style.cursor = 'default';
+                    ref.igual.classList.remove('text-decoration-underline');
+                }
                 if (ref.subenDetalle) ref.subenDetalle.textContent = detalleTexto(cat, resumen[cat].subenDetalle, 'subieron');
                 if (ref.bajanDetalle) ref.bajanDetalle.textContent = detalleTexto(cat, resumen[cat].bajanDetalle, 'bajaron');
             });
@@ -1089,6 +1401,9 @@
             const payload = await response.json();
             const filas = Array.isArray(payload?.data) ? payload.data : [];
             const transiciones = Array.isArray(payload?.transiciones_agencias) ? payload.transiciones_agencias : [];
+            detalleTransicionesAgencias = Array.isArray(payload?.transiciones_agencias_detalle)
+                ? payload.transiciones_agencias_detalle
+                : [];
             dataTable.clear();
             dataTable.rows.add(filas).draw();
             actualizarTarjetasAnalisisAgencias(transiciones);
@@ -1139,6 +1454,7 @@
 
                 configuracion = nuevaConfig;
                 actualizarTarjetaParametros();
+                renderReferenciaRangosModal();
 
                 if (window.bootstrap && modalConfigElement) {
                     const instanciaModal = bootstrap.Modal.getInstance(modalConfigElement);
@@ -1151,15 +1467,33 @@
             });
         }
 
+        if (btnExportarDetalleExcel) {
+            btnExportarDetalleExcel.addEventListener('click', function () {
+                exportarDetalleActualExcel();
+            });
+        }
+
         if (modalConfigElement) {
             modalConfigElement.addEventListener('show.bs.modal', function () {
                 cargarConfiguracionEnModal();
             });
         }
 
+        if (modalDetalleMovimientosElement) {
+            modalDetalleMovimientosElement.addEventListener('shown.bs.modal', function () {
+                dataTableDetalleMovimientos.columns.adjust();
+                if (dataTableDetalleMovimientos.responsive) {
+                    dataTableDetalleMovimientos.responsive.recalc();
+                }
+                dataTableDetalleMovimientos.draw(false);
+            });
+        }
+
         actualizarEtiquetasMeses();
         actualizarTarjetaParametros();
         cargarConfiguracionEnModal();
+        renderReferenciaRangosModal();
+        conectarClicksAnalisis();
         actualizarTarjetasAnalisisAgencias([]);
     });
 </script>
