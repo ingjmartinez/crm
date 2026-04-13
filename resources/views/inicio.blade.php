@@ -351,8 +351,8 @@
 @section('script')
     <script src="{{ asset('libs/apexcharts/apexcharts.min.js') }}"></script>
     <script src="{{ asset('libs/swiper/swiper-bundle.min.js') }}"></script>
-    <script src="{{ asset('js/pages/dashboard-crm.init.js') }}"></script>
-    <script src="{{ asset('js/pages/dashboard-crypto.init.js') }}"></script>
+    <script src="{{ asset('js/pages/dashboard-crm.init.js') }}?v={{ @filemtime(public_path('js/pages/dashboard-crm.init.js')) ?: time() }}"></script>
+    <script src="{{ asset('js/pages/dashboard-crypto.init.js') }}?v={{ @filemtime(public_path('js/pages/dashboard-crypto.init.js')) ?: time() }}"></script>
     <script>
         (function () {
             const bootFiltroConCarga = () => {
