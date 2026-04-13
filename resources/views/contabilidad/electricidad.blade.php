@@ -1,6 +1,26 @@
 @extends('app')
 
 @section('content')
+    <style>
+        .excel-head {
+            background-color: #9ea3a8;
+            color: #111;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .excel-band {
+            background: #fff200;
+            color: #111;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            text-align: center;
+            padding: 0.45rem;
+            border: 1px solid #dee2e6;
+            margin-bottom: 0.75rem;
+        }
+    </style>
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -21,55 +41,66 @@
                 <div class="row">
                     <div class="col-12 mb-3">
                         <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">Seguimiento por dia</h5>
+                                <div class="d-flex gap-2">
+                                    <input type="date" class="form-control form-control-sm" id="filtroSegDesde" style="max-width: 170px;" placeholder="Desde">
+                                    <input type="date" class="form-control form-control-sm" id="filtroSegHasta" style="max-width: 170px;" placeholder="Hasta">
+                                    <button type="button" class="btn btn-sm btn-info" id="btnFiltrarSeguimiento">Filtrar</button>
+                                </div>
+                            </div>
                             <div class="card-body">
-                                <div class="row g-2 align-items-end">
-                                    <div class="col-12 col-md-3">
-                                        <label class="form-label">Mes</label>
-                                        <input type="month" class="form-control" id="filtroMes">
-                                    </div>
-                                    <div class="col-12 col-md-3">
-                                        <label class="form-label">Empresa</label>
-                                        <select class="form-select" id="filtroEmpresa">
-                                            <option value="">Todas</option>
-                                            <option value="Joselito">Joselito</option>
-                                            <option value="Negosur">Negosur</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-12 col-md-2">
-                                        <label class="form-label">Estado</label>
-                                        <select class="form-select" id="filtroPagado">
-                                            <option value="todos">Todos</option>
-                                            <option value="si">Pagado</option>
-                                            <option value="no">Pendiente</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-12 col-md-4 d-grid d-md-flex justify-content-md-end gap-2">
-                                        <button type="button" class="btn btn-info" id="btnFiltrarElectricidad">Filtrar</button>
-                                        <button type="button" class="btn btn-success" id="btnNuevoElectricidad">Nuevo registro</button>
+                                <div class="row mb-3">
+                                    <div class="col-12 col-md-5">
+                                        <label class="form-label">Buscar por codigo o nombre de agencia</label>
+                                        <input type="text" class="form-control" id="buscarSegAgencia" placeholder="Ej: AG001 o Los Mina">
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div class="col-12 mb-3">
-                        <div class="row g-2" id="resumenElectricidad">
-                            <div class="col-12 col-md-4">
-                                <div class="border rounded p-3 bg-light h-100">
-                                    <div class="small text-muted">Registros</div>
-                                    <div class="fs-5 fw-semibold" id="totalRegistros">0</div>
-                                </div>
-                            </div>
-                            <div class="col-12 col-md-4">
-                                <div class="border rounded p-3 bg-light h-100">
-                                    <div class="small text-muted">kWh total</div>
-                                    <div class="fs-5 fw-semibold" id="totalKwh">0.000</div>
-                                </div>
-                            </div>
-                            <div class="col-12 col-md-4">
-                                <div class="border rounded p-3 bg-light h-100">
-                                    <div class="small text-muted">Pendiente por pagar</div>
-                                    <div class="fs-5 fw-semibold text-danger" id="totalPendiente">0.00</div>
+                                <form id="formSeguimientoDia" class="row g-2 mb-3">
+                                    <div class="col-md-2">
+                                        <label class="form-label">Fecha de solicitud *</label>
+                                        <input type="date" class="form-control" id="segFechaSolicitud" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Distribuidora *</label>
+                                        <input type="text" class="form-control" id="segDistribuidora" maxlength="120" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">NIC *</label>
+                                        <input type="text" class="form-control" id="segNic" maxlength="80" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Agencia *</label>
+                                        <input type="text" class="form-control" id="segAgencia" maxlength="150" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Ruta *</label>
+                                        <input type="text" class="form-control" id="segRuta" maxlength="150" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Observaciones</label>
+                                        <input type="text" class="form-control" id="segObservaciones" maxlength="1000">
+                                    </div>
+                                    <div class="col-12 d-flex justify-content-end">
+                                        <button type="submit" class="btn btn-primary">Guardar seguimiento</button>
+                                    </div>
+                                </form>
+
+                                <div class="table-responsive">
+                                    <table id="tablaSeguimientoDia" class="table table-bordered table-striped align-middle mb-0" style="width:100%">
+                                        <thead>
+                                            <tr class="excel-head">
+                                                <th>Fecha de solicitud</th>
+                                                <th>Distribuidoras</th>
+                                                <th>NIC</th>
+                                                <th>Agencia</th>
+                                                <th>Ruta</th>
+                                                <th>Observaciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -78,26 +109,82 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="card-title mb-0">Control de facturas de electricidad</h5>
-                                <div class="text-muted small">Consumo kWh y costo se calculan automaticamente.</div>
+                                <h5 class="card-title mb-0">Reporte de Averias por dia</h5>
+                                <div class="d-flex gap-2">
+                                    <input type="date" class="form-control form-control-sm" id="filtroAveDesde" style="max-width: 170px;" placeholder="Desde">
+                                    <input type="date" class="form-control form-control-sm" id="filtroAveHasta" style="max-width: 170px;" placeholder="Hasta">
+                                    <button type="button" class="btn btn-sm btn-info" id="btnFiltrarAverias">Filtrar</button>
+                                </div>
                             </div>
                             <div class="card-body">
+                                <div class="excel-band">REPORTES DE AVERIA X DIAS</div>
+                                <div class="row mb-3">
+                                    <div class="col-12 col-md-5">
+                                        <label class="form-label">Buscar por codigo o nombre de agencia</label>
+                                        <input type="text" class="form-control" id="buscarAveAgencia" placeholder="Ej: AG001 o Los Mina">
+                                    </div>
+                                </div>
+
+                                <form id="formAveriasDia" class="row g-2 mb-3">
+                                    <div class="col-md-2">
+                                        <label class="form-label">Fecha del reporte *</label>
+                                        <input type="date" class="form-control" id="aveFechaReporte" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Reporte *</label>
+                                        <input type="text" class="form-control" id="aveReporte" maxlength="120" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Distribuidoras *</label>
+                                        <input type="text" class="form-control" id="aveDistribuidora" maxlength="120" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">NIC *</label>
+                                        <input type="text" class="form-control" id="aveNic" maxlength="80" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Agencia *</label>
+                                        <input type="text" class="form-control" id="aveAgencia" maxlength="150" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Ruta *</label>
+                                        <input type="text" class="form-control" id="aveRuta" maxlength="150" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Coordinadores</label>
+                                        <input type="text" class="form-control" id="aveCoordinadores" maxlength="180">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Agente de venta AM</label>
+                                        <input type="text" class="form-control" id="aveAgenteAm" maxlength="180">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Agente de venta PM</label>
+                                        <input type="text" class="form-control" id="aveAgentePm" maxlength="180">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Observaciones</label>
+                                        <input type="text" class="form-control" id="aveObservaciones" maxlength="1000">
+                                    </div>
+                                    <div class="col-12 d-flex justify-content-end">
+                                        <button type="submit" class="btn btn-primary">Guardar averia</button>
+                                    </div>
+                                </form>
+
                                 <div class="table-responsive">
-                                    <table id="tablaElectricidad" class="table table-bordered table-striped align-middle mb-0" style="width:100%">
+                                    <table id="tablaAveriasDia" class="table table-bordered table-striped align-middle mb-0" style="width:100%">
                                         <thead>
-                                            <tr>
-                                                <th>Fecha</th>
-                                                <th>Empresa</th>
-                                                <th>Sucursal</th>
-                                                <th>Contrato</th>
-                                                <th class="text-end">Lectura Ant.</th>
-                                                <th class="text-end">Lectura Act.</th>
-                                                <th class="text-end">Ajuste</th>
-                                                <th class="text-end">kWh</th>
-                                                <th class="text-end">Tarifa</th>
-                                                <th class="text-end">Total</th>
-                                                <th class="text-center">Pagado</th>
-                                                <th class="text-center">Acciones</th>
+                                            <tr class="excel-head">
+                                                <th>Fecha del reporte</th>
+                                                <th>Reporte</th>
+                                                <th>Distribuidoras</th>
+                                                <th>NIC</th>
+                                                <th>Agencia</th>
+                                                <th>Ruta</th>
+                                                <th>Coordinadores</th>
+                                                <th>Agente de venta AM</th>
+                                                <th>Agente de venta PM</th>
+                                                <th>Observaciones</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -110,296 +197,36 @@
             </div>
         </div>
     </div>
-
-    <div class="modal fade" id="electricidadModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="electricidadModalLabel">Nuevo registro de electricidad</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="electricidadId">
-                    <div class="row g-2">
-                        <div class="col-md-3">
-                            <label class="form-label">Fecha factura *</label>
-                            <input type="date" class="form-control" id="electricidadFecha">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Empresa *</label>
-                            <select id="electricidadEmpresa" class="form-select">
-                                <option value="">Seleccione</option>
-                                <option value="Joselito">Joselito</option>
-                                <option value="Negosur">Negosur</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Sucursal *</label>
-                            <input type="text" class="form-control" id="electricidadSucursal" maxlength="120" placeholder="Sucursal o local">
-                        </div>
-
-                        <div class="col-md-3">
-                            <label class="form-label">Contrato</label>
-                            <input type="text" class="form-control" id="electricidadContrato" maxlength="50">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Medidor</label>
-                            <input type="text" class="form-control" id="electricidadMedidor" maxlength="50">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Lectura anterior *</label>
-                            <input type="number" min="0" step="0.001" class="form-control" id="electricidadLecturaAnterior" value="0">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Lectura actual *</label>
-                            <input type="number" min="0" step="0.001" class="form-control" id="electricidadLecturaActual" value="0">
-                        </div>
-
-                        <div class="col-md-3">
-                            <label class="form-label">Ajuste kWh</label>
-                            <input type="number" step="0.001" class="form-control" id="electricidadAjuste" value="0">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Tarifa kWh *</label>
-                            <input type="number" min="0" step="0.0001" class="form-control" id="electricidadTarifa" value="0">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Otros cargos</label>
-                            <input type="number" min="0" step="0.01" class="form-control" id="electricidadOtros" value="0">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Impuestos</label>
-                            <input type="number" min="0" step="0.01" class="form-control" id="electricidadImpuestos" value="0">
-                        </div>
-
-                        <div class="col-md-3">
-                            <label class="form-label">Consumo kWh</label>
-                            <input type="text" class="form-control" id="electricidadConsumoPreview" readonly value="0.000">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Total estimado</label>
-                            <input type="text" class="form-control" id="electricidadTotalPreview" readonly value="0.00">
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" id="electricidadPagado">
-                                <label class="form-check-label" for="electricidadPagado">Pagado</label>
-                            </div>
-                        </div>
-                        <div class="col-md-2" id="wrapFechaPago">
-                            <label class="form-label">Fecha pago</label>
-                            <input type="date" class="form-control" id="electricidadFechaPago">
-                        </div>
-                        <div class="col-md-2" id="wrapReferenciaPago">
-                            <label class="form-label">Ref. pago</label>
-                            <input type="text" class="form-control" id="electricidadReferenciaPago" maxlength="120">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Observacion</label>
-                            <textarea class="form-control" id="electricidadObservacion" rows="2" maxlength="1000" placeholder="Comentario opcional"></textarea>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="btnGuardarElectricidad">Guardar</button>
-                </div>
-            </div>
-        </div>
-    </div>
 @endsection
 
 @section('script')
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const csrfToken = '{{ csrf_token() }}';
-            const modalElement = document.getElementById('electricidadModal');
-            const electricidadModal = new bootstrap.Modal(modalElement);
-            const tablaBody = document.querySelector('#tablaElectricidad tbody');
-            const filtroMes = document.getElementById('filtroMes');
-            const filtroEmpresa = document.getElementById('filtroEmpresa');
-            const filtroPagado = document.getElementById('filtroPagado');
-            const btnFiltrar = document.getElementById('btnFiltrarElectricidad');
-            const btnNuevo = document.getElementById('btnNuevoElectricidad');
-            const btnGuardar = document.getElementById('btnGuardarElectricidad');
-            const totalRegistros = document.getElementById('totalRegistros');
-            const totalKwh = document.getElementById('totalKwh');
-            const totalPendiente = document.getElementById('totalPendiente');
 
-            const electricidadId = document.getElementById('electricidadId');
-            const electricidadFecha = document.getElementById('electricidadFecha');
-            const electricidadEmpresa = document.getElementById('electricidadEmpresa');
-            const electricidadSucursal = document.getElementById('electricidadSucursal');
-            const electricidadContrato = document.getElementById('electricidadContrato');
-            const electricidadMedidor = document.getElementById('electricidadMedidor');
-            const electricidadLecturaAnterior = document.getElementById('electricidadLecturaAnterior');
-            const electricidadLecturaActual = document.getElementById('electricidadLecturaActual');
-            const electricidadAjuste = document.getElementById('electricidadAjuste');
-            const electricidadTarifa = document.getElementById('electricidadTarifa');
-            const electricidadOtros = document.getElementById('electricidadOtros');
-            const electricidadImpuestos = document.getElementById('electricidadImpuestos');
-            const electricidadConsumoPreview = document.getElementById('electricidadConsumoPreview');
-            const electricidadTotalPreview = document.getElementById('electricidadTotalPreview');
-            const electricidadPagado = document.getElementById('electricidadPagado');
-            const electricidadFechaPago = document.getElementById('electricidadFechaPago');
-            const electricidadReferenciaPago = document.getElementById('electricidadReferenciaPago');
-            const electricidadObservacion = document.getElementById('electricidadObservacion');
-            const wrapFechaPago = document.getElementById('wrapFechaPago');
-            const wrapReferenciaPago = document.getElementById('wrapReferenciaPago');
+            const segDesde = document.getElementById('filtroSegDesde');
+            const segHasta = document.getElementById('filtroSegHasta');
+            const btnFiltrarSeguimiento = document.getElementById('btnFiltrarSeguimiento');
+            const formSeguimiento = document.getElementById('formSeguimientoDia');
+            const tablaSeguimientoBody = document.querySelector('#tablaSeguimientoDia tbody');
+            const buscarSegAgencia = document.getElementById('buscarSegAgencia');
 
-            function formatMoney(value) {
-                const number = parseFloat(value || '0') || 0;
-                return number.toFixed(2);
-            }
+            const aveDesde = document.getElementById('filtroAveDesde');
+            const aveHasta = document.getElementById('filtroAveHasta');
+            const btnFiltrarAverias = document.getElementById('btnFiltrarAverias');
+            const formAverias = document.getElementById('formAveriasDia');
+            const tablaAveriasBody = document.querySelector('#tablaAveriasDia tbody');
+            const buscarAveAgencia = document.getElementById('buscarAveAgencia');
 
-            function formatKwh(value) {
-                const number = parseFloat(value || '0') || 0;
-                return number.toFixed(3);
-            }
+            let dtSeguimiento = null;
+            let dtAverias = null;
 
-            function recalcularPreview() {
-                const lecturaAnterior = parseFloat(electricidadLecturaAnterior.value || '0') || 0;
-                const lecturaActual = parseFloat(electricidadLecturaActual.value || '0') || 0;
-                const ajuste = parseFloat(electricidadAjuste.value || '0') || 0;
-                const tarifa = parseFloat(electricidadTarifa.value || '0') || 0;
-                const otros = parseFloat(electricidadOtros.value || '0') || 0;
-                const impuestos = parseFloat(electricidadImpuestos.value || '0') || 0;
-
-                const consumo = Math.max(0, (lecturaActual - lecturaAnterior) + ajuste);
-                const subtotal = consumo * tarifa;
-                const total = subtotal + otros + impuestos;
-
-                electricidadConsumoPreview.value = formatKwh(consumo);
-                electricidadTotalPreview.value = formatMoney(total);
-            }
-
-            function togglePagoFields() {
-                const visible = !!electricidadPagado.checked;
-                wrapFechaPago.classList.toggle('d-none', !visible);
-                wrapReferenciaPago.classList.toggle('d-none', !visible);
-                if (!visible) {
-                    electricidadFechaPago.value = '';
-                    electricidadReferenciaPago.value = '';
-                }
-            }
-
-            function resetModal() {
-                electricidadId.value = '';
-                document.getElementById('electricidadModalLabel').textContent = 'Nuevo registro de electricidad';
-                electricidadFecha.value = '';
-                electricidadEmpresa.value = '';
-                electricidadSucursal.value = '';
-                electricidadContrato.value = '';
-                electricidadMedidor.value = '';
-                electricidadLecturaAnterior.value = '0';
-                electricidadLecturaActual.value = '0';
-                electricidadAjuste.value = '0';
-                electricidadTarifa.value = '0';
-                electricidadOtros.value = '0';
-                electricidadImpuestos.value = '0';
-                electricidadPagado.checked = false;
-                electricidadFechaPago.value = '';
-                electricidadReferenciaPago.value = '';
-                electricidadObservacion.value = '';
-                togglePagoFields();
-                recalcularPreview();
-            }
-
-            function llenarModalParaEditar(item) {
-                electricidadId.value = item.id || '';
-                document.getElementById('electricidadModalLabel').textContent = 'Editar registro de electricidad';
-                electricidadFecha.value = item.fecha_factura || '';
-                electricidadEmpresa.value = item.empresa || '';
-                electricidadSucursal.value = item.sucursal || '';
-                electricidadContrato.value = item.contrato || '';
-                electricidadMedidor.value = item.medidor || '';
-                electricidadLecturaAnterior.value = item.lectura_anterior ?? 0;
-                electricidadLecturaActual.value = item.lectura_actual ?? 0;
-                electricidadAjuste.value = item.ajuste_kwh ?? 0;
-                electricidadTarifa.value = item.tarifa_kwh ?? 0;
-                electricidadOtros.value = item.otros_cargos ?? 0;
-                electricidadImpuestos.value = item.impuestos ?? 0;
-                electricidadPagado.checked = !!item.pagado;
-                electricidadFechaPago.value = item.fecha_pago || '';
-                electricidadReferenciaPago.value = item.referencia_pago || '';
-                electricidadObservacion.value = item.observacion || '';
-                togglePagoFields();
-                recalcularPreview();
-            }
-
-            function obtenerFiltros() {
-                const params = new URLSearchParams();
-                if ((filtroMes.value || '').trim() !== '') {
-                    params.set('mes', filtroMes.value.trim());
-                }
-                if ((filtroEmpresa.value || '').trim() !== '') {
-                    params.set('empresa', filtroEmpresa.value.trim());
-                }
-                params.set('pagado', (filtroPagado.value || 'todos').trim());
-                return params;
-            }
-
-            function pintarTabla(items) {
-                tablaBody.innerHTML = '';
-
-                items.forEach(function (item) {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${item.fecha_factura || ''}</td>
-                        <td>${item.empresa || ''}</td>
-                        <td>${item.sucursal || ''}</td>
-                        <td>${item.contrato || ''}</td>
-                        <td class="text-end">${formatKwh(item.lectura_anterior)}</td>
-                        <td class="text-end">${formatKwh(item.lectura_actual)}</td>
-                        <td class="text-end">${formatKwh(item.ajuste_kwh)}</td>
-                        <td class="text-end fw-semibold">${formatKwh(item.consumo_kwh)}</td>
-                        <td class="text-end">${formatMoney(item.tarifa_kwh)}</td>
-                        <td class="text-end fw-semibold">${formatMoney(item.total_factura)}</td>
-                        <td class="text-center">${item.pagado ? '<span class="badge bg-success-subtle text-success">Pagado</span>' : '<span class="badge bg-warning-subtle text-warning">Pendiente</span>'}</td>
-                        <td class="text-center">
-                            <button class="btn btn-sm btn-primary me-1 btn-editar-electricidad">Editar</button>
-                            <button class="btn btn-sm btn-danger btn-eliminar-electricidad">Eliminar</button>
-                        </td>
-                    `;
-
-                    row.querySelector('.btn-editar-electricidad')?.addEventListener('click', function () {
-                        llenarModalParaEditar(item);
-                        electricidadModal.show();
-                    });
-
-                    row.querySelector('.btn-eliminar-electricidad')?.addEventListener('click', async function () {
-                        if (!confirm('¿Deseas eliminar este registro de electricidad?')) {
-                            return;
-                        }
-
-                        try {
-                            const response = await fetch('/contabilidad/electricidad/' + item.id, {
-                                method: 'DELETE',
-                                headers: {
-                                    'X-CSRF-TOKEN': csrfToken,
-                                    'Accept': 'application/json',
-                                },
-                            });
-
-                            const payload = await response.json().catch(function () { return {}; });
-                            if (!response.ok) {
-                                throw new Error(payload.message || 'No se pudo eliminar el registro.');
-                            }
-
-                            await cargarElectricidad();
-                        } catch (error) {
-                            alert(error.message || 'No se pudo eliminar el registro.');
-                        }
-                    });
-
-                    tablaBody.appendChild(row);
-                });
-
-                if ($.fn.DataTable.isDataTable('#tablaElectricidad')) {
-                    $('#tablaElectricidad').DataTable().destroy();
+            function initDataTable(selector) {
+                if ($.fn.DataTable.isDataTable(selector)) {
+                    $(selector).DataTable().destroy();
                 }
 
-                $('#tablaElectricidad').DataTable({
+                return $(selector).DataTable({
                     responsive: true,
                     scrollX: true,
                     order: [[0, 'desc']],
@@ -408,10 +235,20 @@
                 });
             }
 
-            async function cargarElectricidad() {
-                const params = obtenerFiltros();
+            function getQuery(fechaDesde, fechaHasta) {
+                const params = new URLSearchParams();
+                if ((fechaDesde || '').trim() !== '') {
+                    params.set('fecha_desde', fechaDesde.trim());
+                }
+                if ((fechaHasta || '').trim() !== '') {
+                    params.set('fecha_hasta', fechaHasta.trim());
+                }
                 const query = params.toString();
-                const url = '/contabilidad/electricidad/data' + (query !== '' ? ('?' + query) : '');
+                return query !== '' ? ('?' + query) : '';
+            }
+
+            async function cargarSeguimientoDia() {
+                const url = '/contabilidad/electricidad/seguimiento-dia/data' + getQuery(segDesde.value, segHasta.value);
 
                 const response = await fetch(url, {
                     headers: {
@@ -421,48 +258,92 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('No se pudo cargar la data de electricidad.');
+                    throw new Error('No se pudo cargar seguimiento por dia.');
                 }
 
                 const payload = await response.json();
-                pintarTabla(payload.data || []);
+                tablaSeguimientoBody.innerHTML = '';
 
-                const resumen = payload.resumen || {};
-                totalRegistros.textContent = String(resumen.registros || 0);
-                totalKwh.textContent = formatKwh(resumen.kwh_total || 0);
-                totalPendiente.textContent = formatMoney(resumen.monto_pendiente || 0);
+                (payload.data || []).forEach(function (item) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.fecha_solicitud || ''}</td>
+                        <td>${item.distribuidora || ''}</td>
+                        <td>${item.nic || ''}</td>
+                        <td>${item.agencia || ''}</td>
+                        <td>${item.ruta || ''}</td>
+                        <td>${item.observaciones || ''}</td>
+                    `;
+
+                    tablaSeguimientoBody.appendChild(row);
+                });
+
+                dtSeguimiento = initDataTable('#tablaSeguimientoDia');
+
+                const termino = (buscarSegAgencia?.value || '').trim();
+                dtSeguimiento.column(3).search(termino).draw();
             }
 
-            async function guardarElectricidad() {
-                const id = (electricidadId.value || '').trim();
+            async function cargarAveriasDia() {
+                const url = '/contabilidad/electricidad/averias-dia/data' + getQuery(aveDesde.value, aveHasta.value);
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error('No se pudo cargar reporte de averias por dia.');
+                }
+
+                const payload = await response.json();
+                tablaAveriasBody.innerHTML = '';
+
+                (payload.data || []).forEach(function (item) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.fecha_reporte || ''}</td>
+                        <td>${item.reporte || ''}</td>
+                        <td>${item.distribuidora || ''}</td>
+                        <td>${item.nic || ''}</td>
+                        <td>${item.agencia || ''}</td>
+                        <td>${item.ruta || ''}</td>
+                        <td>${item.coordinadores || ''}</td>
+                        <td>${item.agente_venta_am || ''}</td>
+                        <td>${item.agente_venta_pm || ''}</td>
+                        <td>${item.observaciones || ''}</td>
+                    `;
+
+                    tablaAveriasBody.appendChild(row);
+                });
+
+                dtAverias = initDataTable('#tablaAveriasDia');
+
+                const termino = (buscarAveAgencia?.value || '').trim();
+                dtAverias.column(4).search(termino).draw();
+            }
+
+            formSeguimiento?.addEventListener('submit', async function (event) {
+                event.preventDefault();
+
                 const payload = {
-                    fecha_factura: electricidadFecha.value,
-                    empresa: electricidadEmpresa.value,
-                    sucursal: electricidadSucursal.value.trim(),
-                    contrato: electricidadContrato.value.trim(),
-                    medidor: electricidadMedidor.value.trim(),
-                    lectura_anterior: electricidadLecturaAnterior.value,
-                    lectura_actual: electricidadLecturaActual.value,
-                    ajuste_kwh: electricidadAjuste.value,
-                    tarifa_kwh: electricidadTarifa.value,
-                    otros_cargos: electricidadOtros.value,
-                    impuestos: electricidadImpuestos.value,
-                    pagado: electricidadPagado.checked ? 1 : 0,
-                    fecha_pago: electricidadPagado.checked ? electricidadFechaPago.value : null,
-                    referencia_pago: electricidadPagado.checked ? electricidadReferenciaPago.value.trim() : null,
-                    observacion: electricidadObservacion.value.trim(),
+                    fecha_solicitud: document.getElementById('segFechaSolicitud').value,
+                    distribuidora: document.getElementById('segDistribuidora').value.trim(),
+                    nic: document.getElementById('segNic').value.trim(),
+                    agencia: document.getElementById('segAgencia').value.trim(),
+                    ruta: document.getElementById('segRuta').value.trim(),
+                    observaciones: document.getElementById('segObservaciones').value.trim(),
                 };
 
-                if (!payload.fecha_factura || !payload.empresa || !payload.sucursal) {
-                    alert('Fecha, empresa y sucursal son obligatorias.');
+                if (!payload.fecha_solicitud || !payload.distribuidora || !payload.nic || !payload.agencia || !payload.ruta) {
+                    alert('Completa todos los campos obligatorios de seguimiento.');
                     return;
                 }
 
-                const method = id === '' ? 'POST' : 'PUT';
-                const url = id === '' ? '/contabilidad/electricidad' : ('/contabilidad/electricidad/' + id);
-
-                const response = await fetch(url, {
-                    method: method,
+                const response = await fetch('/contabilidad/electricidad/seguimiento-dia', {
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
@@ -475,43 +356,82 @@
                 const json = await response.json().catch(function () { return {}; });
                 if (!response.ok) {
                     const firstValidation = json?.errors ? Object.values(json.errors)[0]?.[0] : '';
-                    throw new Error(firstValidation || json.message || 'No se pudo guardar el registro.');
+                    throw new Error(firstValidation || json.message || 'No se pudo guardar el seguimiento.');
                 }
 
-                electricidadModal.hide();
-                await cargarElectricidad();
-            }
-
-            btnNuevo?.addEventListener('click', function () {
-                resetModal();
-                electricidadModal.show();
+                formSeguimiento.reset();
+                await cargarSeguimientoDia();
             });
 
-            btnFiltrar?.addEventListener('click', function () {
-                cargarElectricidad().catch(function (error) {
-                    alert(error.message || 'No se pudo filtrar la data.');
+            formAverias?.addEventListener('submit', async function (event) {
+                event.preventDefault();
+
+                const payload = {
+                    fecha_reporte: document.getElementById('aveFechaReporte').value,
+                    reporte: document.getElementById('aveReporte').value.trim(),
+                    distribuidora: document.getElementById('aveDistribuidora').value.trim(),
+                    nic: document.getElementById('aveNic').value.trim(),
+                    agencia: document.getElementById('aveAgencia').value.trim(),
+                    ruta: document.getElementById('aveRuta').value.trim(),
+                    coordinadores: document.getElementById('aveCoordinadores').value.trim(),
+                    agente_venta_am: document.getElementById('aveAgenteAm').value.trim(),
+                    agente_venta_pm: document.getElementById('aveAgentePm').value.trim(),
+                    observaciones: document.getElementById('aveObservaciones').value.trim(),
+                };
+
+                if (!payload.fecha_reporte || !payload.reporte || !payload.distribuidora || !payload.nic || !payload.agencia || !payload.ruta) {
+                    alert('Completa todos los campos obligatorios de averias.');
+                    return;
+                }
+
+                const response = await fetch('/contabilidad/electricidad/averias-dia', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const json = await response.json().catch(function () { return {}; });
+                if (!response.ok) {
+                    const firstValidation = json?.errors ? Object.values(json.errors)[0]?.[0] : '';
+                    throw new Error(firstValidation || json.message || 'No se pudo guardar el reporte de averia.');
+                }
+
+                formAverias.reset();
+                await cargarAveriasDia();
+            });
+
+            btnFiltrarSeguimiento?.addEventListener('click', function () {
+                cargarSeguimientoDia().catch(function (error) {
+                    alert(error.message || 'No se pudo filtrar seguimiento.');
                 });
             });
 
-            [
-                electricidadLecturaAnterior,
-                electricidadLecturaActual,
-                electricidadAjuste,
-                electricidadTarifa,
-                electricidadOtros,
-                electricidadImpuestos,
-            ].forEach(function (input) {
-                input?.addEventListener('input', recalcularPreview);
-            });
-
-            electricidadPagado?.addEventListener('change', togglePagoFields);
-            btnGuardar?.addEventListener('click', function () {
-                guardarElectricidad().catch(function (error) {
-                    alert(error.message || 'No se pudo guardar el registro.');
+            btnFiltrarAverias?.addEventListener('click', function () {
+                cargarAveriasDia().catch(function (error) {
+                    alert(error.message || 'No se pudo filtrar averias.');
                 });
             });
 
-            resetModal();
+            buscarSegAgencia?.addEventListener('input', function () {
+                if (!dtSeguimiento) {
+                    return;
+                }
+
+                dtSeguimiento.column(3).search((this.value || '').trim()).draw();
+            });
+
+            buscarAveAgencia?.addEventListener('input', function () {
+                if (!dtAverias) {
+                    return;
+                }
+
+                dtAverias.column(4).search((this.value || '').trim()).draw();
+            });
         });
     </script>
 @endsection

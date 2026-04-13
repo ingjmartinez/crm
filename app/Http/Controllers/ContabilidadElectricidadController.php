@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ContabilidadElectricidadAveriaDia;
 use App\Models\ContabilidadElectricidad;
+use App\Models\ContabilidadElectricidadSeguimientoDia;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -155,5 +157,149 @@ class ContabilidadElectricidadController extends Controller
         }
 
         return $validated;
+    }
+
+    public function seguimientoDiaData(Request $request)
+    {
+        $validated = $request->validate([
+            'fecha_desde' => ['nullable', 'date_format:Y-m-d'],
+            'fecha_hasta' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $query = ContabilidadElectricidadSeguimientoDia::query();
+
+        if (!empty($validated['fecha_desde'])) {
+            $query->whereDate('fecha_solicitud', '>=', $validated['fecha_desde']);
+        }
+
+        if (!empty($validated['fecha_hasta'])) {
+            $query->whereDate('fecha_solicitud', '<=', $validated['fecha_hasta']);
+        }
+
+        $rows = $query
+            ->orderByDesc('fecha_solicitud')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (ContabilidadElectricidadSeguimientoDia $item) {
+                return [
+                    'id' => $item->id,
+                    'fecha_solicitud' => optional($item->fecha_solicitud)->format('Y-m-d'),
+                    'distribuidora' => (string) $item->distribuidora,
+                    'nic' => (string) $item->nic,
+                    'agencia' => (string) $item->agencia,
+                    'ruta' => (string) $item->ruta,
+                    'observaciones' => (string) ($item->observaciones ?? ''),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'data' => $rows,
+            'total' => $rows->count(),
+        ]);
+    }
+
+    public function storeSeguimientoDia(Request $request)
+    {
+        $validated = $request->validate([
+            'fecha_solicitud' => ['required', 'date_format:Y-m-d'],
+            'distribuidora' => ['required', 'string', 'max:120'],
+            'nic' => ['required', 'string', 'max:80'],
+            'agencia' => ['required', 'string', 'max:150'],
+            'ruta' => ['required', 'string', 'max:150'],
+            'observaciones' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        ContabilidadElectricidadSeguimientoDia::create($validated);
+
+        return response()->json([
+            'message' => 'Seguimiento diario guardado correctamente.',
+        ]);
+    }
+
+    public function destroySeguimientoDia(int $id)
+    {
+        $registro = ContabilidadElectricidadSeguimientoDia::query()->findOrFail($id);
+        $registro->delete();
+
+        return response()->json([
+            'message' => 'Registro eliminado correctamente.',
+        ]);
+    }
+
+    public function averiasDiaData(Request $request)
+    {
+        $validated = $request->validate([
+            'fecha_desde' => ['nullable', 'date_format:Y-m-d'],
+            'fecha_hasta' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $query = ContabilidadElectricidadAveriaDia::query();
+
+        if (!empty($validated['fecha_desde'])) {
+            $query->whereDate('fecha_reporte', '>=', $validated['fecha_desde']);
+        }
+
+        if (!empty($validated['fecha_hasta'])) {
+            $query->whereDate('fecha_reporte', '<=', $validated['fecha_hasta']);
+        }
+
+        $rows = $query
+            ->orderByDesc('fecha_reporte')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (ContabilidadElectricidadAveriaDia $item) {
+                return [
+                    'id' => $item->id,
+                    'fecha_reporte' => optional($item->fecha_reporte)->format('Y-m-d'),
+                    'reporte' => (string) $item->reporte,
+                    'distribuidora' => (string) $item->distribuidora,
+                    'nic' => (string) $item->nic,
+                    'agencia' => (string) $item->agencia,
+                    'ruta' => (string) $item->ruta,
+                    'coordinadores' => (string) ($item->coordinadores ?? ''),
+                    'agente_venta_am' => (string) ($item->agente_venta_am ?? ''),
+                    'agente_venta_pm' => (string) ($item->agente_venta_pm ?? ''),
+                    'observaciones' => (string) ($item->observaciones ?? ''),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'data' => $rows,
+            'total' => $rows->count(),
+        ]);
+    }
+
+    public function storeAveriasDia(Request $request)
+    {
+        $validated = $request->validate([
+            'fecha_reporte' => ['required', 'date_format:Y-m-d'],
+            'reporte' => ['required', 'string', 'max:120'],
+            'distribuidora' => ['required', 'string', 'max:120'],
+            'nic' => ['required', 'string', 'max:80'],
+            'agencia' => ['required', 'string', 'max:150'],
+            'ruta' => ['required', 'string', 'max:150'],
+            'coordinadores' => ['nullable', 'string', 'max:180'],
+            'agente_venta_am' => ['nullable', 'string', 'max:180'],
+            'agente_venta_pm' => ['nullable', 'string', 'max:180'],
+            'observaciones' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        ContabilidadElectricidadAveriaDia::create($validated);
+
+        return response()->json([
+            'message' => 'Reporte de averia guardado correctamente.',
+        ]);
+    }
+
+    public function destroyAveriasDia(int $id)
+    {
+        $registro = ContabilidadElectricidadAveriaDia::query()->findOrFail($id);
+        $registro->delete();
+
+        return response()->json([
+            'message' => 'Registro eliminado correctamente.',
+        ]);
     }
 }

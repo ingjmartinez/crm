@@ -77,6 +77,12 @@ Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
     Route::post('/electricidad', [ContabilidadElectricidadController::class, 'store'])->name('electricidad.store');
     Route::put('/electricidad/{electricidad}', [ContabilidadElectricidadController::class, 'update'])->name('electricidad.update');
     Route::delete('/electricidad/{electricidad}', [ContabilidadElectricidadController::class, 'destroy'])->name('electricidad.destroy');
+    Route::get('/electricidad/seguimiento-dia/data', [ContabilidadElectricidadController::class, 'seguimientoDiaData'])->name('electricidad.seguimiento-dia.data');
+    Route::post('/electricidad/seguimiento-dia', [ContabilidadElectricidadController::class, 'storeSeguimientoDia'])->name('electricidad.seguimiento-dia.store');
+    Route::delete('/electricidad/seguimiento-dia/{id}', [ContabilidadElectricidadController::class, 'destroySeguimientoDia'])->name('electricidad.seguimiento-dia.destroy');
+    Route::get('/electricidad/averias-dia/data', [ContabilidadElectricidadController::class, 'averiasDiaData'])->name('electricidad.averias-dia.data');
+    Route::post('/electricidad/averias-dia', [ContabilidadElectricidadController::class, 'storeAveriasDia'])->name('electricidad.averias-dia.store');
+    Route::delete('/electricidad/averias-dia/{id}', [ContabilidadElectricidadController::class, 'destroyAveriasDia'])->name('electricidad.averias-dia.destroy');
     Route::view('/reportes/comisiones', 'contabilidad.reportes.comisiones')->name('reportes.comisiones');
     Route::get('/reportes/estado-resultado', [ContabilidadEstadoResultadoController::class, 'index'])->name('reportes.estado-resultado');
     Route::get('/reportes/estado-resultado/meta', [ContabilidadEstadoResultadoController::class, 'meta'])->name('reportes.estado-resultado.meta');
@@ -396,6 +402,7 @@ Route::get('/kpi-lotobet/productos-agencia', [KpiLotobetController::class, 'getP
 
 // ═══ Módulo de Tareas ═══
 Route::get('/tareas', [TareaController::class, 'index'])->name('tareas.index');
+Route::view('/tareas/proyecto', 'tareas.proyecto')->name('tareas.proyecto');
 Route::get('/tareas/gantt-data', [TareaController::class, 'ganttData'])->name('tareas.gantt');
 Route::get('/tareas/stats', [TareaController::class, 'stats'])->name('tareas.stats');
 Route::get('/tareas-list', [TareaController::class, 'list'])->name('tareas.list');

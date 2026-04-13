@@ -784,6 +784,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a href="{{ route('tareas.proyecto') }}" class="nav-link">
+                                <i class="ri-kanban-view"></i> <span data-key="t-proyecto">Proyecto</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a href="#sidebarMantenimientos" class="nav-link collapsed" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="sidebarMantenimientos"
                                 data-key="t-mantenimientos">
