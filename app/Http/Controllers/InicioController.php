@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class InicioController extends Controller
 {
@@ -99,7 +100,21 @@ class InicioController extends Controller
         $cacheKey = 'inicio_resumen_ventas:v7:' . sha1($fechaInicio->toDateString() . '|' . $fechaFin->toDateString() . '|' . mb_strtolower($empresa));
 
         return Cache::remember($cacheKey, now()->addMinutes(60), function () use ($fechaInicio, $fechaFin, $empresa) {
-            return $this->calcularResumenVentas($fechaInicio, $fechaFin, $empresa);
+            try {
+                return $this->calcularResumenVentas($fechaInicio, $fechaFin, $empresa);
+            } catch (\Throwable $e) {
+                Log::error('InicioController: fallo al calcular resumen de ventas', [
+                    'fecha_inicio' => $fechaInicio->toDateString(),
+                    'fecha_fin' => $fechaFin->toDateString(),
+                    'empresa' => $empresa,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $fallback = $this->emptyResumenVentas();
+                $fallback['balance_mensual'] = $this->buildBalanceMensualVacio($fechaFin->copy()->startOfDay());
+
+                return $fallback;
+            }
         });
     }
 
@@ -201,12 +216,22 @@ class InicioController extends Controller
             ->values()
             ->all();
 
-        $resumen['balance_mensual'] = $this->getBalanceMensualPorDia(
-            $fechaFin->copy()->startOfDay(),
-            $empresa,
-            $catalogoProductos,
-            $agenciasActivasMap
-        );
+        try {
+            $resumen['balance_mensual'] = $this->getBalanceMensualPorDia(
+                $fechaFin->copy()->startOfDay(),
+                $empresa,
+                $catalogoProductos,
+                $agenciasActivasMap
+            );
+        } catch (\Throwable $e) {
+            Log::warning('InicioController: fallo en balance mensual, se aplica fallback', [
+                'fecha' => $fechaFin->toDateString(),
+                'empresa' => $empresa,
+                'error' => $e->getMessage(),
+            ]);
+
+            $resumen['balance_mensual'] = $this->buildBalanceMensualVacio($fechaFin->copy()->startOfDay());
+        }
 
         return $resumen;
     }
@@ -499,6 +524,37 @@ class InicioController extends Controller
                     'registros' => 0,
                     'tipos' => $tipos,
                 ],
+            ],
+        ];
+    }
+
+    private function buildBalanceMensualVacio(Carbon $fechaSeleccionada): array
+    {
+        $inicioMes = $fechaSeleccionada->copy()->startOfMonth();
+        $finMes = $fechaSeleccionada->copy()->endOfMonth();
+
+        $dias = [];
+        $ingresos = [];
+        $gastos = [];
+        $margen = [];
+
+        $cursor = $inicioMes->copy();
+        while ($cursor->lte($finMes)) {
+            $dias[] = $cursor->format('d');
+            $ingresos[] = 0.0;
+            $gastos[] = 0.0;
+            $margen[] = 0.0;
+            $cursor->addDay();
+        }
+
+        return [
+            'dias' => $dias,
+            'ingresos' => $ingresos,
+            'gastos' => $gastos,
+            'margen' => $margen,
+            'periodo' => [
+                'inicio' => $inicioMes->toDateString(),
+                'fin' => $finMes->toDateString(),
             ],
         ];
     }
