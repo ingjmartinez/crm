@@ -717,6 +717,38 @@
                             </div>
                         </li>
                         <li class="nav-item">
+                            <a href="#sidebarProcesos" class="nav-link collapsed" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="sidebarProcesos"
+                                data-key="t-procesos">
+                                <i class="ri-flow-chart"></i> <span data-key="t-procesos">Procesos</span>
+                            </a>
+                            <div class="collapse menu-dropdown" id="sidebarProcesos">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ route('procesos.departamento', ['departamento' => 'gerencia']) }}" class="nav-link">Gerencia</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('procesos.departamento', ['departamento' => 'contabilidad']) }}" class="nav-link">Contabilidad</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('procesos.departamento', ['departamento' => 'recursos-humanos']) }}" class="nav-link">Recursos Humanos</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('procesos.departamento', ['departamento' => 'operaciones']) }}" class="nav-link">Operaciones</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('procesos.departamento', ['departamento' => 'comercial']) }}" class="nav-link">Comercial</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('procesos.departamento', ['departamento' => 'mantenimiento']) }}" class="nav-link">Mantenimiento</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('procesos.departamento', ['departamento' => 'tecnologia']) }}" class="nav-link">Tecnologia</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        <li class="nav-item">
                             <a href="#sidebarEmpleados" class="nav-link collapsed" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="sidebarEmpleados"
                                 data-key="t-invoices">

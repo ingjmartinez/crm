@@ -28,6 +28,7 @@ use App\Http\Controllers\PagoPorOtraEmpresaController;
 use App\Http\Controllers\PaqueticoController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PremioController;
+use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\RecargasController;
 use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\ReporteController;
@@ -69,6 +70,14 @@ Route::middleware('auth')->group(function () {
 
 Route::get('/', [InicioController::class, 'index'])->name('inicio.index');
 Route::get('/inicio/ventas-data', [InicioController::class, 'ventasData'])->name('inicio.ventas-data');
+
+Route::get('/procesos', [ProcesoController::class, 'index'])->name('procesos.index');
+Route::get('/procesos/{departamento}', [ProcesoController::class, 'departamento'])->name('procesos.departamento');
+Route::post('/procesos/protocolo', [ProcesoController::class, 'guardarProtocolo'])->name('procesos.guardarProtocolo');
+Route::post('/procesos/base/actualizar', [ProcesoController::class, 'actualizarProcesoBase'])->name('procesos.actualizarProcesoBase');
+Route::post('/procesos/crear', [ProcesoController::class, 'crearProceso'])->name('procesos.crearProceso');
+Route::put('/procesos/{id}', [ProcesoController::class, 'actualizarProceso'])->name('procesos.actualizarProceso');
+Route::delete('/procesos/{id}', [ProcesoController::class, 'eliminarProceso'])->name('procesos.eliminarProceso');
 
 Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
     Route::view('/', 'contabilidad.index')->name('index');
