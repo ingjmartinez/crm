@@ -97,7 +97,9 @@ class InicioController extends Controller
             @set_time_limit(300);
         }
 
-        $cacheKey = 'inicio_resumen_ventas:v7:' . sha1($fechaInicio->toDateString() . '|' . $fechaFin->toDateString() . '|' . mb_strtolower($empresa));
+        $cacheKey = 'inicio_resumen_ventas:v8:' . sha1(
+            $fechaInicio->toDateTimeString() . '|' . $fechaFin->toDateTimeString() . '|' . mb_strtolower($empresa)
+        );
 
         return Cache::remember($cacheKey, now()->addMinutes(60), function () use ($fechaInicio, $fechaFin, $empresa) {
             try {
@@ -279,7 +281,7 @@ class InicioController extends Controller
                 ->selectRaw('DATE(v.fecha) AS fecha')
                 ->selectRaw('v.producto_id')
                 ->selectRaw('SUM(COALESCE(v.monto, 0)) AS total')
-                ->whereBetween('v.fecha', [$inicioMes->toDateString(), $finMes->toDateString()])
+                ->whereBetween('v.fecha', [$inicioMes->toDateTimeString(), $finMes->toDateTimeString()])
                 ->whereIn(DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'), $agenciasActivas)
                 ->groupByRaw('DATE(v.fecha), v.producto_id')
                 ->get();
@@ -337,7 +339,7 @@ class InicioController extends Controller
             ->selectRaw('MAX(v.tipo) AS tipo')
             ->selectRaw('SUM(COALESCE(v.monto, 0)) AS total')
             ->selectRaw('COUNT(*) AS registros')
-            ->whereBetween('v.fecha', [$fechaInicio->toDateString(), $fechaFin->toDateString()])
+            ->whereBetween('v.fecha', [$fechaInicio->toDateTimeString(), $fechaFin->toDateTimeString()])
             ->groupByRaw("TRIM(CAST(v.agencia_id AS CHAR)), v.producto_id")
             ->get();
 
