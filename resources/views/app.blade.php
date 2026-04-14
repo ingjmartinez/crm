@@ -40,6 +40,52 @@
     <link href="{{ asset('css/mobile.css') }}" rel="stylesheet" type="text/css" />
 
     <style>
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body,
+        .main-content,
+        .page-content,
+        #scrollbar,
+        #scrollbar .simplebar-content-wrapper,
+        [data-simplebar] .simplebar-content-wrapper {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+
+        #scrollbar,
+        #scrollbar .simplebar-content-wrapper {
+            overscroll-behavior: contain;
+            will-change: scroll-position;
+        }
+
+        #navbar-nav .nav-link,
+        #navbar-nav .menu-link,
+        #navbar-nav .menu-dropdown {
+            transition: background-color 0.18s ease, color 0.18s ease, padding-left 0.18s ease, transform 0.18s ease;
+        }
+
+        #navbar-nav .menu-dropdown .nav-link:hover {
+            transform: translateX(2px);
+        }
+
+        #scrollbar .simplebar-track.simplebar-vertical {
+            width: 8px;
+        }
+
+        #scrollbar .simplebar-scrollbar::before {
+            background: rgba(64, 81, 137, 0.38);
+            border-radius: 999px;
+        }
+
+        .layout-width,
+        .vertical-menu,
+        .main-content {
+            transform: translateZ(0);
+            backface-visibility: hidden;
+        }
+
         .task-notif-item {
             white-space: normal;
         }
@@ -66,6 +112,24 @@
 
         .main-content > .footer {
             display: none !important;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            html,
+            body,
+            .main-content,
+            .page-content,
+            #scrollbar,
+            #scrollbar .simplebar-content-wrapper,
+            [data-simplebar] .simplebar-content-wrapper {
+                scroll-behavior: auto;
+            }
+
+            #navbar-nav .nav-link,
+            #navbar-nav .menu-link,
+            #navbar-nav .menu-dropdown {
+                transition: none;
+            }
         }
     </style>
 
@@ -819,6 +883,21 @@
                             <a href="{{ route('tareas.proyecto') }}" class="nav-link">
                                 <i class="ri-stack-line"></i> <span data-key="t-proyecto">Proyecto</span>
                             </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link menu-link collapsed" href="#sidebarTecnologia" data-bs-toggle="collapse"
+                                role="button" aria-expanded="false" aria-controls="sidebarTecnologia">
+                                <i class="ri-computer-line"></i> <span data-key="t-tecnologia">Tecnologia</span>
+                            </a>
+                            <div class="collapse menu-dropdown" id="sidebarTecnologia">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ route('tecnologia.solicitudes.index') }}" class="nav-link" data-key="t-tecnologia-solicitudes">
+                                            Solicitudes
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
                         </li>
                         <li class="nav-item">
                             <a href="#sidebarMantenimientos" class="nav-link collapsed" data-bs-toggle="collapse"

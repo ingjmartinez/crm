@@ -486,12 +486,13 @@ class TareaController extends Controller
     public function listNotificaciones()
     {
         $user = auth()->user();
+        $modulosPermitidos = ['tareas', 'tecnologia'];
 
         $notificaciones = $user->notifications()
             ->latest()
             ->take(15)
             ->get()
-            ->filter(fn($notification) => ($notification->data['module'] ?? null) === 'tareas')
+            ->filter(fn($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
             ->values()
             ->map(function ($notification) {
                 return [
@@ -508,7 +509,7 @@ class TareaController extends Controller
 
         $noLeidas = $user->unreadNotifications()
             ->get()
-            ->filter(fn($notification) => ($notification->data['module'] ?? null) === 'tareas')
+            ->filter(fn($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
             ->count();
 
         return response()->json([
@@ -533,9 +534,11 @@ class TareaController extends Controller
 
     public function marcarTodasLeidas()
     {
+        $modulosPermitidos = ['tareas', 'tecnologia'];
+
         auth()->user()
             ->unreadNotifications
-            ->filter(fn($notification) => ($notification->data['module'] ?? null) === 'tareas')
+            ->filter(fn($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
             ->each
             ->markAsRead();
 

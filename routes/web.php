@@ -36,6 +36,7 @@ use App\Http\Controllers\RutaController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SuperAdminSesionController;
 use App\Http\Controllers\TareaController;
+use App\Http\Controllers\TecnologiaSolicitudController;
 use App\Http\Controllers\TokenController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VentaFlashController;
@@ -378,6 +379,16 @@ Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 
 Route::get('/incentivos/empleados', [EmpleadoController::class, 'incentivos']);
 Route::get('/incentivos/empleados/list', [EmpleadoController::class, 'listEmpleados']);
 Route::post('/incentivos/empleados/update', [EmpleadoController::class, 'updateEmpleadoIncentivo']);
+
+Route::prefix('tecnologia')->name('tecnologia.')->group(function () {
+    Route::get('/solicitudes', [TecnologiaSolicitudController::class, 'index'])->name('solicitudes.index');
+    Route::get('/solicitudes/list', [TecnologiaSolicitudController::class, 'list'])->name('solicitudes.list');
+    Route::post('/solicitudes', [TecnologiaSolicitudController::class, 'store'])->name('solicitudes.store');
+    Route::get('/solicitudes/{solicitud}', [TecnologiaSolicitudController::class, 'show'])->name('solicitudes.show');
+    Route::put('/solicitudes/{solicitud}', [TecnologiaSolicitudController::class, 'update'])->name('solicitudes.update');
+    Route::post('/solicitudes/{solicitud}/solicitar-cierre', [TecnologiaSolicitudController::class, 'solicitarCierre'])->name('solicitudes.solicitar-cierre');
+    Route::post('/solicitudes/{solicitud}/finalizar', [TecnologiaSolicitudController::class, 'finalizar'])->name('solicitudes.finalizar');
+});
 
 Route::get('/generar-lotobet', fn() => view('lotobet.index'));
 Route::get('/generar-lotonet', fn() => view('lotonet.index'));
