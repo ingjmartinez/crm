@@ -7,6 +7,39 @@
             min-height: 142px;
         }
 
+        .sorteo-card {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+            transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
+        }
+
+        .sorteo-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(13, 110, 253, 0.06), rgba(32, 201, 151, 0.02));
+            opacity: 0;
+            transition: opacity 0.28s ease;
+            pointer-events: none;
+        }
+
+        .sorteo-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(13, 110, 253, 0.28);
+            box-shadow: 0 22px 48px rgba(15, 23, 42, 0.16);
+        }
+
+        .sorteo-card:hover::after {
+            opacity: 1;
+        }
+
+        .sorteo-card .card-body {
+            position: relative;
+            z-index: 1;
+        }
+
         .kpi-icon {
             font-size: 2.35rem;
             line-height: 1;
@@ -310,7 +343,7 @@
                                 $rankClass = $rank <= 3 ? 'rank-' . $rank : '';
                             @endphp
                             <div class="col-12 col-md-6 col-xl-4 col-xxl-3 mb-3">
-                                <div class="card h-100">
+                                <div class="card h-100 sorteo-card">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-3">
                                             <h6 class="mb-0 fs-14 text-uppercase pe-2">{{ $producto['nombre'] }}</h6>
@@ -340,7 +373,7 @@
                                 $rankClass = $rank <= 3 ? 'rank-' . $rank : '';
                             @endphp
                             <div class="col-12 col-md-6 col-xl-4 col-xxl-3 mb-3">
-                                <div class="card h-100">
+                                <div class="card h-100 sorteo-card">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-3">
                                             <h6 class="mb-0 fs-14 text-uppercase pe-2">{{ $producto['nombre'] }}</h6>
