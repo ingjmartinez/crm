@@ -116,6 +116,18 @@
                     $balancePeriodoFin = !empty($balanceMensual['periodo']['fin'])
                         ? \Carbon\Carbon::parse($balanceMensual['periodo']['fin'])->format('d/m/Y')
                         : '-';
+                    $crmDashboardData = [
+                        'ventasProductos' => [
+                            'series' => [round($ventaTradicional, 2), round($ventaNoTradicional, 2), round($ventaRecargas, 2)],
+                            'agencias' => [$agenciasTradicional, $agenciasNoTradicional, $agenciasRecargas],
+                        ],
+                        'resumenBalance' => [
+                            'categories' => $balanceMensual['dias'] ?? [],
+                            'ingresos' => $balanceMensual['ingresos'] ?? [],
+                            'gastos' => $balanceMensual['gastos'] ?? [],
+                            'margen' => $balanceMensual['margen'] ?? [],
+                        ],
+                    ];
                 @endphp
 
                 <div class="row mb-3">
@@ -349,6 +361,9 @@
 @endsection
 
 @section('script')
+    <script>
+        window.crmDashboardData = @json($crmDashboardData);
+    </script>
     <script src="{{ asset('libs/apexcharts/apexcharts.min.js') }}"></script>
     <script src="{{ asset('libs/swiper/swiper-bundle.min.js') }}"></script>
     <script src="{{ asset('js/pages/dashboard-crm.init.js') }}?v={{ @filemtime(public_path('js/pages/dashboard-crm.init.js')) ?: time() }}"></script>

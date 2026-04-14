@@ -22,25 +22,62 @@ function getChartColorsArray(chartId) {
     });
 }
 
+function normalizeNumericArray(values, expectedLength) {
+    var source = Array.isArray(values) ? values : [];
+    var normalized = source.map(function (value) {
+        var numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : 0;
+    });
+
+    if (typeof expectedLength === "number" && expectedLength >= 0) {
+        normalized = normalized.slice(0, expectedLength);
+        while (normalized.length < expectedLength) {
+            normalized.push(0);
+        }
+    }
+
+    return normalized;
+}
+
+function getDashboardData(path, fallbackValue) {
+    var source = window.crmDashboardData || {};
+    var current = source;
+
+    for (var i = 0; i < path.length; i++) {
+        if (current == null || typeof current !== "object" || !(path[i] in current)) {
+            return fallbackValue;
+        }
+
+        current = current[path[i]];
+    }
+
+    return current;
+}
+
 (function () {
     var salesColors = getChartColorsArray("sales-forecast-chart");
     var salesChartEl = document.querySelector("#sales-forecast-chart");
 
     if (salesColors && salesChartEl) {
-        var ventasSeries = [];
-        var agenciasSeries = [];
+        var ventasSeries = normalizeNumericArray(getDashboardData(["ventasProductos", "series"], []), 3);
+        var agenciasSeries = normalizeNumericArray(getDashboardData(["ventasProductos", "agencias"], []), 3);
         var isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-        try {
-            ventasSeries = JSON.parse(salesChartEl.getAttribute("data-series") || "[]");
-            agenciasSeries = JSON.parse(salesChartEl.getAttribute("data-agencias") || "[]");
-        } catch (e) {
-            ventasSeries = [];
-            agenciasSeries = [];
+        if (!ventasSeries.some(function (value) { return value > 0; })) {
+            try {
+                ventasSeries = normalizeNumericArray(JSON.parse(salesChartEl.getAttribute("data-series") || "[]"), 3);
+            } catch (e) {
+                ventasSeries = [0, 0, 0];
+            }
         }
 
-        while (ventasSeries.length < 3) ventasSeries.push(0);
-        while (agenciasSeries.length < 3) agenciasSeries.push(0);
+        if (!agenciasSeries.some(function (value) { return value > 0; })) {
+            try {
+                agenciasSeries = normalizeNumericArray(JSON.parse(salesChartEl.getAttribute("data-agencias") || "[]"), 3);
+            } catch (e) {
+                agenciasSeries = [0, 0, 0];
+            }
+        }
 
         var formatAgenciasLabel = function (value) {
             var numeric = Number(value || 0);
@@ -181,12 +218,12 @@ function getChartColorsArray(chartId) {
     var revenueExpensesChartsColors = getChartColorsArray("revenue-expenses-charts");
     if (revenueExpensesChartsColors) {
         var revenueExpensesEl = document.querySelector("#revenue-expenses-charts");
-        var revenueCategories = [];
-        var ingresosData = [];
-        var gastosData = [];
-        var margenData = [];
+        var revenueCategories = getDashboardData(["resumenBalance", "categories"], []);
+        var ingresosData = getDashboardData(["resumenBalance", "ingresos"], []);
+        var gastosData = getDashboardData(["resumenBalance", "gastos"], []);
+        var margenData = getDashboardData(["resumenBalance", "margen"], []);
 
-        if (revenueExpensesEl) {
+        if ((!Array.isArray(revenueCategories) || !revenueCategories.length) && revenueExpensesEl) {
             try {
                 revenueCategories = JSON.parse(revenueExpensesEl.getAttribute("data-categories") || "[]");
                 ingresosData = JSON.parse(revenueExpensesEl.getAttribute("data-ingresos") || "[]");
@@ -206,7 +243,7 @@ function getChartColorsArray(chartId) {
 
         var daysCount = revenueCategories.length;
         var fillToDays = function (arr) {
-            var result = Array.isArray(arr) ? arr.slice(0, daysCount).map(function (value) { return Number(value || 0); }) : [];
+            var result = normalizeNumericArray(arr, daysCount);
             while (result.length < daysCount) result.push(0);
             return result;
         };

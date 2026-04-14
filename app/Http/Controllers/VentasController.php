@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Token;
 use App\Models\VtUsuarioBet;
 use App\Models\VtUsuarioNet;
+use App\Support\InicioVentasCache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -130,6 +131,8 @@ class VentasController extends Controller
             foreach (array_chunk($data, 5000) as $chunk) {
                 DB::table('vt_usuarios_bet')->insert($chunk);
             }
+
+            InicioVentasCache::bust();
         }
 
         return response()->json([
@@ -145,6 +148,7 @@ class VentasController extends Controller
         $fecha = $request->query('fecha');
 
         VtUsuarioBet::whereDate('fecha', $fecha)->delete();
+        InicioVentasCache::bust();
 
         return response()->json([
             'message' => 'Datos eliminados correctamente',
@@ -274,6 +278,8 @@ class VentasController extends Controller
             foreach (array_chunk($data, 5000) as $chunk) {
                 DB::table('vt_usuarios_net')->insert($chunk);
             }
+
+            InicioVentasCache::bust();
         }
 
         return response()->json([
@@ -289,6 +295,7 @@ class VentasController extends Controller
         $fecha = $request->query('fecha');
 
         VtUsuarioNet::whereDate('fecha', $fecha)->delete();
+        InicioVentasCache::bust();
 
         return response()->json([
             'message' => 'Datos eliminados correctamente',

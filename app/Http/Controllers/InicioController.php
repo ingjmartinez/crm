@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\InicioVentasCache;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -97,8 +98,11 @@ class InicioController extends Controller
             @set_time_limit(300);
         }
 
-        $cacheKey = 'inicio_resumen_ventas:v8:' . sha1(
-            $fechaInicio->toDateTimeString() . '|' . $fechaFin->toDateTimeString() . '|' . mb_strtolower($empresa)
+        $cacheKey = 'inicio_resumen_ventas:v9:' . sha1(
+            InicioVentasCache::version() . '|' .
+            $fechaInicio->toDateTimeString() . '|' .
+            $fechaFin->toDateTimeString() . '|' .
+            mb_strtolower($empresa)
         );
 
         return Cache::remember($cacheKey, now()->addMinutes(60), function () use ($fechaInicio, $fechaFin, $empresa) {
