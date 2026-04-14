@@ -1,0 +1,486 @@
+DIAGNOSTICO TECNICO - DASHBOARD / INICIO
+=======================================
+
+1. RUTAS QUE CARGAN LA VISTA DE INICIO
+-------------------------------------
+
+Archivo:
+- routes/web.php
+
+Rutas encontradas:
+- GET / -> InicioController@index
+- GET /inicio/ventas-data -> InicioController@ventasData
+
+Referencias:
+- routes/web.php:71
+- routes/web.php:72
+
+routes/api.php:
+- No hay ruta del dashboard en api.php para este flujo.
+
+
+2. CONTROLADOR ASOCIADO
+-----------------------
+
+Controlador:
+- App\Http\Controllers\InicioController
+
+Metodos involucrados:
+- index(Request $request)
+- ventasData(Request $request)
+
+Referencias:
+- app/Http/Controllers/InicioController.php:13
+- app/Http/Controllers/InicioController.php:28
+
+La vista renderizada es:
+- resources/views/inicio.blade.php
+
+
+3. TODAS LAS CONSULTAS EJECUTADAS POR LA VISTA
+----------------------------------------------
+
+No se usa Eloquent.
+No se usa DB::select.
+No se usan stored procedures.
+Todo el flujo usa Query Builder con DB::table(...).
+
+
+Consulta 1: getEmpresasFiltro()
+--------------------------------
+
+Referencia:
+- app/Http/Controllers/InicioController.php:437
+
+SQL equivalente:
+- SELECT DISTINCT TRIM(empresa) AS empresa
+  FROM agencias
+  WHERE empresa IS NOT NULL
+    AND TRIM(COALESCE(empresa, '')) <> ''
+  ORDER BY empresa
+
+Tablas:
+- agencias
+
+Columnas usadas en WHERE:
+- empresa
+
+Joins:
+- Ninguno
+
+Filtros:
+- Empresas disponibles para el combo del dashboard
+
+
+Consulta 2: getCatalogoProductos()
+----------------------------------
+
+Referencia:
+- app/Http/Controllers/InicioController.php:421
+
+SQL equivalente:
+- SELECT producto_id, tipo, descripcion
+  FROM catalogo_juegos
+
+Tablas:
+- catalogo_juegos
+
+Columnas relevantes:
+- producto_id
+- tipo
+- descripcion
+
+Joins:
+- Ninguno
+
+
+Consulta 3: getAgenciasActivasMap($empresa)
+-------------------------------------------
+
+Referencia:
+- app/Http/Controllers/InicioController.php:451
+
+SQL equivalente:
+- SELECT DISTINCT TRIM(CAST(terminal AS CHAR)) AS agencia_id
+  FROM agencias
+  WHERE estatus = 1
+    AND terminal IS NOT NULL
+    AND TRIM(CAST(terminal AS CHAR)) <> ''
+    AND LOWER(TRIM(COALESCE(empresa, ''))) = ?   -- solo si empresa != 'todos'
+
+Tablas:
+- agencias
+
+Columnas usadas en WHERE:
+- estatus
+- terminal
+- empresa
+
+Joins:
+- Ninguno
+
+Filtros importantes:
+- Solo agencias activas
+- Solo agencias con terminal no vacio
+- El mapeo real del dashboard depende de agencias.terminal
+
+
+Consulta 4: getResumenVentasPorTabla('VT_usuarios_Bet', ...)
+------------------------------------------------------------
+
+Referencia:
+- app/Http/Controllers/InicioController.php:332
+
+SQL equivalente:
+- SELECT
+      TRIM(CAST(v.agencia_id AS CHAR)) AS agencia_id,
+      v.producto_id,
+      MAX(v.tipo) AS tipo,
+      SUM(COALESCE(v.monto, 0)) AS total,
+      COUNT(*) AS registros
+  FROM VT_usuarios_Bet v
+  WHERE v.fecha BETWEEN ? AND ?
+  GROUP BY TRIM(CAST(v.agencia_id AS CHAR)), v.producto_id
+
+Tablas:
+- VT_usuarios_Bet
+
+Columnas usadas en WHERE:
+- fecha
+
+Columnas agrupadas:
+- agencia_id
+- producto_id
+
+Columnas agregadas:
+- monto
+- tipo
+
+Joins:
+- Ninguno en SQL
+
+Filtros posteriores en PHP:
+- Descarta la fila si agencia_id no existe en agenciasActivasMap
+- Clasifica el producto usando catalogo_juegos.tipo o v.tipo
+
+
+Consulta 5: getResumenVentasPorTabla('VT_usuarios_Net', ...)
+------------------------------------------------------------
+
+Referencia:
+- app/Http/Controllers/InicioController.php:332
+
+Misma estructura que la anterior, pero sobre:
+- VT_usuarios_Net
+
+
+Consulta 6: getBalanceMensualPorDia() sobre VT_usuarios_Bet
+-----------------------------------------------------------
+
+Referencia:
+- app/Http/Controllers/InicioController.php:239
+
+SQL equivalente:
+- SELECT
+      DATE(v.fecha) AS fecha,
+      v.producto_id,
+      SUM(COALESCE(v.monto, 0)) AS total
+  FROM VT_usuarios_Bet v
+  WHERE v.fecha BETWEEN ? AND ?
+    AND TRIM(CAST(v.agencia_id AS CHAR)) IN (...)
+  GROUP BY DATE(v.fecha), v.producto_id
+
+Tablas:
+- VT_usuarios_Bet
+
+Columnas usadas en WHERE:
+- fecha
+- agencia_id
+
+Columnas agrupadas:
+- DATE(fecha)
+- producto_id
+
+Joins:
+- Ninguno
+
+
+Consulta 7: getBalanceMensualPorDia() sobre VT_usuarios_Net
+-----------------------------------------------------------
+
+Referencia:
+- app/Http/Controllers/InicioController.php:239
+
+Misma estructura que la anterior, pero sobre:
+- VT_usuarios_Net
+
+
+4. CONDICIONES DE FECHA Y FILTROS IMPORTANTES
+---------------------------------------------
+
+Resolucion de fechas:
+- app/Http/Controllers/InicioController.php:49
+- app/Http/Controllers/InicioController.php:81
+
+Reglas reales:
+- Si llega ?fecha=YYYY-MM-DD:
+  - usa ese mismo dia como inicio y fin logicos
+- Si no llega fecha:
+  - usa now()->subDay()
+
+Problema importante del codigo:
+- El controlador termina consultando con toDateString()
+- Ejemplo:
+  - whereBetween('v.fecha', ['2026-04-12', '2026-04-12'])
+
+Esto es critico si v.fecha es DATETIME en produccion:
+- Puede terminar filtrando solo 2026-04-12 00:00:00
+- No todo el dia
+
+Referencias:
+- app/Http/Controllers/InicioController.php:279
+- app/Http/Controllers/InicioController.php:338
+
+Filtros funcionales adicionales:
+- empresa
+- agencias activas via agencias.estatus = 1
+- coincidencia entre agencias.terminal y ventas.agencia_id
+- clasificacion por producto usando catalogo_juegos.tipo
+
+
+5. CACHE, ENTORNO Y DIFERENCIAS POSIBLES
+----------------------------------------
+
+Cache detectado:
+- Cache::remember(...)
+- app/Http/Controllers/InicioController.php:102
+
+Key:
+- inicio_resumen_ventas:v7:sha1(...)
+
+TTL:
+- 60 minutos
+
+Riesgo:
+- Si produccion cacheo un resultado vacio o incorrecto, lo seguira mostrando
+
+Condiciones por entorno:
+- No se detecto app()->environment()
+- No se detecto env() condicional en este flujo del controlador
+
+Timezone:
+- config/app.php tiene timezone = UTC
+- config/app.php
+
+Esto puede afectar el "now()->subDay()" y el dia que se consulta en produccion.
+
+Manejo de errores:
+- Si falla una consulta, el controlador no rompe la vista
+- Devuelve estructura vacia con ceros
+- Registra en log
+
+Referencias:
+- Log::error(...) en app/Http/Controllers/InicioController.php:106
+- Log::warning(...) en app/Http/Controllers/InicioController.php:227
+
+Esto hace que en el VPS puedas ver todo en cero aunque la consulta este fallando.
+
+
+6. RELACIONES, SCOPES, MUTATORS, ACCESSORS
+------------------------------------------
+
+No hay Eloquent en este flujo.
+No hay relaciones Eloquent.
+No hay scopes.
+No hay mutators.
+No hay accessors.
+
+Todo el comportamiento depende de:
+- Query Builder
+- Arrays
+- Collections
+
+
+7. POSIBLES CAUSAS REALES DE DIFERENCIA ENTRE LOCAL Y VPS
+---------------------------------------------------------
+
+1. Filtro de fecha incorrecto sobre campos DATETIME
+- Sospecha principal
+- Si local tiene DATE y produccion tiene DATETIME, local devuelve datos y VPS no
+
+2. Mapeo de agencias incompatible
+- El dashboard no usa directamente agencia_id como esta en ventas
+- Primero arma un mapa con agencias.terminal
+- Luego descarta cualquier venta cuyo agencia_id no coincida con terminal
+
+3. estatus de agencias en produccion
+- Si agencias.estatus no es 1 en produccion, el mapa de agencias activas queda vacio
+- Eso vacia practicamente todos los widgets
+
+4. producto_id sin catalogo o tipos fuera del set esperado
+- Tipos visibles:
+  - tradicional
+  - no tradicional
+  - no_tradicional
+  - recarga
+  - recargas
+- Todo lo demas cae en "otros" y no alimenta los widgets principales
+
+5. Cache en Laravel
+- Produccion puede seguir mostrando un resumen vacio cacheado
+
+6. Error de consulta silencioso
+- Si alguna tabla/columna falla en el VPS, la vista muestra ceros por fallback
+- Revisar storage/logs/laravel.log
+
+7. Diferencias de nombres de tabla entre Windows y Linux
+- Tablas sensibles:
+  - VT_usuarios_Bet
+  - VT_usuarios_Net
+
+8. Tipos de datos distintos
+- agencia_id puede ser varchar en un ambiente y entero en otro
+- terminal puede venir con espacios, ceros a la izquierda o formato distinto
+
+9. Collation / trim / lower
+- empresa usa LOWER(TRIM(...))
+- Diferencias de collation pueden afectar coincidencias por empresa
+
+
+8. RESUMEN PRACTICO
+-------------------
+
+Consulta probablemente fallando:
+- getResumenVentasPorTabla() sobre VT_usuarios_Bet y VT_usuarios_Net
+- Motivo probable: filtro de fecha usando toDateString() sobre columna DATETIME
+
+Segunda consulta mas sospechosa:
+- getAgenciasActivasMap()
+- Motivo probable: terminal de agencias no coincide con agencia_id de ventas
+
+Tabla a revisar primero:
+- VT_usuarios_Bet
+
+Segunda tabla a revisar:
+- agencias
+
+Campos a validar primero:
+- VT_usuarios_Bet.fecha
+- VT_usuarios_Bet.agencia_id
+- VT_usuarios_Bet.producto_id
+- agencias.terminal
+- agencias.estatus
+- catalogo_juegos.producto_id
+- catalogo_juegos.tipo
+
+
+9. 3 QUERIES SQL PARA VALIDAR RAPIDO EN PRODUCCION
+--------------------------------------------------
+
+QUERY 1: validar si el problema es DATE vs DATETIME
+
+SELECT 'BET' AS sistema,
+       SUM(v.fecha BETWEEN '2026-04-12' AND '2026-04-12') AS rango_codigo_actual,
+       SUM(v.fecha BETWEEN '2026-04-12 00:00:00' AND '2026-04-12 23:59:59') AS rango_dia_real
+FROM VT_usuarios_Bet v
+UNION ALL
+SELECT 'NET' AS sistema,
+       SUM(v.fecha BETWEEN '2026-04-12' AND '2026-04-12') AS rango_codigo_actual,
+       SUM(v.fecha BETWEEN '2026-04-12 00:00:00' AND '2026-04-12 23:59:59') AS rango_dia_real
+FROM VT_usuarios_Net v;
+
+
+QUERY 2: validar si agencia_id mapea con agencias.terminal activas
+
+SELECT 'BET' AS sistema,
+       COUNT(DISTINCT TRIM(CAST(v.agencia_id AS CHAR))) AS agencias_en_ventas,
+       COUNT(DISTINCT CASE
+           WHEN a.estatus = 1 AND TRIM(CAST(a.terminal AS CHAR)) <> ''
+           THEN TRIM(CAST(v.agencia_id AS CHAR))
+       END) AS agencias_mapeadas_activas
+FROM VT_usuarios_Bet v
+LEFT JOIN agencias a
+  ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(v.agencia_id AS CHAR))
+WHERE v.fecha BETWEEN '2026-04-12 00:00:00' AND '2026-04-12 23:59:59'
+UNION ALL
+SELECT 'NET' AS sistema,
+       COUNT(DISTINCT TRIM(CAST(v.agencia_id AS CHAR))) AS agencias_en_ventas,
+       COUNT(DISTINCT CASE
+           WHEN a.estatus = 1 AND TRIM(CAST(a.terminal AS CHAR)) <> ''
+           THEN TRIM(CAST(v.agencia_id AS CHAR))
+       END) AS agencias_mapeadas_activas
+FROM VT_usuarios_Net v
+LEFT JOIN agencias a
+  ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(v.agencia_id AS CHAR))
+WHERE v.fecha BETWEEN '2026-04-12 00:00:00' AND '2026-04-12 23:59:59';
+
+
+QUERY 3: validar si producto_id y tipo estan entrando al dashboard
+
+SELECT 'BET' AS sistema,
+       COUNT(*) AS filas,
+       SUM(cj.producto_id IS NULL) AS sin_catalogo,
+       SUM(LOWER(TRIM(COALESCE(cj.tipo, v.tipo, ''))) IN ('tradicional','no tradicional','no_tradicional','recarga','recargas')) AS tipo_visible_dashboard,
+       SUM(LOWER(TRIM(COALESCE(cj.tipo, v.tipo, ''))) NOT IN ('tradicional','no tradicional','no_tradicional','recarga','recargas')) AS tipo_fuera_dashboard
+FROM VT_usuarios_Bet v
+LEFT JOIN catalogo_juegos cj
+  ON CAST(cj.producto_id AS CHAR) = CAST(v.producto_id AS CHAR)
+WHERE v.fecha BETWEEN '2026-04-12 00:00:00' AND '2026-04-12 23:59:59'
+UNION ALL
+SELECT 'NET' AS sistema,
+       COUNT(*) AS filas,
+       SUM(cj.producto_id IS NULL) AS sin_catalogo,
+       SUM(LOWER(TRIM(COALESCE(cj.tipo, v.tipo, ''))) IN ('tradicional','no tradicional','no_tradicional','recarga','recargas')) AS tipo_visible_dashboard,
+       SUM(LOWER(TRIM(COALESCE(cj.tipo, v.tipo, ''))) NOT IN ('tradicional','no tradicional','no_tradicional','recarga','recargas')) AS tipo_fuera_dashboard
+FROM VT_usuarios_Net v
+LEFT JOIN catalogo_juegos cj
+  ON CAST(cj.producto_id AS CHAR) = CAST(v.producto_id AS CHAR)
+WHERE v.fecha BETWEEN '2026-04-12 00:00:00' AND '2026-04-12 23:59:59';
+
+
+10. HALLAZGO ADICIONAL DE FRONTEND
+----------------------------------
+
+La vista inicio.blade.php carga:
+- public/js/pages/dashboard-crm.init.js
+
+Referencias:
+- resources/views/inicio.blade.php:354
+
+El JS actual espera estas series:
+- Tradicional
+- No Tradicional
+- Recargas
+
+Referencia:
+- public/js/pages/dashboard-crm.init.js:56
+- public/js/pages/dashboard-crm.init.js:220
+
+Si en produccion todavia ves etiquetas como:
+- Goal
+- Pending Forecast
+- Revenue
+- Expenses
+
+entonces ademas del problema de datos hay un problema de despliegue o cache del archivo:
+- public/js/pages/dashboard-crm.init.js
+
+
+CONCLUSION CORTA
+----------------
+
+La causa mas probable en backend es:
+- filtro de fecha incorrecto para columnas DATETIME
+
+La segunda causa mas probable es:
+- ventas.agencia_id no coincide con agencias.terminal activas
+
+La tercera causa probable es:
+- cache o fallback silencioso ocultando el error real
+
+Revision inmediata recomendada en VPS:
+- ejecutar las 3 queries
+- revisar storage/logs/laravel.log
+- limpiar cache de Laravel
+- verificar que public/js/pages/dashboard-crm.init.js sea el archivo actualizado
+

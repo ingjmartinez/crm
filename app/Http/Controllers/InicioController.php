@@ -123,8 +123,8 @@ class InicioController extends Controller
         $resumen = $this->emptyResumenVentas();
         $catalogoProductos = $this->getCatalogoProductos();
         $agenciasActivasMap = $this->getAgenciasActivasMap($empresa);
-        $resumenLotobet = $this->getResumenVentasPorTabla('VT_usuarios_Bet', $fechaInicio, $fechaFin, $catalogoProductos, $agenciasActivasMap);
-        $resumenLotonet = $this->getResumenVentasPorTabla('VT_usuarios_Net', $fechaInicio, $fechaFin, $catalogoProductos, $agenciasActivasMap);
+        $resumenLotobet = $this->getResumenVentasPorTabla('vt_usuarios_bet', $fechaInicio, $fechaFin, $catalogoProductos, $agenciasActivasMap);
+        $resumenLotonet = $this->getResumenVentasPorTabla('vt_usuarios_net', $fechaInicio, $fechaFin, $catalogoProductos, $agenciasActivasMap);
 
         $resumen['sistemas']['Lotobet'] = $resumenLotobet;
         $resumen['sistemas']['Lotonet'] = $resumenLotonet;
@@ -274,7 +274,7 @@ class InicioController extends Controller
         $agenciasActivas = array_keys($agenciasActivasMap);
         $totalesPorFechaTipo = [];
 
-        foreach (['VT_usuarios_Bet', 'VT_usuarios_Net'] as $tabla) {
+        foreach (['vt_usuarios_bet', 'vt_usuarios_net'] as $tabla) {
             $rows = DB::table($tabla . ' as v')
                 ->selectRaw('DATE(v.fecha) AS fecha')
                 ->selectRaw('v.producto_id')
