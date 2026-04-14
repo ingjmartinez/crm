@@ -107,8 +107,9 @@
                                     <div class="col-12 col-md-4 col-lg-2">
                                         <label class="form-label">Sistema</label>
                                         <select name="sistema" class="form-select">
-                                            <option value="lotobet" {{ ($sistemaSeleccionado ?? 'lotobet') === 'lotobet' ? 'selected' : '' }}>Lotobet</option>
-                                            <option value="lotonet" {{ ($sistemaSeleccionado ?? 'lotobet') === 'lotonet' ? 'selected' : '' }}>Lotonet</option>
+                                            <option value="todos" {{ ($sistemaSeleccionado ?? 'todos') === 'todos' ? 'selected' : '' }}>Todos</option>
+                                            <option value="lotobet" {{ ($sistemaSeleccionado ?? 'todos') === 'lotobet' ? 'selected' : '' }}>Lotobet</option>
+                                            <option value="lotonet" {{ ($sistemaSeleccionado ?? 'todos') === 'lotonet' ? 'selected' : '' }}>Lotonet</option>
                                         </select>
                                     </div>
                                     <div class="col-12 col-md-4 col-lg-2">
@@ -133,7 +134,7 @@
                                                 <i class="ri-search-line me-1"></i>Buscar
                                             </button>
                                             <a href="{{ route('gerencia.venta-comparativa') }}" class="btn btn-light">Limpiar</a>
-                                            <a href="{{ route('gerencia.venta-comparativa.export.excel', ['fecha' => ($fechaSeleccionada ?? now()->format('Y-m-d')), 'sistema' => ($sistemaSeleccionado ?? 'lotobet'), 'agencia' => ($agenciaSeleccionada ?? '')]) }}" class="btn btn-success">
+                                            <a href="{{ route('gerencia.venta-comparativa.export.excel', ['fecha' => ($fechaSeleccionada ?? now()->format('Y-m-d')), 'sistema' => ($sistemaSeleccionado ?? 'todos'), 'agencia' => ($agenciaSeleccionada ?? '')]) }}" class="btn btn-success">
                                                 <i class="ri-file-excel-2-line me-1"></i>Excel
                                             </a>
                                         </div>
@@ -146,10 +147,10 @@
                     <div class="col-lg-12">
                         @php
                             $fechaBase = \Carbon\Carbon::parse($fechaSeleccionada ?? now()->format('Y-m-d'));
-                            $fechaHoyLabel = $fechaBase->format('d/m/Y');
-                            $fechaAyerLabel = $fechaBase->copy()->subDay()->format('d/m/Y');
-                            $fechaDosDiasLabel = $fechaBase->copy()->subDays(2)->format('d/m/Y');
-                            $fechaTresDiasLabel = $fechaBase->copy()->subDays(3)->format('d/m/Y');
+                            $fechaHoyLabel = $fechaBase->format('d-m-Y');
+                            $fechaAyerLabel = $fechaBase->copy()->subDay()->format('d-m-Y');
+                            $fechaDosDiasLabel = $fechaBase->copy()->subDays(2)->format('d-m-Y');
+                            $fechaTresDiasLabel = $fechaBase->copy()->subDays(3)->format('d-m-Y');
 
                             $totalHoy = collect($resumenComparativo ?? [])->sum('ventas_hoy');
                             $totalAyer = collect($resumenComparativo ?? [])->sum('ventas_ayer');
@@ -171,8 +172,7 @@
                             <div class="row g-0">
                                 <div class="col-xl-3 col-md-6 kpi-col">
                                     <div class="kpi-card">
-                                        <div class="kpi-title text-primary">Ventas Hoy</div>
-                                        <div class="kpi-label mb-2">Fecha: {{ $fechaHoyLabel }}</div>
+                                        <div class="kpi-title text-primary">Ventas {{ $fechaHoyLabel }}</div>
                                         <div class="kpi-metric">
                                             <div class="kpi-label">Cantidad de agencias</div>
                                             <div class="kpi-value">{{ number_format($agenciasHoy, 0) }}</div>
@@ -189,8 +189,7 @@
                                 </div>
                                 <div class="col-xl-3 col-md-6 kpi-col">
                                     <div class="kpi-card">
-                                        <div class="kpi-title text-info">Ventas de Ayer</div>
-                                        <div class="kpi-label mb-2">Fecha: {{ $fechaAyerLabel }}</div>
+                                        <div class="kpi-title text-info">Ventas {{ $fechaAyerLabel }}</div>
                                         <div class="kpi-metric">
                                             <div class="kpi-label">Cantidad de agencias</div>
                                             <div class="kpi-value">{{ number_format($agenciasAyer, 0) }}</div>
@@ -207,8 +206,7 @@
                                 </div>
                                 <div class="col-xl-3 col-md-6 kpi-col">
                                     <div class="kpi-card">
-                                        <div class="kpi-title text-success">Ventas Hace 2 Dias</div>
-                                        <div class="kpi-label mb-2">Fecha: {{ $fechaDosDiasLabel }}</div>
+                                        <div class="kpi-title text-success">Ventas {{ $fechaDosDiasLabel }}</div>
                                         <div class="kpi-metric">
                                             <div class="kpi-label">Cantidad de agencias</div>
                                             <div class="kpi-value">{{ number_format($agencias2Dias, 0) }}</div>
@@ -225,8 +223,7 @@
                                 </div>
                                 <div class="col-xl-3 col-md-6 kpi-col">
                                     <div class="kpi-card">
-                                        <div class="kpi-title text-warning">Ventas Hace 3 Dias</div>
-                                        <div class="kpi-label mb-2">Fecha: {{ $fechaTresDiasLabel }}</div>
+                                        <div class="kpi-title text-warning">Ventas {{ $fechaTresDiasLabel }}</div>
                                         <div class="kpi-metric">
                                             <div class="kpi-label">Cantidad de agencias</div>
                                             <div class="kpi-value">{{ number_format($agencias3Dias, 0) }}</div>
@@ -258,7 +255,7 @@
 
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <h5 class="card-title mb-0">Reporte Venta Comparativa ({{ strtoupper($sistemaSeleccionado ?? 'lotobet') }})</h5>
+                                <h5 class="card-title mb-0">Reporte Venta Comparativa ({{ strtoupper($sistemaSeleccionado ?? 'todos') }})</h5>
                                 <div class="d-flex align-items-center flex-wrap gap-2">
                                     <select class="form-select form-select-sm" id="select-dia-cero" style="min-width: 190px;">
                                         <option value="ventasHoy">Validar cero en Hoy</option>

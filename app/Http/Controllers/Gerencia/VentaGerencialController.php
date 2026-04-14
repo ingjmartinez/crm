@@ -21,10 +21,7 @@ class VentaGerencialController extends Controller
             $fecha = now()->format('Y-m-d');
         }
 
-        $sistema = strtolower(trim((string) $request->query('sistema', 'lotobet')));
-        if (!in_array($sistema, ['lotobet', 'lotonet'], true)) {
-            $sistema = 'lotobet';
-        }
+        $sistema = $this->normalizarSistema($request->query('sistema', 'todos'));
 
         $resumenAgencias = $this->getResumenVentasAgenciaPorFecha($fecha, $sistema);
 
@@ -42,10 +39,7 @@ class VentaGerencialController extends Controller
             $fecha = now()->format('Y-m-d');
         }
 
-        $sistema = strtolower(trim((string) $request->query('sistema', 'lotobet')));
-        if (!in_array($sistema, ['lotobet', 'lotonet'], true)) {
-            $sistema = 'lotobet';
-        }
+        $sistema = $this->normalizarSistema($request->query('sistema', 'todos'));
 
         $rows = collect($this->getResumenVentasAgenciaPorFecha($fecha, $sistema));
         $fileName = sprintf('venta_gerencial_%s_%s.xlsx', str_replace('-', '', $fecha), $sistema);
@@ -93,10 +87,7 @@ class VentaGerencialController extends Controller
             $fecha = now()->format('Y-m-d');
         }
 
-        $sistema = strtolower(trim((string) $request->query('sistema', 'lotobet')));
-        if (!in_array($sistema, ['lotobet', 'lotonet'], true)) {
-            $sistema = 'lotobet';
-        }
+        $sistema = $this->normalizarSistema($request->query('sistema', 'todos'));
 
         $agencia = trim((string) $request->query('agencia', ''));
         if ($agencia === '') {
@@ -133,10 +124,7 @@ class VentaGerencialController extends Controller
             $fecha = now()->format('Y-m-d');
         }
 
-        $sistema = strtolower(trim((string) $request->query('sistema', 'lotobet')));
-        if (!in_array($sistema, ['lotobet', 'lotonet'], true)) {
-            $sistema = 'lotobet';
-        }
+        $sistema = $this->normalizarSistema($request->query('sistema', 'todos'));
 
         $agencia = trim((string) $request->query('agencia', ''));
         if ($agencia === '') {
@@ -188,49 +176,55 @@ class VentaGerencialController extends Controller
             $fecha = now()->format('Y-m-d');
         }
 
-        $mapaTablas = $this->getMapaTablasPorSistema($sistema);
+        $inicioDia = Carbon::createFromFormat('Y-m-d', $fecha)->startOfDay()->toDateTimeString();
+        $finDia = Carbon::createFromFormat('Y-m-d', $fecha)->addDay()->startOfDay()->toDateTimeString();
+        $mapasTablas = $this->getMapasTablasPorSistema($sistema);
+        $ventasByAgencia = [];
+        $premiosByAgencia = [];
 
-        $ventasRows = DB::table($mapaTablas['ventas'] . ' as v')
-            ->leftJoin('agencias as a', DB::raw("TRIM(CAST(a.terminal AS CHAR))"), '=', DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"))
-            ->selectRaw("TRIM(CAST(v.agencia_id AS CHAR)) AS agencia")
-            ->selectRaw('SUM(COALESCE(monto, 0)) AS total_vendido')
-            ->whereNotNull('v.agencia_id')
-            ->whereDate('fecha', $fecha)
-            ->groupBy(DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"))
-            ->orderByDesc('total_vendido')
-            ->get();
+        foreach ($mapasTablas as $mapaTablas) {
+            $ventasRows = DB::table($mapaTablas['ventas'] . ' as v')
+                ->select('v.agencia_id as agencia')
+                ->selectRaw('SUM(COALESCE(monto, 0)) AS total_vendido')
+                ->whereNotNull('v.agencia_id')
+                ->where('v.fecha', '>=', $inicioDia)
+                ->where('v.fecha', '<', $finDia)
+                ->groupBy('v.agencia_id')
+                ->get();
 
-        $premiosRows = DB::table($mapaTablas['premios'])
-            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS agencia")
-            ->selectRaw('SUM(COALESCE(monto, 0)) AS premios_pagados')
-            ->whereDate('fecha', $fecha)
-            ->groupBy(DB::raw("TRIM(CAST(agencia_id AS CHAR))"))
-            ->get();
+            foreach ($ventasRows as $row) {
+                $agencia = $this->normalizarAgenciaId($row->agencia ?? '');
+                if ($agencia === '') {
+                    continue;
+                }
 
-        $premiosByAgencia = $premiosRows
-            ->mapWithKeys(function ($row) {
-                $agencia = (string) ($row->agencia ?? '');
+                $ventasByAgencia[$agencia] = (float) ($ventasByAgencia[$agencia] ?? 0) + (float) ($row->total_vendido ?? 0);
+            }
 
-                return [$agencia => (float) ($row->premios_pagados ?? 0)];
-            })
-            ->toArray();
+            $premiosRows = DB::table($mapaTablas['premios'])
+                ->select('agencia_id as agencia')
+                ->selectRaw('SUM(COALESCE(monto, 0)) AS premios_pagados')
+                ->where('fecha', '>=', $inicioDia)
+                ->where('fecha', '<', $finDia)
+                ->groupBy('agencia_id')
+                ->get();
 
-        $nombresAgenciaByTerminal = DB::table('agencias')
-            ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal")
-            ->selectRaw('TRIM(COALESCE(nombre_agencia, "")) AS nombre_agencia')
-            ->whereNotNull('terminal')
-            ->get()
-            ->mapWithKeys(function ($row) {
-                $terminal = (string) ($row->terminal ?? '');
-                $nombre = (string) ($row->nombre_agencia ?? '');
+            foreach ($premiosRows as $row) {
+                $agencia = $this->normalizarAgenciaId($row->agencia ?? '');
+                if ($agencia === '') {
+                    continue;
+                }
 
-                return [$terminal => $nombre];
-            })
-            ->toArray();
+                $premiosByAgencia[$agencia] = (float) ($premiosByAgencia[$agencia] ?? 0) + (float) ($row->premios_pagados ?? 0);
+            }
+        }
 
-        return $ventasRows->map(function ($row) use ($premiosByAgencia, $nombresAgenciaByTerminal) {
-            $agencia = (string) ($row->agencia ?? 'SIN AGENCIA');
-            $totalVendido = (float) ($row->total_vendido ?? 0);
+        $nombresAgenciaByTerminal = $this->getNombresAgenciaByTerminal();
+
+        return collect($ventasByAgencia)
+            ->map(function ($totalVendido, $agencia) use ($premiosByAgencia, $nombresAgenciaByTerminal) {
+            $agencia = (string) ($agencia ?: 'SIN AGENCIA');
+            $totalVendido = (float) ($totalVendido ?? 0);
             $premiosSacados = (float) ($premiosByAgencia[$agencia] ?? 0);
             $nombreAgencia = trim((string) ($nombresAgenciaByTerminal[$agencia] ?? ''));
             $utilidadBruta = $totalVendido - $premiosSacados;
@@ -243,22 +237,49 @@ class VentaGerencialController extends Controller
                 'premios_sacados' => $premiosSacados,
                 'utilidad_bruta' => $utilidadBruta,
             ];
-        })->toArray();
+        })
+            ->sortByDesc('total_vendido')
+            ->values()
+            ->toArray();
     }
 
-    private function getMapaTablasPorSistema(string $sistema): array
+    private function normalizarSistema(mixed $sistema): string
     {
-        if ($sistema === 'lotonet') {
+        $valor = strtolower(trim((string) $sistema));
+
+        if (!in_array($valor, ['todos', 'lotobet', 'lotonet'], true)) {
+            return 'todos';
+        }
+
+        return $valor;
+    }
+
+    private function getMapasTablasPorSistema(string $sistema): array
+    {
+        if ($sistema === 'todos') {
             return [
-                'ventas' => 'vt_usuarios_net',
-                'premios' => 'premios_net',
+                [
+                    'ventas' => 'vt_usuarios_bet',
+                    'premios' => 'premios_bet',
+                ],
+                [
+                    'ventas' => 'vt_usuarios_net',
+                    'premios' => 'premios_net',
+                ],
             ];
         }
 
-        return [
+        if ($sistema === 'lotonet') {
+            return [[
+                'ventas' => 'vt_usuarios_net',
+                'premios' => 'premios_net',
+            ]];
+        }
+
+        return [[
             'ventas' => 'vt_usuarios_bet',
             'premios' => 'premios_bet',
-        ];
+        ]];
     }
 
     private function getResumenVentasComparativaPorFecha(string $fecha, string $sistema, ?string $agenciaFiltro = null): array
@@ -268,48 +289,85 @@ class VentaGerencialController extends Controller
         }
 
         $fechaBase = Carbon::createFromFormat('Y-m-d', $fecha);
-        $fechaHoy = $fechaBase->toDateString();
-        $fechaAyer = $fechaBase->copy()->subDay()->toDateString();
-        $fechaDosDias = $fechaBase->copy()->subDays(2)->toDateString();
-        $fechaTresDias = $fechaBase->copy()->subDays(3)->toDateString();
+        $inicioHoy = $fechaBase->copy()->startOfDay();
+        $finHoy = $inicioHoy->copy()->addDay();
+        $inicioAyer = $inicioHoy->copy()->subDay();
+        $finAyer = $inicioHoy->copy();
+        $inicioDosDias = $inicioHoy->copy()->subDays(2);
+        $finDosDias = $inicioHoy->copy()->subDay();
+        $inicioTresDias = $inicioHoy->copy()->subDays(3);
+        $finTresDias = $inicioHoy->copy()->subDays(2);
 
-        $mapaTablas = $this->getMapaTablasPorSistema($sistema);
+        $inicioVentana = $inicioTresDias->toDateTimeString();
+        $finVentana = $finHoy->toDateTimeString();
+        $filtroAgencia = $agenciaFiltro !== null ? $this->normalizarAgenciaId($agenciaFiltro) : null;
 
-        $rows = DB::table($mapaTablas['ventas'] . ' as v')
-            ->leftJoin('agencias as a', DB::raw("TRIM(CAST(a.terminal AS CHAR))"), '=', DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"))
-            ->selectRaw("TRIM(CAST(v.agencia_id AS CHAR)) AS agencia")
-            ->selectRaw("MAX(TRIM(COALESCE(a.nombre_agencia, ''))) AS nombre_agencia")
-            ->selectRaw('SUM(CASE WHEN DATE(v.fecha) = ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_hoy', [$fechaHoy])
-            ->selectRaw('SUM(CASE WHEN DATE(v.fecha) = ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_ayer', [$fechaAyer])
-            ->selectRaw('SUM(CASE WHEN DATE(v.fecha) = ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_hace_2_dias', [$fechaDosDias])
-            ->selectRaw('SUM(CASE WHEN DATE(v.fecha) = ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_hace_3_dias', [$fechaTresDias])
-            ->selectRaw('SUM(CASE WHEN DATE(v.fecha) BETWEEN ? AND ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_ultimos_2_dias', [$fechaAyer, $fechaHoy])
-            ->selectRaw('SUM(CASE WHEN DATE(v.fecha) BETWEEN ? AND ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_ultimos_3_dias', [$fechaDosDias, $fechaHoy])
-            ->whereNotNull('v.agencia_id')
-            ->when($agenciaFiltro !== null, function ($query) use ($agenciaFiltro) {
-                $query->whereRaw("TRIM(CAST(v.agencia_id AS CHAR)) = ?", [$agenciaFiltro]);
+        $mapasTablas = $this->getMapasTablasPorSistema($sistema);
+        $totalesPorAgencia = [];
+        $nombresAgenciaByTerminal = $this->getNombresAgenciaByTerminal();
+
+        foreach ($mapasTablas as $mapaTablas) {
+            $rows = DB::table($mapaTablas['ventas'] . ' as v')
+                ->select('v.agencia_id as agencia')
+                ->selectRaw('SUM(CASE WHEN v.fecha >= ? AND v.fecha < ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_hoy', [$inicioHoy->toDateTimeString(), $finHoy->toDateTimeString()])
+                ->selectRaw('SUM(CASE WHEN v.fecha >= ? AND v.fecha < ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_ayer', [$inicioAyer->toDateTimeString(), $finAyer->toDateTimeString()])
+                ->selectRaw('SUM(CASE WHEN v.fecha >= ? AND v.fecha < ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_hace_2_dias', [$inicioDosDias->toDateTimeString(), $finDosDias->toDateTimeString()])
+                ->selectRaw('SUM(CASE WHEN v.fecha >= ? AND v.fecha < ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_hace_3_dias', [$inicioTresDias->toDateTimeString(), $finTresDias->toDateTimeString()])
+                ->selectRaw('SUM(CASE WHEN v.fecha >= ? AND v.fecha < ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_ultimos_2_dias', [$inicioAyer->toDateTimeString(), $finHoy->toDateTimeString()])
+                ->selectRaw('SUM(CASE WHEN v.fecha >= ? AND v.fecha < ? THEN COALESCE(v.monto, 0) ELSE 0 END) AS ventas_ultimos_3_dias', [$inicioDosDias->toDateTimeString(), $finHoy->toDateTimeString()])
+                ->whereNotNull('v.agencia_id')
+                ->when($filtroAgencia !== null, function ($query) use ($filtroAgencia) {
+                    $query->where('v.agencia_id', $filtroAgencia);
+                })
+                ->where('v.fecha', '>=', $inicioVentana)
+                ->where('v.fecha', '<', $finVentana)
+                ->groupBy('v.agencia_id')
+                ->get();
+
+            foreach ($rows as $row) {
+                $agencia = $this->normalizarAgenciaId($row->agencia ?? '');
+                if ($agencia === '') {
+                    continue;
+                }
+
+                if (!isset($totalesPorAgencia[$agencia])) {
+                    $totalesPorAgencia[$agencia] = [
+                        'agencia' => $agencia,
+                        'terminal' => $agencia,
+                        'nombre_agencia' => trim((string) ($nombresAgenciaByTerminal[$agencia] ?? '')),
+                        'ventas_hoy' => 0.0,
+                        'ventas_ayer' => 0.0,
+                        'ventas_hace_2_dias' => 0.0,
+                        'ventas_hace_3_dias' => 0.0,
+                        'ventas_ultimos_2_dias' => 0.0,
+                        'ventas_ultimos_3_dias' => 0.0,
+                    ];
+                }
+
+                if ($totalesPorAgencia[$agencia]['nombre_agencia'] === '') {
+                    $totalesPorAgencia[$agencia]['nombre_agencia'] = $agencia;
+                }
+
+                $totalesPorAgencia[$agencia]['ventas_hoy'] += (float) ($row->ventas_hoy ?? 0);
+                $totalesPorAgencia[$agencia]['ventas_ayer'] += (float) ($row->ventas_ayer ?? 0);
+                $totalesPorAgencia[$agencia]['ventas_hace_2_dias'] += (float) ($row->ventas_hace_2_dias ?? 0);
+                $totalesPorAgencia[$agencia]['ventas_hace_3_dias'] += (float) ($row->ventas_hace_3_dias ?? 0);
+                $totalesPorAgencia[$agencia]['ventas_ultimos_2_dias'] += (float) ($row->ventas_ultimos_2_dias ?? 0);
+                $totalesPorAgencia[$agencia]['ventas_ultimos_3_dias'] += (float) ($row->ventas_ultimos_3_dias ?? 0);
+            }
+        }
+
+        return collect($totalesPorAgencia)
+            ->map(function ($row) {
+                $agencia = (string) ($row['agencia'] ?? 'SIN AGENCIA');
+                $nombreAgencia = trim((string) ($row['nombre_agencia'] ?? ''));
+                $row['nombre_agencia'] = $nombreAgencia !== '' ? $nombreAgencia : $agencia;
+
+                return $row;
             })
-            ->whereBetween(DB::raw('DATE(v.fecha)'), [$fechaTresDias, $fechaHoy])
-            ->groupBy(DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"))
-            ->orderByDesc('ventas_hoy')
-            ->get();
-
-        return $rows->map(function ($row) {
-            $agencia = (string) ($row->agencia ?? 'SIN AGENCIA');
-            $nombreAgencia = trim((string) ($row->nombre_agencia ?? ''));
-
-            return [
-                'agencia' => $agencia,
-                'terminal' => $agencia,
-                'nombre_agencia' => $nombreAgencia !== '' ? $nombreAgencia : $agencia,
-                'ventas_hoy' => (float) ($row->ventas_hoy ?? 0),
-                'ventas_ayer' => (float) ($row->ventas_ayer ?? 0),
-                'ventas_hace_2_dias' => (float) ($row->ventas_hace_2_dias ?? 0),
-                'ventas_hace_3_dias' => (float) ($row->ventas_hace_3_dias ?? 0),
-                'ventas_ultimos_2_dias' => (float) ($row->ventas_ultimos_2_dias ?? 0),
-                'ventas_ultimos_3_dias' => (float) ($row->ventas_ultimos_3_dias ?? 0),
-            ];
-        })->toArray();
+            ->sortByDesc('ventas_hoy')
+            ->values()
+            ->toArray();
     }
 
     private function getAgenciasDisponiblesComparativa(string $fecha, string $sistema): array
@@ -318,27 +376,41 @@ class VentaGerencialController extends Controller
             $fecha = now()->format('Y-m-d');
         }
 
-        $fechaInicio = Carbon::createFromFormat('Y-m-d', $fecha)->subDays(6)->toDateString();
-        $mapaTablas = $this->getMapaTablasPorSistema($sistema);
+        $fechaInicio = Carbon::createFromFormat('Y-m-d', $fecha)->subDays(6)->startOfDay()->toDateTimeString();
+        $fechaFin = Carbon::createFromFormat('Y-m-d', $fecha)->addDay()->startOfDay()->toDateTimeString();
+        $mapasTablas = $this->getMapasTablasPorSistema($sistema);
+        $agencias = [];
+        $nombresAgenciaByTerminal = $this->getNombresAgenciaByTerminal();
 
-        return DB::table($mapaTablas['ventas'] . ' as v')
-            ->leftJoin('agencias as a', DB::raw("TRIM(CAST(a.terminal AS CHAR))"), '=', DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"))
-            ->selectRaw("TRIM(CAST(v.agencia_id AS CHAR)) AS agencia")
-            ->selectRaw("MAX(TRIM(COALESCE(a.nombre_agencia, ''))) AS nombre_agencia")
-            ->whereNotNull('v.agencia_id')
-            ->whereBetween(DB::raw('DATE(v.fecha)'), [$fechaInicio, $fecha])
-            ->groupBy(DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"))
-            ->orderBy('agencia')
-            ->get()
-            ->map(function ($row) {
-                $agencia = (string) ($row->agencia ?? '');
-                $nombre = trim((string) ($row->nombre_agencia ?? ''));
+        foreach ($mapasTablas as $mapaTablas) {
+            $rows = DB::table($mapaTablas['ventas'] . ' as v')
+                ->select('v.agencia_id as agencia')
+                ->whereNotNull('v.agencia_id')
+                ->where('v.fecha', '>=', $fechaInicio)
+                ->where('v.fecha', '<', $fechaFin)
+                ->groupBy('v.agencia_id')
+                ->get();
 
-                return [
-                    'agencia' => $agencia,
-                    'nombre' => $nombre !== '' ? $nombre : $agencia,
-                ];
-            })
+            foreach ($rows as $row) {
+                $agencia = $this->normalizarAgenciaId($row->agencia ?? '');
+                if ($agencia === '') {
+                    continue;
+                }
+
+                $nombre = trim((string) ($nombresAgenciaByTerminal[$agencia] ?? ''));
+                if (!isset($agencias[$agencia])) {
+                    $agencias[$agencia] = [
+                        'agencia' => $agencia,
+                        'nombre' => $nombre !== '' ? $nombre : $agencia,
+                    ];
+                } elseif ($agencias[$agencia]['nombre'] === $agencia && $nombre !== '') {
+                    $agencias[$agencia]['nombre'] = $nombre;
+                }
+            }
+        }
+
+        return collect($agencias)
+            ->sortBy('agencia')
             ->values()
             ->toArray();
     }
@@ -349,32 +421,46 @@ class VentaGerencialController extends Controller
             $fecha = now()->format('Y-m-d');
         }
 
-        $fechaInicio = Carbon::createFromFormat('Y-m-d', $fecha)->subDays(6)->toDateString();
-        $mapaTablas = $this->getMapaTablasPorSistema($sistema);
+        $fechaInicio = Carbon::createFromFormat('Y-m-d', $fecha)->subDays(6)->startOfDay();
+        $fechaFin = Carbon::createFromFormat('Y-m-d', $fecha)->addDay()->startOfDay();
+        $filtroAgencia = $agenciaFiltro !== null ? $this->normalizarAgenciaId($agenciaFiltro) : null;
+        $mapasTablas = $this->getMapasTablasPorSistema($sistema);
+        $totalesPorFecha = [];
 
-        $rows = DB::table($mapaTablas['ventas'] . ' as v')
-            ->selectRaw('DATE(v.fecha) AS fecha')
-            ->selectRaw('SUM(COALESCE(v.monto, 0)) AS total_ventas')
-            ->whereNotNull('v.agencia_id')
-            ->when($agenciaFiltro !== null, function ($query) use ($agenciaFiltro) {
-                $query->whereRaw("TRIM(CAST(v.agencia_id AS CHAR)) = ?", [$agenciaFiltro]);
-            })
-            ->whereBetween(DB::raw('DATE(v.fecha)'), [$fechaInicio, $fecha])
-            ->groupBy(DB::raw('DATE(v.fecha)'))
-            ->orderBy(DB::raw('DATE(v.fecha)'))
-            ->get()
-            ->keyBy('fecha');
+        foreach ($mapasTablas as $mapaTablas) {
+            $rows = DB::table($mapaTablas['ventas'] . ' as v')
+                ->selectRaw('DATE(v.fecha) AS fecha')
+                ->selectRaw('SUM(COALESCE(v.monto, 0)) AS total_ventas')
+                ->whereNotNull('v.agencia_id')
+                ->when($filtroAgencia !== null, function ($query) use ($filtroAgencia) {
+                    $query->where('v.agencia_id', $filtroAgencia);
+                })
+                ->where('v.fecha', '>=', $fechaInicio->toDateTimeString())
+                ->where('v.fecha', '<', $fechaFin->toDateTimeString())
+                ->groupBy(DB::raw('DATE(v.fecha)'))
+                ->orderBy(DB::raw('DATE(v.fecha)'))
+                ->get();
+
+            foreach ($rows as $row) {
+                $fechaRow = (string) ($row->fecha ?? '');
+                if ($fechaRow === '') {
+                    continue;
+                }
+
+                $totalesPorFecha[$fechaRow] = (float) ($totalesPorFecha[$fechaRow] ?? 0) + (float) ($row->total_ventas ?? 0);
+            }
+        }
 
         $labels = [];
         $series = [];
 
-        $cursor = Carbon::createFromFormat('Y-m-d', $fechaInicio);
+        $cursor = $fechaInicio->copy();
         $fin = Carbon::createFromFormat('Y-m-d', $fecha);
 
         while ($cursor->lessThanOrEqualTo($fin)) {
             $key = $cursor->toDateString();
             $labels[] = $cursor->format('d/m');
-            $series[] = (float) (($rows[$key]->total_ventas ?? 0));
+            $series[] = (float) ($totalesPorFecha[$key] ?? 0);
             $cursor->addDay();
         }
 
@@ -382,5 +468,33 @@ class VentaGerencialController extends Controller
             'labels' => $labels,
             'series' => $series,
         ];
+    }
+
+    private function normalizarAgenciaId(mixed $agencia): string
+    {
+        return trim((string) $agencia);
+    }
+
+    private function getNombresAgenciaByTerminal(): array
+    {
+        static $cache = null;
+
+        if (is_array($cache)) {
+            return $cache;
+        }
+
+        $cache = DB::table('agencias')
+            ->select('terminal', 'nombre_agencia')
+            ->whereNotNull('terminal')
+            ->get()
+            ->mapWithKeys(function ($row) {
+                $terminal = $this->normalizarAgenciaId($row->terminal ?? '');
+                $nombre = trim((string) ($row->nombre_agencia ?? ''));
+
+                return [$terminal => $nombre];
+            })
+            ->toArray();
+
+        return $cache;
     }
 }

@@ -29,8 +29,9 @@
                                     <div class="col-12 col-md-4 col-lg-2">
                                         <label class="form-label">Sistema</label>
                                         <select name="sistema" class="form-select">
-                                            <option value="lotobet" {{ ($sistemaSeleccionado ?? 'lotobet') === 'lotobet' ? 'selected' : '' }}>Lotobet</option>
-                                            <option value="lotonet" {{ ($sistemaSeleccionado ?? 'lotobet') === 'lotonet' ? 'selected' : '' }}>Lotonet</option>
+                                            <option value="todos" {{ ($sistemaSeleccionado ?? 'todos') === 'todos' ? 'selected' : '' }}>Todos</option>
+                                            <option value="lotobet" {{ ($sistemaSeleccionado ?? 'todos') === 'lotobet' ? 'selected' : '' }}>Lotobet</option>
+                                            <option value="lotonet" {{ ($sistemaSeleccionado ?? 'todos') === 'lotonet' ? 'selected' : '' }}>Lotonet</option>
                                         </select>
                                     </div>
                                     <div class="col-12 col-md-4 col-lg-3">
@@ -44,7 +45,7 @@
                                             <i class="ri-search-line me-1"></i>Buscar
                                             </button>
                                             <a href="{{ route('gerencia.venta-gerencial') }}" class="btn btn-light">Limpiar</a>
-                                            <a href="{{ route('gerencia.venta-gerencial.export.excel', ['fecha' => ($fechaSeleccionada ?? now()->format('Y-m-d')), 'sistema' => ($sistemaSeleccionado ?? 'lotobet')]) }}" class="btn btn-success">
+                                            <a href="{{ route('gerencia.venta-gerencial.export.excel', ['fecha' => ($fechaSeleccionada ?? now()->format('Y-m-d')), 'sistema' => ($sistemaSeleccionado ?? 'todos')]) }}" class="btn btn-success">
                                             <i class="ri-file-excel-2-line me-1"></i>Excel
                                             </a>
                                         </div>
@@ -57,7 +58,7 @@
                     <div class="col-lg-12">
                         <div class="card">
                             <div class="card-header">
-                                <h5 class="card-title mb-0">Reporte de Venta Gerencial ({{ strtoupper($sistemaSeleccionado ?? 'lotobet') }})</h5>
+                                <h5 class="card-title mb-0">Reporte de Venta Gerencial ({{ strtoupper($sistemaSeleccionado ?? 'todos') }})</h5>
                             </div>
                             <div class="card-body">
                                 @php
