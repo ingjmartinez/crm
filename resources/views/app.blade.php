@@ -60,6 +60,21 @@
             will-change: scroll-position;
         }
 
+        .app-menu.navbar-menu {
+            overflow: hidden;
+        }
+
+        #scrollbar {
+            height: calc(100vh - 70px) !important;
+            max-height: calc(100vh - 70px);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        #scrollbar .container-fluid {
+            padding-bottom: 1.25rem;
+        }
+
         #navbar-nav .nav-link,
         #navbar-nav .menu-link,
         #navbar-nav .menu-dropdown {
@@ -68,6 +83,28 @@
 
         #navbar-nav .menu-dropdown .nav-link:hover {
             transform: translateX(2px);
+        }
+
+        #navbar-nav .menu-dropdown.show {
+            max-height: min(52vh, 420px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-gutter: stable;
+            overscroll-behavior: contain;
+            padding-right: 0.2rem;
+        }
+
+        #navbar-nav .menu-dropdown.show::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #navbar-nav .menu-dropdown.show::-webkit-scrollbar-thumb {
+            background: rgba(64, 81, 137, 0.34);
+            border-radius: 999px;
+        }
+
+        #navbar-nav .menu-dropdown.show::-webkit-scrollbar-track {
+            background: transparent;
         }
 
         #scrollbar .simplebar-track.simplebar-vertical {
