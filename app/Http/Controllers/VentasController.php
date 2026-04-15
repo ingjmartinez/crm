@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Models\Token;
 use App\Models\VtUsuarioBet;
 use App\Models\VtUsuarioNet;
@@ -13,47 +14,27 @@ class VentasController extends Controller
 {
     public function getVentasUsuariosLotobet(Request $request)
     {
+        ini_set('memory_limit', '1G');
+        ini_set('max_execution_time', 360);
+        set_time_limit(360);
         header('Content-Type: application/json');
 
-        $curl = curl_init();
-
         $fecha = $request->query('fecha');
+        $apiResult = $this->fetchVentasUsuariosLotobetApi($fecha);
 
-        $token = Token::find(1);
-
-        if (!$token) {
-            return response()->json(['error' => 'Genere un token'], 404);
+        if (!$apiResult['ok']) {
+            return response()->json([
+                'ventas' => [],
+                'code' => 1,
+                'message' => $apiResult['message'],
+            ], $apiResult['status']);
         }
 
-        $fechaActual = now();
-        if ($fechaActual->greaterThan($token->fecha)) {
-            return response()->json(['error' => 'El token ha expirado, genere uno nuevo'], 401);
-        }
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => "https://ltkadapi.lotobet.bet/api/V1/EQsEpamN7MuKb0Y7/{$token->token}/{$fecha}/05",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_HTTPHEADER => array(
-                'AhfCC: yB0tt5KW3wVVCYYtCpen',
-                'AhfVB: xSzdgtOKbGRhUhtv1ois'
-            ),
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ));
-
-        $response = curl_exec($curl);
-
-        curl_close($curl);
-
-        $ventas = json_decode($response, true);
-
-        return response()->json(['ventas' => $ventas['Content'], 'code' => $ventas['code'], 'message' => $ventas['msg']]);
+        return response()->json([
+            'ventas' => $apiResult['rows'],
+            'code' => 0,
+            'message' => $apiResult['message'],
+        ]);
     }
 
     public function saveVentasUsuariosLotobet(Request $request)
@@ -63,20 +44,7 @@ class VentasController extends Controller
         set_time_limit(360);                // alternativa equivalente
         header('Content-Type: application/json');
 
-        $curl = curl_init();
-
         $fecha = $request->query('fecha');
-
-        $token = Token::find(1);
-
-        if (!$token) {
-            return response()->json(['error' => 'Genere un token'], 404);
-        }
-
-        $fechaActual = now();
-        if ($fechaActual->greaterThan($token->fecha)) {
-            return response()->json(['error' => 'El token ha expirado, genere uno nuevo'], 401);
-        }
 
         $existe = VtUsuarioBet::whereDate('fecha', $fecha)->exists();
 
@@ -84,42 +52,30 @@ class VentasController extends Controller
             return response()->json(['message' => 'Ya hay data guardada en la fecha: ' . $fecha]);
         }
 
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => "https://ltkadapi.lotobet.bet/api/V1/EQsEpamN7MuKb0Y7/{$token->token}/{$fecha}/05",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_HTTPHEADER => array(
-                'AhfCC: yB0tt5KW3wVVCYYtCpen',
-                'AhfVB: xSzdgtOKbGRhUhtv1ois'
-            ),
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ));
+        $apiResult = $this->fetchVentasUsuariosLotobetApi($fecha);
 
-        $response = curl_exec($curl);
-
-        $ventas = json_decode($response, true);
+        if (!$apiResult['ok']) {
+            return response()->json([
+                'code' => 1,
+                'message' => $apiResult['message'],
+            ], $apiResult['status']);
+        }
 
         $data = [];
 
-        if (!isset($ventas['Content']) || empty($ventas['Content'])) {
+        if (empty($apiResult['rows'])) {
             return response()->json([
                 'message' => 'No hay datos para guardar en la fecha: ' . $fecha,
                 'total' => 0,
             ]);
         }
 
-        foreach ($ventas['Content'] as $v) {
+        foreach ($apiResult['rows'] as $v) {
             $data[] = [
                 'consorcio_id'  => $v['consorcio_id'] ?? null,
                 'agencia_id'    => $v['agencia_id'] ?? null,
                 'producto_id'   => $v['producto_id'] ?? null,
-                'cedula'        => str_pad($v['cedula'], 11, '0', STR_PAD_LEFT) ?? null,
+                'cedula'        => str_pad((string) ($v['cedula'] ?? ''), 11, '0', STR_PAD_LEFT),
                 'descripcion'   => $v['descripcion'] ?? null,
                 'tipo'          => $v['tipo'] ?? null,
                 'monto'         => $v['monto'] ?? 0,
@@ -260,6 +216,124 @@ class VentasController extends Controller
         return response()->json([
             'message' => 'Datos eliminados correctamente',
         ]);
+    }
+
+    private function fetchVentasUsuariosLotobetApi(?string $fecha): array
+    {
+        $fecha = trim((string) $fecha);
+
+        if ($fecha === '') {
+            return [
+                'ok' => false,
+                'status' => 422,
+                'message' => 'Debe indicar una fecha valida.',
+                'rows' => [],
+            ];
+        }
+
+        $token = Token::find(1);
+
+        if (!$token || empty($token->token)) {
+            return [
+                'ok' => false,
+                'status' => 404,
+                'message' => 'Genere un token antes de consultar la data.',
+                'rows' => [],
+            ];
+        }
+
+        if (empty($token->fecha) || now()->greaterThan(Carbon::parse($token->fecha))) {
+            return [
+                'ok' => false,
+                'status' => 401,
+                'message' => 'El token ha expirado, genere uno nuevo.',
+                'rows' => [],
+            ];
+        }
+
+        $curl = curl_init();
+
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => "https://ltkadapi.lotobet.bet/api/V1/EQsEpamN7MuKb0Y7/{$token->token}/{$fecha}/05",
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'GET',
+            CURLOPT_HTTPHEADER => array(
+                'AhfCC: yB0tt5KW3wVVCYYtCpen',
+                'AhfVB: xSzdgtOKbGRhUhtv1ois'
+            ),
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_SSL_VERIFYPEER => 0,
+        ));
+
+        $response = curl_exec($curl);
+        $curlError = curl_error($curl);
+        $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+        curl_close($curl);
+
+        if ($response === false) {
+            return [
+                'ok' => false,
+                'status' => 502,
+                'message' => $curlError !== '' ? $curlError : 'No se pudo conectar con la API de Lotobet.',
+                'rows' => [],
+            ];
+        }
+
+        $ventas = json_decode($response, true);
+
+        if (!is_array($ventas)) {
+            return [
+                'ok' => false,
+                'status' => 502,
+                'message' => 'La API de Lotobet devolvio una respuesta invalida.',
+                'rows' => [],
+            ];
+        }
+
+        $rows = $ventas['Content'] ?? [];
+        $message = (string) ($ventas['msg'] ?? $ventas['message'] ?? $ventas['error'] ?? '');
+        $code = (int) ($ventas['code'] ?? 0);
+
+        if ($httpCode >= 400) {
+            return [
+                'ok' => false,
+                'status' => $httpCode,
+                'message' => $message !== '' ? $message : ('La API de Lotobet respondio con HTTP ' . $httpCode . '.'),
+                'rows' => [],
+            ];
+        }
+
+        if (!is_array($rows)) {
+            return [
+                'ok' => false,
+                'status' => 502,
+                'message' => $message !== '' ? $message : 'La API de Lotobet no devolvio el listado esperado.',
+                'rows' => [],
+            ];
+        }
+
+        if ($code !== 0 && empty($rows)) {
+            return [
+                'ok' => false,
+                'status' => 422,
+                'message' => $message !== '' ? $message : 'La API de Lotobet devolvio un error.',
+                'rows' => [],
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'status' => 200,
+            'message' => $message !== '' ? $message : 'Proceso completado.',
+            'rows' => $rows,
+        ];
     }
 
     private function fetchVentasUsuariosLotonetApi(?string $fecha): array
