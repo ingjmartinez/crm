@@ -170,6 +170,30 @@ class InicioController extends Controller
         $totalAgenciasActivas = count($agenciasActivasMap);
         $resumen['agencias_con_venta'] = $agenciasConVenta;
         $resumen['agencias_sin_venta'] = max(0, $totalAgenciasActivas - $agenciasConVenta);
+        $resumen['agencias_sin_ventas'] = collect($agenciasActivasMap)
+            ->reject(function ($agenciaData, $agenciaId) use ($agenciasConVentaIds) {
+                return in_array((string) $agenciaId, $agenciasConVentaIds, true);
+            })
+            ->map(function ($agenciaData, $agenciaId) {
+                $nombreAgencia = trim((string) ($agenciaData['nombre_agencia'] ?? ''));
+
+                if ($nombreAgencia === '') {
+                    $nombreAgencia = trim((string) ($agenciaData['agencia'] ?? ''));
+                }
+
+                if ($nombreAgencia === '') {
+                    $nombreAgencia = trim((string) $agenciaId);
+                }
+
+                return [
+                    'agencia_id' => trim((string) $agenciaId),
+                    'nombre_agencia' => $nombreAgencia,
+                    'terminal' => trim((string) ($agenciaData['terminal'] ?? $agenciaId)),
+                ];
+            })
+            ->sortBy('nombre_agencia', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
 
         $productosCombinados = [];
         foreach ([$resumenLotobet['productos'] ?? [], $resumenLotonet['productos'] ?? []] as $productosSistema) {
@@ -465,15 +489,29 @@ class InicioController extends Controller
             $query->whereRaw("LOWER(TRIM(COALESCE(empresa, ''))) = ?", [mb_strtolower(trim($empresa))]);
         }
 
-        $ids = $query
-            ->selectRaw("DISTINCT TRIM(CAST(terminal AS CHAR)) AS agencia_id")
-            ->pluck('agencia_id')
-            ->map(static fn ($id) => trim((string) $id))
-            ->filter(static fn ($id) => $id !== '')
-            ->values()
-            ->all();
+        return $query
+            ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS agencia_id")
+            ->selectRaw("TRIM(COALESCE(nombre_agencia, '')) AS nombre_agencia")
+            ->selectRaw("TRIM(COALESCE(agencia, '')) AS agencia")
+            ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal")
+            ->get()
+            ->mapWithKeys(function ($row) {
+                $agenciaId = trim((string) ($row->agencia_id ?? ''));
 
-        return array_fill_keys($ids, true);
+                if ($agenciaId === '') {
+                    return [];
+                }
+
+                return [
+                    $agenciaId => [
+                        'agencia_id' => $agenciaId,
+                        'nombre_agencia' => trim((string) ($row->nombre_agencia ?? '')),
+                        'agencia' => trim((string) ($row->agencia ?? '')),
+                        'terminal' => trim((string) ($row->terminal ?? '')),
+                    ],
+                ];
+            })
+            ->all();
     }
 
     private function normalizeTipo(string $tipo): string
@@ -509,6 +547,7 @@ class InicioController extends Controller
             'registros' => 0,
             'agencias_con_venta' => 0,
             'agencias_sin_venta' => 0,
+            'agencias_sin_ventas' => [],
             'productos_no_tradicionales' => [],
             'productos_tradicionales_top' => [],
             'balance_mensual' => [

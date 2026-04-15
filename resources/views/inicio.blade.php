@@ -7,6 +7,22 @@
             min-height: 142px;
         }
 
+        .kpi-card-action {
+            cursor: pointer;
+            transition: transform 0.22s ease, box-shadow 0.22s ease, background-color 0.22s ease;
+        }
+
+        .kpi-card-action:hover {
+            transform: translateY(-4px);
+            box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.08), 0 12px 24px rgba(15, 23, 42, 0.08);
+            background: rgba(13, 110, 253, 0.02);
+        }
+
+        .kpi-card-action:focus-visible {
+            outline: 2px solid rgba(13, 110, 253, 0.5);
+            outline-offset: -2px;
+        }
+
         .sorteo-card {
             position: relative;
             overflow: hidden;
@@ -137,6 +153,7 @@
                     $agenciasRecargas = (int) ($ventasTipos['recargas']['agencias'] ?? 0);
                     $agenciasConVenta = (int) ($ventasInicio['agencias_con_venta'] ?? 0);
                     $agenciasSinVenta = (int) ($ventasInicio['agencias_sin_venta'] ?? 0);
+                    $agenciasSinVentaListado = $ventasInicio['agencias_sin_ventas'] ?? [];
                     $productosNoTradicionales = $ventasInicio['productos_no_tradicionales'] ?? [];
                     $productosTradicionalesTop = $ventasInicio['productos_tradicionales_top'] ?? [];
                     $balanceMensual = $ventasInicio['balance_mensual'] ?? ['dias' => [], 'ingresos' => [], 'gastos' => [], 'margen' => [], 'periodo' => ['inicio' => null, 'fin' => null]];
@@ -154,6 +171,7 @@
                             'series' => [round($ventaTradicional, 2), round($ventaNoTradicional, 2), round($ventaRecargas, 2)],
                             'agencias' => [$agenciasTradicional, $agenciasNoTradicional, $agenciasRecargas],
                         ],
+                        'agenciasSinVenta' => $agenciasSinVentaListado,
                         'resumenBalance' => [
                             'categories' => $balanceMensual['dias'] ?? [],
                             'ingresos' => $balanceMensual['ingresos'] ?? [],
@@ -220,7 +238,11 @@
                                         </div>
                                     </div>
                                     <div class="col">
-                                        <div class="mt-3 mt-md-0 py-4 px-3 kpi-card">
+                                        <div class="mt-3 mt-md-0 py-4 px-3 kpi-card kpi-card-action"
+                                            id="cardAgenciasSinVenta"
+                                            role="button"
+                                            tabindex="0"
+                                            aria-label="Ver agencias sin ventas">
                                             <h5 class="text-muted text-uppercase fs-13">Agencias sin ventas <i class="ri-arrow-up-circle-line text-success fs-18 float-end align-middle"></i></h5>
                                             <div class="d-flex align-items-center">
                                                 <div class="flex-shrink-0">
@@ -391,6 +413,38 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="modalAgenciasSinVentaInicio" tabindex="-1" aria-labelledby="modalAgenciasSinVentaInicioLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header d-flex justify-content-between align-items-center">
+                    <h5 class="modal-title" id="modalAgenciasSinVentaInicioLabel">Agencias sin venta</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-success btn-sm" id="btnDescargarAgenciasSinVentaInicioExcel">
+                            <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
+                        </button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table id="tableModalAgenciasSinVentaInicio" class="table table-striped table-bordered w-100">
+                            <thead>
+                                <tr>
+                                    <th>Agencia</th>
+                                    <th>Terminal</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -403,6 +457,18 @@
     <script src="{{ asset('js/pages/dashboard-crypto.init.js') }}?v={{ @filemtime(public_path('js/pages/dashboard-crypto.init.js')) ?: time() }}"></script>
     <script>
         (function () {
+            const modalAgencyEntriesSinVentasInicio = Array.isArray(window.crmDashboardData?.agenciasSinVenta)
+                ? window.crmDashboardData.agenciasSinVenta
+                : [];
+            let dtModalAgenciasSinVentaInicio = null;
+
+            const escapeHtml = (value) => (value ?? '').toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+
             const bootFiltroConCarga = () => {
                 const form = document.getElementById('inicioFiltroForm');
                 const fechaInput = document.getElementById('fecha');
@@ -486,14 +552,118 @@
                 renderExtraSparkline('nueva_sparkline_charts_4', 'power lotto', [30, 58, 29, 89, 12, 36, 9, 54]);
             };
 
+            const descargarAgenciasSinVentaExcel = () => {
+                if (!modalAgencyEntriesSinVentasInicio.length) {
+                    Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para descargar.', icon: 'info' });
+                    return;
+                }
+
+                const filas = modalAgencyEntriesSinVentasInicio.map((item) => {
+                    const nombre = escapeHtml(item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA');
+                    const terminal = escapeHtml(item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL');
+
+                    return `<tr><td>${nombre}</td><td>${terminal}</td></tr>`;
+                }).join('');
+
+                const tablaHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Agencia</th>
+                                <th>Terminal</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                `;
+
+                const blob = new Blob(['\ufeff', tablaHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const enlace = document.createElement('a');
+                const fecha = (document.getElementById('fecha')?.value || '').replace(/-/g, '') || 'sin_fecha';
+                enlace.href = url;
+                enlace.download = `agencias_sin_venta_inicio_${fecha}.xls`;
+                document.body.appendChild(enlace);
+                enlace.click();
+                document.body.removeChild(enlace);
+                URL.revokeObjectURL(url);
+            };
+
+            const abrirModalAgenciasSinVenta = () => {
+                if (!modalAgencyEntriesSinVentasInicio.length) {
+                    Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para mostrar.', icon: 'info' });
+                    return;
+                }
+
+                if (dtModalAgenciasSinVentaInicio) {
+                    dtModalAgenciasSinVentaInicio.destroy();
+                    dtModalAgenciasSinVentaInicio = null;
+                }
+
+                const tbody = document.querySelector('#tableModalAgenciasSinVentaInicio tbody');
+
+                if (!tbody) return;
+
+                tbody.innerHTML = '';
+
+                modalAgencyEntriesSinVentasInicio.forEach((item) => {
+                    const nombre = (item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
+                    const terminal = (item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${escapeHtml(nombre)}</td>
+                        <td>${escapeHtml(terminal)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                if (typeof $ === 'function' && $.fn?.DataTable) {
+                    dtModalAgenciasSinVentaInicio = $('#tableModalAgenciasSinVentaInicio').DataTable({
+                        destroy: true,
+                        responsive: true,
+                        language: {
+                            url: '/json/es-DO.json',
+                            search: 'Buscar:',
+                            lengthMenu: 'Mostrar _MENU_ registros',
+                            info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                            paginate: { first: 'Primera', last: 'Ultima', next: 'Siguiente', previous: 'Anterior' }
+                        },
+                        order: [[0, 'asc']],
+                    });
+                }
+
+                const modal = new bootstrap.Modal(document.getElementById('modalAgenciasSinVentaInicio'));
+                modal.show();
+            };
+
+            const bootAgenciasSinVentaCard = () => {
+                const card = document.getElementById('cardAgenciasSinVenta');
+                const btnExcel = document.getElementById('btnDescargarAgenciasSinVentaInicioExcel');
+
+                if (card) {
+                    card.addEventListener('click', abrirModalAgenciasSinVenta);
+                    card.addEventListener('keydown', (event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        abrirModalAgenciasSinVenta();
+                    });
+                }
+
+                if (btnExcel) {
+                    btnExcel.addEventListener('click', descargarAgenciasSinVentaExcel);
+                }
+            };
+
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', () => {
                     bootFiltroConCarga();
                     bootExtraCards();
+                    bootAgenciasSinVentaCard();
                 });
             } else {
                 bootFiltroConCarga();
                 bootExtraCards();
+                bootAgenciasSinVentaCard();
             }
         })();
     </script>
