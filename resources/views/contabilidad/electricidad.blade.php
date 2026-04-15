@@ -230,8 +230,25 @@
                     responsive: true,
                     scrollX: true,
                     order: [[0, 'desc']],
+                    pageLength: 10,
+                    lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
                     dom: 'Bfrtip',
                     buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+                    language: {
+                        lengthMenu: 'Mostrar _MENU_ registros por pagina',
+                        info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                        infoEmpty: 'Mostrando 0 a 0 de 0 registros',
+                        infoFiltered: '(filtrado de _MAX_ registros totales)',
+                        search: 'Buscar:',
+                        zeroRecords: 'No se encontraron registros',
+                        emptyTable: 'No hay datos disponibles',
+                        paginate: {
+                            first: 'Primera',
+                            last: 'Ultima',
+                            next: 'Siguiente',
+                            previous: 'Anterior',
+                        },
+                    },
                 });
             }
 
@@ -431,6 +448,14 @@
                 }
 
                 dtAverias.column(4).search((this.value || '').trim()).draw();
+            });
+
+            cargarSeguimientoDia().catch(function (error) {
+                alert(error.message || 'No se pudo cargar seguimiento.');
+            });
+
+            cargarAveriasDia().catch(function (error) {
+                alert(error.message || 'No se pudo cargar averias.');
             });
         });
     </script>

@@ -204,6 +204,50 @@
             };
         };
 
+        const destroyVentasTable = () => {
+            if (typeof $ === 'function' && $.fn?.DataTable && $.fn.DataTable.isDataTable('#tableVentas')) {
+                $('#tableVentas').DataTable().destroy();
+            }
+
+            const tableBody = document.querySelector('#tableVentas tbody');
+            if (tableBody) {
+                tableBody.innerHTML = '';
+            }
+        };
+
+        const renderVentasTable = (ventas, fecha) => {
+            const tableBody = document.querySelector('#tableVentas tbody');
+            if (!tableBody) {
+                return;
+            }
+
+            tableBody.innerHTML = '';
+
+            ventas.forEach((item) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${escapeHtml(item.consorcio_id)}</td>
+                    <td>${escapeHtml(item.agencia_id)}</td>
+                    <td>${escapeHtml(item.producto_id)}</td>
+                    <td>${escapeHtml(item.cedula)}</td>
+                    <td>${escapeHtml(item.descripcion)}</td>
+                    <td>${escapeHtml(item.tipo)}</td>
+                    <td>${escapeHtml(item.monto)}</td>
+                    <td>${escapeHtml(fecha)}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            if (typeof $ === 'function' && $.fn?.DataTable) {
+                $('#tableVentas').DataTable({
+                    destroy: true,
+                    responsive: true,
+                    dom: 'Bfrtip',
+                    buttons: ['copy', 'csv', 'excel', 'pdf', 'print']
+                });
+            }
+        };
+
         const buildResultsHtml = (results) => {
             const rows = results.map((result) => {
                 const badgeClass = result.status === 'ok'
@@ -257,21 +301,26 @@
         };
 
         const btnGenerarToken = document.getElementById('btnGenerarToken');
-        btnGenerarToken.addEventListener('click', () => {
-            fetch("/iniciar-session")
-                .then(response => response.json())
-                .then(data => {
-                    Swal.fire({
-                        title: "Listo",
-                        text: data.success,
-                        icon: "success"
-                    });
-                })
-                .catch(error => console.error('Error fetching data:', error));
+        btnGenerarToken.addEventListener('click', async () => {
+            try {
+                const result = await requestJson('/iniciar-session');
+
+                Swal.fire({
+                    title: result.ok ? 'Listo' : 'Error',
+                    text: result.message,
+                    icon: result.ok ? 'success' : 'error'
+                });
+            } catch (error) {
+                Swal.fire({
+                    title: 'Error',
+                    text: error.message || 'No se pudo iniciar la sesion.',
+                    icon: 'error'
+                });
+            }
         });
 
         const btnGenerarData = document.getElementById('btnGenerarData');
-        btnGenerarData.addEventListener('click', () => {
+        btnGenerarData.addEventListener('click', async () => {
             const fecha = document.getElementById('inputFecha').value;
             if (!fecha) {
                 Swal.fire({
@@ -291,58 +340,39 @@
                 didOpen: () => Swal.showLoading()
             });
 
-            $('#tableVentas').DataTable().destroy();
-            const tableBody = document.querySelector('#tableVentas tbody');
-            tableBody.innerHTML = '';
+            destroyVentasTable();
 
-            fetch(`/ventas-usuarios-lotonet?fecha=${fecha}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.code != 0) {
-                        Swal.fire({
-                            title: "Error",
-                            text: data.message,
-                            icon: "error"
-                        });
-                    } else {
-                        Swal.fire({
-                            title: "Listo",
-                            text: "Datos obtenidos correctamente",
-                            icon: "success"
-                        });
+            try {
+                const result = await requestJson(`/ventas-usuarios-lotonet?fecha=${fecha}`);
 
-                        tableBody.innerHTML = ''; // Clear existing rows
+                if (!result.ok) {
+                    Swal.fire({
+                        title: 'Error',
+                        text: result.message,
+                        icon: 'error'
+                    });
+                    return;
+                }
 
-                        data.ventas.forEach(item => {
-                            const row = document.createElement('tr');
-                            row.innerHTML = `
-                                <td>${item.consorcio_id}</td>
-                                <td>${item.agencia_id}</td>
-                                <td>${item.producto_id}</td>
-                                <td>${item.cedula}</td>
-                                <td>${item.descripcion}</td>
-                                <td>${item.tipo}</td>
-                                <td>${item.monto}</td>
-                                <td>${fecha}</td>
-                            `;
-                            tableBody.appendChild(row);
-                        });
+                const ventas = Array.isArray(result.payload?.ventas) ? result.payload.ventas : [];
+                renderVentasTable(ventas, fecha);
 
-                        $('#tableVentas').DataTable({
-                            destroy: true,
-                            responsive: true,
-                            dom: 'Bfrtip',
-                            buttons: [
-                                'copy', 'csv', 'excel', 'pdf', 'print'
-                            ]
-                        });
-                    }
-                })
-                .catch(error => console.error('Error fetching data:', error));
+                Swal.fire({
+                    title: 'Listo',
+                    text: ventas.length > 0 ? 'Datos obtenidos correctamente' : 'No hay datos para la fecha seleccionada.',
+                    icon: ventas.length > 0 ? 'success' : 'info'
+                });
+            } catch (error) {
+                Swal.fire({
+                    title: 'Error',
+                    text: error.message || 'No se pudieron obtener los datos.',
+                    icon: 'error'
+                });
+            }
         });
 
         const btnGuardarData = document.getElementById('btnGuardarData');
-        btnGuardarData.addEventListener('click', () => {
+        btnGuardarData.addEventListener('click', async () => {
             const fecha = document.getElementById('inputFecha').value;
             if (!fecha) {
                 Swal.fire({
@@ -361,20 +391,24 @@
                 timerProgressBar: true,
                 didOpen: () => Swal.showLoading()
             });
-            fetch(`/save-ventas-usuarios-lotonet?fecha=${fecha}`)
-                .then(response => response.json())
-                .then(data => {
-                    Swal.fire({
-                        title: "Listo",
-                        text: data.message,
-                        icon: "success"
-                    });
-                })
-                .catch(error => console.error('Error fetching data:', error));
+            try {
+                const result = await requestJson(`/save-ventas-usuarios-lotonet?fecha=${fecha}`);
+                Swal.fire({
+                    title: result.ok ? 'Listo' : 'Error',
+                    text: result.message,
+                    icon: result.ok ? 'success' : 'error'
+                });
+            } catch (error) {
+                Swal.fire({
+                    title: 'Error',
+                    text: error.message || 'No se pudo guardar la informacion.',
+                    icon: 'error'
+                });
+            }
         });
 
         const btnEliminarData = document.getElementById('btnEliminarData');
-        btnEliminarData.addEventListener('click', () => {
+        btnEliminarData.addEventListener('click', async () => {
             const fecha = document.getElementById('inputFecha').value;
             if (!fecha) {
                 Swal.fire({
@@ -393,16 +427,20 @@
                 timerProgressBar: true,
                 didOpen: () => Swal.showLoading()
             });
-            fetch(`/delete-ventas-usuarios-lotonet?fecha=${fecha}`)
-                .then(response => response.json())
-                .then(data => {
-                    Swal.fire({
-                        title: "Listo",
-                        text: data.message,
-                        icon: "success"
-                    });
-                })
-                .catch(error => console.error('Error fetching data:', error));
+            try {
+                const result = await requestJson(`/delete-ventas-usuarios-lotonet?fecha=${fecha}`);
+                Swal.fire({
+                    title: result.ok ? 'Listo' : 'Error',
+                    text: result.message,
+                    icon: result.ok ? 'success' : 'error'
+                });
+            } catch (error) {
+                Swal.fire({
+                    title: 'Error',
+                    text: error.message || 'No se pudo eliminar la informacion.',
+                    icon: 'error'
+                });
+            }
         });
 
          const btnGuardarDataFecha = document.getElementById('btnGuardarDataFecha');

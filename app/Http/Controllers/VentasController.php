@@ -159,48 +159,25 @@ class VentasController extends Controller
     {
         header('Content-Type: application/json');
 
-        $curl = curl_init();
-
         $fecha = $request->query('fecha');
+        $apiResult = $this->fetchVentasUsuariosLotonetApi($fecha);
 
-        $curl = curl_init();
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => "http://contable.apploteka.com//api/finan/ventas_por_usuario/{$fecha}/5",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_POSTFIELDS => '{
-                "usuario": {
-                    "username": "fjoselito",
-                    "password": "mnXd5pSyF3HXjCC4"
-                }
-            }',
-            CURLOPT_HTTPHEADER => array(
-                'token: ZFozLWdBYyqERusVdTsW',
-                'Content-Type: application/json',
-                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682'
-            ),
-        ));
-
-        $response = curl_exec($curl);
-
-        curl_close($curl);
-
-        $ventas = json_decode($response, true);
+        if (!$apiResult['ok']) {
+            return response()->json([
+                'ventas' => [],
+                'code' => 1,
+                'message' => $apiResult['message'],
+            ], $apiResult['status']);
+        }
 
         $data = [];
 
-        foreach ($ventas['data']['result'] as $v) {
+        foreach ($apiResult['rows'] as $v) {
             $data[] = [
                 'consorcio_id'  => $v['consorcio_id'] ?? null,
                 'agencia_id'    => $v['agencia_id'] ?? null,
                 'producto_id'   => $v['producto_id'] ?? null,
-                'cedula'        => str_replace('-', '', $v['cedula']),
+                'cedula'        => str_replace('-', '', (string) ($v['cedula'] ?? '')),
                 'descripcion'   => $v['descripcion'] ?? null,
                 'tipo'          => $v['tipo'] ?? null,
                 'monto'         => $v['monto'] ?? 0,
@@ -208,7 +185,11 @@ class VentasController extends Controller
             ];
         }
 
-        return response()->json(['ventas' => $data, 'code' => $ventas['code'], 'message' => '']);
+        return response()->json([
+            'ventas' => $data,
+            'code' => 0,
+            'message' => $apiResult['message'],
+        ]);
     }
 
     public function saveVentasUsuariosLotonet(Request $request)
@@ -218,8 +199,6 @@ class VentasController extends Controller
         set_time_limit(360);                // alternativa equivalente
         header('Content-Type: application/json');
 
-        $curl = curl_init();
-
         $fecha = $request->query('fecha');
 
         $existe = VtUsuarioNet::whereDate('fecha', $fecha)->exists();
@@ -228,37 +207,18 @@ class VentasController extends Controller
             return response()->json(['message' => 'Ya hay data guardada en la fecha: ' . $fecha]);
         }
 
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => "http://contable.apploteka.com//api/finan/ventas_por_usuario/{$fecha}/5",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_POSTFIELDS => '{
-                "usuario": {
-                    "username": "fjoselito",
-                    "password": "mnXd5pSyF3HXjCC4"
-                }
-            }',
-            CURLOPT_HTTPHEADER => array(
-                'token: ZFozLWdBYyqERusVdTsW',
-                'Content-Type: application/json',
-                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682'
-            ),
-        ));
+        $apiResult = $this->fetchVentasUsuariosLotonetApi($fecha);
 
-        $response = curl_exec($curl);
-
-        curl_close($curl);
-
-        $ventas = json_decode($response, true);
+        if (!$apiResult['ok']) {
+            return response()->json([
+                'code' => 1,
+                'message' => $apiResult['message'],
+            ], $apiResult['status']);
+        }
 
         $data = [];
 
-        foreach ($ventas['data']['result'] as $v) {
+        foreach ($apiResult['rows'] as $v) {
             $producto_id = $v['producto_id'];
             if ($v['tipo'] == 'recarga') $producto_id = -1;
             if ($v['tipo'] == 'paquetico') $producto_id = -2;
@@ -300,5 +260,107 @@ class VentasController extends Controller
         return response()->json([
             'message' => 'Datos eliminados correctamente',
         ]);
+    }
+
+    private function fetchVentasUsuariosLotonetApi(?string $fecha): array
+    {
+        $fecha = trim((string) $fecha);
+
+        if ($fecha === '') {
+            return [
+                'ok' => false,
+                'status' => 422,
+                'message' => 'Debe indicar una fecha valida.',
+                'rows' => [],
+            ];
+        }
+
+        $curl = curl_init();
+
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => "http://contable.apploteka.com//api/finan/ventas_por_usuario/{$fecha}/5",
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'GET',
+            CURLOPT_POSTFIELDS => '{
+                "usuario": {
+                    "username": "fjoselito",
+                    "password": "mnXd5pSyF3HXjCC4"
+                }
+            }',
+            CURLOPT_HTTPHEADER => array(
+                'token: ZFozLWdBYyqERusVdTsW',
+                'Content-Type: application/json',
+                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682'
+            ),
+        ));
+
+        $response = curl_exec($curl);
+        $curlError = curl_error($curl);
+        $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+        curl_close($curl);
+
+        if ($response === false) {
+            return [
+                'ok' => false,
+                'status' => 502,
+                'message' => $curlError !== '' ? $curlError : 'No se pudo conectar con la API de Lotonet.',
+                'rows' => [],
+            ];
+        }
+
+        $ventas = json_decode($response, true);
+
+        if (!is_array($ventas)) {
+            return [
+                'ok' => false,
+                'status' => 502,
+                'message' => 'La API de Lotonet devolvio una respuesta invalida.',
+                'rows' => [],
+            ];
+        }
+
+        $rows = data_get($ventas, 'data.result', []);
+        $message = (string) ($ventas['message'] ?? $ventas['msg'] ?? $ventas['error'] ?? '');
+        $code = (int) ($ventas['code'] ?? 0);
+
+        if ($httpCode >= 400) {
+            return [
+                'ok' => false,
+                'status' => $httpCode,
+                'message' => $message !== '' ? $message : ('La API de Lotonet respondio con HTTP ' . $httpCode . '.'),
+                'rows' => [],
+            ];
+        }
+
+        if (!is_array($rows)) {
+            return [
+                'ok' => false,
+                'status' => 502,
+                'message' => $message !== '' ? $message : 'La API de Lotonet no devolvio el listado esperado.',
+                'rows' => [],
+            ];
+        }
+
+        if ($code !== 0 && empty($rows)) {
+            return [
+                'ok' => false,
+                'status' => 422,
+                'message' => $message !== '' ? $message : 'La API de Lotonet devolvio un error.',
+                'rows' => [],
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'status' => 200,
+            'message' => $message !== '' ? $message : 'Proceso completado.',
+            'rows' => $rows,
+        ];
     }
 }
