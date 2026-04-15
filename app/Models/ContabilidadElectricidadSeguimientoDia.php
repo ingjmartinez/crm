@@ -17,6 +17,7 @@ class ContabilidadElectricidadSeguimientoDia extends Model
         'nic',
         'agencia',
         'ruta',
+        'estatus',
         'observaciones',
     ];
 

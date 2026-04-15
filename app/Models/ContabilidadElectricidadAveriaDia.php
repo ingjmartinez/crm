@@ -21,6 +21,7 @@ class ContabilidadElectricidadAveriaDia extends Model
         'coordinadores',
         'agente_venta_am',
         'agente_venta_pm',
+        'estatus',
         'observaciones',
     ];
 

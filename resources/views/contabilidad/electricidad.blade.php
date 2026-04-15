@@ -2,6 +2,132 @@
 
 @section('content')
     <style>
+        .electricidad-casos-page {
+            font-size: 1rem;
+        }
+
+        .electricidad-stat-card {
+            min-height: 118px;
+            background: #fff;
+            border: 0;
+            border-radius: 1rem;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+            transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .electricidad-stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
+        }
+
+        .electricidad-stat-card .card-body {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.35rem 1.5rem;
+        }
+
+        .electricidad-stat-value {
+            font-size: 2.45rem;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: -0.04em;
+            color: #1f2b3d;
+        }
+
+        .electricidad-stat-label {
+            display: block;
+            margin-top: 0.55rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #6c757d;
+        }
+
+        .electricidad-stat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .electricidad-status-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 118px;
+            padding: 0.42rem 0.78rem;
+            border-radius: 999px;
+            font-size: 0.86rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .electricidad-status-pendiente {
+            background: #fff3cd;
+            color: #9a6700;
+        }
+
+        .electricidad-status-en_gestion {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .electricidad-status-resuelta {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .electricidad-status-cancelada {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .electricidad-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            flex-wrap: nowrap;
+        }
+
+        .electricidad-toolbar .btn,
+        .electricidad-toolbar .form-control {
+            min-height: 42px;
+            flex: 0 0 auto;
+        }
+
+        .electricidad-toolbar .btn {
+            padding: 0.62rem 1rem;
+            font-size: 0.98rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .electricidad-toolbar .form-control {
+            width: 170px;
+            min-width: 170px;
+            font-size: 0.95rem;
+        }
+
+        @media (max-width: 991.98px) {
+            .electricidad-toolbar {
+                flex-wrap: wrap;
+                justify-content: flex-start;
+            }
+
+            .electricidad-toolbar .btn,
+            .electricidad-toolbar .form-control {
+                width: 100%;
+                min-width: 0;
+            }
+        }
+
         .excel-head {
             background-color: #9ea3a8;
             color: #111;
@@ -21,7 +147,7 @@
             margin-bottom: 0.75rem;
         }
     </style>
-    <div class="main-content">
+    <div class="main-content electricidad-casos-page">
         <div class="page-content">
             <div class="container-fluid">
                 <div class="row">
@@ -39,14 +165,72 @@
                 </div>
 
                 <div class="row">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card electricidad-stat-card" title="Total de casos">
+                            <div class="card-body">
+                                <div>
+                                    <div class="electricidad-stat-value" id="stat-total-casos">{{ $stats['total'] ?? 0 }}</div>
+                                    <span class="electricidad-stat-label">Total de casos</span>
+                                </div>
+                                <span class="electricidad-stat-icon bg-primary-subtle text-primary">
+                                    <i class="ri-file-list-3-line"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card electricidad-stat-card" title="Pendientes">
+                            <div class="card-body">
+                                <div>
+                                    <div class="electricidad-stat-value" id="stat-pendientes">{{ $stats['pendientes'] ?? 0 }}</div>
+                                    <span class="electricidad-stat-label">Pendientes</span>
+                                </div>
+                                <span class="electricidad-stat-icon bg-warning-subtle text-warning">
+                                    <i class="ri-alarm-warning-line"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card electricidad-stat-card" title="En gestion">
+                            <div class="card-body">
+                                <div>
+                                    <div class="electricidad-stat-value" id="stat-en-gestion">{{ $stats['en_gestion'] ?? 0 }}</div>
+                                    <span class="electricidad-stat-label">En gestion</span>
+                                </div>
+                                <span class="electricidad-stat-icon bg-info-subtle text-info">
+                                    <i class="ri-radar-line"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card electricidad-stat-card" title="Resueltas">
+                            <div class="card-body">
+                                <div>
+                                    <div class="electricidad-stat-value" id="stat-resueltas">{{ $stats['resueltas'] ?? 0 }}</div>
+                                    <span class="electricidad-stat-label">Resueltas</span>
+                                </div>
+                                <span class="electricidad-stat-icon bg-success-subtle text-success">
+                                    <i class="ri-checkbox-circle-line"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
                     <div class="col-12 mb-3">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5 class="card-title mb-0">Seguimiento por dia</h5>
-                                <div class="d-flex gap-2">
-                                    <input type="date" class="form-control form-control-sm" id="filtroSegDesde" style="max-width: 170px;" placeholder="Desde">
-                                    <input type="date" class="form-control form-control-sm" id="filtroSegHasta" style="max-width: 170px;" placeholder="Hasta">
-                                    <button type="button" class="btn btn-sm btn-info" id="btnFiltrarSeguimiento">Filtrar</button>
+                                <div class="electricidad-toolbar">
+                                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalSeguimientoDia">
+                                        Captura de evento
+                                    </button>
+                                    <input type="date" class="form-control" id="filtroSegDesde" placeholder="Desde">
+                                    <input type="date" class="form-control" id="filtroSegHasta" placeholder="Hasta">
+                                    <button type="button" class="btn btn-info" id="btnFiltrarSeguimiento">Filtrar</button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -57,36 +241,6 @@
                                     </div>
                                 </div>
 
-                                <form id="formSeguimientoDia" class="row g-2 mb-3">
-                                    <div class="col-md-2">
-                                        <label class="form-label">Fecha de solicitud *</label>
-                                        <input type="date" class="form-control" id="segFechaSolicitud" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Distribuidora *</label>
-                                        <input type="text" class="form-control" id="segDistribuidora" maxlength="120" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">NIC *</label>
-                                        <input type="text" class="form-control" id="segNic" maxlength="80" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Agencia *</label>
-                                        <input type="text" class="form-control" id="segAgencia" maxlength="150" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Ruta *</label>
-                                        <input type="text" class="form-control" id="segRuta" maxlength="150" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Observaciones</label>
-                                        <input type="text" class="form-control" id="segObservaciones" maxlength="1000">
-                                    </div>
-                                    <div class="col-12 d-flex justify-content-end">
-                                        <button type="submit" class="btn btn-primary">Guardar seguimiento</button>
-                                    </div>
-                                </form>
-
                                 <div class="table-responsive">
                                     <table id="tablaSeguimientoDia" class="table table-bordered table-striped align-middle mb-0" style="width:100%">
                                         <thead>
@@ -96,6 +250,7 @@
                                                 <th>NIC</th>
                                                 <th>Agencia</th>
                                                 <th>Ruta</th>
+                                                <th>Estatus</th>
                                                 <th>Observaciones</th>
                                             </tr>
                                         </thead>
@@ -110,10 +265,13 @@
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5 class="card-title mb-0">Reporte de Averias por dia</h5>
-                                <div class="d-flex gap-2">
-                                    <input type="date" class="form-control form-control-sm" id="filtroAveDesde" style="max-width: 170px;" placeholder="Desde">
-                                    <input type="date" class="form-control form-control-sm" id="filtroAveHasta" style="max-width: 170px;" placeholder="Hasta">
-                                    <button type="button" class="btn btn-sm btn-info" id="btnFiltrarAverias">Filtrar</button>
+                                <div class="electricidad-toolbar">
+                                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAveriasDia">
+                                        Captura de evento
+                                    </button>
+                                    <input type="date" class="form-control" id="filtroAveDesde" placeholder="Desde">
+                                    <input type="date" class="form-control" id="filtroAveHasta" placeholder="Hasta">
+                                    <button type="button" class="btn btn-info" id="btnFiltrarAverias">Filtrar</button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -124,52 +282,6 @@
                                         <input type="text" class="form-control" id="buscarAveAgencia" placeholder="Ej: AG001 o Los Mina">
                                     </div>
                                 </div>
-
-                                <form id="formAveriasDia" class="row g-2 mb-3">
-                                    <div class="col-md-2">
-                                        <label class="form-label">Fecha del reporte *</label>
-                                        <input type="date" class="form-control" id="aveFechaReporte" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Reporte *</label>
-                                        <input type="text" class="form-control" id="aveReporte" maxlength="120" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Distribuidoras *</label>
-                                        <input type="text" class="form-control" id="aveDistribuidora" maxlength="120" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">NIC *</label>
-                                        <input type="text" class="form-control" id="aveNic" maxlength="80" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Agencia *</label>
-                                        <input type="text" class="form-control" id="aveAgencia" maxlength="150" required>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Ruta *</label>
-                                        <input type="text" class="form-control" id="aveRuta" maxlength="150" required>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">Coordinadores</label>
-                                        <input type="text" class="form-control" id="aveCoordinadores" maxlength="180">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">Agente de venta AM</label>
-                                        <input type="text" class="form-control" id="aveAgenteAm" maxlength="180">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">Agente de venta PM</label>
-                                        <input type="text" class="form-control" id="aveAgentePm" maxlength="180">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Observaciones</label>
-                                        <input type="text" class="form-control" id="aveObservaciones" maxlength="1000">
-                                    </div>
-                                    <div class="col-12 d-flex justify-content-end">
-                                        <button type="submit" class="btn btn-primary">Guardar averia</button>
-                                    </div>
-                                </form>
 
                                 <div class="table-responsive">
                                     <table id="tablaAveriasDia" class="table table-bordered table-striped align-middle mb-0" style="width:100%">
@@ -184,6 +296,7 @@
                                                 <th>Coordinadores</th>
                                                 <th>Agente de venta AM</th>
                                                 <th>Agente de venta PM</th>
+                                                <th>Estatus</th>
                                                 <th>Observaciones</th>
                                             </tr>
                                         </thead>
@@ -194,6 +307,130 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalSeguimientoDia" tabindex="-1" aria-labelledby="modalSeguimientoDiaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalSeguimientoDiaLabel">Captura de evento - Seguimiento por dia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="formSeguimientoDia">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Fecha de solicitud *</label>
+                                <input type="date" class="form-control" id="segFechaSolicitud" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Distribuidora *</label>
+                                <input type="text" class="form-control" id="segDistribuidora" maxlength="120" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">NIC *</label>
+                                <input type="text" class="form-control" id="segNic" maxlength="80" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Agencia *</label>
+                                <input type="text" class="form-control" id="segAgencia" maxlength="150" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Ruta *</label>
+                                <input type="text" class="form-control" id="segRuta" maxlength="150" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Estatus *</label>
+                                <select class="form-select" id="segEstatus" required>
+                                    <option value="pendiente">Pendiente</option>
+                                    <option value="en_gestion">En gestion</option>
+                                    <option value="resuelta">Resuelta</option>
+                                    <option value="cancelada">Cancelada</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Observaciones</label>
+                                <input type="text" class="form-control" id="segObservaciones" maxlength="1000">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="submit" class="btn btn-primary">Guardar seguimiento</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalAveriasDia" tabindex="-1" aria-labelledby="modalAveriasDiaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalAveriasDiaLabel">Captura de evento - Reporte de averias por dia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="formAveriasDia">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha del reporte *</label>
+                                <input type="date" class="form-control" id="aveFechaReporte" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Reporte *</label>
+                                <input type="text" class="form-control" id="aveReporte" maxlength="120" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Distribuidoras *</label>
+                                <input type="text" class="form-control" id="aveDistribuidora" maxlength="120" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">NIC *</label>
+                                <input type="text" class="form-control" id="aveNic" maxlength="80" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Agencia *</label>
+                                <input type="text" class="form-control" id="aveAgencia" maxlength="150" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Ruta *</label>
+                                <input type="text" class="form-control" id="aveRuta" maxlength="150" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Estatus *</label>
+                                <select class="form-select" id="aveEstatus" required>
+                                    <option value="pendiente">Pendiente</option>
+                                    <option value="en_gestion">En gestion</option>
+                                    <option value="resuelta">Resuelta</option>
+                                    <option value="cancelada">Cancelada</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Coordinadores</label>
+                                <input type="text" class="form-control" id="aveCoordinadores" maxlength="180">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Agente de venta AM</label>
+                                <input type="text" class="form-control" id="aveAgenteAm" maxlength="180">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Agente de venta PM</label>
+                                <input type="text" class="form-control" id="aveAgentePm" maxlength="180">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Observaciones</label>
+                                <input type="text" class="form-control" id="aveObservaciones" maxlength="1000">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="submit" class="btn btn-primary">Guardar averia</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -210,6 +447,7 @@
             const formSeguimiento = document.getElementById('formSeguimientoDia');
             const tablaSeguimientoBody = document.querySelector('#tablaSeguimientoDia tbody');
             const buscarSegAgencia = document.getElementById('buscarSegAgencia');
+            const modalSeguimientoDia = document.getElementById('modalSeguimientoDia');
 
             const aveDesde = document.getElementById('filtroAveDesde');
             const aveHasta = document.getElementById('filtroAveHasta');
@@ -217,9 +455,71 @@
             const formAverias = document.getElementById('formAveriasDia');
             const tablaAveriasBody = document.querySelector('#tablaAveriasDia tbody');
             const buscarAveAgencia = document.getElementById('buscarAveAgencia');
+            const modalAveriasDia = document.getElementById('modalAveriasDia');
 
             let dtSeguimiento = null;
             let dtAverias = null;
+            let resumenSeguimiento = {
+                total: 0,
+                pendientes: 0,
+                en_gestion: 0,
+                resueltas: 0,
+                canceladas: 0,
+            };
+            let resumenAverias = {
+                total: 0,
+                pendientes: 0,
+                en_gestion: 0,
+                resueltas: 0,
+                canceladas: 0,
+            };
+
+            function normalizeResumen(resumen) {
+                return {
+                    total: Number(resumen?.total || 0),
+                    pendientes: Number(resumen?.pendientes || 0),
+                    en_gestion: Number(resumen?.en_gestion || 0),
+                    resueltas: Number(resumen?.resueltas || 0),
+                    canceladas: Number(resumen?.canceladas || 0),
+                };
+            }
+
+            function updateStatusCards() {
+                const total = resumenSeguimiento.total + resumenAverias.total;
+                const pendientes = resumenSeguimiento.pendientes + resumenAverias.pendientes;
+                const enGestion = resumenSeguimiento.en_gestion + resumenAverias.en_gestion;
+                const resueltas = resumenSeguimiento.resueltas + resumenAverias.resueltas;
+
+                document.getElementById('stat-total-casos').textContent = total;
+                document.getElementById('stat-pendientes').textContent = pendientes;
+                document.getElementById('stat-en-gestion').textContent = enGestion;
+                document.getElementById('stat-resueltas').textContent = resueltas;
+            }
+
+            function estatusLabel(estatus) {
+                const labels = {
+                    pendiente: 'Pendiente',
+                    en_gestion: 'En gestion',
+                    resuelta: 'Resuelta',
+                    cancelada: 'Cancelada',
+                };
+
+                return labels[estatus] || 'Pendiente';
+            }
+
+            function estatusBadge(estatus) {
+                const current = estatus || 'pendiente';
+                return `<span class="electricidad-status-badge electricidad-status-${current}">${estatusLabel(current)}</span>`;
+            }
+
+            function closeModal(modalElement) {
+                if (!modalElement || !window.bootstrap?.Modal) {
+                    return;
+                }
+
+                const instance = window.bootstrap.Modal.getInstance(modalElement) || new window.bootstrap.Modal(modalElement);
+                instance.hide();
+            }
 
             function initDataTable(selector) {
                 if ($.fn.DataTable.isDataTable(selector)) {
@@ -280,6 +580,7 @@
 
                 const payload = await response.json();
                 tablaSeguimientoBody.innerHTML = '';
+                resumenSeguimiento = normalizeResumen(payload.resumen);
 
                 (payload.data || []).forEach(function (item) {
                     const row = document.createElement('tr');
@@ -289,6 +590,7 @@
                         <td>${item.nic || ''}</td>
                         <td>${item.agencia || ''}</td>
                         <td>${item.ruta || ''}</td>
+                        <td>${estatusBadge(item.estatus)}</td>
                         <td>${item.observaciones || ''}</td>
                     `;
 
@@ -296,6 +598,7 @@
                 });
 
                 dtSeguimiento = initDataTable('#tablaSeguimientoDia');
+                updateStatusCards();
 
                 const termino = (buscarSegAgencia?.value || '').trim();
                 dtSeguimiento.column(3).search(termino).draw();
@@ -317,6 +620,7 @@
 
                 const payload = await response.json();
                 tablaAveriasBody.innerHTML = '';
+                resumenAverias = normalizeResumen(payload.resumen);
 
                 (payload.data || []).forEach(function (item) {
                     const row = document.createElement('tr');
@@ -330,6 +634,7 @@
                         <td>${item.coordinadores || ''}</td>
                         <td>${item.agente_venta_am || ''}</td>
                         <td>${item.agente_venta_pm || ''}</td>
+                        <td>${estatusBadge(item.estatus)}</td>
                         <td>${item.observaciones || ''}</td>
                     `;
 
@@ -337,6 +642,7 @@
                 });
 
                 dtAverias = initDataTable('#tablaAveriasDia');
+                updateStatusCards();
 
                 const termino = (buscarAveAgencia?.value || '').trim();
                 dtAverias.column(4).search(termino).draw();
@@ -351,10 +657,11 @@
                     nic: document.getElementById('segNic').value.trim(),
                     agencia: document.getElementById('segAgencia').value.trim(),
                     ruta: document.getElementById('segRuta').value.trim(),
+                    estatus: document.getElementById('segEstatus').value,
                     observaciones: document.getElementById('segObservaciones').value.trim(),
                 };
 
-                if (!payload.fecha_solicitud || !payload.distribuidora || !payload.nic || !payload.agencia || !payload.ruta) {
+                if (!payload.fecha_solicitud || !payload.distribuidora || !payload.nic || !payload.agencia || !payload.ruta || !payload.estatus) {
                     alert('Completa todos los campos obligatorios de seguimiento.');
                     return;
                 }
@@ -377,6 +684,7 @@
                 }
 
                 formSeguimiento.reset();
+                closeModal(modalSeguimientoDia);
                 await cargarSeguimientoDia();
             });
 
@@ -393,10 +701,11 @@
                     coordinadores: document.getElementById('aveCoordinadores').value.trim(),
                     agente_venta_am: document.getElementById('aveAgenteAm').value.trim(),
                     agente_venta_pm: document.getElementById('aveAgentePm').value.trim(),
+                    estatus: document.getElementById('aveEstatus').value,
                     observaciones: document.getElementById('aveObservaciones').value.trim(),
                 };
 
-                if (!payload.fecha_reporte || !payload.reporte || !payload.distribuidora || !payload.nic || !payload.agencia || !payload.ruta) {
+                if (!payload.fecha_reporte || !payload.reporte || !payload.distribuidora || !payload.nic || !payload.agencia || !payload.ruta || !payload.estatus) {
                     alert('Completa todos los campos obligatorios de averias.');
                     return;
                 }
@@ -419,6 +728,7 @@
                 }
 
                 formAverias.reset();
+                closeModal(modalAveriasDia);
                 await cargarAveriasDia();
             });
 

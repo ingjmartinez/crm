@@ -13,7 +13,9 @@ class ContabilidadElectricidadController extends Controller
 {
     public function index()
     {
-        return view('contabilidad.electricidad');
+        return view('contabilidad.electricidad', [
+            'stats' => $this->buildElectricidadStatusSummary(),
+        ]);
     }
 
     public function data(Request $request)
@@ -188,6 +190,7 @@ class ContabilidadElectricidadController extends Controller
                     'nic' => (string) $item->nic,
                     'agencia' => (string) $item->agencia,
                     'ruta' => (string) $item->ruta,
+                    'estatus' => (string) ($item->estatus ?? 'pendiente'),
                     'observaciones' => (string) ($item->observaciones ?? ''),
                 ];
             })
@@ -196,6 +199,7 @@ class ContabilidadElectricidadController extends Controller
         return response()->json([
             'data' => $rows,
             'total' => $rows->count(),
+            'resumen' => $this->buildStatusSummaryFromRows($rows),
         ]);
     }
 
@@ -207,6 +211,7 @@ class ContabilidadElectricidadController extends Controller
             'nic' => ['required', 'string', 'max:80'],
             'agencia' => ['required', 'string', 'max:150'],
             'ruta' => ['required', 'string', 'max:150'],
+            'estatus' => ['required', 'in:pendiente,en_gestion,resuelta,cancelada'],
             'observaciones' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -260,6 +265,7 @@ class ContabilidadElectricidadController extends Controller
                     'coordinadores' => (string) ($item->coordinadores ?? ''),
                     'agente_venta_am' => (string) ($item->agente_venta_am ?? ''),
                     'agente_venta_pm' => (string) ($item->agente_venta_pm ?? ''),
+                    'estatus' => (string) ($item->estatus ?? 'pendiente'),
                     'observaciones' => (string) ($item->observaciones ?? ''),
                 ];
             })
@@ -268,6 +274,7 @@ class ContabilidadElectricidadController extends Controller
         return response()->json([
             'data' => $rows,
             'total' => $rows->count(),
+            'resumen' => $this->buildStatusSummaryFromRows($rows),
         ]);
     }
 
@@ -283,6 +290,7 @@ class ContabilidadElectricidadController extends Controller
             'coordinadores' => ['nullable', 'string', 'max:180'],
             'agente_venta_am' => ['nullable', 'string', 'max:180'],
             'agente_venta_pm' => ['nullable', 'string', 'max:180'],
+            'estatus' => ['required', 'in:pendiente,en_gestion,resuelta,cancelada'],
             'observaciones' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -301,5 +309,35 @@ class ContabilidadElectricidadController extends Controller
         return response()->json([
             'message' => 'Registro eliminado correctamente.',
         ]);
+    }
+
+    private function buildElectricidadStatusSummary(): array
+    {
+        $seguimientoRows = ContabilidadElectricidadSeguimientoDia::query()
+            ->get(['estatus'])
+            ->map(fn (ContabilidadElectricidadSeguimientoDia $item) => [
+                'estatus' => (string) ($item->estatus ?? 'pendiente'),
+            ]);
+
+        $averiasRows = ContabilidadElectricidadAveriaDia::query()
+            ->get(['estatus'])
+            ->map(fn (ContabilidadElectricidadAveriaDia $item) => [
+                'estatus' => (string) ($item->estatus ?? 'pendiente'),
+            ]);
+
+        return $this->buildStatusSummaryFromRows($seguimientoRows->concat($averiasRows)->values());
+    }
+
+    private function buildStatusSummaryFromRows($rows): array
+    {
+        $items = collect($rows);
+
+        return [
+            'total' => $items->count(),
+            'pendientes' => $items->where('estatus', 'pendiente')->count(),
+            'en_gestion' => $items->where('estatus', 'en_gestion')->count(),
+            'resueltas' => $items->where('estatus', 'resuelta')->count(),
+            'canceladas' => $items->where('estatus', 'cancelada')->count(),
+        ];
     }
 }
