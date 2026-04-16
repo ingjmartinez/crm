@@ -319,6 +319,13 @@
 @section('script')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        ['modalMetaDiaria', 'modalRentabilidad'].forEach(function (modalId) {
+            const modalEl = document.getElementById(modalId);
+            if (modalEl && modalEl.parentElement !== document.body) {
+                document.body.appendChild(modalEl);
+            }
+        });
+
         const STORAGE_KEY = 'comercial_kpi_meta_diaria_v1';
         const STORAGE_KEY_RENTABILIDAD = 'comercial_kpi_meta_rentabilidad_v1';
         const formFiltro = document.getElementById('form-filtro-mes-kpi');

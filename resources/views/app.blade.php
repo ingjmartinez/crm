@@ -865,14 +865,6 @@
                                         <a href="{{ url('/empleados') }}" class="nav-link" data-key="t-mailbox">
                                             Empleados </a>
                                     </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/empleados-no-regularizados') }}" class="nav-link"
-                                            data-key="t-mailbox"> Empleados No Regularizados </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/ventas-sin-empleado') }}" class="nav-link"
-                                            data-key="t-mailbox"> Ventas Sin Empleado </a>
-                                    </li>
                                 </ul>
                             </div>
                         </li>
