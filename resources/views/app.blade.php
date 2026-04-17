@@ -40,6 +40,17 @@
     <link href="{{ asset('css/mobile.css') }}" rel="stylesheet" type="text/css" />
 
     <style>
+        :root {
+            --crm-sidebar-height: 100vh;
+            --crm-sidebar-brand-height: 70px;
+        }
+
+        @supports (height: 100dvh) {
+            :root {
+                --crm-sidebar-height: 100dvh;
+            }
+        }
+
         html {
             scroll-behavior: smooth;
         }
@@ -60,19 +71,60 @@
             will-change: scroll-position;
         }
 
-        .app-menu.navbar-menu {
+        html[data-layout="vertical"] .app-menu.navbar-menu,
+        html[data-layout="twocolumn"] .app-menu.navbar-menu {
+            display: flex;
+            flex-direction: column;
+            height: var(--crm-sidebar-height);
+            max-height: var(--crm-sidebar-height);
             overflow: hidden;
         }
 
-        #scrollbar {
-            height: calc(100vh - 70px) !important;
-            max-height: calc(100vh - 70px);
+        html[data-layout="vertical"] .app-menu.navbar-menu .navbar-brand-box,
+        html[data-layout="twocolumn"] .app-menu.navbar-menu .navbar-brand-box {
+            flex: 0 0 var(--crm-sidebar-brand-height);
+        }
+
+        html[data-layout="vertical"] #scrollbar,
+        html[data-layout="twocolumn"] #scrollbar {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: calc(var(--crm-sidebar-height) - var(--crm-sidebar-brand-height)) !important;
+            max-height: calc(var(--crm-sidebar-height) - var(--crm-sidebar-brand-height));
             overflow-y: auto;
             overflow-x: hidden;
         }
 
-        #scrollbar .container-fluid {
+        html[data-layout="vertical"] #scrollbar .container-fluid,
+        html[data-layout="twocolumn"] #scrollbar .container-fluid {
+            height: 100%;
+            min-height: 0;
+            padding-bottom: 2rem;
+        }
+
+        html[data-layout="vertical"] #navbar-nav,
+        html[data-layout="twocolumn"] #navbar-nav {
+            min-height: 0;
             padding-bottom: 1.25rem;
+        }
+
+        html[data-layout="vertical"] #navbar-nav[data-simplebar],
+        html[data-layout="twocolumn"] #navbar-nav[data-simplebar] {
+            height: 100%;
+            max-height: 100%;
+            overflow: hidden;
+        }
+
+        html[data-layout="vertical"] #scrollbar .simplebar-content-wrapper,
+        html[data-layout="twocolumn"] #scrollbar .simplebar-content-wrapper,
+        html[data-layout="vertical"] #navbar-nav .simplebar-content-wrapper,
+        html[data-layout="twocolumn"] #navbar-nav .simplebar-content-wrapper {
+            max-height: 100%;
+        }
+
+        html[data-layout="vertical"] #navbar-nav .simplebar-content,
+        html[data-layout="twocolumn"] #navbar-nav .simplebar-content {
+            padding-bottom: 1.25rem !important;
         }
 
         #navbar-nav .nav-link,
@@ -86,20 +138,20 @@
         }
 
         #navbar-nav .menu-dropdown.show {
-            max-height: min(52vh, 420px);
-            overflow-y: auto;
-            overflow-x: hidden;
-            scrollbar-gutter: stable;
+            max-height: none;
+            overflow: visible;
             overscroll-behavior: contain;
-            padding-right: 0.2rem;
+            padding-right: 0;
         }
 
         #navbar-nav .menu-dropdown.show::-webkit-scrollbar {
-            width: 6px;
+            width: 10px;
         }
 
         #navbar-nav .menu-dropdown.show::-webkit-scrollbar-thumb {
-            background: rgba(64, 81, 137, 0.34);
+            background-color: rgba(255, 255, 255, 0.28);
+            background-clip: content-box;
+            border: 3px solid transparent;
             border-radius: 999px;
         }
 
@@ -107,13 +159,50 @@
             background: transparent;
         }
 
-        #scrollbar .simplebar-track.simplebar-vertical {
-            width: 8px;
+        #scrollbar,
+        #navbar-nav {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
         }
 
-        #scrollbar .simplebar-scrollbar::before {
-            background: rgba(64, 81, 137, 0.38);
+        #scrollbar::-webkit-scrollbar,
+        #navbar-nav::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        #scrollbar::-webkit-scrollbar-thumb,
+        #navbar-nav::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.28);
+            background-clip: content-box;
+            border: 3px solid transparent;
             border-radius: 999px;
+        }
+
+        #scrollbar::-webkit-scrollbar-track,
+        #navbar-nav::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #scrollbar .simplebar-track.simplebar-vertical,
+        #navbar-nav .simplebar-track.simplebar-vertical {
+            right: 1px;
+            width: 10px;
+            background: transparent;
+        }
+
+        #scrollbar .simplebar-scrollbar::before,
+        #navbar-nav .simplebar-scrollbar::before {
+            left: 3px;
+            right: 3px;
+            background: rgba(255, 255, 255, 0.30);
+            border-radius: 999px;
+            opacity: 0.55;
+        }
+
+        #scrollbar .simplebar-track.simplebar-vertical:hover .simplebar-scrollbar::before,
+        #navbar-nav .simplebar-track.simplebar-vertical:hover .simplebar-scrollbar::before {
+            background: rgba(255, 255, 255, 0.46);
+            opacity: 0.75;
         }
 
         .layout-width,
@@ -2072,6 +2161,65 @@
     <script src="{{ asset('js/app.js') }}"></script>
     <!-- Mobile Optimization JS -->
     <script src="{{ asset('js/mobile-optimization.js') }}"></script>
+
+    <script>
+        (function () {
+            function recalculateMenuScroll() {
+                const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+                document.documentElement.style.setProperty('--crm-sidebar-height', viewportHeight + 'px');
+
+                window.requestAnimationFrame(function () {
+                    if (!window.SimpleBar || !window.SimpleBar.instances || typeof window.SimpleBar.instances.get !== 'function') {
+                        return;
+                    }
+
+                    ['scrollbar', 'navbar-nav'].forEach(function (elementId) {
+                        const element = document.getElementById(elementId);
+                        const instance = element ? window.SimpleBar.instances.get(element) : null;
+
+                        if (instance && typeof instance.recalculate === 'function') {
+                            instance.recalculate();
+                        }
+                    });
+                });
+            }
+
+            function keepMenuSectionVisible(element) {
+                if (!element || !element.closest || !element.closest('#navbar-nav')) {
+                    return;
+                }
+
+                window.requestAnimationFrame(function () {
+                    const scrollbar = document.getElementById('scrollbar');
+                    const scrollElement = document.querySelector('#scrollbar .simplebar-content-wrapper') || scrollbar;
+
+                    if (!scrollElement) {
+                        return;
+                    }
+
+                    const sectionRect = element.getBoundingClientRect();
+                    const scrollRect = scrollElement.getBoundingClientRect();
+                    const bottomGap = sectionRect.bottom - scrollRect.bottom + 24;
+                    const topGap = scrollRect.top - sectionRect.top + 16;
+
+                    if (bottomGap > 0) {
+                        scrollElement.scrollTop += bottomGap;
+                    } else if (topGap > 0) {
+                        scrollElement.scrollTop -= topGap;
+                    }
+                });
+            }
+
+            recalculateMenuScroll();
+            window.addEventListener('resize', recalculateMenuScroll);
+            window.addEventListener('orientationchange', recalculateMenuScroll);
+            document.addEventListener('shown.bs.collapse', function (event) {
+                recalculateMenuScroll();
+                keepMenuSectionVisible(event.target);
+            });
+            document.addEventListener('hidden.bs.collapse', recalculateMenuScroll);
+        })();
+    </script>
 
     <script>
         const TASK_NOTIF_URL = '{{ url('/tareas/notificaciones') }}';

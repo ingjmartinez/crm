@@ -341,6 +341,402 @@ class AgenciaController extends Controller
     }
 
     /**
+     * API: Agencias que tienen al menos un campo visible incompleto.
+     */
+    public function agenciasParaActualizar(Request $request)
+    {
+        $campos = $this->camposRevisionAgencia();
+        $agencias = Agencia::query()
+            ->select(array_merge(['id'], array_keys($campos)))
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function (Agencia $agencia) use ($campos) {
+                $camposFaltantes = [];
+
+                foreach ($campos as $campo => $etiqueta) {
+                    if ($this->valorAgenciaIncompleto($agencia->{$campo} ?? null)) {
+                        $camposFaltantes[] = $etiqueta;
+                    }
+                }
+
+                if (empty($camposFaltantes)) {
+                    return null;
+                }
+
+                return [
+                    'id' => $agencia->id,
+                    'agencia' => $agencia->agencia,
+                    'terminal' => $agencia->terminal,
+                    'nombre_agencia' => $agencia->nombre_agencia,
+                    'campos_faltantes' => $camposFaltantes,
+                    'total_campos_faltantes' => count($camposFaltantes),
+                    'edit_url' => route('agencias.edit', $agencia),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        return response()->json([
+            'ok' => true,
+            'total' => $agencias->count(),
+            'agencias' => $agencias,
+        ]);
+    }
+
+    private function camposRevisionAgencia(): array
+    {
+        return [
+            'agencia' => 'Agencia',
+            'terminal' => 'Terminal',
+            'horario_am' => 'Horario AM',
+            'horario_pm' => 'Horario PM',
+            'nombre_agencia' => 'Nombre',
+            'sistema' => 'Sistema',
+            'empresa' => 'Empresa',
+            'ciudad' => 'Ciudad',
+            'ruta' => 'Ruta',
+            'operador' => 'Operador',
+            'coordinador' => 'Coordinador',
+            'estatus' => 'Estatus',
+            'aplica_incentivo' => 'Incentivo',
+        ];
+    }
+
+    private function valorAgenciaIncompleto($value): bool
+    {
+        if ($value === null) {
+            return true;
+        }
+
+        if (is_bool($value) || is_int($value) || is_float($value)) {
+            return false;
+        }
+
+        $normalizado = trim((string) $value);
+
+        return $normalizado === '' || in_array(strtolower($normalizado), ['-', 'n/a', 'na', 'null'], true);
+    }
+
+    /**
+     * Registra masivamente las terminales no registradas de venta fija.
+     */
+    public function registrarNoRegistradasVentaFija(Request $request)
+    {
+        $fechaCorteInput = trim((string) $request->input('fecha_corte', now()->toDateString()));
+
+        try {
+            $fechaCorte = Carbon::createFromFormat('Y-m-d', $fechaCorteInput)->endOfDay();
+        } catch (\Throwable $e) {
+            $fechaCorte = now()->endOfDay();
+        }
+
+        $resultado = $this->obtenerTerminalesNoRegistradasVentaFija($fechaCorte);
+        $terminales = collect($resultado['terminales'])
+            ->pluck('terminal')
+            ->filter()
+            ->values()
+            ->all();
+
+        $registro = $this->registrarTerminalesBase($terminales);
+
+        return response()->json([
+            'ok' => true,
+            'registradas' => $registro['registradas'],
+            'omitidas' => $registro['omitidas'],
+            'total_solicitadas' => count($terminales),
+            'agencias' => $registro['agencias'],
+        ]);
+    }
+
+    /**
+     * Registra una terminal no registrada especifica como agencia base.
+     */
+    public function registrarTerminalNoRegistrada(Request $request)
+    {
+        $validated = $request->validate([
+            'terminal' => ['required', 'string', 'max:25'],
+        ]);
+
+        $registro = $this->registrarTerminalesBase([$validated['terminal']]);
+
+        return response()->json([
+            'ok' => true,
+            'registradas' => $registro['registradas'],
+            'omitidas' => $registro['omitidas'],
+            'agencia' => $registro['agencias'][0] ?? null,
+        ]);
+    }
+
+    /**
+     * API: Agencias actualmente desactivadas.
+     */
+    public function agenciasInactivas(Request $request)
+    {
+        $agencias = $this->obtenerAgenciasInactivas();
+
+        return response()->json([
+            'ok' => true,
+            'total' => count($agencias),
+            'activas' => 0,
+            'inactivas' => count($agencias),
+            'agencias' => $agencias,
+        ]);
+    }
+
+    /**
+     * API: Agencias sin venta positiva en los ultimos 30 dias.
+     */
+    public function agenciasSinVentaTreintaDias(Request $request)
+    {
+        $resultado = $this->obtenerAgenciasSinVentaTreintaDias();
+
+        return response()->json([
+            'ok' => true,
+            'desde' => $resultado['desde'],
+            'hasta' => $resultado['hasta'],
+            'total' => count($resultado['agencias']),
+            'activas' => collect($resultado['agencias'])->where('estatus', 1)->count(),
+            'inactivas' => collect($resultado['agencias'])->where('estatus', 0)->count(),
+            'agencias' => $resultado['agencias'],
+        ]);
+    }
+
+    /**
+     * API: Agencias desactivadas que registraron ventas positivas en 30 dias.
+     */
+    public function agenciasInactivasConVentaTreintaDias(Request $request)
+    {
+        $resultado = $this->obtenerAgenciasInactivasConVentaTreintaDias();
+
+        return response()->json([
+            'ok' => true,
+            'desde' => $resultado['desde'],
+            'hasta' => $resultado['hasta'],
+            'total' => count($resultado['agencias']),
+            'activas' => 0,
+            'inactivas' => count($resultado['agencias']),
+            'agencias' => $resultado['agencias'],
+        ]);
+    }
+
+    /**
+     * Desactiva masivamente agencias que no tienen venta positiva en 30 dias.
+     */
+    public function desactivarAgenciasSinVentaTreintaDias(Request $request)
+    {
+        $resultado = $this->obtenerAgenciasSinVentaTreintaDias();
+        $idsActivas = collect($resultado['agencias'])
+            ->where('estatus', 1)
+            ->pluck('id')
+            ->values();
+
+        if ($idsActivas->isNotEmpty()) {
+            Agencia::query()
+                ->whereIn('id', $idsActivas)
+                ->update(['estatus' => 0]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'desactivadas' => $idsActivas->count(),
+            'omitidas' => count($resultado['agencias']) - $idsActivas->count(),
+        ]);
+    }
+
+    /**
+     * Activa o desactiva una agencia desde el modal de inactividad.
+     */
+    public function actualizarEstatusAgencia(Request $request)
+    {
+        $validated = $request->validate([
+            'agencia_id' => ['required', 'integer', 'exists:agencias,id'],
+            'estatus' => ['required', 'integer', 'in:0,1'],
+        ]);
+
+        $agencia = Agencia::findOrFail((int) $validated['agencia_id']);
+        $agencia->update(['estatus' => (int) $validated['estatus']]);
+
+        return response()->json([
+            'ok' => true,
+            'agencia' => [
+                'id' => $agencia->id,
+                'agencia' => $agencia->agencia,
+                'terminal' => $agencia->terminal,
+                'estatus' => (int) $agencia->estatus,
+            ],
+        ]);
+    }
+
+    private function registrarTerminalesBase(array $terminales): array
+    {
+        $terminalesPorClave = collect($terminales)
+            ->mapWithKeys(function ($terminal) {
+                $terminalOriginal = trim((string) $terminal);
+                $terminalKey = $this->normalizarTerminal($terminalOriginal);
+
+                return $terminalKey !== '0' ? [$terminalKey => $terminalOriginal] : [];
+            });
+
+        if ($terminalesPorClave->isEmpty()) {
+            return [
+                'registradas' => 0,
+                'omitidas' => 0,
+                'agencias' => [],
+            ];
+        }
+
+        $terminalesExistentes = Agencia::query()
+            ->whereNotNull('terminal')
+            ->pluck('terminal')
+            ->map(fn($terminal) => $this->normalizarTerminal((string) $terminal))
+            ->filter(fn($terminal) => $terminal !== '0')
+            ->unique()
+            ->flip();
+
+        $registradas = [];
+        $omitidas = 0;
+
+        foreach ($terminalesPorClave as $terminalKey => $terminalOriginal) {
+            if ($terminalesExistentes->has($terminalKey)) {
+                $omitidas++;
+                continue;
+            }
+
+            $agencia = Agencia::create([
+                'agencia' => substr($terminalOriginal, 0, 25),
+                'terminal' => substr($terminalOriginal, 0, 25),
+                'nombre_agencia' => null,
+                'estatus' => 1,
+                'aplica_incentivo' => 1,
+            ]);
+
+            $terminalesExistentes->put($terminalKey, true);
+            $registradas[] = [
+                'id' => $agencia->id,
+                'agencia' => $agencia->agencia,
+                'terminal' => $agencia->terminal,
+                'edit_url' => route('agencias.edit', $agencia),
+            ];
+        }
+
+        return [
+            'registradas' => count($registradas),
+            'omitidas' => $omitidas,
+            'agencias' => $registradas,
+        ];
+    }
+
+    private function obtenerAgenciasSinVentaTreintaDias(): array
+    {
+        $fechaInicio = now()->subDays(29)->startOfDay()->toDateString();
+        $fechaFin = now()->endOfDay()->toDateString();
+
+        $ventasPorTerminal = $this->obtenerVentasPorTerminal($fechaInicio, $fechaFin);
+
+        $agencias = Agencia::query()
+            ->select('id', 'agencia', 'terminal', 'nombre_agencia', 'empresa', 'ciudad', 'ruta', 'estatus')
+            ->whereNotNull('terminal')
+            ->where('estatus', 1)
+            ->orderBy('terminal')
+            ->get()
+            ->filter(function (Agencia $agencia) use ($ventasPorTerminal) {
+                $terminalKey = $this->normalizarTerminal((string) $agencia->terminal);
+
+                return $terminalKey !== '0' && !$ventasPorTerminal->has($terminalKey);
+            })
+            ->map(fn(Agencia $agencia) => $this->formatearAgenciaModal($agencia))
+            ->values()
+            ->all();
+
+        return [
+            'desde' => $fechaInicio,
+            'hasta' => $fechaFin,
+            'agencias' => $agencias,
+        ];
+    }
+
+    private function obtenerAgenciasInactivas(): array
+    {
+        return Agencia::query()
+            ->select('id', 'agencia', 'terminal', 'nombre_agencia', 'empresa', 'ciudad', 'ruta', 'estatus')
+            ->where('estatus', 0)
+            ->orderBy('terminal')
+            ->get()
+            ->map(fn(Agencia $agencia) => $this->formatearAgenciaModal($agencia))
+            ->values()
+            ->all();
+    }
+
+    private function obtenerAgenciasInactivasConVentaTreintaDias(): array
+    {
+        $fechaInicio = now()->subDays(29)->startOfDay()->toDateString();
+        $fechaFin = now()->endOfDay()->toDateString();
+        $ventasPorTerminal = $this->obtenerVentasPorTerminal($fechaInicio, $fechaFin);
+
+        $agencias = Agencia::query()
+            ->select('id', 'agencia', 'terminal', 'nombre_agencia', 'empresa', 'ciudad', 'ruta', 'estatus')
+            ->where('estatus', 0)
+            ->whereNotNull('terminal')
+            ->orderBy('terminal')
+            ->get()
+            ->filter(function (Agencia $agencia) use ($ventasPorTerminal) {
+                $terminalKey = $this->normalizarTerminal((string) $agencia->terminal);
+
+                return $terminalKey !== '0' && $ventasPorTerminal->has($terminalKey);
+            })
+            ->map(fn(Agencia $agencia) => $this->formatearAgenciaModal($agencia))
+            ->values()
+            ->all();
+
+        return [
+            'desde' => $fechaInicio,
+            'hasta' => $fechaFin,
+            'agencias' => $agencias,
+        ];
+    }
+
+    private function obtenerVentasPorTerminal(string $fechaInicio, string $fechaFin)
+    {
+        $ventasBet = DB::table('vt_usuarios_bet')
+            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia_id AS CHAR))), ''), '0') AS terminal_key")
+            ->whereNotNull('agencia_id')
+            ->whereDate('fecha', '>=', $fechaInicio)
+            ->whereDate('fecha', '<=', $fechaFin)
+            ->whereRaw('COALESCE(monto, 0) > 0');
+
+        $ventasNet = DB::table('vt_usuarios_net')
+            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia_id AS CHAR))), ''), '0') AS terminal_key")
+            ->whereNotNull('agencia_id')
+            ->whereDate('fecha', '>=', $fechaInicio)
+            ->whereDate('fecha', '<=', $fechaFin)
+            ->whereRaw('COALESCE(monto, 0) > 0');
+
+        return DB::query()
+            ->fromSub($ventasBet->unionAll($ventasNet), 'v')
+            ->whereRaw('terminal_key <> ?', ['0'])
+            ->distinct()
+            ->pluck('terminal_key')
+            ->map(fn($terminal) => (string) $terminal)
+            ->flip();
+    }
+
+    private function formatearAgenciaModal(Agencia $agencia): array
+    {
+        return [
+            'id' => $agencia->id,
+            'agencia' => $agencia->agencia,
+            'terminal' => $agencia->terminal,
+            'nombre_agencia' => $agencia->nombre_agencia,
+            'empresa' => $agencia->empresa,
+            'ciudad' => $agencia->ciudad,
+            'ruta' => $agencia->ruta,
+            'estatus' => (int) $agencia->estatus,
+            'estatus_texto' => (int) $agencia->estatus === 1 ? 'Activa' : 'Inactiva',
+            'edit_url' => route('agencias.edit', $agencia),
+        ];
+    }
+
+    /**
      * Vista: Agencias con incumplimiento de horario.
      */
     public function incumplimientosHorario()
@@ -746,6 +1142,7 @@ class AgenciaController extends Controller
 
         $ventasBet = DB::table('vt_usuarios_bet')
             ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia_id AS CHAR))), ''), '0') AS terminal_key")
+            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS terminal_original")
             ->selectRaw('COALESCE(monto, 0) AS monto')
             ->selectRaw('fecha AS fecha')
             ->whereNotNull('agencia_id')
@@ -764,6 +1161,7 @@ class AgenciaController extends Controller
 
         $ventasNet = DB::table('vt_usuarios_net')
             ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia_id AS CHAR))), ''), '0') AS terminal_key")
+            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS terminal_original")
             ->selectRaw('COALESCE(monto, 0) AS monto')
             ->selectRaw('fecha AS fecha')
             ->whereNotNull('agencia_id')
@@ -783,6 +1181,7 @@ class AgenciaController extends Controller
         $ventasConsolidadas = DB::query()
             ->fromSub($ventasBet->unionAll($ventasNet), 'v')
             ->selectRaw('terminal_key')
+            ->selectRaw('MIN(NULLIF(terminal_original, "")) AS terminal_original')
             ->selectRaw('COUNT(DISTINCT DATE(fecha)) AS dias_con_venta')
             ->selectRaw('MAX(fecha) AS ultima_fecha')
             ->whereRaw('terminal_key <> ?', ['0'])
@@ -796,8 +1195,11 @@ class AgenciaController extends Controller
                 return !$terminalesRegistradas->has($terminal);
             })
             ->map(function ($row) {
+                $terminalOriginal = trim((string) ($row->terminal_original ?? ''));
+
                 return [
-                    'terminal' => (string) ($row->terminal_key ?? ''),
+                    'terminal' => $terminalOriginal !== '' ? $terminalOriginal : (string) ($row->terminal_key ?? ''),
+                    'terminal_key' => (string) ($row->terminal_key ?? ''),
                     'dias_con_venta' => (int) ($row->dias_con_venta ?? 0),
                     'ultima_fecha' => $row->ultima_fecha ? Carbon::parse((string) $row->ultima_fecha)->toDateString() : null,
                 ];

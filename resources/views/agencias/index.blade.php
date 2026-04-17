@@ -70,7 +70,7 @@
                                         </div>
                                         <div>
                                             <small class="text-muted d-block">Agencias inactivas</small>
-                                            <h5 class="mb-0 text-danger" id="countAgenciasInactivas">0</h5>
+                                            <h5 class="mb-0 text-danger" id="countAgenciasInactivas" role="button" title="Ver detalle" style="cursor:pointer; text-decoration: underline; text-decoration-style: dotted;">0</h5>
                                         </div>
                                         <div>
                                             <small class="text-muted d-block">Agencias Joselito</small>
@@ -83,6 +83,10 @@
                                         <div>
                                             <small class="text-muted d-block">Agencia no registrada</small>
                                             <h5 class="mb-0 text-warning" id="countAgenciasNoRegistradas" role="button" title="Ver detalle" style="cursor:pointer; text-decoration: underline; text-decoration-style: dotted;">0</h5>
+                                        </div>
+                                        <div>
+                                            <small class="text-muted d-block">Agencias para actualizar</small>
+                                            <h5 class="mb-0 text-primary" id="countAgenciasParaActualizar" role="button" title="Ver detalle" style="cursor:pointer; text-decoration: underline; text-decoration-style: dotted;">0</h5>
                                         </div>
                                     </div>
                                     <div class="d-flex gap-2 flex-wrap">
@@ -277,7 +281,12 @@
                 <div class="modal-body">
                     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                         <span class="text-muted small" id="noRegistradasRangoTexto">Ultima semana</span>
-                        <span class="badge bg-warning-subtle text-warning-emphasis" id="noRegistradasTotalTexto">0 terminales</span>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge bg-warning-subtle text-warning-emphasis" id="noRegistradasTotalTexto">0 terminales</span>
+                            <button type="button" class="btn btn-sm btn-warning" id="btnRegistrarNoRegistradasMasivo">
+                                <i class="ri-add-box-line me-1"></i>Registrar agencias masivo
+                            </button>
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered align-middle mb-0" id="tablaNoRegistradas">
@@ -286,6 +295,7 @@
                                     <th style="min-width: 130px;">Terminal</th>
                                     <th class="text-end" style="min-width: 120px;">Dias con venta</th>
                                     <th style="min-width: 120px;">Ultima fecha</th>
+                                    <th class="text-center" style="min-width: 90px;">Accion</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -293,6 +303,102 @@
                     </div>
                     <div class="small text-muted mt-2" id="sinNoRegistradasTexto" style="display:none;">
                         No hay terminales no registradas para el rango consultado.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="inactivasModal" tabindex="-1" aria-labelledby="inactivasModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="inactivasModalLabel">Agencias inactivas</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-2">
+                        <span class="text-muted small mt-1" id="inactivasRangoTexto">Agencias desactivadas actualmente</span>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge bg-danger-subtle text-danger-emphasis" id="inactivasTotalTexto">0 agencias</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnConsultarInactivas">
+                                <i class="ri-list-check-2 me-1"></i>Agencias desactivadas
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="btnConsultarSinVentas">
+                                <i class="ri-search-eye-line me-1"></i>Agencias sin ventas
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning" id="btnConsultarInactivasConVentas">
+                                <i class="ri-funds-line me-1"></i>Inactivas con ventas
+                            </button>
+                            <button type="button" class="btn btn-sm btn-danger" id="btnDesactivarInactivasMasivo" style="display:none;">
+                                <i class="ri-forbid-2-line me-1"></i>Desactivar masivo
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0" id="tablaInactivas">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 90px;">Agencia</th>
+                                    <th style="min-width: 100px;">Terminal</th>
+                                    <th style="min-width: 160px;">Nombre</th>
+                                    <th style="min-width: 120px;">Empresa</th>
+                                    <th style="min-width: 120px;">Ciudad</th>
+                                    <th class="text-center" style="min-width: 90px;">Estatus</th>
+                                    <th class="text-center" style="min-width: 130px;">Accion</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="small text-muted mt-2" id="sinInactivasTexto" style="display:none;">
+                        No hay agencias para mostrar en esta consulta.
+                    </div>
+                    <div class="small text-muted mt-2">
+                        Total de agencias en esta consulta: <strong id="inactivasTotalInferior">0</strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="paraActualizarModal" tabindex="-1" aria-labelledby="paraActualizarModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="paraActualizarModalLabel">Agencias para actualizar</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <span class="text-muted small">Agencias con campos en blanco o incompletos</span>
+                        <span class="badge bg-primary-subtle text-primary-emphasis" id="paraActualizarTotalTexto">0 agencias</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0" id="tablaParaActualizar">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 90px;">Agencia</th>
+                                    <th style="min-width: 110px;">Terminal</th>
+                                    <th style="min-width: 160px;">Nombre</th>
+                                    <th style="min-width: 260px;">Campos faltantes</th>
+                                    <th class="text-center" style="min-width: 90px;">Accion</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="small text-muted mt-2" id="sinParaActualizarTexto" style="display:none;">
+                        No hay agencias con campos pendientes de actualizar.
+                    </div>
+                    <div class="small text-muted mt-2">
+                        Total de agencias que se van a actualizar: <strong id="paraActualizarTotalInferior">0</strong>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -313,6 +419,7 @@
         var countAgenciasJoselito = $('#countAgenciasJoselito');
         var countAgenciasNegosur = $('#countAgenciasNegosur');
         var countAgenciasNoRegistradas = $('#countAgenciasNoRegistradas');
+        var countAgenciasParaActualizar = $('#countAgenciasParaActualizar');
         var massUpdateModal = $('#massUpdateModal');
         var massUpdateFile = $('#mass_update_file');
         var btnPreviewTerminalesMasivo = $('#btnPreviewTerminalesMasivo');
@@ -324,10 +431,32 @@
         var noRegistradasRangoTexto = $('#noRegistradasRangoTexto');
         var noRegistradasTotalTexto = $('#noRegistradasTotalTexto');
         var sinNoRegistradasTexto = $('#sinNoRegistradasTexto');
+        var btnRegistrarNoRegistradasMasivo = $('#btnRegistrarNoRegistradasMasivo');
+        var inactivasModal = $('#inactivasModal');
+        var inactivasModalLabel = $('#inactivasModalLabel');
+        var tablaInactivasBody = $('#tablaInactivas tbody');
+        var inactivasRangoTexto = $('#inactivasRangoTexto');
+        var inactivasTotalTexto = $('#inactivasTotalTexto');
+        var inactivasTotalInferior = $('#inactivasTotalInferior');
+        var sinInactivasTexto = $('#sinInactivasTexto');
+        var btnConsultarInactivas = $('#btnConsultarInactivas');
+        var btnConsultarSinVentas = $('#btnConsultarSinVentas');
+        var btnConsultarInactivasConVentas = $('#btnConsultarInactivasConVentas');
+        var btnDesactivarInactivasMasivo = $('#btnDesactivarInactivasMasivo');
+        var paraActualizarModal = $('#paraActualizarModal');
+        var tablaParaActualizarBody = $('#tablaParaActualizar tbody');
+        var paraActualizarTotalTexto = $('#paraActualizarTotalTexto');
+        var paraActualizarTotalInferior = $('#paraActualizarTotalInferior');
+        var sinParaActualizarTexto = $('#sinParaActualizarTexto');
         var previewMasivoStats = null;
         var enviandoMassUpdate = false;
         var noRegistradasStats = null;
         var noRegistradasCargadas = false;
+        var inactivasStats = null;
+        var inactivasModo = 'inactivas';
+        var cargandoInactivas = false;
+        var paraActualizarStats = null;
+        var paraActualizarCargadas = false;
 
         function escapeHtml(value) {
             return $('<div>').text(value ?? '').html();
@@ -345,22 +474,157 @@
             if (!items.length) {
                 tablaNoRegistradasBody.html('');
                 sinNoRegistradasTexto.show();
+                btnRegistrarNoRegistradasMasivo.prop('disabled', true);
                 return;
             }
 
             sinNoRegistradasTexto.hide();
+            btnRegistrarNoRegistradasMasivo.prop('disabled', false);
 
             var rowsHtml = items.map(function(item) {
+                var terminal = item.terminal || '';
                 return `
                     <tr>
-                        <td>${escapeHtml(item.terminal || '-')}</td>
+                        <td>${escapeHtml(terminal || '-')}</td>
                         <td class="text-end">${Number(item.dias_con_venta || 0).toLocaleString('es-DO')}</td>
                         <td>${escapeHtml(item.ultima_fecha || '-')}</td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-success btn-registrar-terminal-no-registrada" data-terminal="${escapeHtml(terminal)}" title="Registrar agencia">
+                                <i class="ri-add-line"></i>
+                            </button>
+                        </td>
                     </tr>
                 `;
             }).join('');
 
             tablaNoRegistradasBody.html(rowsHtml);
+        }
+
+        function renderParaActualizarModal() {
+            var items = (paraActualizarStats && paraActualizarStats.agencias) ? paraActualizarStats.agencias : [];
+            var total = Number(paraActualizarStats && paraActualizarStats.total ? paraActualizarStats.total : 0);
+
+            paraActualizarTotalTexto.text(total.toLocaleString('es-DO') + ' agencias');
+            paraActualizarTotalInferior.text(total.toLocaleString('es-DO'));
+
+            if (!items.length) {
+                tablaParaActualizarBody.html('');
+                sinParaActualizarTexto.show();
+                return;
+            }
+
+            sinParaActualizarTexto.hide();
+
+            var rowsHtml = items.map(function(item) {
+                var campos = Array.isArray(item.campos_faltantes) ? item.campos_faltantes : [];
+                var camposHtml = campos.length
+                    ? campos.map(function(campo) {
+                        return '<span class="badge bg-warning-subtle text-warning-emphasis me-1 mb-1">' + escapeHtml(campo) + '</span>';
+                    }).join('')
+                    : '<span class="text-muted">-</span>';
+
+                return `
+                    <tr>
+                        <td>${escapeHtml(item.agencia || '-')}</td>
+                        <td>${escapeHtml(item.terminal || '-')}</td>
+                        <td>${escapeHtml(item.nombre_agencia || '-')}</td>
+                        <td>${camposHtml}</td>
+                        <td class="text-center">
+                            <a href="${escapeHtml(item.edit_url || '#')}" class="btn btn-sm btn-success" title="Editar">
+                                <i class="ri-pencil-line"></i>
+                            </a>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            tablaParaActualizarBody.html(rowsHtml);
+        }
+
+        function renderInactivasModal() {
+            var items = (inactivasStats && inactivasStats.agencias) ? inactivasStats.agencias : [];
+            var total = Number(inactivasStats && inactivasStats.total ? inactivasStats.total : 0);
+            var activas = Number(inactivasStats && inactivasStats.activas ? inactivasStats.activas : 0);
+            var desde = inactivasStats && inactivasStats.desde ? inactivasStats.desde : '';
+            var hasta = inactivasStats && inactivasStats.hasta ? inactivasStats.hasta : '';
+
+            var config = {
+                inactivas: {
+                    titulo: 'Agencias inactivas',
+                    descripcion: 'Agencias desactivadas actualmente',
+                    vacio: 'No hay agencias desactivadas actualmente.',
+                    badge: 'bg-danger-subtle text-danger-emphasis'
+                },
+                sin_venta: {
+                    titulo: 'Agencias activas sin venta',
+                    descripcion: 'Agencias activas sin venta positiva en los ultimos 30 dias',
+                    vacio: 'No hay agencias activas sin venta en los ultimos 30 dias.',
+                    badge: 'bg-warning-subtle text-warning-emphasis'
+                },
+                inactivas_con_venta: {
+                    titulo: 'Inactivas con ventas',
+                    descripcion: 'Agencias desactivadas con venta positiva en los ultimos 30 dias',
+                    vacio: 'No hay agencias inactivas con ventas en los ultimos 30 dias.',
+                    badge: 'bg-info-subtle text-info-emphasis'
+                }
+            }[inactivasModo] || {};
+
+            inactivasModalLabel.text(config.titulo || 'Agencias inactivas');
+            inactivasRangoTexto.text(desde && hasta ? ((config.descripcion || 'Consulta') + ' | Rango: ' + desde + ' a ' + hasta) : (config.descripcion || 'Agencias desactivadas actualmente'));
+            inactivasTotalTexto.text(total.toLocaleString('es-DO') + ' agencias');
+            inactivasTotalTexto
+                .removeClass('bg-danger-subtle text-danger-emphasis bg-warning-subtle text-warning-emphasis bg-info-subtle text-info-emphasis')
+                .addClass(config.badge || 'bg-danger-subtle text-danger-emphasis');
+            inactivasTotalInferior.text(total.toLocaleString('es-DO'));
+            sinInactivasTexto.text(config.vacio || 'No hay agencias para mostrar en esta consulta.');
+            btnDesactivarInactivasMasivo
+                .toggle(inactivasModo === 'sin_venta')
+                .prop('disabled', inactivasModo !== 'sin_venta' || activas <= 0 || cargandoInactivas);
+
+            btnConsultarInactivas.toggleClass('active', inactivasModo === 'inactivas');
+            btnConsultarSinVentas.toggleClass('active', inactivasModo === 'sin_venta');
+            btnConsultarInactivasConVentas.toggleClass('active', inactivasModo === 'inactivas_con_venta');
+
+            if (cargandoInactivas && !items.length) {
+                tablaInactivasBody.html('<tr><td colspan="7" class="text-center text-muted py-3">Consultando datos...</td></tr>');
+                sinInactivasTexto.hide();
+                return;
+            }
+
+            if (!items.length) {
+                tablaInactivasBody.html('');
+                sinInactivasTexto.show();
+                return;
+            }
+
+            sinInactivasTexto.hide();
+
+            var rowsHtml = items.map(function(item) {
+                var estatus = Number(item.estatus || 0);
+                var nuevoEstatus = estatus === 1 ? 0 : 1;
+                var accionTexto = estatus === 1 ? 'Desactivar' : 'Activar';
+                var accionClase = estatus === 1 ? 'btn-danger' : 'btn-success';
+                var badgeClase = estatus === 1 ? 'bg-success' : 'bg-danger';
+                var badgeTexto = estatus === 1 ? 'Activa' : 'Inactiva';
+
+                return `
+                    <tr>
+                        <td>${escapeHtml(item.agencia || '-')}</td>
+                        <td>${escapeHtml(item.terminal || '-')}</td>
+                        <td>${escapeHtml(item.nombre_agencia || '-')}</td>
+                        <td>${escapeHtml(item.empresa || '-')}</td>
+                        <td>${escapeHtml(item.ciudad || '-')}</td>
+                        <td class="text-center"><span class="badge ${badgeClase}">${badgeTexto}</span></td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm ${accionClase} btn-actualizar-estatus-agencia" data-agencia-id="${escapeHtml(item.id || '')}" data-estatus="${nuevoEstatus}">
+                                ${accionTexto}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            tablaInactivasBody.html(rowsHtml);
         }
 
         function cargarNoRegistradasVentaFija(mostrarError) {
@@ -390,6 +654,432 @@
                         text: 'No se pudo cargar el listado de terminales no registradas.'
                     });
                 }
+            });
+        }
+
+        function cargarAgenciasParaActualizar(mostrarError) {
+            $.ajax({
+                url: '{{ route('agencias.para-actualizar') }}',
+                method: 'GET',
+                success: function(response) {
+                    paraActualizarStats = response || null;
+                    var total = Number(response && response.total ? response.total : 0);
+                    countAgenciasParaActualizar.text(total.toLocaleString('es-DO'));
+
+                    if (paraActualizarModal.hasClass('show')) {
+                        renderParaActualizarModal();
+                    }
+                },
+                error: function() {
+                    paraActualizarStats = null;
+                    countAgenciasParaActualizar.text('0');
+
+                    if (!mostrarError) {
+                        return;
+                    }
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'No se pudo cargar el listado de agencias para actualizar.'
+                    });
+                }
+            });
+        }
+
+        function prepararCargaInactivas(modo) {
+            inactivasModo = modo;
+            cargandoInactivas = true;
+            inactivasStats = null;
+
+            if (inactivasModal.hasClass('show')) {
+                renderInactivasModal();
+            }
+        }
+
+        function finalizarCargaInactivas(response, modo) {
+            if (modo && inactivasModo !== modo) {
+                return;
+            }
+
+            cargandoInactivas = false;
+            inactivasStats = response || null;
+
+            if (inactivasModal.hasClass('show')) {
+                renderInactivasModal();
+            }
+        }
+
+        function manejarErrorCargaInactivas(mostrarError, mensaje, modo) {
+            if (modo && inactivasModo !== modo) {
+                return;
+            }
+
+            cargandoInactivas = false;
+            inactivasStats = null;
+
+            if (inactivasModal.hasClass('show')) {
+                renderInactivasModal();
+            }
+
+            if (!mostrarError) {
+                return;
+            }
+
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: mensaje
+            });
+        }
+
+        function cargarAgenciasInactivas(mostrarError) {
+            prepararCargaInactivas('inactivas');
+
+            $.ajax({
+                url: '{{ route('agencias.inactivas') }}',
+                method: 'GET',
+                success: function(response) {
+                    finalizarCargaInactivas(response, 'inactivas');
+                },
+                error: function() {
+                    manejarErrorCargaInactivas(mostrarError, 'No se pudo cargar el listado de agencias desactivadas.', 'inactivas');
+                }
+            });
+        }
+
+        function cargarAgenciasSinVentaTreintaDias(mostrarError) {
+            prepararCargaInactivas('sin_venta');
+
+            $.ajax({
+                url: '{{ route('agencias.sin-venta-30-dias') }}',
+                method: 'GET',
+                success: function(response) {
+                    finalizarCargaInactivas(response, 'sin_venta');
+                },
+                error: function() {
+                    manejarErrorCargaInactivas(mostrarError, 'No se pudo cargar el listado de agencias sin venta.', 'sin_venta');
+                }
+            });
+        }
+
+        function cargarAgenciasInactivasConVentas(mostrarError) {
+            prepararCargaInactivas('inactivas_con_venta');
+
+            $.ajax({
+                url: '{{ route('agencias.inactivas-con-venta-30-dias') }}',
+                method: 'GET',
+                success: function(response) {
+                    finalizarCargaInactivas(response, 'inactivas_con_venta');
+                },
+                error: function() {
+                    manejarErrorCargaInactivas(mostrarError, 'No se pudo cargar el listado de agencias inactivas con ventas.', 'inactivas_con_venta');
+                }
+            });
+        }
+
+        function refrescarDespuesRegistroNoRegistradas() {
+            cargarNoRegistradasVentaFija(false);
+            cargarAgenciasParaActualizar(false);
+            table.ajax.reload(null, false);
+        }
+
+        function actualizarConteoInactivasLocal(estatusNuevo, cantidad) {
+            cantidad = Number(cantidad || 1);
+            var conteoActual = Number((countAgenciasInactivas.text() || '0').replace(/[^\d]/g, '')) || 0;
+            var nuevoConteo = Number(estatusNuevo) === 1
+                ? Math.max(conteoActual - cantidad, 0)
+                : conteoActual + cantidad;
+
+            countAgenciasInactivas.text(nuevoConteo.toLocaleString('es-DO'));
+        }
+
+        function actualizarListadoInactivasLocal(agenciaId, estatusNuevo) {
+            if (!inactivasStats || !Array.isArray(inactivasStats.agencias)) {
+                return;
+            }
+
+            agenciaId = Number(agenciaId);
+            estatusNuevo = Number(estatusNuevo);
+            inactivasStats.agencias = inactivasStats.agencias.filter(function(item) {
+                return Number(item.id) !== agenciaId;
+            });
+            inactivasStats.total = inactivasStats.agencias.length;
+            inactivasStats.activas = inactivasStats.agencias.filter(function(item) {
+                return Number(item.estatus) === 1;
+            }).length;
+            inactivasStats.inactivas = inactivasStats.agencias.filter(function(item) {
+                return Number(item.estatus) === 0;
+            }).length;
+
+            actualizarConteoInactivasLocal(estatusNuevo);
+            renderInactivasModal();
+        }
+
+        function desactivarAgenciasSinVentaMasivo() {
+            if (inactivasModo !== 'sin_venta') {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Consulta requerida',
+                    text: 'Primero ejecuta la consulta de agencias sin ventas.'
+                });
+                return;
+            }
+
+            var activas = Number(inactivasStats && inactivasStats.activas ? inactivasStats.activas : 0);
+
+            if (!activas) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Sin agencias activas',
+                    text: 'No hay agencias activas para desactivar en este listado.'
+                });
+                return;
+            }
+
+            Swal.fire({
+                icon: 'warning',
+                title: 'Desactivar agencias',
+                text: 'Se desactivaran ' + activas.toLocaleString('es-DO') + ' agencias activas sin venta en los ultimos 30 dias.',
+                showCancelButton: true,
+                confirmButtonText: 'Desactivar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f06548'
+            }).then(function(result) {
+                if (!result.isConfirmed) {
+                    return;
+                }
+
+                btnDesactivarInactivasMasivo.prop('disabled', true);
+
+                Swal.fire({
+                    title: 'Desactivando agencias',
+                    text: 'Procesando agencias sin venta...',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: function() {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: '{{ route('agencias.sin-venta-30-dias.desactivar') }}',
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}'
+                    },
+                    success: function(response) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Proceso finalizado',
+                            html: `
+                                <div class="text-start">
+                                    <div><strong>Agencias desactivadas:</strong> ${Number(response.desactivadas || 0).toLocaleString('es-DO')}</div>
+                                    <div><strong>Omitidas:</strong> ${Number(response.omitidas || 0).toLocaleString('es-DO')}</div>
+                                </div>
+                            `,
+                            confirmButtonText: 'Entendido'
+                        });
+                        if (inactivasStats && Array.isArray(inactivasStats.agencias)) {
+                            inactivasStats.agencias = [];
+                            inactivasStats.total = 0;
+                            inactivasStats.activas = 0;
+                            inactivasStats.inactivas = 0;
+                            actualizarConteoInactivasLocal(0, Number(response.desactivadas || 0));
+                            renderInactivasModal();
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = xhr?.responseJSON?.message || 'No se pudieron desactivar las agencias.';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: msg
+                        });
+                        btnDesactivarInactivasMasivo.prop('disabled', false);
+                    }
+                });
+            });
+        }
+
+        function ejecutarActualizacionEstatusAgencia(agenciaId, estatus, button) {
+            var activar = Number(estatus) === 1;
+            var btn = $(button);
+            btn.prop('disabled', true);
+
+            $.ajax({
+                url: '{{ route('agencias.actualizar-estatus') }}',
+                method: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    agencia_id: agenciaId,
+                    estatus: estatus
+                },
+                success: function() {
+                    actualizarListadoInactivasLocal(agenciaId, estatus);
+                    Swal.fire({
+                        icon: 'success',
+                        title: activar ? 'Agencia activada' : 'Agencia desactivada',
+                        timer: 1200,
+                        showConfirmButton: false
+                    });
+                },
+                error: function(xhr) {
+                    var msg = xhr?.responseJSON?.message || 'No se pudo actualizar el estatus de la agencia.';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: msg
+                    });
+                    btn.prop('disabled', false);
+                }
+            });
+        }
+
+        function actualizarEstatusAgenciaDesdeModal(agenciaId, estatus, button) {
+            var activar = Number(estatus) === 1;
+
+            if (activar) {
+                ejecutarActualizacionEstatusAgencia(agenciaId, estatus, button);
+                return;
+            }
+
+            Swal.fire({
+                icon: 'question',
+                title: 'Desactivar agencia',
+                text: 'Esta agencia quedara inactiva.',
+                showCancelButton: true,
+                confirmButtonText: 'Desactivar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f06548'
+            }).then(function(result) {
+                if (!result.isConfirmed) {
+                    return;
+                }
+
+                ejecutarActualizacionEstatusAgencia(agenciaId, estatus, button);
+            });
+        }
+
+        function registrarNoRegistradasMasivo() {
+            var total = Number(noRegistradasStats && noRegistradasStats.total ? noRegistradasStats.total : 0);
+
+            if (!total) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Sin terminales',
+                    text: 'No hay terminales no registradas para registrar.'
+                });
+                return;
+            }
+
+            Swal.fire({
+                icon: 'question',
+                title: 'Registrar agencias masivo',
+                text: 'Se registraran ' + total.toLocaleString('es-DO') + ' agencias base con el mismo codigo de terminal.',
+                showCancelButton: true,
+                confirmButtonText: 'Registrar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f7b84b'
+            }).then(function(result) {
+                if (!result.isConfirmed) {
+                    return;
+                }
+
+                btnRegistrarNoRegistradasMasivo.prop('disabled', true);
+
+                Swal.fire({
+                    title: 'Registrando agencias',
+                    text: 'Procesando terminales no registradas...',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: function() {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: '{{ route('agencias.no-registradas.registrar') }}',
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}'
+                    },
+                    success: function(response) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Registro masivo finalizado',
+                            html: `
+                                <div class="text-start">
+                                    <div><strong>Agencias registradas:</strong> ${Number(response.registradas || 0).toLocaleString('es-DO')}</div>
+                                    <div><strong>Omitidas:</strong> ${Number(response.omitidas || 0).toLocaleString('es-DO')}</div>
+                                </div>
+                            `,
+                            confirmButtonText: 'Entendido'
+                        });
+                        refrescarDespuesRegistroNoRegistradas();
+                    },
+                    error: function(xhr) {
+                        var msg = xhr?.responseJSON?.message || 'No se pudieron registrar las agencias.';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: msg
+                        });
+                        btnRegistrarNoRegistradasMasivo.prop('disabled', false);
+                    }
+                });
+            });
+        }
+
+        function registrarTerminalNoRegistrada(terminal, button) {
+            if (!terminal) {
+                return;
+            }
+
+            Swal.fire({
+                icon: 'question',
+                title: 'Registrar agencia',
+                text: 'Se registrara la terminal ' + terminal + ' como agencia base.',
+                showCancelButton: true,
+                confirmButtonText: 'Registrar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0ab39c'
+            }).then(function(result) {
+                if (!result.isConfirmed) {
+                    return;
+                }
+
+                var btn = $(button);
+                btn.prop('disabled', true);
+
+                $.ajax({
+                    url: '{{ route('agencias.no-registradas.registrar-terminal') }}',
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}',
+                        terminal: terminal
+                    },
+                    success: function(response) {
+                        var registradas = Number(response.registradas || 0);
+                        Swal.fire({
+                            icon: registradas > 0 ? 'success' : 'info',
+                            title: registradas > 0 ? 'Agencia registrada' : 'Agencia omitida',
+                            text: registradas > 0
+                                ? 'La terminal ' + terminal + ' fue registrada como agencia base.'
+                                : 'La terminal ' + terminal + ' ya existe o no pudo registrarse.'
+                        });
+                        refrescarDespuesRegistroNoRegistradas();
+                    },
+                    error: function(xhr) {
+                        var msg = xhr?.responseJSON?.message || 'No se pudo registrar la terminal.';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: msg
+                        });
+                        btn.prop('disabled', false);
+                    }
+                });
             });
         }
 
@@ -531,11 +1221,22 @@
                         cargarNoRegistradasVentaFija(false);
                     }, 120);
                 }
+
+                if (!paraActualizarCargadas) {
+                    paraActualizarCargadas = true;
+                    window.setTimeout(function() {
+                        cargarAgenciasParaActualizar(false);
+                    }, 220);
+                }
             }
         });
 
         aplicarEstadoBotones();
         aplicarEmpresaBotones();
+
+        countAgenciasInactivas.on('click', function() {
+            inactivasModal.modal('show');
+        });
 
         countAgenciasNoRegistradas.on('click', function() {
             if (!noRegistradasStats) {
@@ -550,6 +1251,49 @@
 
             renderNoRegistradasModal();
             noRegistradasModal.modal('show');
+        });
+
+        btnRegistrarNoRegistradasMasivo.on('click', function() {
+            registrarNoRegistradasMasivo();
+        });
+
+        tablaNoRegistradasBody.on('click', '.btn-registrar-terminal-no-registrada', function() {
+            registrarTerminalNoRegistrada($(this).data('terminal'), this);
+        });
+
+        btnConsultarInactivas.on('click', function() {
+            cargarAgenciasInactivas(true);
+        });
+
+        btnConsultarSinVentas.on('click', function() {
+            cargarAgenciasSinVentaTreintaDias(true);
+        });
+
+        btnConsultarInactivasConVentas.on('click', function() {
+            cargarAgenciasInactivasConVentas(true);
+        });
+
+        btnDesactivarInactivasMasivo.on('click', function() {
+            desactivarAgenciasSinVentaMasivo();
+        });
+
+        tablaInactivasBody.on('click', '.btn-actualizar-estatus-agencia', function() {
+            actualizarEstatusAgenciaDesdeModal($(this).data('agencia-id'), $(this).data('estatus'), this);
+        });
+
+        countAgenciasParaActualizar.on('click', function() {
+            if (!paraActualizarStats) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Consultando datos',
+                    text: 'Se esta cargando el detalle. Intente nuevamente en unos segundos.'
+                });
+                cargarAgenciasParaActualizar(false);
+                return;
+            }
+
+            renderParaActualizarModal();
+            paraActualizarModal.modal('show');
         });
 
         $('#btnFiltroEstadoTodos').on('click', function() {
@@ -595,6 +1339,19 @@
             }
 
             renderNoRegistradasModal();
+        });
+
+        inactivasModal.on('show.bs.modal', function() {
+            cargarAgenciasInactivas(false);
+        });
+
+        paraActualizarModal.on('show.bs.modal', function() {
+            if (!paraActualizarStats) {
+                cargarAgenciasParaActualizar(false);
+                return;
+            }
+
+            renderParaActualizarModal();
         });
 
         // Manejar eliminación

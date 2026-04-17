@@ -278,6 +278,14 @@ Route::post('agencias-import', [AgenciaController::class, 'import'])->name('agen
 Route::post('agencias-mass-update', [AgenciaController::class, 'massUpdate'])->name('agencias.mass-update');
 Route::post('agencias-mass-update-preview', [AgenciaController::class, 'massUpdatePreview'])->name('agencias.mass-update-preview');
 Route::get('agencias-no-registradas-venta-fija-semana', [AgenciaController::class, 'noRegistradasVentaFijaSemana'])->name('agencias.no-registradas-venta-fija-semana');
+Route::post('agencias-no-registradas-registrar', [AgenciaController::class, 'registrarNoRegistradasVentaFija'])->name('agencias.no-registradas.registrar');
+Route::post('agencias-no-registradas-registrar-terminal', [AgenciaController::class, 'registrarTerminalNoRegistrada'])->name('agencias.no-registradas.registrar-terminal');
+Route::get('agencias-inactivas', [AgenciaController::class, 'agenciasInactivas'])->name('agencias.inactivas');
+Route::get('agencias-sin-venta-30-dias', [AgenciaController::class, 'agenciasSinVentaTreintaDias'])->name('agencias.sin-venta-30-dias');
+Route::get('agencias-inactivas-con-venta-30-dias', [AgenciaController::class, 'agenciasInactivasConVentaTreintaDias'])->name('agencias.inactivas-con-venta-30-dias');
+Route::post('agencias-sin-venta-30-dias-desactivar', [AgenciaController::class, 'desactivarAgenciasSinVentaTreintaDias'])->name('agencias.sin-venta-30-dias.desactivar');
+Route::post('agencias-actualizar-estatus', [AgenciaController::class, 'actualizarEstatusAgencia'])->name('agencias.actualizar-estatus');
+Route::get('agencias-para-actualizar', [AgenciaController::class, 'agenciasParaActualizar'])->name('agencias.para-actualizar');
 Route::get('agencias-template', [AgenciaController::class, 'template'])->name('agencias.template');
 Route::get('agencias-mass-update-template', [AgenciaController::class, 'massUpdateTemplate'])->name('agencias.mass-update-template');
 Route::get('agencias-incumplimientos-horario', [AgenciaController::class, 'incumplimientosHorario'])->name('agencias.incumplimientos');
