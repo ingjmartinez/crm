@@ -33,7 +33,8 @@ class ComercialController extends Controller
 
         $kpis = $this->getAcumuladosBet($mes);
         $cumplimiento = $this->buildCumplimiento($kpis, $metasDiarias);
-        $resumenAgencias = $this->getResumenVentasAgenciaMensual($mes);
+        $rentabilidadCargada = $request->boolean('cargar_rentabilidad');
+        $resumenAgencias = $rentabilidadCargada ? $this->getResumenVentasAgenciaMensual($mes) : [];
         $agenciasPorTipo = $this->getCantidadAgenciasConVentaPorTipo($mes);
 
         return view('comercial.kpi-ventas', [
@@ -41,6 +42,7 @@ class ComercialController extends Controller
             'metasDiarias' => $metasDiarias,
             'cumplimiento' => $cumplimiento,
             'resumenAgencias' => $resumenAgencias,
+            'rentabilidadCargada' => $rentabilidadCargada,
             'agenciasPorTipo' => $agenciasPorTipo,
             'mesSeleccionado' => $mes,
         ]);

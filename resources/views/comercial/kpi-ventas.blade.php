@@ -224,9 +224,9 @@
 
                     <div class="col-12 mt-2">
                         <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
                                 <h5 class="card-title mb-0">Rentabilidad por Agencia (Ventas Mensuales)</h5>
-                                <div class="d-flex align-items-center gap-2">
+                                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
                                     <div class="d-flex flex-column gap-2" style="min-width: 240px;">
                                         <input type="text" class="form-control form-control-sm" id="buscar-nombre-rentabilidad" placeholder="Buscar por nombre o terminal">
                                         <select class="form-select form-select-sm" id="filtro-cumplimiento-rentabilidad">
@@ -236,6 +236,12 @@
                                         </select>
                                     </div>
                                     <span class="badge bg-primary-subtle text-primary" id="label-meta-rentabilidad">Gasto por agencia: RD$ 0.00</span>
+                                    <button type="button" class="btn btn-soft-primary btn-sm" id="btn-generar-rentabilidad">
+                                        <i class="ri-refresh-line me-1"></i>Generar data
+                                    </button>
+                                    <button type="button" class="btn btn-success btn-sm" id="btn-exportar-rentabilidad" disabled>
+                                        <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
+                                    </button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -332,6 +338,8 @@
         const botonFiltrar = document.getElementById('btn-filtrar-kpi');
         const btnGuardarMeta = document.getElementById('btn-guardar-meta-diaria');
         const btnGuardarRentabilidad = document.getElementById('btn-guardar-rentabilidad');
+        const btnGenerarRentabilidad = document.getElementById('btn-generar-rentabilidad');
+        const btnExportarRentabilidad = document.getElementById('btn-exportar-rentabilidad');
 
         const inputTrad = document.getElementById('input-meta-tradicional');
         const inputNoTrad = document.getElementById('input-meta-no-tradicional');
@@ -377,8 +385,11 @@
         const cardTotalGananciaNetaRentabilidad = document.getElementById('card-total-ganancia-neta-rentabilidad');
 
         const resumenAgencias = @json($resumenAgencias ?? []);
+        const rentabilidadCargada = @json($rentabilidadCargada ?? false);
+        const mesSeleccionado = @json($mesSeleccionado ?? now()->format('Y-m'));
         let estadoFiltroCumplimientoRentabilidad = 'todos';
         let estadoBusquedaNombreRentabilidad = '';
+        let rentabilidadRenderizada = rentabilidadCargada;
 
         const acumulados = {
             tradicional: Number(@json($kpis['tradicional'] ?? 0)),
@@ -388,6 +399,87 @@
 
         function formatCurrency(value) {
             return 'RD$ ' + Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function setResumenRentabilidad(totalVentas, totalPremios, totalGastos, totalGananciaNeta, totalCumplen, totalNoCumplen) {
+            if (cardTotalVentasRentabilidad) {
+                cardTotalVentasRentabilidad.textContent = formatCurrency(totalVentas);
+            }
+            if (cardTotalPremiosRentabilidad) {
+                cardTotalPremiosRentabilidad.textContent = formatCurrency(totalPremios);
+            }
+            if (cardTotalGastosRentabilidad) {
+                cardTotalGastosRentabilidad.textContent = formatCurrency(totalGastos);
+            }
+            if (cardTotalGananciaNetaRentabilidad) {
+                cardTotalGananciaNetaRentabilidad.textContent = formatCurrency(totalGananciaNeta);
+                cardTotalGananciaNetaRentabilidad.classList.remove('text-success', 'text-danger');
+                cardTotalGananciaNetaRentabilidad.classList.add(totalGananciaNeta >= 0 ? 'text-success' : 'text-danger');
+            }
+
+            if (cardAgenciasCumplenRentabilidad) {
+                cardAgenciasCumplenRentabilidad.textContent = Number(totalCumplen || 0).toLocaleString('es-DO');
+            }
+            if (cardAgenciasNoCumplenRentabilidad) {
+                cardAgenciasNoCumplenRentabilidad.textContent = Number(totalNoCumplen || 0).toLocaleString('es-DO');
+            }
+        }
+
+        function actualizarBotonExportarRentabilidad() {
+            if (!btnExportarRentabilidad || !tbodyRentabilidad) return;
+
+            const tieneFilas = tbodyRentabilidad.querySelectorAll('tr[data-exportable="1"]').length > 0;
+            btnExportarRentabilidad.disabled = !rentabilidadRenderizada || !tieneFilas;
+        }
+
+        function renderTablaRentabilidadPendiente(metaMensual) {
+            if (!tbodyRentabilidad) return;
+
+            rentabilidadRenderizada = false;
+            if (lblMetaRentabilidad) {
+                lblMetaRentabilidad.textContent = 'Gasto por agencia: ' + formatCurrency(metaMensual);
+            }
+
+            tbodyRentabilidad.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Configura la rentabilidad y presiona Generar data para cargar la tabla.</td></tr>';
+            setResumenRentabilidad(0, 0, 0, 0, 0, 0);
+            actualizarBotonExportarRentabilidad();
+        }
+
+        function cargarRentabilidadDesdeFormulario() {
+            if (!formFiltro) return;
+
+            let inputCargar = formFiltro.querySelector('input[name="cargar_rentabilidad"]');
+            if (!inputCargar) {
+                inputCargar = document.createElement('input');
+                inputCargar.type = 'hidden';
+                inputCargar.name = 'cargar_rentabilidad';
+                formFiltro.appendChild(inputCargar);
+            }
+            inputCargar.value = '1';
+
+            if (botonFiltrar) botonFiltrar.disabled = true;
+            if (btnGenerarRentabilidad) btnGenerarRentabilidad.disabled = true;
+
+            Swal.fire({
+                title: 'Cargando...',
+                text: 'Generando data de rentabilidad, por favor espera.',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            formFiltro.submit();
         }
 
         function getConfig() {
@@ -425,6 +517,7 @@
         function renderTablaRentabilidad(metaMensual) {
             if (!tbodyRentabilidad) return;
 
+            rentabilidadRenderizada = true;
             tbodyRentabilidad.innerHTML = '';
             if (lblMetaRentabilidad) {
                 lblMetaRentabilidad.textContent = 'Gasto por agencia: ' + formatCurrency(metaMensual);
@@ -470,10 +563,11 @@
                 const cumplimientoTexto = cumple ? 'Cumple' : 'No cumple';
 
                 const tr = document.createElement('tr');
+                tr.setAttribute('data-exportable', '1');
                 tr.innerHTML = `
                     <td>
-                        <div class="fw-medium">${nombreAgencia}</div>
-                        <small class="text-muted">Terminal: ${terminal}</small>
+                        <div class="fw-medium">${escapeHtml(nombreAgencia)}</div>
+                        <small class="text-muted">Terminal: ${escapeHtml(terminal)}</small>
                     </td>
                     <td>${formatCurrency(ventas)}</td>
                     <td>${formatCurrency(premiosPagados)}</td>
@@ -485,33 +579,62 @@
                 tbodyRentabilidad.appendChild(tr);
             });
 
-            if (cardTotalVentasRentabilidad) {
-                cardTotalVentasRentabilidad.textContent = formatCurrency(totalVentas);
-            }
-            if (cardTotalPremiosRentabilidad) {
-                cardTotalPremiosRentabilidad.textContent = formatCurrency(totalPremios);
-            }
-            if (cardTotalGastosRentabilidad) {
-                cardTotalGastosRentabilidad.textContent = formatCurrency(totalGastos);
-            }
-            if (cardTotalGananciaNetaRentabilidad) {
-                cardTotalGananciaNetaRentabilidad.textContent = formatCurrency(totalGananciaNeta);
-                cardTotalGananciaNetaRentabilidad.classList.remove('text-success', 'text-danger');
-                cardTotalGananciaNetaRentabilidad.classList.add(totalGananciaNeta >= 0 ? 'text-success' : 'text-danger');
-            }
-
-            if (cardAgenciasCumplenRentabilidad) {
-                cardAgenciasCumplenRentabilidad.textContent = totalCumplen.toLocaleString('es-DO');
-            }
-            if (cardAgenciasNoCumplenRentabilidad) {
-                cardAgenciasNoCumplenRentabilidad.textContent = totalNoCumplen.toLocaleString('es-DO');
-            }
+            setResumenRentabilidad(totalVentas, totalPremios, totalGastos, totalGananciaNeta, totalCumplen, totalNoCumplen);
 
             if (!tbodyRentabilidad.children.length) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = '<td colspan="7" class="text-center text-muted">No hay agencias para el filtro seleccionado.</td>';
                 tbodyRentabilidad.appendChild(tr);
             }
+
+            actualizarBotonExportarRentabilidad();
+        }
+
+        function descargarExcelRentabilidad() {
+            if (!tbodyRentabilidad) return;
+
+            const filas = Array.from(tbodyRentabilidad.querySelectorAll('tr[data-exportable="1"]'));
+            if (!rentabilidadRenderizada || !filas.length) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Sin datos para exportar',
+                    text: 'Primero genera la data de rentabilidad.'
+                });
+                return;
+            }
+
+            const headers = ['Agencia', 'Ventas', 'Premios Pagados', 'Utilidad Bruta', 'Gasto Agencia', 'Ganancia Neta', 'Cumplimiento'];
+            const headerHtml = headers.map(header => `<th>${escapeHtml(header)}</th>`).join('');
+            const rowsHtml = filas.map(row => {
+                const cells = Array.from(row.children).map(cell => {
+                    const value = (cell.innerText || cell.textContent || '').replace(/\s+/g, ' ').trim();
+                    return `<td>${escapeHtml(value)}</td>`;
+                }).join('');
+
+                return `<tr>${cells}</tr>`;
+            }).join('');
+
+            const html = `
+                <html>
+                    <head><meta charset="UTF-8"></head>
+                    <body>
+                        <table border="1">
+                            <thead><tr>${headerHtml}</tr></thead>
+                            <tbody>${rowsHtml}</tbody>
+                        </table>
+                    </body>
+                </html>
+            `;
+
+            const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `rentabilidad_agencias_${mesSeleccionado}.xls`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         }
 
         function renderMetas(config) {
@@ -594,20 +717,39 @@
         renderMetas(configInicial);
         const metaRentabilidadInicial = getMetaRentabilidad();
         if (inputMetaRentabilidad) inputMetaRentabilidad.value = metaRentabilidadInicial;
-        renderTablaRentabilidad(metaRentabilidadInicial);
+        if (rentabilidadCargada) {
+            renderTablaRentabilidad(metaRentabilidadInicial);
+        } else {
+            renderTablaRentabilidadPendiente(metaRentabilidadInicial);
+        }
 
         if (filtroCumplimientoRentabilidad) {
             filtroCumplimientoRentabilidad.addEventListener('change', function () {
                 estadoFiltroCumplimientoRentabilidad = this.value || 'todos';
-                renderTablaRentabilidad(getMetaRentabilidad());
+                if (rentabilidadRenderizada) {
+                    renderTablaRentabilidad(getMetaRentabilidad());
+                }
             });
         }
 
         if (buscarNombreRentabilidad) {
             buscarNombreRentabilidad.addEventListener('input', function () {
                 estadoBusquedaNombreRentabilidad = this.value || '';
-                renderTablaRentabilidad(getMetaRentabilidad());
+                if (rentabilidadRenderizada) {
+                    renderTablaRentabilidad(getMetaRentabilidad());
+                }
             });
+        }
+
+        if (btnGenerarRentabilidad) {
+            btnGenerarRentabilidad.addEventListener('click', function () {
+                setMetaRentabilidad(Math.max(0, Number(inputMetaRentabilidad?.value || getMetaRentabilidad())));
+                cargarRentabilidadDesdeFormulario();
+            });
+        }
+
+        if (btnExportarRentabilidad) {
+            btnExportarRentabilidad.addEventListener('click', descargarExcelRentabilidad);
         }
 
         if (!formFiltro || !botonFiltrar) return;
@@ -655,11 +797,17 @@
             btnGuardarRentabilidad.addEventListener('click', function () {
                 const meta = Math.max(0, Number(inputMetaRentabilidad?.value || 0));
                 setMetaRentabilidad(meta);
-                renderTablaRentabilidad(meta);
 
                 const modalEl = document.getElementById('modalRentabilidad');
                 const modal = bootstrap.Modal.getInstance(modalEl);
                 if (modal) modal.hide();
+
+                if (!rentabilidadCargada && !rentabilidadRenderizada) {
+                    cargarRentabilidadDesdeFormulario();
+                    return;
+                }
+
+                renderTablaRentabilidad(meta);
 
                 Swal.fire({
                     icon: 'success',

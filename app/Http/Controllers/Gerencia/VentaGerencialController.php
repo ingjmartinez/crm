@@ -16,6 +16,7 @@ class VentaGerencialController extends Controller
 {
     public function index(Request $request)
     {
+        $debeConsultar = $request->boolean('consultar') || $request->hasAny(['fecha', 'sistema']);
         $fecha = trim((string) $request->query('fecha', now()->format('Y-m-d')));
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
             $fecha = now()->format('Y-m-d');
@@ -23,9 +24,10 @@ class VentaGerencialController extends Controller
 
         $sistema = $this->normalizarSistema($request->query('sistema', 'todos'));
 
-        $resumenAgencias = $this->getResumenVentasAgenciaPorFecha($fecha, $sistema);
+        $resumenAgencias = $debeConsultar ? $this->getResumenVentasAgenciaPorFecha($fecha, $sistema) : [];
 
         return view('gerencia.venta-gerencial', [
+            'debeConsultar' => $debeConsultar,
             'fechaSeleccionada' => $fecha,
             'sistemaSeleccionado' => $sistema,
             'resumenAgencias' => $resumenAgencias,

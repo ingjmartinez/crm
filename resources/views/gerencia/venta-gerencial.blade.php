@@ -21,7 +21,8 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <form method="GET" action="{{ route('gerencia.venta-gerencial') }}" class="row g-2 align-items-end">
+                                <form method="GET" action="{{ route('gerencia.venta-gerencial') }}" class="row g-2 align-items-end" id="form-venta-gerencial">
+                                    <input type="hidden" name="consultar" value="1">
                                     <div class="col-12 col-md-4 col-lg-2">
                                         <label class="form-label">Fecha</label>
                                         <input type="date" name="fecha" class="form-control" value="{{ $fechaSeleccionada ?? now()->format('Y-m-d') }}">
@@ -41,13 +42,19 @@
                                     <div class="col-12 col-lg-5">
                                         <label class="form-label d-none d-lg-block">Acciones</label>
                                         <div class="d-flex flex-wrap flex-lg-nowrap gap-2">
-                                            <button type="submit" class="btn btn-primary">
+                                            <button type="submit" class="btn btn-primary" id="btn-buscar-venta-gerencial">
                                             <i class="ri-search-line me-1"></i>Buscar
                                             </button>
                                             <a href="{{ route('gerencia.venta-gerencial') }}" class="btn btn-light">Limpiar</a>
-                                            <a href="{{ route('gerencia.venta-gerencial.export.excel', ['fecha' => ($fechaSeleccionada ?? now()->format('Y-m-d')), 'sistema' => ($sistemaSeleccionado ?? 'todos')]) }}" class="btn btn-success">
+                                            @if($debeConsultar ?? false)
+                                            <a href="{{ route('gerencia.venta-gerencial.export.excel', ['fecha' => ($fechaSeleccionada ?? now()->format('Y-m-d')), 'sistema' => ($sistemaSeleccionado ?? 'todos')]) }}" class="btn btn-success" id="btn-excel-venta-gerencial">
                                             <i class="ri-file-excel-2-line me-1"></i>Excel
                                             </a>
+                                            @else
+                                            <button type="button" class="btn btn-success" disabled>
+                                            <i class="ri-file-excel-2-line me-1"></i>Excel
+                                            </button>
+                                            @endif
                                         </div>
                                     </div>
                                 </form>
@@ -65,7 +72,17 @@
                                     $totalVendido = collect($resumenAgencias ?? [])->sum('total_vendido');
                                     $totalPremiosSacados = collect($resumenAgencias ?? [])->sum('premios_sacados');
                                     $totalUtilidad = $totalVendido - $totalPremiosSacados;
+                                    $hayResultados = collect($resumenAgencias ?? [])->count() > 0;
                                 @endphp
+                                @if(!($debeConsultar ?? false))
+                                    <div class="alert alert-info py-2 mb-3" role="alert">
+                                        Selecciona los filtros y presiona <strong>Buscar</strong> para cargar el reporte.
+                                    </div>
+                                @elseif(!$hayResultados)
+                                    <div class="alert alert-warning py-2 mb-3" role="alert">
+                                        No hay datos para el filtro seleccionado.
+                                    </div>
+                                @endif
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-striped align-middle mb-0" id="table-rentabilidad-agencias">
                                         <thead>
@@ -77,7 +94,8 @@
                                             </tr>
                                         </thead>
                                         <tbody id="tbody-rentabilidad-agencias">
-                                            @forelse (($resumenAgencias ?? []) as $item)
+                                            @if($hayResultados)
+                                            @foreach (($resumenAgencias ?? []) as $item)
                                                 <tr>
                                                     <td>
                                                         <div class="fw-medium">{{ $item['nombre_agencia'] ?? ($item['agencia'] ?? 'SIN AGENCIA') }}</div>
@@ -89,11 +107,8 @@
                                                         RD$ {{ number_format((float) ($item['utilidad_bruta'] ?? 0), 2) }}
                                                     </td>
                                                 </tr>
-                                            @empty
-                                                <tr>
-                                                    <td colspan="4" class="text-center text-muted">No hay datos para el filtro seleccionado.</td>
-                                                </tr>
-                                            @endforelse
+                                            @endforeach
+                                            @endif
                                         </tbody>
                                         <tfoot>
                                             <tr class="fw-semibold table-light">
@@ -117,6 +132,36 @@
 @section('script')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('form-venta-gerencial');
+        const btnBuscar = document.getElementById('btn-buscar-venta-gerencial');
+        const btnExcel = document.getElementById('btn-excel-venta-gerencial');
+
+        if (form && btnBuscar) {
+            form.addEventListener('submit', function () {
+                btnBuscar.disabled = true;
+
+                Swal.fire({
+                    title: 'Cargando...',
+                    text: 'Generando venta gerencial, por favor espera.',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: () => Swal.showLoading(),
+                });
+            });
+        }
+
+        if (btnExcel) {
+            btnExcel.addEventListener('click', function () {
+                Swal.fire({
+                    title: 'Preparando Excel...',
+                    text: 'Generando archivo, por favor espera.',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: () => Swal.showLoading(),
+                });
+            });
+        }
+
         if (!(window.$ && $.fn.DataTable)) {
             return;
         }

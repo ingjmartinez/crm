@@ -1,6 +1,17 @@
 @extends('app')
 
 @section('content')
+    <style>
+        #modalCrearTareaInc,
+        #modalConfigEstadosInc {
+            z-index: 1065;
+        }
+
+        .swal2-container {
+            z-index: 2000;
+        }
+    </style>
+
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -36,10 +47,10 @@
                                         </div>
                                     </div>
                                     <div class="col-md-6 text-md-end">
-                                        <button class="btn btn-info" id="btnConfigEstados">
+                                        <button type="button" class="btn btn-info" id="btnConfigEstados">
                                             <i class="ri-settings-3-line me-1"></i> Configurar estados
                                         </button>
-                                        <button class="btn btn-primary" id="btnConsultar">
+                                        <button type="button" class="btn btn-primary" id="btnConsultar">
                                             <i class="ri-search-line me-1"></i> Consultar
                                         </button>
                                         <a href="{{ route('agencias.index') }}" class="btn btn-light">
@@ -433,6 +444,66 @@
         });
     }
 
+    function limpiarBackdropsBootstrap() {
+        if (document.querySelector('.modal.show')) {
+            return;
+        }
+
+        document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+            backdrop.remove();
+        });
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }
+
+    function prepararModalBootstrap(modalId) {
+        const modalEl = document.getElementById(modalId);
+        if (!modalEl) {
+            return null;
+        }
+
+        if (modalEl.parentElement !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+
+        if (modalEl.dataset.backdropCleanup !== '1') {
+            modalEl.addEventListener('hidden.bs.modal', limpiarBackdropsBootstrap);
+            modalEl.dataset.backdropCleanup = '1';
+        }
+
+        return modalEl;
+    }
+
+    function abrirModalBootstrap(modalId) {
+        const modalEl = prepararModalBootstrap(modalId);
+        if (!modalEl) {
+            return;
+        }
+
+        if (window.bootstrap?.Modal) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            return;
+        }
+
+        $(`#${modalId}`).modal('show');
+    }
+
+    function cerrarModalBootstrap(modalId) {
+        const modalEl = document.getElementById(modalId);
+        if (!modalEl) {
+            return;
+        }
+
+        if (window.bootstrap?.Modal) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        } else {
+            $(`#${modalId}`).modal('hide');
+        }
+
+        setTimeout(limpiarBackdropsBootstrap, 250);
+    }
+
     function abrirModalCrearTareaDesdeFila(row) {
         const fecha = $('#fecha').val() || '{{ now()->toDateString() }}';
         const tituloDefault = `Seguimiento incumplimiento - Agencia ${row.agencia || '-'} (${row.nombre_agencia || '-'})`;
@@ -455,7 +526,7 @@
         $('#inc-tarea-departamento').val('');
         $('#inc-tarea-asignado').val('');
 
-        $('#modalCrearTareaInc').modal('show');
+        abrirModalBootstrap('modalCrearTareaInc');
     }
 
     function guardarTareaDesdeIncumplimiento() {
@@ -488,7 +559,7 @@
             contentType: 'application/json',
             data: JSON.stringify(payload),
             success: function(resp) {
-                $('#modalCrearTareaInc').modal('hide');
+                cerrarModalBootstrap('modalCrearTareaInc');
                 Swal.fire('Tarea creada', resp.message || 'La tarea fue creada correctamente.', 'success');
             },
             error: function(xhr) {
@@ -575,6 +646,10 @@
     }
 
     $(document).ready(function() {
+        ['modalCrearTareaInc', 'modalConfigEstadosInc'].forEach(function (modalId) {
+            prepararModalBootstrap(modalId);
+        });
+
         table = $('#tableIncumplimientos').DataTable({
             data: [],
             responsive: true,
@@ -667,7 +742,7 @@
 
         $('#btnConfigEstados').on('click', function() {
             poblarModalConfigEstados();
-            $('#modalConfigEstadosInc').modal('show');
+            abrirModalBootstrap('modalConfigEstadosInc');
         });
 
         $('#btnGuardarConfigEstados').on('click', function() {
@@ -681,7 +756,7 @@
 
             configEstados = cfg;
             guardarConfigEstadosEnStorage();
-            $('#modalConfigEstadosInc').modal('hide');
+            cerrarModalBootstrap('modalConfigEstadosInc');
 
             if (ultimaRespuesta && Array.isArray(ultimaRespuesta.data)) {
                 renderizarTablaConConfig(ultimaRespuesta);
