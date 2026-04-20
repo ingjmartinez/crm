@@ -520,6 +520,24 @@ class AgenciaController extends Controller
     }
 
     /**
+     * API: Terminales con ventas positivas en 30 dias que no existen en agencias.
+     */
+    public function agenciasNoRegistradasConVentaTreintaDias(Request $request)
+    {
+        $resultado = $this->obtenerAgenciasNoRegistradasConVentaTreintaDias();
+
+        return response()->json([
+            'ok' => true,
+            'desde' => $resultado['desde'],
+            'hasta' => $resultado['hasta'],
+            'total' => count($resultado['agencias']),
+            'activas' => 0,
+            'inactivas' => 0,
+            'agencias' => $resultado['agencias'],
+        ]);
+    }
+
+    /**
      * Desactiva masivamente agencias que no tienen venta positiva en 30 dias.
      */
     public function desactivarAgenciasSinVentaTreintaDias(Request $request)
@@ -685,6 +703,84 @@ class AgenciaController extends Controller
                 return $terminalKey !== '0' && $ventasPorTerminal->has($terminalKey);
             })
             ->map(fn(Agencia $agencia) => $this->formatearAgenciaModal($agencia))
+            ->values()
+            ->all();
+
+        return [
+            'desde' => $fechaInicio,
+            'hasta' => $fechaFin,
+            'agencias' => $agencias,
+        ];
+    }
+
+    private function obtenerAgenciasNoRegistradasConVentaTreintaDias(): array
+    {
+        $fechaInicio = now()->subDays(29)->startOfDay()->toDateString();
+        $fechaFin = now()->endOfDay()->toDateString();
+
+        $terminalesRegistradas = Agencia::query()
+            ->whereNotNull('terminal')
+            ->pluck('terminal')
+            ->map(fn($terminal) => $this->normalizarTerminal((string) $terminal))
+            ->filter(fn($terminal) => $terminal !== '0')
+            ->unique()
+            ->flip();
+
+        $ventasBet = DB::table('vt_usuarios_bet')
+            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia_id AS CHAR))), ''), '0') AS terminal_key")
+            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS terminal_original")
+            ->selectRaw('COALESCE(monto, 0) AS monto')
+            ->selectRaw('fecha AS fecha')
+            ->whereNotNull('agencia_id')
+            ->whereDate('fecha', '>=', $fechaInicio)
+            ->whereDate('fecha', '<=', $fechaFin)
+            ->whereRaw('COALESCE(monto, 0) > 0');
+
+        $ventasNet = DB::table('vt_usuarios_net')
+            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia_id AS CHAR))), ''), '0') AS terminal_key")
+            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS terminal_original")
+            ->selectRaw('COALESCE(monto, 0) AS monto')
+            ->selectRaw('fecha AS fecha')
+            ->whereNotNull('agencia_id')
+            ->whereDate('fecha', '>=', $fechaInicio)
+            ->whereDate('fecha', '<=', $fechaFin)
+            ->whereRaw('COALESCE(monto, 0) > 0');
+
+        $agencias = DB::query()
+            ->fromSub($ventasBet->unionAll($ventasNet), 'v')
+            ->selectRaw('terminal_key')
+            ->selectRaw('MIN(NULLIF(terminal_original, "")) AS terminal_original')
+            ->selectRaw('COUNT(DISTINCT DATE(fecha)) AS dias_con_venta')
+            ->selectRaw('MAX(fecha) AS ultima_fecha')
+            ->selectRaw('SUM(COALESCE(monto, 0)) AS total_venta')
+            ->whereRaw('terminal_key <> ?', ['0'])
+            ->groupBy('terminal_key')
+            ->orderByDesc('total_venta')
+            ->get()
+            ->filter(function ($row) use ($terminalesRegistradas) {
+                return !$terminalesRegistradas->has((string) ($row->terminal_key ?? '0'));
+            })
+            ->map(function ($row) {
+                $terminalOriginal = trim((string) ($row->terminal_original ?? ''));
+                $terminal = $terminalOriginal !== '' ? $terminalOriginal : (string) ($row->terminal_key ?? '');
+
+                return [
+                    'id' => null,
+                    'agencia' => '-',
+                    'terminal' => $terminal,
+                    'nombre_agencia' => 'Terminal no registrada',
+                    'empresa' => '-',
+                    'ciudad' => '-',
+                    'ruta' => '-',
+                    'estatus' => null,
+                    'estatus_texto' => 'No registrada',
+                    'edit_url' => null,
+                    'no_registrada' => true,
+                    'dias_con_venta' => (int) ($row->dias_con_venta ?? 0),
+                    'ultima_fecha' => $row->ultima_fecha ? Carbon::parse((string) $row->ultima_fecha)->toDateString() : null,
+                    'total_venta' => round((float) ($row->total_venta ?? 0), 2),
+                ];
+            })
             ->values()
             ->all();
 

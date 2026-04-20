@@ -61,7 +61,7 @@
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">&nbsp;</label>
-                                        <button type="button" class="btn btn-success d-block w-100" id="btnDiasFaltantes" data-bs-toggle="modal" data-bs-target="#modalDiasFaltantes" disabled>
+                                        <button type="button" class="btn btn-success d-block w-100" id="btnDiasFaltantes" disabled>
                                             Días faltantes del rango
                                         </button>
                                     </div>
@@ -100,23 +100,6 @@
                     </div>
                 </div>
 
-                <div class="modal fade" id="modalDiasFaltantes" tabindex="-1" aria-labelledby="modalDiasFaltantesLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="modalDiasFaltantesLabel">Fechas sin ventas en el rango</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div id="mensajeDiasFaltantes" class="alert alert-success mb-3 d-none"></div>
-                                <ul id="listaDiasFaltantes" class="mb-0 ps-3"></ul>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -207,26 +190,25 @@
             btnDiasFaltantes.disabled = false;
         }
 
-        function renderModalDiasFaltantes() {
-            const lista = document.getElementById('listaDiasFaltantes');
-            const mensaje = document.getElementById('mensajeDiasFaltantes');
-
-            if (!lista || !mensaje) return;
-
-            lista.innerHTML = '';
+        function mostrarDiasFaltantes(event) {
+            event.preventDefault();
 
             if (!fechasFaltantesGlobal.length) {
-                mensaje.classList.remove('d-none');
-                mensaje.textContent = 'No hay fechas faltantes para el rango seleccionado.';
                 return;
             }
 
-            mensaje.classList.add('d-none');
+            const listaFechas = fechasFaltantesGlobal
+                .map(function(fecha) {
+                    return `<li>${formatoFecha(fecha)}</li>`;
+                })
+                .join('');
 
-            fechasFaltantesGlobal.forEach(function(fecha) {
-                const li = document.createElement('li');
-                li.textContent = formatoFecha(fecha);
-                lista.appendChild(li);
+            Swal.fire({
+                title: 'Fechas sin ventas en el rango',
+                html: `<ul class="text-start mb-0 ps-4">${listaFechas}</ul>`,
+                icon: 'info',
+                confirmButtonText: 'Cerrar',
+                width: 520
             });
         }
 
@@ -260,8 +242,12 @@
             });
 
             if (table) {
-                table.destroy();
+                table.clear().destroy();
+                $('#tableCuadreVentas tbody').empty();
             }
+
+            fechasFaltantesGlobal = [];
+            actualizarBotonDiasFaltantes();
 
             table = $('#tableCuadreVentas').DataTable({
                 ajax: {
@@ -277,8 +263,20 @@
                         actualizarBotonDiasFaltantes();
                         return json || [];
                     },
-                    complete: function() {
-                        Swal.close();
+                    complete: function(jqXHR, textStatus) {
+                        if (textStatus !== 'error') {
+                            Swal.close();
+                        }
+                    },
+                    error: function() {
+                        fechasFaltantesGlobal = [];
+                        actualizarBotonDiasFaltantes();
+
+                        Swal.fire({
+                            title: 'Error',
+                            text: 'No se pudieron cargar los datos del cuadre de ventas.',
+                            icon: 'error'
+                        });
                     }
                 },
                 columns: [
@@ -316,7 +314,7 @@
         }
 
         document.getElementById('btnBuscar').addEventListener('click', cargarDatos);
-        document.getElementById('btnDiasFaltantes').addEventListener('click', renderModalDiasFaltantes);
+        document.getElementById('btnDiasFaltantes').addEventListener('click', mostrarDiasFaltantes);
 
         actualizarBotonDiasFaltantes();
 

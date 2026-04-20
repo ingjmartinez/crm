@@ -333,6 +333,9 @@
                             <button type="button" class="btn btn-sm btn-outline-warning" id="btnConsultarInactivasConVentas">
                                 <i class="ri-funds-line me-1"></i>Inactivas con ventas
                             </button>
+                            <button type="button" class="btn btn-sm btn-outline-info" id="btnConsultarNoRegistradasConVentas">
+                                <i class="ri-file-search-line me-1"></i>No registradas con ventas
+                            </button>
                             <button type="button" class="btn btn-sm btn-danger" id="btnDesactivarInactivasMasivo" style="display:none;">
                                 <i class="ri-forbid-2-line me-1"></i>Desactivar masivo
                             </button>
@@ -442,6 +445,7 @@
         var btnConsultarInactivas = $('#btnConsultarInactivas');
         var btnConsultarSinVentas = $('#btnConsultarSinVentas');
         var btnConsultarInactivasConVentas = $('#btnConsultarInactivasConVentas');
+        var btnConsultarNoRegistradasConVentas = $('#btnConsultarNoRegistradasConVentas');
         var btnDesactivarInactivasMasivo = $('#btnDesactivarInactivasMasivo');
         var paraActualizarModal = $('#paraActualizarModal');
         var tablaParaActualizarBody = $('#tablaParaActualizar tbody');
@@ -566,6 +570,12 @@
                     descripcion: 'Agencias desactivadas con venta positiva en los ultimos 30 dias',
                     vacio: 'No hay agencias inactivas con ventas en los ultimos 30 dias.',
                     badge: 'bg-info-subtle text-info-emphasis'
+                },
+                no_registradas_con_venta: {
+                    titulo: 'No registradas con ventas',
+                    descripcion: 'Terminales con venta positiva que no existen en agencias en los ultimos 30 dias',
+                    vacio: 'No hay terminales no registradas con ventas en los ultimos 30 dias.',
+                    badge: 'bg-warning-subtle text-warning-emphasis'
                 }
             }[inactivasModo] || {};
 
@@ -584,6 +594,7 @@
             btnConsultarInactivas.toggleClass('active', inactivasModo === 'inactivas');
             btnConsultarSinVentas.toggleClass('active', inactivasModo === 'sin_venta');
             btnConsultarInactivasConVentas.toggleClass('active', inactivasModo === 'inactivas_con_venta');
+            btnConsultarNoRegistradasConVentas.toggleClass('active', inactivasModo === 'no_registradas_con_venta');
 
             if (cargandoInactivas && !items.length) {
                 tablaInactivasBody.html('<tr><td colspan="7" class="text-center text-muted py-3">Consultando datos...</td></tr>');
@@ -600,6 +611,34 @@
             sinInactivasTexto.hide();
 
             var rowsHtml = items.map(function(item) {
+                if (item.no_registrada) {
+                    var totalVenta = Number(item.total_venta || 0).toLocaleString('es-DO', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+                    var diasVenta = Number(item.dias_con_venta || 0).toLocaleString('es-DO');
+                    var ultimaFecha = item.ultima_fecha || '-';
+
+                    return `
+                        <tr>
+                            <td>${escapeHtml(item.agencia || '-')}</td>
+                            <td>${escapeHtml(item.terminal || '-')}</td>
+                            <td>
+                                ${escapeHtml(item.nombre_agencia || 'Terminal no registrada')}
+                                <div class="small text-muted">Venta: RD$ ${totalVenta} | Dias: ${diasVenta} | Ultima: ${escapeHtml(ultimaFecha)}</div>
+                            </td>
+                            <td>${escapeHtml(item.empresa || '-')}</td>
+                            <td>${escapeHtml(item.ciudad || '-')}</td>
+                            <td class="text-center"><span class="badge bg-warning">No registrada</span></td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-warning btn-registrar-terminal-no-registrada" data-terminal="${escapeHtml(item.terminal || '')}">
+                                    Registrar
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }
+
                 var estatus = Number(item.estatus || 0);
                 var nuevoEstatus = estatus === 1 ? 0 : 1;
                 var accionTexto = estatus === 1 ? 'Desactivar' : 'Activar';
@@ -778,8 +817,26 @@
             });
         }
 
+        function cargarAgenciasNoRegistradasConVentas(mostrarError) {
+            prepararCargaInactivas('no_registradas_con_venta');
+
+            $.ajax({
+                url: '{{ route('agencias.no-registradas-con-venta-30-dias') }}',
+                method: 'GET',
+                success: function(response) {
+                    finalizarCargaInactivas(response, 'no_registradas_con_venta');
+                },
+                error: function() {
+                    manejarErrorCargaInactivas(mostrarError, 'No se pudo cargar el listado de terminales no registradas con ventas.', 'no_registradas_con_venta');
+                }
+            });
+        }
+
         function refrescarDespuesRegistroNoRegistradas() {
             cargarNoRegistradasVentaFija(false);
+            if (inactivasModo === 'no_registradas_con_venta') {
+                cargarAgenciasNoRegistradasConVentas(false);
+            }
             cargarAgenciasParaActualizar(false);
             table.ajax.reload(null, false);
         }
@@ -1273,12 +1330,20 @@
             cargarAgenciasInactivasConVentas(true);
         });
 
+        btnConsultarNoRegistradasConVentas.on('click', function() {
+            cargarAgenciasNoRegistradasConVentas(true);
+        });
+
         btnDesactivarInactivasMasivo.on('click', function() {
             desactivarAgenciasSinVentaMasivo();
         });
 
         tablaInactivasBody.on('click', '.btn-actualizar-estatus-agencia', function() {
             actualizarEstatusAgenciaDesdeModal($(this).data('agencia-id'), $(this).data('estatus'), this);
+        });
+
+        tablaInactivasBody.on('click', '.btn-registrar-terminal-no-registrada', function() {
+            registrarTerminalNoRegistrada($(this).data('terminal'), this);
         });
 
         countAgenciasParaActualizar.on('click', function() {

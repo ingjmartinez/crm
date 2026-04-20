@@ -283,6 +283,7 @@ Route::post('agencias-no-registradas-registrar-terminal', [AgenciaController::cl
 Route::get('agencias-inactivas', [AgenciaController::class, 'agenciasInactivas'])->name('agencias.inactivas');
 Route::get('agencias-sin-venta-30-dias', [AgenciaController::class, 'agenciasSinVentaTreintaDias'])->name('agencias.sin-venta-30-dias');
 Route::get('agencias-inactivas-con-venta-30-dias', [AgenciaController::class, 'agenciasInactivasConVentaTreintaDias'])->name('agencias.inactivas-con-venta-30-dias');
+Route::get('agencias-no-registradas-con-venta-30-dias', [AgenciaController::class, 'agenciasNoRegistradasConVentaTreintaDias'])->name('agencias.no-registradas-con-venta-30-dias');
 Route::post('agencias-sin-venta-30-dias-desactivar', [AgenciaController::class, 'desactivarAgenciasSinVentaTreintaDias'])->name('agencias.sin-venta-30-dias.desactivar');
 Route::post('agencias-actualizar-estatus', [AgenciaController::class, 'actualizarEstatusAgencia'])->name('agencias.actualizar-estatus');
 Route::get('agencias-para-actualizar', [AgenciaController::class, 'agenciasParaActualizar'])->name('agencias.para-actualizar');
