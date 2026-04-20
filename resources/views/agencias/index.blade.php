@@ -832,13 +832,35 @@
             });
         }
 
-        function refrescarDespuesRegistroNoRegistradas() {
+        function refrescarDespuesRegistroNoRegistradas(terminalRegistrada) {
             cargarNoRegistradasVentaFija(false);
             if (inactivasModo === 'no_registradas_con_venta') {
-                cargarAgenciasNoRegistradasConVentas(false);
+                if (terminalRegistrada) {
+                    eliminarTerminalInactivasLocal(terminalRegistrada);
+                } else {
+                    cargarAgenciasNoRegistradasConVentas(false);
+                }
             }
             cargarAgenciasParaActualizar(false);
             table.ajax.reload(null, false);
+        }
+
+        function eliminarTerminalInactivasLocal(terminal) {
+            if (!inactivasStats || !Array.isArray(inactivasStats.agencias)) {
+                return;
+            }
+
+            var terminalStr = String(terminal || '').trim();
+            if (!terminalStr) {
+                return;
+            }
+
+            inactivasStats.agencias = inactivasStats.agencias.filter(function(item) {
+                return String(item.terminal || '').trim() !== terminalStr;
+            });
+            inactivasStats.total = inactivasStats.agencias.length;
+
+            renderInactivasModal();
         }
 
         function actualizarConteoInactivasLocal(estatusNuevo, cantidad) {
@@ -1125,7 +1147,7 @@
                                 ? 'La terminal ' + terminal + ' fue registrada como agencia base.'
                                 : 'La terminal ' + terminal + ' ya existe o no pudo registrarse.'
                         });
-                        refrescarDespuesRegistroNoRegistradas();
+                        refrescarDespuesRegistroNoRegistradas(terminal);
                     },
                     error: function(xhr) {
                         var msg = xhr?.responseJSON?.message || 'No se pudo registrar la terminal.';
