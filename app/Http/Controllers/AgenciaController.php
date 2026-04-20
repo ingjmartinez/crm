@@ -45,7 +45,16 @@ class AgenciaController extends Controller
 
         $validated = $request->validate([
             'agencia' => 'required|string|max:25',
-            'terminal' => 'nullable|string|max:25',
+            'terminal' => [
+                'nullable',
+                'string',
+                'max:25',
+                function ($attribute, $value, $fail) {
+                    if ($this->terminalExisteEnOtraAgencia((string) $value)) {
+                        $fail('El codigo de terminal ya existe. Use la actualizacion masiva para modificar esa agencia.');
+                    }
+                },
+            ],
             'nombre_agencia' => 'nullable|string|max:55',
             'horario_am' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'horario_pm' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
@@ -100,7 +109,16 @@ class AgenciaController extends Controller
         $validated = $request->validate([
             'agencia' => 'required|string|max:255',
             'nombre_agencia' => 'nullable|string|max:255',
-            'terminal' => 'nullable|string|max:255',
+            'terminal' => [
+                'nullable',
+                'string',
+                'max:25',
+                function ($attribute, $value, $fail) use ($agencia) {
+                    if ($this->terminalExisteEnOtraAgencia((string) $value, (int) $agencia->id)) {
+                        $fail('El codigo de terminal ya pertenece a otra agencia.');
+                    }
+                },
+            ],
             'horario_am' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'horario_pm' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'sistema' => 'nullable|string|max:255',
@@ -449,7 +467,7 @@ class AgenciaController extends Controller
     }
 
     /**
-     * Registra una terminal no registrada especifica como agencia base.
+     * Registra una terminal no registrada sin asignar codigo de agencia.
      */
     public function registrarTerminalNoRegistrada(Request $request)
     {
@@ -621,7 +639,7 @@ class AgenciaController extends Controller
             }
 
             $agencia = Agencia::create([
-                'agencia' => substr($terminalOriginal, 0, 25),
+                'agencia' => null,
                 'terminal' => substr($terminalOriginal, 0, 25),
                 'nombre_agencia' => null,
                 'estatus' => 1,
@@ -1328,10 +1346,22 @@ class AgenciaController extends Controller
         ]);
 
         try {
-            Excel::import(new AgenciasImport, $request->file('file'));
+            $import = new AgenciasImport();
+            Excel::import($import, $request->file('file'));
+
+            $resultado = [
+                'importadas' => $import->importadas,
+                'omitidas' => $import->totalOmitidas(),
+                'omitidas_existentes' => $import->omitidasExistentes,
+                'omitidas_duplicadas_archivo' => $import->omitidasDuplicadasArchivo,
+                'omitidas_sin_terminal' => $import->omitidasSinTerminal,
+            ];
+
+            $mensaje = "Importacion completada. Creadas: {$import->importadas}. Omitidas: {$resultado['omitidas']}.";
 
             return redirect()->route('agencias.index')
-                ->with('success', 'Agencias importadas exitosamente.');
+                ->with('success', $mensaje)
+                ->with('import_result', $resultado);
         } catch (\Exception $e) {
             return redirect()->route('agencias.index')
                 ->with('error', 'Error al importar: ' . $e->getMessage());
@@ -1392,6 +1422,14 @@ class AgenciaController extends Controller
 
                 if (empty($updates)) {
                     $sinCambios++;
+                    continue;
+                }
+
+                if (
+                    array_key_exists('terminal', $updates)
+                    && $this->terminalExisteEnOtraAgencia((string) $updates['terminal'], (int) $agencia->id)
+                ) {
+                    $filasInvalidas++;
                     continue;
                 }
 
@@ -1566,6 +1604,24 @@ class AgenciaController extends Controller
         }
 
         return null;
+    }
+
+    private function terminalExisteEnOtraAgencia(?string $terminal, ?int $exceptoId = null): bool
+    {
+        $terminalKey = $this->normalizarTerminal($terminal);
+        if ($terminalKey === '0') {
+            return false;
+        }
+
+        $query = Agencia::query()
+            ->whereNotNull('terminal')
+            ->whereRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') = ?", [$terminalKey]);
+
+        if ($exceptoId !== null) {
+            $query->where('id', '<>', $exceptoId);
+        }
+
+        return $query->exists();
     }
 
     private function parseEstatus(string $value): int

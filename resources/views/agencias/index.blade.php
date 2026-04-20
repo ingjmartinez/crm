@@ -201,6 +201,7 @@
                                 <li>Columna K: Coordinador</li>
                                 <li>Columna L: Estatus (1 Activo / 0 Inactivo)</li>
                                 <li>Columna M: Aplica Incentivo (SI/NO)</li>
+                                <li>Si la terminal ya existe, la fila se omite. Para modificarla use Actualizar masiva.</li>
                             </ul>
                         </div>
                     </div>
@@ -284,7 +285,7 @@
                         <div class="d-flex align-items-center gap-2 flex-wrap">
                             <span class="badge bg-warning-subtle text-warning-emphasis" id="noRegistradasTotalTexto">0 terminales</span>
                             <button type="button" class="btn btn-sm btn-warning" id="btnRegistrarNoRegistradasMasivo">
-                                <i class="ri-add-box-line me-1"></i>Registrar agencias masivo
+                                <i class="ri-add-box-line me-1"></i>Registrar terminales masivo
                             </button>
                         </div>
                     </div>
@@ -493,7 +494,7 @@
                         <td class="text-end">${Number(item.dias_con_venta || 0).toLocaleString('es-DO')}</td>
                         <td>${escapeHtml(item.ultima_fecha || '-')}</td>
                         <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-success btn-registrar-terminal-no-registrada" data-terminal="${escapeHtml(terminal)}" title="Registrar agencia">
+                            <button type="button" class="btn btn-sm btn-success btn-registrar-terminal-no-registrada" data-terminal="${escapeHtml(terminal)}" title="Registrar terminal">
                                 <i class="ri-add-line"></i>
                             </button>
                         </td>
@@ -1054,8 +1055,8 @@
 
             Swal.fire({
                 icon: 'question',
-                title: 'Registrar agencias masivo',
-                text: 'Se registraran ' + total.toLocaleString('es-DO') + ' agencias base con el mismo codigo de terminal.',
+                title: 'Registrar terminales masivo',
+                text: 'Se registraran ' + total.toLocaleString('es-DO') + ' terminales pendientes sin alterar el codigo de agencia.',
                 showCancelButton: true,
                 confirmButtonText: 'Registrar',
                 cancelButtonText: 'Cancelar',
@@ -1098,7 +1099,7 @@
                         refrescarDespuesRegistroNoRegistradas();
                     },
                     error: function(xhr) {
-                        var msg = xhr?.responseJSON?.message || 'No se pudieron registrar las agencias.';
+                        var msg = xhr?.responseJSON?.message || 'No se pudieron registrar las terminales.';
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
@@ -1117,8 +1118,8 @@
 
             Swal.fire({
                 icon: 'question',
-                title: 'Registrar agencia',
-                text: 'Se registrara la terminal ' + terminal + ' como agencia base.',
+                title: 'Registrar terminal',
+                text: 'Se registrara la terminal ' + terminal + ' sin asignar codigo de agencia.',
                 showCancelButton: true,
                 confirmButtonText: 'Registrar',
                 cancelButtonText: 'Cancelar',
@@ -1142,9 +1143,9 @@
                         var registradas = Number(response.registradas || 0);
                         Swal.fire({
                             icon: registradas > 0 ? 'success' : 'info',
-                            title: registradas > 0 ? 'Agencia registrada' : 'Agencia omitida',
+                            title: registradas > 0 ? 'Terminal registrada' : 'Terminal omitida',
                             text: registradas > 0
-                                ? 'La terminal ' + terminal + ' fue registrada como agencia base.'
+                                ? 'La terminal ' + terminal + ' fue registrada sin codigo de agencia.'
                                 : 'La terminal ' + terminal + ' ya existe o no pudo registrarse.'
                         });
                         refrescarDespuesRegistroNoRegistradas(terminal);
@@ -1450,7 +1451,7 @@
         });
 
         // Mostrar mensaje de éxito si existe
-        @if(session('success') && !session('mass_update_result'))
+        @if(session('success') && !session('mass_update_result') && !session('import_result'))
             Swal.fire({
                 icon: 'success',
                 title: '¡Éxito!',
@@ -1461,6 +1462,27 @@
         @endif
 
         // Resumen de actualización masiva con conteo
+        @if(session('import_result'))
+            const importResult = @json(session('import_result'));
+            Swal.fire({
+                icon: Number(importResult.omitidas || 0) > 0 ? 'info' : 'success',
+                title: 'Importacion finalizada',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-2">Resumen del archivo procesado:</p>
+                        <ul class="mb-0 ps-3">
+                            <li>Agencias creadas: <strong>${Number(importResult.importadas || 0).toLocaleString('es-DO')}</strong></li>
+                            <li>Omitidas por terminal existente: <strong>${Number(importResult.omitidas_existentes || 0).toLocaleString('es-DO')}</strong></li>
+                            <li>Omitidas por terminal repetida en el archivo: <strong>${Number(importResult.omitidas_duplicadas_archivo || 0).toLocaleString('es-DO')}</strong></li>
+                            <li>Omitidas sin terminal: <strong>${Number(importResult.omitidas_sin_terminal || 0).toLocaleString('es-DO')}</strong></li>
+                        </ul>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#0ab39c'
+            });
+        @endif
+
         @if(session('mass_update_result'))
             const massUpdateResult = @json(session('mass_update_result'));
             Swal.fire({
