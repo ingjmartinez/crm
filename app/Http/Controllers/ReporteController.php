@@ -11,9 +11,153 @@ use Illuminate\Support\Facades\DB;
 
 class ReporteController extends Controller
 {
+    public function indexReportes()
+    {
+        $reportes = collect(config('reportes', []))
+            ->filter(fn ($reporte) => (bool) ($reporte['activo'] ?? true))
+            ->map(function ($reporte) {
+                $reporte['url'] = url($reporte['url']);
+                $reporte['tags'] = $reporte['tags'] ?? [];
+
+                return $reporte;
+            })
+            ->sortBy('nombre')
+            ->values();
+
+        $categorias = $reportes
+            ->pluck('categoria')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        return view('reportes.index', compact('reportes', 'categorias'));
+    }
+
     function ventasUsuarioBet(Request $request)
     {
         return view('reportes.ventas-usuario-bet');
+    }
+
+    public function compensacion()
+    {
+        return view('reportes.compensacion');
+    }
+
+    public function listCompensacion(Request $request)
+    {
+        $validated = $request->validate([
+            'sistema' => 'required|in:lotobet,lotonet',
+            'fecha_inicio' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
+        ]);
+
+        $tablas = [
+            'lotobet' => [
+                'label' => 'Lotobet',
+                'a_otra' => 'pagos_aotra_empresa_bet',
+                'por_otra' => 'pagos_porotra_empresa_bet',
+                'consorcio_destino' => 'pagado_consorcio_id',
+                'plataforma' => 'plataforma_pago',
+            ],
+            'lotonet' => [
+                'label' => 'Lotonet',
+                'a_otra' => 'pagos_aotra_empresa_net',
+                'por_otra' => 'pagos_porotra_empresa_net',
+                'consorcio_destino' => 'pagado_consorcio_id',
+                'plataforma' => 'plataforma',
+            ],
+        ];
+
+        $config = $tablas[$validated['sistema']];
+        $fechaInicio = $validated['fecha_inicio'];
+        $fechaFin = $validated['fecha_fin'];
+        $consorcioAotra = $validated['sistema'] === 'lotonet' ? 'pagado_a_consorcio_id' : $config['consorcio_destino'];
+
+        $sql = "
+            SELECT
+                sistema,
+                tipo_movimiento,
+                fecha,
+                agencia_id,
+                producto_id,
+                descripcion,
+                consorcio_origen,
+                consorcio_destino,
+                plataforma,
+                SUM(monto) AS total_monto,
+                COUNT(*) AS cantidad
+            FROM (
+                SELECT
+                    ? AS sistema,
+                    'Pagos a otra empresa' AS tipo_movimiento,
+                    fecha,
+                    agencia_id,
+                    producto_id,
+                    descripcion,
+                    consorcio_id AS consorcio_origen,
+                    {$consorcioAotra} AS consorcio_destino,
+                    {$config['plataforma']} AS plataforma,
+                    COALESCE(monto, 0) AS monto
+                FROM {$config['a_otra']}
+                WHERE fecha BETWEEN ? AND ?
+
+                UNION ALL
+
+                SELECT
+                    ? AS sistema,
+                    'Pagos por otra empresa' AS tipo_movimiento,
+                    fecha,
+                    agencia_id,
+                    producto_id,
+                    descripcion,
+                    consorcio_id AS consorcio_origen,
+                    {$config['consorcio_destino']} AS consorcio_destino,
+                    {$config['plataforma']} AS plataforma,
+                    COALESCE(monto, 0) AS monto
+                FROM {$config['por_otra']}
+                WHERE fecha BETWEEN ? AND ?
+            ) movimientos
+            GROUP BY
+                sistema,
+                tipo_movimiento,
+                fecha,
+                agencia_id,
+                producto_id,
+                descripcion,
+                consorcio_origen,
+                consorcio_destino,
+                plataforma
+            ORDER BY fecha DESC, agencia_id, tipo_movimiento
+        ";
+
+        $data = DB::select($sql, [
+            $config['label'],
+            $fechaInicio,
+            $fechaFin,
+            $config['label'],
+            $fechaInicio,
+            $fechaFin,
+        ]);
+
+        $totalAotra = collect($data)
+            ->where('tipo_movimiento', 'Pagos a otra empresa')
+            ->sum(fn ($row) => (float) $row->total_monto);
+
+        $totalPorOtra = collect($data)
+            ->where('tipo_movimiento', 'Pagos por otra empresa')
+            ->sum(fn ($row) => (float) $row->total_monto);
+
+        return response()->json([
+            'resumen' => [
+                'sistema' => $config['label'],
+                'total_a_otra_empresa' => round($totalAotra, 2),
+                'total_por_otra_empresa' => round($totalPorOtra, 2),
+                'balance' => round($totalPorOtra - $totalAotra, 2),
+                'registros' => count($data),
+            ],
+            'data' => $data,
+        ]);
     }
 
     public function listVentasUsuarioBet(Request $request)
@@ -255,7 +399,10 @@ class ReporteController extends Controller
         $fechaFin = $request->input('fecha_fin');
 
         if (!$fechaInicio || !$fechaFin) {
-            return response()->json([]);
+            return response()->json([
+                'resultados' => [],
+                'agencias_sin_cedula' => [],
+            ]);
         }
 
         // Determinar la tabla según el sistema
@@ -537,6 +684,8 @@ class ReporteController extends Controller
 
             WHERE v.fecha >= ?
               AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+                            AND NULLIF(REPLACE(REPLACE(v.cedula,'-',''),' ',''), '') IS NOT NULL
+                            AND REPLACE(REPLACE(v.cedula,'-',''),' ','') <> '00000000000'
 
             GROUP BY
                 CAST(REPLACE(REPLACE(v.cedula,'-',''),' ','') AS CHAR(11))
@@ -544,6 +693,21 @@ class ReporteController extends Controller
             ORDER BY
                 Ultima_Fecha_Venta DESC,
                 Identificacion
+        ", [$fechaInicio, $fechaFin]);
+
+        $agenciasSinCedula = DB::select("
+            SELECT
+                v.agencia_id AS Agencia,
+                COUNT(DISTINCT DATE(v.fecha)) AS Dias_Sin_Cedula_Con_Ventas
+            FROM {$tabla} v
+            WHERE v.fecha >= ?
+              AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+              AND (
+                    NULLIF(REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ',''), '') IS NULL
+                    OR REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ','') = '00000000000'
+                  )
+            GROUP BY v.agencia_id
+            ORDER BY Dias_Sin_Cedula_Con_Ventas DESC, v.agencia_id
         ", [$fechaInicio, $fechaFin]);
         
         // Restaurar el strict mode
@@ -564,7 +728,48 @@ class ReporteController extends Controller
         
         $resultados = array_values($resultados); // Reindexar el array
 
-        return response()->json($resultados);
+        return response()->json([
+            'resultados' => $resultados,
+            'agencias_sin_cedula' => $agenciasSinCedula,
+        ]);
+    }
+
+    public function listCruceUsuariosSinCedulaFechas(Request $request)
+    {
+        $sistema = $request->input('sistema', 'Lotobet');
+        $fechaInicio = $request->input('fecha_inicio');
+        $fechaFin = $request->input('fecha_fin');
+        $agenciaId = $request->input('agencia_id');
+
+        if (!$fechaInicio || !$fechaFin || !$agenciaId) {
+            return response()->json([
+                'agencia' => $agenciaId,
+                'fechas' => [],
+            ]);
+        }
+
+        $tabla = $sistema === 'Lotobet' ? 'vt_usuarios_bet' : 'vt_usuarios_net';
+
+        $fechas = DB::select(" 
+            SELECT
+                DATE(v.fecha) AS Fecha,
+                COUNT(*) AS Cantidad_Ventas
+            FROM {$tabla} v
+            WHERE v.fecha >= ?
+              AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+              AND v.agencia_id = ?
+              AND (
+                    NULLIF(REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ',''), '') IS NULL
+                    OR REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ','') = '00000000000'
+                  )
+            GROUP BY DATE(v.fecha)
+            ORDER BY Fecha DESC
+        ", [$fechaInicio, $fechaFin, $agenciaId]);
+
+        return response()->json([
+            'agencia' => $agenciaId,
+            'fechas' => $fechas,
+        ]);
     }
 
     // ========== VERIFICADOR DE USUARIOS ==========

@@ -11,7 +11,7 @@
                             <h4 class="mb-sm-0">Cruce de Usuarios</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);">Reportes</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('reportes.index') }}">Reportes</a></li>
                                     <li class="breadcrumb-item active">Cruce de Usuarios</li>
                                 </ol>
                             </div>
@@ -63,6 +63,20 @@
                     </div>
                 </div>
 
+                <div class="row" id="sinCedulaSummary" style="display: none;">
+                    <div class="col-lg-12">
+                        <div class="alert alert-warning d-flex align-items-center justify-content-between mb-3">
+                            <div>
+                                <strong>Agencias con ventas sin cédula:</strong>
+                                <span id="sinCedulaCount" class="badge bg-danger ms-2">0</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-dark" id="btnVerSinCedula" data-bs-toggle="modal" data-bs-target="#modalSinCedula">
+                                Ver detalle
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-lg-12">
                         <div class="card">
@@ -91,6 +105,46 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="modal fade" id="modalSinCedula" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Agencias con ventas sin cédula</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="table-responsive" style="max-height: 45vh; overflow-y: auto;">
+                                    <table class="table table-bordered table-striped mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Agencia</th>
+                                                <th>Días sin cédulas con ventas</th>
+                                                <th>Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodySinCedula"></tbody>
+                                    </table>
+                                </div>
+
+                                <div id="detalleFechasContainer" class="mt-3" style="display:none;">
+                                    <h6 class="mb-2" id="detalleFechasTitulo"></h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered table-striped mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Fecha</th>
+                                                    <th>Cantidad de ventas sin cédula</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbodyFechasSinCedula"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -99,6 +153,121 @@
 @section('script')
     <script>
         let table;
+        let agenciasSinCedula = [];
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function limpiarDetalleFechas() {
+            document.getElementById('detalleFechasContainer').style.display = 'none';
+            document.getElementById('detalleFechasTitulo').textContent = '';
+            document.getElementById('tbodyFechasSinCedula').innerHTML = '';
+        }
+
+        function abrirModalSinCedula() {
+            const modalElement = document.getElementById('modalSinCedula');
+            if (!modalElement) {
+                return;
+            }
+
+            if (modalElement.parentElement !== document.body) {
+                document.body.appendChild(modalElement);
+            }
+
+            if (window.bootstrap && typeof window.bootstrap.Modal === 'function') {
+                const modal = window.bootstrap.Modal.getOrCreateInstance(modalElement);
+                modal.show();
+                return;
+            }
+
+            if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+                window.jQuery(modalElement).modal('show');
+            }
+        }
+
+        function renderDetalleFechas(agenciaId, fechas) {
+            const container = document.getElementById('detalleFechasContainer');
+            const titulo = document.getElementById('detalleFechasTitulo');
+            const tbody = document.getElementById('tbodyFechasSinCedula');
+
+            titulo.textContent = 'Fechas con ventas sin cédula - Agencia ' + agenciaId;
+            tbody.innerHTML = '';
+
+            if (!fechas.length) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="2" class="text-center">No hay fechas disponibles</td>';
+                tbody.appendChild(tr);
+            } else {
+                fechas.forEach(function(item) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML =
+                        '<td>' + escapeHtml(item.Fecha ?? '') + '</td>' +
+                        '<td>' + escapeHtml(item.Cantidad_Ventas ?? 0) + '</td>';
+                    tbody.appendChild(tr);
+                });
+            }
+
+            container.style.display = 'block';
+        }
+
+        function cargarDetalleFechasSinCedula(agenciaId) {
+            const sistema = document.getElementById('sistema').value;
+            const fechaInicio = document.getElementById('fecha_inicio').value;
+            const fechaFin = document.getElementById('fecha_fin').value;
+
+            const tbody = document.getElementById('tbodyFechasSinCedula');
+            document.getElementById('detalleFechasContainer').style.display = 'block';
+            document.getElementById('detalleFechasTitulo').textContent = 'Fechas con ventas sin cédula - Agencia ' + agenciaId;
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center">Cargando...</td></tr>';
+
+            $.ajax({
+                url: '/reportes-cruce-usuarios/sin-cedula-fechas',
+                type: 'GET',
+                data: {
+                    sistema: sistema,
+                    fecha_inicio: fechaInicio,
+                    fecha_fin: fechaFin,
+                    agencia_id: agenciaId
+                },
+                success: function(json) {
+                    renderDetalleFechas(agenciaId, json.fechas || []);
+                },
+                error: function() {
+                    tbody.innerHTML = '<tr><td colspan="2" class="text-center text-danger">No fue posible cargar el detalle</td></tr>';
+                }
+            });
+        }
+
+        function renderResumenSinCedula() {
+            const summary = document.getElementById('sinCedulaSummary');
+            const count = document.getElementById('sinCedulaCount');
+            const tbody = document.getElementById('tbodySinCedula');
+
+            count.textContent = agenciasSinCedula.length;
+            summary.style.display = agenciasSinCedula.length > 0 ? 'block' : 'none';
+
+            tbody.innerHTML = '';
+
+            agenciasSinCedula.forEach(function(item) {
+                const tr = document.createElement('tr');
+                const agencia = item.Agencia ?? '';
+                tr.innerHTML =
+                    '<td>' + escapeHtml(agencia) + '</td>' +
+                    '<td>' + escapeHtml(item.Dias_Sin_Cedula_Con_Ventas ?? 0) + '</td>' +
+                    '<td class="text-center">' +
+                        '<button type="button" class="btn btn-sm btn-outline-primary btnVerFechasSinCedula" data-agencia="' + escapeHtml(agencia) + '">' +
+                            '<i class="ri-pencil-line"></i>' +
+                        '</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+        }
 
         function cargarDatos() {
             const sistema = document.getElementById('sistema').value;
@@ -144,7 +313,11 @@
                         fecha_inicio: fechaInicio,
                         fecha_fin: fechaFin
                     },
-                    dataSrc: '',
+                    dataSrc: function(json) {
+                        agenciasSinCedula = json.agencias_sin_cedula || [];
+                        renderResumenSinCedula();
+                        return json.resultados || [];
+                    },
                     complete: function() {
                         Swal.close();
                     }
@@ -196,9 +369,38 @@
 
         document.getElementById('btnBuscar').addEventListener('click', cargarDatos);
 
-        // Cargar datos automáticamente al inicio
+        document.getElementById('btnVerSinCedula').addEventListener('click', function(event) {
+            event.preventDefault();
+            limpiarDetalleFechas();
+            abrirModalSinCedula();
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
-            // cargarDatos();
+            const modalElement = document.getElementById('modalSinCedula');
+
+            if (modalElement && modalElement.parentElement !== document.body) {
+                document.body.appendChild(modalElement);
+            }
+
+            if (modalElement) {
+                modalElement.addEventListener('hidden.bs.modal', function() {
+                    limpiarDetalleFechas();
+                });
+            }
+        });
+
+        document.getElementById('tbodySinCedula').addEventListener('click', function(event) {
+            const btn = event.target.closest('.btnVerFechasSinCedula');
+            if (!btn) {
+                return;
+            }
+
+            const agenciaId = btn.getAttribute('data-agencia');
+            if (!agenciaId) {
+                return;
+            }
+
+            cargarDetalleFechasSinCedula(agenciaId);
         });
     </script>
 @endsection

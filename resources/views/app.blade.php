@@ -1226,47 +1226,11 @@
                             </div>
                         </li>
                         <li class="nav-item">
-                            <a href="#sidebarReportes" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarReportes"
+                            <a href="{{ route('reportes.index') }}"
+                                class="nav-link menu-link {{ request()->is('reportes') || request()->is('reportes-*') ? 'active' : '' }}"
                                 data-key="t-invoices">
                                 <i class="ri-apps-2-line"></i> <span data-key="t-apps">Reportes</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarReportes">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-ventas-usuario-bet') }}" class="nav-link"
-                                            data-key="t-mailbox"> Ventas por Usuario BET </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-faltantes-bet') }}" class="nav-link"
-                                            data-key="t-mailbox"> Faltantes BET </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-cuadre-ventas') }}" class="nav-link"
-                                            data-key="t-mailbox"> Cuadre de Ventas </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-ventas-agencia-periodo') }}" class="nav-link"
-                                            data-key="t-mailbox"> Ventas por Agencia y Período </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-ventas-por-agencia') }}" class="nav-link"
-                                            data-key="t-mailbox"> Ventas por Agencia </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-ventas-por-cedula') }}" class="nav-link"
-                                            data-key="t-mailbox"> Ventas por Cédula </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-cruce-usuarios') }}" class="nav-link"
-                                            data-key="t-mailbox"> Cruce de Usuarios </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-verificador-usuarios') }}" class="nav-link"
-                                            data-key="t-mailbox"> Verificador de Usuarios </a>
-                                    </li>
-                                </ul>
-                            </div>
                         </li>
                         <li class="nav-item d-none">
                             <a href="#sidebarReportesBI" class="nav-link collapsed" data-bs-toggle="collapse"

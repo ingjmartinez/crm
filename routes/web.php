@@ -239,6 +239,8 @@ Route::get('/empleados-no-regularizados/list', [EmpleadoController::class, 'list
 Route::get('/ventas-sin-empleado', [EmpleadoController::class, 'ventasSinEmpleado']);
 Route::get('/ventas-sin-empleado/list', [EmpleadoController::class, 'listVentasSinEmpleado']);
 
+Route::get('/reportes', [ReporteController::class, 'indexReportes'])->name('reportes.index');
+
 Route::get('/reportes-ventas-usuario-bet', [ReporteController::class, 'ventasUsuarioBet']);
 Route::get('/reportes-ventas-usuario-bet/list', [ReporteController::class, 'listVentasUsuarioBet']);
 Route::get('/reportes-ventas-usuario-bet/excel', [ReporteController::class, 'excelVentasUsuarioBet']);
@@ -264,6 +266,10 @@ Route::get('/reportes-ventas-por-cedula/list', [ReporteController::class, 'listV
 
 Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
 Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
+Route::get('/reportes-cruce-usuarios/sin-cedula-fechas', [ReporteController::class, 'listCruceUsuariosSinCedulaFechas']);
+
+Route::get('/reportes-compensacion', [ReporteController::class, 'compensacion']);
+Route::get('/reportes-compensacion/list', [ReporteController::class, 'listCompensacion']);
 
 Route::get('/reportes-verificador-usuarios', [ReporteController::class, 'verificadorUsuarios']);
 Route::get('/reportes-verificador-usuarios/list', [ReporteController::class, 'listVerificadorUsuarios']);

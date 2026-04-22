@@ -12,6 +12,23 @@ use Illuminate\Support\Facades\DB;
 
 class VentasController extends Controller
 {
+    private function normalizeCedula($rawCedula): ?string
+    {
+        $cedula = preg_replace('/\D/', '', (string) $rawCedula);
+
+        if ($cedula === '') {
+            return null;
+        }
+
+        $cedula = str_pad(substr($cedula, 0, 11), 11, '0', STR_PAD_LEFT);
+
+        if ($cedula === '00000000000') {
+            return null;
+        }
+
+        return $cedula;
+    }
+
     public function getVentasUsuariosLotobet(Request $request)
     {
         ini_set('memory_limit', '1G');
@@ -75,7 +92,7 @@ class VentasController extends Controller
                 'consorcio_id'  => $v['consorcio_id'] ?? null,
                 'agencia_id'    => $v['agencia_id'] ?? null,
                 'producto_id'   => $v['producto_id'] ?? null,
-                'cedula'        => str_pad((string) ($v['cedula'] ?? ''), 11, '0', STR_PAD_LEFT),
+                'cedula'        => $this->normalizeCedula($v['cedula'] ?? null),
                 'descripcion'   => $v['descripcion'] ?? null,
                 'tipo'          => $v['tipo'] ?? null,
                 'monto'         => $v['monto'] ?? 0,
@@ -182,7 +199,7 @@ class VentasController extends Controller
                 'consorcio_id'  => $v['consorcio_id'] ?? null,
                 'agencia_id'    => $v['agencia_id'] ?? null,
                 'producto_id'   => $producto_id,
-                'cedula'        => str_pad(str_replace('-', '', $v['cedula']), 11, '0', STR_PAD_LEFT) ?? null,
+                'cedula'        => $this->normalizeCedula($v['cedula'] ?? null),
                 'descripcion'   => $v['descripcion'] ?? null,
                 'tipo'          => ucfirst($v['tipo']) ?? null,
                 'monto'         => $v['monto'] ?? 0,
