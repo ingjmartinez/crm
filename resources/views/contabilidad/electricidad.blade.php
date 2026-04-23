@@ -512,6 +512,93 @@
                 return `<span class="electricidad-status-badge electricidad-status-${current}">${estatusLabel(current)}</span>`;
             }
 
+            function estatusOptions() {
+                return {
+                    pendiente: 'Pendiente',
+                    en_gestion: 'En gestion',
+                    resuelta: 'Resuelta',
+                    cancelada: 'Cancelada',
+                };
+            }
+
+            function estatusEditableCell(tipo, id, estatus) {
+                const current = estatus || 'pendiente';
+                return `
+                    <button
+                        type="button"
+                        class="btn btn-link p-0 border-0 text-decoration-none js-editar-estatus"
+                        data-tipo="${tipo}"
+                        data-id="${id}"
+                        data-estatus="${current}"
+                        title="Haz clic para cambiar estatus"
+                    >
+                        ${estatusBadge(current)}
+                    </button>
+                `;
+            }
+
+            async function actualizarEstatusOrden(tipo, id, estatus) {
+                const endpoint = tipo === 'seguimiento'
+                    ? `/contabilidad/electricidad/seguimiento-dia/${id}/estatus`
+                    : `/contabilidad/electricidad/averias-dia/${id}/estatus`;
+
+                const response = await fetch(endpoint, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({ estatus }),
+                });
+
+                const json = await response.json().catch(function () { return {}; });
+
+                if (!response.ok) {
+                    const firstValidation = json?.errors ? Object.values(json.errors)[0]?.[0] : '';
+                    throw new Error(firstValidation || json.message || 'No se pudo actualizar el estatus.');
+                }
+
+                return json;
+            }
+
+            async function seleccionarYActualizarEstatus(tipo, id, estatusActual, triggerElement) {
+                const selected = await Swal.fire({
+                    title: 'Cambiar estatus',
+                    input: 'select',
+                    inputOptions: estatusOptions(),
+                    inputValue: estatusActual || 'pendiente',
+                    showCancelButton: true,
+                    confirmButtonText: 'Guardar',
+                    cancelButtonText: 'Cancelar',
+                });
+
+                if (!selected.isConfirmed || !selected.value || selected.value === estatusActual) {
+                    return;
+                }
+
+                await actualizarEstatusOrden(tipo, id, selected.value);
+
+                if (triggerElement) {
+                    triggerElement.setAttribute('data-estatus', selected.value);
+                    triggerElement.innerHTML = estatusBadge(selected.value);
+                }
+
+                if (tipo === 'seguimiento') {
+                    await cargarSeguimientoDia();
+                } else {
+                    await cargarAveriasDia();
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Estatus actualizado',
+                    timer: 1100,
+                    showConfirmButton: false,
+                });
+            }
+
             function closeModal(modalElement) {
                 if (!modalElement || !window.bootstrap?.Modal) {
                     return;
@@ -560,6 +647,8 @@
                 if ((fechaHasta || '').trim() !== '') {
                     params.set('fecha_hasta', fechaHasta.trim());
                 }
+                // Evita que el navegador reutilice una respuesta vieja al refrescar la tabla.
+                params.set('_t', String(Date.now()));
                 const query = params.toString();
                 return query !== '' ? ('?' + query) : '';
             }
@@ -568,6 +657,7 @@
                 const url = '/contabilidad/electricidad/seguimiento-dia/data' + getQuery(segDesde.value, segHasta.value);
 
                 const response = await fetch(url, {
+                    cache: 'no-store',
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
@@ -590,7 +680,7 @@
                         <td>${item.nic || ''}</td>
                         <td>${item.agencia || ''}</td>
                         <td>${item.ruta || ''}</td>
-                        <td>${estatusBadge(item.estatus)}</td>
+                        <td>${estatusEditableCell('seguimiento', item.id, item.estatus)}</td>
                         <td>${item.observaciones || ''}</td>
                     `;
 
@@ -608,6 +698,7 @@
                 const url = '/contabilidad/electricidad/averias-dia/data' + getQuery(aveDesde.value, aveHasta.value);
 
                 const response = await fetch(url, {
+                    cache: 'no-store',
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
@@ -634,7 +725,7 @@
                         <td>${item.coordinadores || ''}</td>
                         <td>${item.agente_venta_am || ''}</td>
                         <td>${item.agente_venta_pm || ''}</td>
-                        <td>${estatusBadge(item.estatus)}</td>
+                        <td>${estatusEditableCell('averia', item.id, item.estatus)}</td>
                         <td>${item.observaciones || ''}</td>
                     `;
 
@@ -758,6 +849,29 @@
                 }
 
                 dtAverias.column(4).search((this.value || '').trim()).draw();
+            });
+
+            document.addEventListener('click', function (event) {
+                const btn = event.target.closest('.js-editar-estatus');
+                if (!btn) {
+                    return;
+                }
+
+                const tipo = btn.getAttribute('data-tipo');
+                const id = btn.getAttribute('data-id');
+                const estatus = btn.getAttribute('data-estatus') || 'pendiente';
+
+                if (!tipo || !id) {
+                    return;
+                }
+
+                seleccionarYActualizarEstatus(tipo, id, estatus, btn).catch(function (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: error.message || 'No fue posible actualizar el estatus.',
+                    });
+                });
             });
 
             cargarSeguimientoDia().catch(function (error) {

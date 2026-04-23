@@ -232,6 +232,23 @@ class ContabilidadElectricidadController extends Controller
         ]);
     }
 
+    public function updateSeguimientoDiaStatus(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'estatus' => ['required', 'in:pendiente,en_gestion,resuelta,cancelada'],
+        ]);
+
+        $registro = ContabilidadElectricidadSeguimientoDia::query()->findOrFail($id);
+        $registro->update([
+            'estatus' => $validated['estatus'],
+        ]);
+
+        return response()->json([
+            'message' => 'Estatus de seguimiento actualizado correctamente.',
+            'estatus' => $registro->estatus,
+        ]);
+    }
+
     public function averiasDiaData(Request $request)
     {
         $validated = $request->validate([
@@ -308,6 +325,23 @@ class ContabilidadElectricidadController extends Controller
 
         return response()->json([
             'message' => 'Registro eliminado correctamente.',
+        ]);
+    }
+
+    public function updateAveriasDiaStatus(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'estatus' => ['required', 'in:pendiente,en_gestion,resuelta,cancelada'],
+        ]);
+
+        $registro = ContabilidadElectricidadAveriaDia::query()->findOrFail($id);
+        $registro->update([
+            'estatus' => $validated['estatus'],
+        ]);
+
+        return response()->json([
+            'message' => 'Estatus de averia actualizado correctamente.',
+            'estatus' => $registro->estatus,
         ]);
     }
 

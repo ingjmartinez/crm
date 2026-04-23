@@ -20,6 +20,7 @@ use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\MarController;
 use App\Http\Controllers\MetaIncentivoController;
+use App\Http\Controllers\NovedadHorarioController;
 use App\Http\Controllers\OperacionesReporteDiarioController;
 use App\Http\Controllers\OperadorRutaController;
 use App\Http\Controllers\PagoAOtraEmpresaController;
@@ -89,9 +90,11 @@ Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
     Route::delete('/electricidad/{electricidad}', [ContabilidadElectricidadController::class, 'destroy'])->name('electricidad.destroy');
     Route::get('/electricidad/seguimiento-dia/data', [ContabilidadElectricidadController::class, 'seguimientoDiaData'])->name('electricidad.seguimiento-dia.data');
     Route::post('/electricidad/seguimiento-dia', [ContabilidadElectricidadController::class, 'storeSeguimientoDia'])->name('electricidad.seguimiento-dia.store');
+    Route::put('/electricidad/seguimiento-dia/{id}/estatus', [ContabilidadElectricidadController::class, 'updateSeguimientoDiaStatus'])->name('electricidad.seguimiento-dia.update-status');
     Route::delete('/electricidad/seguimiento-dia/{id}', [ContabilidadElectricidadController::class, 'destroySeguimientoDia'])->name('electricidad.seguimiento-dia.destroy');
     Route::get('/electricidad/averias-dia/data', [ContabilidadElectricidadController::class, 'averiasDiaData'])->name('electricidad.averias-dia.data');
     Route::post('/electricidad/averias-dia', [ContabilidadElectricidadController::class, 'storeAveriasDia'])->name('electricidad.averias-dia.store');
+    Route::put('/electricidad/averias-dia/{id}/estatus', [ContabilidadElectricidadController::class, 'updateAveriasDiaStatus'])->name('electricidad.averias-dia.update-status');
     Route::delete('/electricidad/averias-dia/{id}', [ContabilidadElectricidadController::class, 'destroyAveriasDia'])->name('electricidad.averias-dia.destroy');
     Route::view('/reportes/comisiones', 'contabilidad.reportes.comisiones')->name('reportes.comisiones');
     Route::get('/reportes/estado-resultado', [ContabilidadEstadoResultadoController::class, 'index'])->name('reportes.estado-resultado');
@@ -233,6 +236,10 @@ Route::get('/empleados/show/{id}', [EmpleadoController::class, 'show']);
 Route::post('/empleados/store', [EmpleadoController::class, 'store']);
 Route::get('/empleados/destroy/{id}', [EmpleadoController::class, 'destroy']);
 Route::get('/empleados/sincronizar', [EmpleadoController::class, 'sincronizar']);
+Route::get('/recursos-humanos/novedades-horario', [NovedadHorarioController::class, 'index'])
+    ->name('recursos-humanos.novedades-horario.index');
+Route::get('/recursos-humanos/novedades-horario/list', [NovedadHorarioController::class, 'list'])
+    ->name('recursos-humanos.novedades-horario.list');
 
 Route::get('/empleados-no-regularizados', [EmpleadoController::class, 'noRegularizados']);
 Route::get('/empleados-no-regularizados/list', [EmpleadoController::class, 'listNoRegularizados']);

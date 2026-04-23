@@ -1,6 +1,34 @@
 @extends('app')
 
 @section('content')
+    <style>
+        .compensacion-metric-icon,
+        .compensacion-metric-icon .avatar-title,
+        .compensacion-metric-icon .avatar-title i {
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+
+        .compensacion-metric-icon .avatar-title {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .compensacion-metric-icon .avatar-title,
+        .compensacion-metric-icon .avatar-title i {
+            color: #fff !important;
+        }
+
+        .compensacion-metric-icon .avatar-title i {
+            display: inline-block !important;
+            font-size: 1.35rem;
+            line-height: 1;
+        }
+    </style>
+
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -27,8 +55,9 @@
                             <div class="card-body">
                                 <div class="row g-3 align-items-end">
                                     <div class="col-md-3">
-                                        <label for="sistema" class="form-label">Sistema</label>
+                                        <label for="sistema" class="form-label">Empresa</label>
                                         <select id="sistema" class="form-control">
+                                            <option value="todos">Todas</option>
                                             <option value="lotobet">Lotobet</option>
                                             <option value="lotonet">Lotonet</option>
                                         </select>
@@ -53,35 +82,88 @@
                 </div>
 
                 <div class="row">
-                    <div class="col-xl-3 col-md-6">
+                    <div class="col-xl col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Pagos a otra empresa</p>
-                                <h4 class="mb-0" id="totalAotra">0.00</h4>
+                                <div class="d-flex align-items-center justify-content-between gap-3">
+                                    <div>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos a otra empresa Lotobet</p>
+                                        <h4 class="mb-0" id="totalAotraBet">0.00</h4>
+                                    </div>
+                                    <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
+                                        <span class="avatar-title bg-success rounded fs-3">
+                                            <i class="ri-hand-coin-line text-white"></i>
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-3 col-md-6">
+                    <div class="col-xl col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Pagos por otra empresa</p>
-                                <h4 class="mb-0" id="totalPorOtra">0.00</h4>
+                                <div class="d-flex align-items-center justify-content-between gap-3">
+                                    <div>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos a otra empresa Lotonet</p>
+                                        <h4 class="mb-0" id="totalAotraNet">0.00</h4>
+                                    </div>
+                                    <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
+                                        <span class="avatar-title bg-primary rounded fs-3">
+                                            <i class="ri-refund-2-line text-white"></i>
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-3 col-md-6">
+                    <div class="col-xl col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Balance</p>
-                                <h4 class="mb-0" id="totalBalance">0.00</h4>
+                                <div class="d-flex align-items-center justify-content-between gap-3">
+                                    <div>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos por otra empresa Lotobet</p>
+                                        <h4 class="mb-0" id="totalPorotraBet">0.00</h4>
+                                    </div>
+                                    <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
+                                        <span class="avatar-title bg-info rounded fs-3">
+                                            <i class="ri-exchange-dollar-line text-white"></i>
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-3 col-md-6">
+                    <div class="col-xl col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Registros</p>
-                                <h4 class="mb-0" id="totalRegistros">0</h4>
+                                <div class="d-flex align-items-center justify-content-between gap-3">
+                                    <div>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos por otra empresa Lotonet</p>
+                                        <h4 class="mb-0" id="totalPorotraNet">0.00</h4>
+                                    </div>
+                                    <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
+                                        <span class="avatar-title bg-warning rounded fs-3">
+                                            <i class="ri-money-dollar-box-line text-white"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl col-md-6">
+                        <div class="card card-animate">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between gap-3">
+                                    <div>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Total General</p>
+                                        <h4 class="mb-0" id="totalGeneral">0.00</h4>
+                                    </div>
+                                    <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
+                                        <span class="avatar-title bg-danger rounded fs-3">
+                                            <i class="ri-stack-line text-white"></i>
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -91,24 +173,19 @@
                     <div class="col-lg-12">
                         <div class="card">
                             <div class="card-header">
-                                <h5 class="card-title mb-0">Resultados</h5>
+                                <h5 class="card-title mb-0">Resultados-Tradicional</h5>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
                                     <table id="tableCompensacion" class="table table-bordered table-striped align-middle" style="width: 100%;">
                                         <thead>
                                             <tr>
-                                                <th>Fecha</th>
-                                                <th>Sistema</th>
-                                                <th>Movimiento</th>
-                                                <th>Agencia</th>
-                                                <th>Producto</th>
-                                                <th>Descripcion</th>
-                                                <th>Consorcio Origen</th>
-                                                <th>Consorcio Destino</th>
-                                                <th>Plataforma</th>
-                                                <th class="text-end">Cantidad</th>
-                                                <th class="text-end">Monto</th>
+                                                <th>Consorcios</th>
+                                                <th class="text-end">Pagos a otra empresa Lotobet</th>
+                                                <th class="text-end">Pagos a otra empresa Lotonet</th>
+                                                <th class="text-end">Pagos por otra empresa Lotobet</th>
+                                                <th class="text-end">Pagos por otra empresa Lotonet</th>
+                                                <th class="text-end">Total General</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -135,10 +212,11 @@
         }
 
         function actualizarResumen(resumen) {
-            document.getElementById('totalAotra').textContent = formatearNumero(resumen.total_a_otra_empresa);
-            document.getElementById('totalPorOtra').textContent = formatearNumero(resumen.total_por_otra_empresa);
-            document.getElementById('totalBalance').textContent = formatearNumero(resumen.balance);
-            document.getElementById('totalRegistros').textContent = parseInt(resumen.registros || 0).toLocaleString('en-US');
+            document.getElementById('totalAotraBet').textContent = formatearNumero(resumen.aotra_bet);
+            document.getElementById('totalAotraNet').textContent = formatearNumero(resumen.aotra_net);
+            document.getElementById('totalPorotraBet').textContent = formatearNumero(resumen.porotra_bet);
+            document.getElementById('totalPorotraNet').textContent = formatearNumero(resumen.porotra_net);
+            document.getElementById('totalGeneral').textContent = formatearNumero(resumen.total_general);
         }
 
         function cargarCompensacion() {
@@ -189,24 +267,37 @@
                     }
                 },
                 columns: [
-                    { data: 'fecha' },
-                    { data: 'sistema' },
-                    { data: 'tipo_movimiento' },
-                    { data: 'agencia_id' },
-                    { data: 'producto_id' },
-                    { data: 'descripcion' },
-                    { data: 'consorcio_origen' },
-                    { data: 'consorcio_destino' },
-                    { data: 'plataforma' },
+                    { data: 'consorcios' },
                     {
-                        data: 'cantidad',
+                        data: 'aotra_bet',
                         className: 'text-end',
                         render: function (data) {
-                            return parseInt(data || 0).toLocaleString('en-US');
+                            return formatearNumero(data);
                         }
                     },
                     {
-                        data: 'total_monto',
+                        data: 'aotra_net',
+                        className: 'text-end',
+                        render: function (data) {
+                            return formatearNumero(data);
+                        }
+                    },
+                    {
+                        data: 'porotra_bet',
+                        className: 'text-end',
+                        render: function (data) {
+                            return formatearNumero(data);
+                        }
+                    },
+                    {
+                        data: 'porotra_net',
+                        className: 'text-end',
+                        render: function (data) {
+                            return formatearNumero(data);
+                        }
+                    },
+                    {
+                        data: 'total_general',
                         className: 'text-end',
                         render: function (data) {
                             return formatearNumero(data);
@@ -219,13 +310,17 @@
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
                 },
-                order: [[0, 'desc'], [3, 'asc']],
+                order: [],
                 pageLength: 25,
-                lengthMenu: [25, 50, 100, 200]
+                lengthMenu: [25, 50, 100, 200],
+                rowCallback: function (row, data) {
+                    if (data.consorcios === 'TOTAL') {
+                        row.classList.add('fw-bold');
+                    }
+                }
             });
         }
 
         document.getElementById('btnBuscar').addEventListener('click', cargarCompensacion);
-        document.addEventListener('DOMContentLoaded', cargarCompensacion);
     </script>
 @endsection

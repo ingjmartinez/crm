@@ -47,113 +47,155 @@ class ReporteController extends Controller
     public function listCompensacion(Request $request)
     {
         $validated = $request->validate([
-            'sistema' => 'required|in:lotobet,lotonet',
+            'sistema' => 'required|in:todos,lotobet,lotonet',
             'fecha_inicio' => 'required|date',
             'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
         ]);
 
-        $tablas = [
-            'lotobet' => [
-                'label' => 'Lotobet',
-                'a_otra' => 'pagos_aotra_empresa_bet',
-                'por_otra' => 'pagos_porotra_empresa_bet',
-                'consorcio_destino' => 'pagado_consorcio_id',
-                'plataforma' => 'plataforma_pago',
-            ],
-            'lotonet' => [
-                'label' => 'Lotonet',
-                'a_otra' => 'pagos_aotra_empresa_net',
-                'por_otra' => 'pagos_porotra_empresa_net',
-                'consorcio_destino' => 'pagado_consorcio_id',
-                'plataforma' => 'plataforma',
-            ],
-        ];
-
-        $config = $tablas[$validated['sistema']];
         $fechaInicio = $validated['fecha_inicio'];
         $fechaFin = $validated['fecha_fin'];
-        $consorcioAotra = $validated['sistema'] === 'lotonet' ? 'pagado_a_consorcio_id' : $config['consorcio_destino'];
+        $uniones = [];
+        $bindings = [];
 
+        if (in_array($validated['sistema'], ['todos', 'lotobet'], true)) {
+            $uniones[] = "
+                SELECT
+                    CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
+                    CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
+                    COALESCE(monto, 0) AS aotra_bet,
+                    0 AS aotra_net,
+                    0 AS porotra_bet,
+                    0 AS porotra_net
+                FROM pagos_aotra_empresa_bet
+                WHERE fecha >= ? AND fecha < DATE_ADD(?, INTERVAL 1 DAY)
+            ";
+            $bindings[] = $fechaInicio;
+            $bindings[] = $fechaFin;
+
+            $uniones[] = "
+                SELECT
+                    CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
+                    CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
+                    0 AS aotra_bet,
+                    0 AS aotra_net,
+                    COALESCE(monto, 0) AS porotra_bet,
+                    0 AS porotra_net
+                FROM pagos_porotra_empresa_bet
+                WHERE fecha >= ? AND fecha < DATE_ADD(?, INTERVAL 1 DAY)
+            ";
+            $bindings[] = $fechaInicio;
+            $bindings[] = $fechaFin;
+        }
+
+        if (in_array($validated['sistema'], ['todos', 'lotonet'], true)) {
+            $uniones[] = "
+                SELECT
+                    CAST(NULLIF(TRIM(pagado_a_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
+                    CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
+                    0 AS aotra_bet,
+                    COALESCE(monto, 0) AS aotra_net,
+                    0 AS porotra_bet,
+                    0 AS porotra_net
+                FROM pagos_aotra_empresa_net
+                WHERE fecha >= ? AND fecha < DATE_ADD(?, INTERVAL 1 DAY)
+            ";
+            $bindings[] = $fechaInicio;
+            $bindings[] = $fechaFin;
+
+            $uniones[] = "
+                SELECT
+                    CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
+                    CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
+                    0 AS aotra_bet,
+                    0 AS aotra_net,
+                    0 AS porotra_bet,
+                    COALESCE(monto, 0) AS porotra_net
+                FROM pagos_porotra_empresa_net
+                WHERE fecha >= ? AND fecha < DATE_ADD(?, INTERVAL 1 DAY)
+            ";
+            $bindings[] = $fechaInicio;
+            $bindings[] = $fechaFin;
+        }
+
+        $movimientosSql = implode(' UNION ALL ', $uniones);
+        $catalogoTradicionalSql = "
+            SELECT DISTINCT
+                CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
+                TRIM(UPPER(tipo)) AS tipo
+            FROM catalogo_juegos
+        ";
         $sql = "
             SELECT
-                sistema,
-                tipo_movimiento,
-                fecha,
-                agencia_id,
-                producto_id,
-                descripcion,
-                consorcio_origen,
-                consorcio_destino,
-                plataforma,
-                SUM(monto) AS total_monto,
-                COUNT(*) AS cantidad
+                x.consorcios,
+                x.aotra_bet,
+                x.aotra_net,
+                x.porotra_bet,
+                x.porotra_net,
+                x.total_general,
+                x.orden
             FROM (
                 SELECT
-                    ? AS sistema,
-                    'Pagos a otra empresa' AS tipo_movimiento,
-                    fecha,
-                    agencia_id,
-                    producto_id,
-                    descripcion,
-                    consorcio_id AS consorcio_origen,
-                    {$consorcioAotra} AS consorcio_destino,
-                    {$config['plataforma']} AS plataforma,
-                    COALESCE(monto, 0) AS monto
-                FROM {$config['a_otra']}
-                WHERE fecha BETWEEN ? AND ?
+                    co.consorcios,
+                    COALESCE(SUM(p.aotra_bet), 0) AS aotra_bet,
+                    COALESCE(SUM(p.aotra_net), 0) AS aotra_net,
+                    COALESCE(SUM(p.porotra_bet), 0) AS porotra_bet,
+                    COALESCE(SUM(p.porotra_net), 0) AS porotra_net,
+                    COALESCE(SUM(p.aotra_bet + p.aotra_net + p.porotra_bet + p.porotra_net), 0) AS total_general,
+                    1 AS orden
+                FROM (
+                    {$movimientosSql}
+                ) p
+                INNER JOIN ({$catalogoTradicionalSql}) cj
+                    ON p.producto_id = cj.producto_id
+                    AND cj.tipo = 'TRADICIONAL'
+                INNER JOIN consorcios co ON p.consorcio_id = co.id
+                WHERE p.consorcio_id IS NOT NULL
+                  AND p.consorcio_id <> 0
+                GROUP BY co.consorcios
 
                 UNION ALL
 
                 SELECT
-                    ? AS sistema,
-                    'Pagos por otra empresa' AS tipo_movimiento,
-                    fecha,
-                    agencia_id,
-                    producto_id,
-                    descripcion,
-                    consorcio_id AS consorcio_origen,
-                    {$config['consorcio_destino']} AS consorcio_destino,
-                    {$config['plataforma']} AS plataforma,
-                    COALESCE(monto, 0) AS monto
-                FROM {$config['por_otra']}
-                WHERE fecha BETWEEN ? AND ?
-            ) movimientos
-            GROUP BY
-                sistema,
-                tipo_movimiento,
-                fecha,
-                agencia_id,
-                producto_id,
-                descripcion,
-                consorcio_origen,
-                consorcio_destino,
-                plataforma
-            ORDER BY fecha DESC, agencia_id, tipo_movimiento
+                    'TOTAL' AS consorcios,
+                    COALESCE(SUM(p.aotra_bet), 0) AS aotra_bet,
+                    COALESCE(SUM(p.aotra_net), 0) AS aotra_net,
+                    COALESCE(SUM(p.porotra_bet), 0) AS porotra_bet,
+                    COALESCE(SUM(p.porotra_net), 0) AS porotra_net,
+                    COALESCE(SUM(p.aotra_bet + p.aotra_net + p.porotra_bet + p.porotra_net), 0) AS total_general,
+                    2 AS orden
+                FROM (
+                    {$movimientosSql}
+                ) p
+                INNER JOIN ({$catalogoTradicionalSql}) cj
+                    ON p.producto_id = cj.producto_id
+                    AND cj.tipo = 'TRADICIONAL'
+            ) x
+            ORDER BY x.orden, x.total_general DESC, x.consorcios
         ";
 
-        $data = DB::select($sql, [
-            $config['label'],
-            $fechaInicio,
-            $fechaFin,
-            $config['label'],
-            $fechaInicio,
-            $fechaFin,
-        ]);
+        $data = DB::select($sql, array_merge($bindings, $bindings));
+        $totalRow = collect($data)->firstWhere('consorcios', 'TOTAL');
 
-        $totalAotra = collect($data)
-            ->where('tipo_movimiento', 'Pagos a otra empresa')
-            ->sum(fn ($row) => (float) $row->total_monto);
-
-        $totalPorOtra = collect($data)
-            ->where('tipo_movimiento', 'Pagos por otra empresa')
-            ->sum(fn ($row) => (float) $row->total_monto);
+        $totalAotraBet = (float) ($totalRow->aotra_bet ?? 0);
+        $totalAotraNet = (float) ($totalRow->aotra_net ?? 0);
+        $totalPorotraBet = (float) ($totalRow->porotra_bet ?? 0);
+        $totalPorotraNet = (float) ($totalRow->porotra_net ?? 0);
+        $totalGeneral = $totalAotraBet + $totalAotraNet + $totalPorotraBet + $totalPorotraNet;
 
         return response()->json([
             'resumen' => [
-                'sistema' => $config['label'],
-                'total_a_otra_empresa' => round($totalAotra, 2),
-                'total_por_otra_empresa' => round($totalPorOtra, 2),
-                'balance' => round($totalPorOtra - $totalAotra, 2),
+                'sistema' => match ($validated['sistema']) {
+                    'lotobet' => 'Lotobet',
+                    'lotonet' => 'Lotonet',
+                    default => 'Todas',
+                },
+                'aotra_bet' => round($totalAotraBet, 2),
+                'aotra_net' => round($totalAotraNet, 2),
+                'porotra_bet' => round($totalPorotraBet, 2),
+                'porotra_net' => round($totalPorotraNet, 2),
+                'total_lotobet' => round($totalAotraBet + $totalPorotraBet, 2),
+                'total_lotonet' => round($totalAotraNet + $totalPorotraNet, 2),
+                'total_general' => round($totalGeneral, 2),
                 'registros' => count($data),
             ],
             'data' => $data,

@@ -954,6 +954,10 @@
                                         <a href="{{ url('/empleados') }}" class="nav-link" data-key="t-mailbox">
                                             Empleados </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('recursos-humanos.novedades-horario.index') }}" class="nav-link" data-key="t-novedades-horario">
+                                            Novedades de Horario </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>

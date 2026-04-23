@@ -6,6 +6,27 @@
             transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
         }
 
+        .reporte-card .reporte-icon .avatar-title,
+        .reporte-card .reporte-icon .avatar-title i {
+            color: #fff !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+
+        .reporte-card .reporte-icon .avatar-title {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background-color: var(--vz-primary) !important;
+        }
+
+        .reporte-card .reporte-icon .avatar-title i {
+            display: inline-block !important;
+            line-height: 1;
+        }
+
         .reporte-card .avatar-title,
         .reporte-card .reporte-arrow {
             transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease;
@@ -87,9 +108,9 @@
                                 <div class="card border h-100 reporte-card">
                                     <div class="card-body">
                                         <div class="d-flex align-items-start gap-3">
-                                            <div class="avatar-sm flex-shrink-0">
-                                                <span class="avatar-title bg-primary-subtle text-primary rounded">
-                                                    <i class="{{ $reporte['icono'] ?? 'ri-file-chart-line' }} fs-4"></i>
+                                            <div class="avatar-sm flex-shrink-0 reporte-icon">
+                                                <span class="avatar-title bg-primary text-white rounded">
+                                                    <i class="{{ $reporte['icono'] ?? 'ri-file-chart-line' }} fs-4 text-white"></i>
                                                 </span>
                                             </div>
                                             <div class="flex-grow-1">
