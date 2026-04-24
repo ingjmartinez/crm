@@ -82,13 +82,13 @@
                 </div>
 
                 <div class="row">
-                    <div class="col-xl col-md-6">
+                    <div class="col-xl-3 col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos a otra empresa Lotobet</p>
-                                        <h4 class="mb-0" id="totalAotraBet">0.00</h4>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos a Socios</p>
+                                        <h4 class="mb-0" id="totalPagosASocios">0.00</h4>
                                     </div>
                                     <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
                                         <span class="avatar-title bg-success rounded fs-3">
@@ -99,30 +99,13 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl col-md-6">
+                    <div class="col-xl-3 col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos a otra empresa Lotonet</p>
-                                        <h4 class="mb-0" id="totalAotraNet">0.00</h4>
-                                    </div>
-                                    <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
-                                        <span class="avatar-title bg-primary rounded fs-3">
-                                            <i class="ri-refund-2-line text-white"></i>
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-xl col-md-6">
-                        <div class="card card-animate">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between gap-3">
-                                    <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos por otra empresa Lotobet</p>
-                                        <h4 class="mb-0" id="totalPorotraBet">0.00</h4>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos de Socios</p>
+                                        <h4 class="mb-0" id="totalPagosDeSocios">0.00</h4>
                                     </div>
                                     <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
                                         <span class="avatar-title bg-info rounded fs-3">
@@ -133,34 +116,34 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl col-md-6">
+                    <div class="col-xl-3 col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos por otra empresa Lotonet</p>
-                                        <h4 class="mb-0" id="totalPorotraNet">0.00</h4>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Resta</p>
+                                        <h4 class="mb-0" id="totalResta">0.00</h4>
                                     </div>
                                     <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
-                                        <span class="avatar-title bg-warning rounded fs-3">
-                                            <i class="ri-money-dollar-box-line text-white"></i>
+                                        <span class="avatar-title bg-danger rounded fs-3">
+                                            <i class="ri-stack-line text-white"></i>
                                         </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl col-md-6">
+                    <div class="col-xl-3 col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">Total General</p>
-                                        <h4 class="mb-0" id="totalGeneral">0.00</h4>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">2% Beneficio</p>
+                                        <h4 class="mb-0" id="totalBeneficio">0.00</h4>
                                     </div>
                                     <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
-                                        <span class="avatar-title bg-danger rounded fs-3">
-                                            <i class="ri-stack-line text-white"></i>
+                                        <span class="avatar-title bg-warning rounded fs-3">
+                                            <i class="ri-percent-line text-white"></i>
                                         </span>
                                     </div>
                                 </div>
@@ -181,11 +164,10 @@
                                         <thead>
                                             <tr>
                                                 <th>Consorcios</th>
-                                                <th class="text-end">Pagos a otra empresa Lotobet</th>
-                                                <th class="text-end">Pagos a otra empresa Lotonet</th>
-                                                <th class="text-end">Pagos por otra empresa Lotobet</th>
-                                                <th class="text-end">Pagos por otra empresa Lotonet</th>
-                                                <th class="text-end">Total General</th>
+                                                <th class="text-end">Pagos a Socios</th>
+                                                <th class="text-end">Pagos de Socios</th>
+                                                <th class="text-end">Resta</th>
+                                                <th class="text-end">2% Beneficio</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -212,11 +194,15 @@
         }
 
         function actualizarResumen(resumen) {
-            document.getElementById('totalAotraBet').textContent = formatearNumero(resumen.aotra_bet);
-            document.getElementById('totalAotraNet').textContent = formatearNumero(resumen.aotra_net);
-            document.getElementById('totalPorotraBet').textContent = formatearNumero(resumen.porotra_bet);
-            document.getElementById('totalPorotraNet').textContent = formatearNumero(resumen.porotra_net);
-            document.getElementById('totalGeneral').textContent = formatearNumero(resumen.total_general);
+            const pagosASocios = parseFloat(resumen.aotra_bet || 0) + parseFloat(resumen.aotra_net || 0);
+            const pagosDeSocios = parseFloat(resumen.porotra_bet || 0) + parseFloat(resumen.porotra_net || 0);
+            const resta = pagosASocios - pagosDeSocios;
+            const beneficio = resta * 1.02;
+
+            document.getElementById('totalPagosASocios').textContent = formatearNumero(pagosASocios);
+            document.getElementById('totalPagosDeSocios').textContent = formatearNumero(pagosDeSocios);
+            document.getElementById('totalResta').textContent = formatearNumero(resta);
+            document.getElementById('totalBeneficio').textContent = formatearNumero(beneficio);
         }
 
         function cargarCompensacion() {
@@ -269,38 +255,38 @@
                 columns: [
                     { data: 'consorcios' },
                     {
-                        data: 'aotra_bet',
+                        data: null,
                         className: 'text-end',
-                        render: function (data) {
-                            return formatearNumero(data);
+                        render: function (data, type, row) {
+                            const total = parseFloat(row.aotra_bet || 0) + parseFloat(row.aotra_net || 0);
+                            return formatearNumero(total);
                         }
                     },
                     {
-                        data: 'aotra_net',
+                        data: null,
                         className: 'text-end',
-                        render: function (data) {
-                            return formatearNumero(data);
+                        render: function (data, type, row) {
+                            const total = parseFloat(row.porotra_bet || 0) + parseFloat(row.porotra_net || 0);
+                            return formatearNumero(total);
                         }
                     },
                     {
-                        data: 'porotra_bet',
+                        data: null,
                         className: 'text-end',
-                        render: function (data) {
-                            return formatearNumero(data);
+                        render: function (data, type, row) {
+                            const pagosASocios = parseFloat(row.aotra_bet || 0) + parseFloat(row.aotra_net || 0);
+                            const pagosDeSocios = parseFloat(row.porotra_bet || 0) + parseFloat(row.porotra_net || 0);
+                            return formatearNumero(pagosASocios - pagosDeSocios);
                         }
                     },
                     {
-                        data: 'porotra_net',
+                        data: null,
                         className: 'text-end',
-                        render: function (data) {
-                            return formatearNumero(data);
-                        }
-                    },
-                    {
-                        data: 'total_general',
-                        className: 'text-end',
-                        render: function (data) {
-                            return formatearNumero(data);
+                        render: function (data, type, row) {
+                            const pagosASocios = parseFloat(row.aotra_bet || 0) + parseFloat(row.aotra_net || 0);
+                            const pagosDeSocios = parseFloat(row.porotra_bet || 0) + parseFloat(row.porotra_net || 0);
+                            const resta = pagosASocios - pagosDeSocios;
+                            return formatearNumero(resta * 1.02);
                         }
                     }
                 ],
