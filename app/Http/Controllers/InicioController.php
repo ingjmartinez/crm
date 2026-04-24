@@ -16,13 +16,23 @@ class InicioController extends Controller
         [$fechaInicio, $fechaFin, $fechaSeleccionada] = $this->resolverRangoFechas($request);
         $empresaSeleccionada = $this->resolverEmpresa($request);
 
+        $datosCargados = $request->boolean('cargar');
+
+        if ($datosCargados) {
+            $ventasInicio = $this->getResumenVentas($fechaInicio, $fechaFin, $empresaSeleccionada);
+        } else {
+            $ventasInicio = $this->emptyResumenVentas();
+            $ventasInicio['balance_mensual'] = $this->buildBalanceMensualVacio($fechaSeleccionada);
+        }
+
         return view('inicio', [
             'fechaInicioVentas' => $fechaInicio->toDateString(),
             'fechaFinVentas' => $fechaFin->toDateString(),
             'fechaSeleccionadaVentas' => $fechaSeleccionada->toDateString(),
             'empresaSeleccionada' => $empresaSeleccionada,
             'empresasFiltro' => $this->getEmpresasFiltro(),
-            'ventasInicio' => $this->getResumenVentas($fechaInicio, $fechaFin, $empresaSeleccionada),
+            'ventasInicio' => $ventasInicio,
+            'datosCargados' => $datosCargados,
         ]);
     }
 

@@ -186,6 +186,7 @@
                         <div class="card">
                             <div class="card-body">
                                 <form id="inicioFiltroForm" method="GET" action="{{ route('inicio.index') }}" class="row g-3 align-items-end">
+                                    <input type="hidden" name="cargar" value="1">
                                     <div class="col-12 col-md-4 col-lg-3">
                                         <label for="fecha" class="form-label">Fecha de ventas</label>
                                         <input
@@ -206,12 +207,20 @@
                                         </select>
                                     </div>
                                     <div class="col-12 col-md-4 col-lg-2 d-grid d-md-flex gap-2">
-                                        <button type="submit" class="btn btn-primary">Filtrar</button>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="ri-refresh-line align-bottom me-1"></i>Cargar datos
+                                        </button>
                                     </div>
                                     <div class="col-12 col-lg-4">
-                                        <div class="alert alert-info mb-0 py-2">
-                                            Mostrando ventas del dia <strong>{{ \Carbon\Carbon::parse($fechaSeleccionadaVentas ?? now()->subDay()->toDateString())->format('d/m/Y') }}</strong>.
-                                        </div>
+                                        @if (!empty($datosCargados))
+                                            <div class="alert alert-info mb-0 py-2">
+                                                Mostrando ventas del dia <strong>{{ \Carbon\Carbon::parse($fechaSeleccionadaVentas ?? now()->subDay()->toDateString())->format('d/m/Y') }}</strong>.
+                                            </div>
+                                        @else
+                                            <div class="alert alert-warning mb-0 py-2">
+                                                Selecciona los filtros y presiona <strong>Cargar datos</strong> para consultar la informacion.
+                                            </div>
+                                        @endif
                                     </div>
                                 </form>
                             </div>
@@ -471,8 +480,6 @@
 
             const bootFiltroConCarga = () => {
                 const form = document.getElementById('inicioFiltroForm');
-                const fechaInput = document.getElementById('fecha');
-                const empresaSelect = document.getElementById('empresa');
 
                 if (!form) return;
 
@@ -494,22 +501,6 @@
                 form.addEventListener('submit', () => {
                     showLoadingAlert();
                 });
-
-                const triggerSubmit = () => {
-                    if (typeof form.requestSubmit === 'function') {
-                        form.requestSubmit();
-                    } else {
-                        form.submit();
-                    }
-                };
-
-                if (fechaInput) {
-                    fechaInput.addEventListener('change', triggerSubmit);
-                }
-
-                if (empresaSelect) {
-                    empresaSelect.addEventListener('change', triggerSubmit);
-                }
             };
 
             const bootExtraCards = () => {
