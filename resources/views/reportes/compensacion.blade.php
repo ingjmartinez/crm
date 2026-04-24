@@ -87,8 +87,8 @@
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos a Socios</p>
-                                        <h4 class="mb-0" id="totalPagosASocios">0.00</h4>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos a Consorcios</p>
+                                        <h4 class="mb-0" id="totalPagosAConsorcios">0.00</h4>
                                     </div>
                                     <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
                                         <span class="avatar-title bg-success rounded fs-3">
@@ -104,8 +104,8 @@
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos de Socios</p>
-                                        <h4 class="mb-0" id="totalPagosDeSocios">0.00</h4>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Pagos de Consorcios</p>
+                                        <h4 class="mb-0" id="totalPagosDeConsorcios">0.00</h4>
                                     </div>
                                     <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
                                         <span class="avatar-title bg-info rounded fs-3">
@@ -121,7 +121,7 @@
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">Resta</p>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Resultado</p>
                                         <h4 class="mb-0" id="totalResta">0.00</h4>
                                     </div>
                                     <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
@@ -138,7 +138,7 @@
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between gap-3">
                                     <div>
-                                        <p class="text-uppercase fw-medium text-muted mb-1">2% Beneficio</p>
+                                        <p class="text-uppercase fw-medium text-muted mb-1">Resultado + 2%</p>
                                         <h4 class="mb-0" id="totalBeneficio">0.00</h4>
                                     </div>
                                     <div class="avatar-sm flex-shrink-0 compensacion-metric-icon">
@@ -164,10 +164,10 @@
                                         <thead>
                                             <tr>
                                                 <th>Consorcios</th>
-                                                <th class="text-end">Pagos a Socios</th>
-                                                <th class="text-end">Pagos de Socios</th>
-                                                <th class="text-end">Resta</th>
-                                                <th class="text-end">2% Beneficio</th>
+                                                <th class="text-end">Pagos a Consorcios</th>
+                                                <th class="text-end">Pagos de Consorcios</th>
+                                                <th class="text-end">Resultado</th>
+                                                <th class="text-end">Resultado + 2%</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -194,13 +194,13 @@
         }
 
         function actualizarResumen(resumen) {
-            const pagosASocios = parseFloat(resumen.aotra_bet || 0) + parseFloat(resumen.aotra_net || 0);
-            const pagosDeSocios = parseFloat(resumen.porotra_bet || 0) + parseFloat(resumen.porotra_net || 0);
-            const resta = pagosASocios - pagosDeSocios;
+            const pagosAConsorcios = parseFloat(resumen.aotra_bet || 0) + parseFloat(resumen.aotra_net || 0);
+            const pagosDeConsorcios = parseFloat(resumen.porotra_bet || 0) + parseFloat(resumen.porotra_net || 0);
+            const resta = pagosAConsorcios - pagosDeConsorcios;
             const beneficio = resta * 1.02;
 
-            document.getElementById('totalPagosASocios').textContent = formatearNumero(pagosASocios);
-            document.getElementById('totalPagosDeSocios').textContent = formatearNumero(pagosDeSocios);
+            document.getElementById('totalPagosAConsorcios').textContent = formatearNumero(pagosAConsorcios);
+            document.getElementById('totalPagosDeConsorcios').textContent = formatearNumero(pagosDeConsorcios);
             document.getElementById('totalResta').textContent = formatearNumero(resta);
             document.getElementById('totalBeneficio').textContent = formatearNumero(beneficio);
         }
@@ -274,18 +274,18 @@
                         data: null,
                         className: 'text-end',
                         render: function (data, type, row) {
-                            const pagosASocios = parseFloat(row.aotra_bet || 0) + parseFloat(row.aotra_net || 0);
-                            const pagosDeSocios = parseFloat(row.porotra_bet || 0) + parseFloat(row.porotra_net || 0);
-                            return formatearNumero(pagosASocios - pagosDeSocios);
+                            const pagosAConsorcios = parseFloat(row.aotra_bet || 0) + parseFloat(row.aotra_net || 0);
+                            const pagosDeConsorcios = parseFloat(row.porotra_bet || 0) + parseFloat(row.porotra_net || 0);
+                            return formatearNumero(pagosAConsorcios - pagosDeConsorcios);
                         }
                     },
                     {
                         data: null,
                         className: 'text-end',
                         render: function (data, type, row) {
-                            const pagosASocios = parseFloat(row.aotra_bet || 0) + parseFloat(row.aotra_net || 0);
-                            const pagosDeSocios = parseFloat(row.porotra_bet || 0) + parseFloat(row.porotra_net || 0);
-                            const resta = pagosASocios - pagosDeSocios;
+                            const pagosAConsorcios = parseFloat(row.aotra_bet || 0) + parseFloat(row.aotra_net || 0);
+                            const pagosDeConsorcios = parseFloat(row.porotra_bet || 0) + parseFloat(row.porotra_net || 0);
+                            const resta = pagosAConsorcios - pagosDeConsorcios;
                             return formatearNumero(resta * 1.02);
                         }
                     }
