@@ -82,7 +82,7 @@ class VentaGerencialController extends Controller
 
     public function comparativa(Request $request)
     {
-        $debeConsultar = $request->hasAny(['fecha', 'sistema', 'agencia']);
+        $debeConsultar = $request->hasAny(['fecha', 'sistema', 'agencia', 'terminal']);
 
         $fecha = trim((string) $request->query('fecha', now()->format('Y-m-d')));
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
@@ -91,7 +91,12 @@ class VentaGerencialController extends Controller
 
         $sistema = $this->normalizarSistema($request->query('sistema', 'todos'));
 
+        $terminalBuscada = trim((string) $request->query('terminal', ''));
         $agencia = trim((string) $request->query('agencia', ''));
+        if ($agencia === '' && $terminalBuscada !== '') {
+            $agencia = $terminalBuscada;
+        }
+
         if ($agencia === '') {
             $agencia = null;
         }
@@ -113,6 +118,7 @@ class VentaGerencialController extends Controller
             'fechaSeleccionada' => $fecha,
             'sistemaSeleccionado' => $sistema,
             'agenciaSeleccionada' => $agencia,
+            'terminalBuscada' => $terminalBuscada,
             'agenciasDisponibles' => $agenciasDisponibles,
             'resumenComparativo' => $resumenComparativo,
             'tendenciaSemanal' => $tendenciaSemanal,
@@ -128,7 +134,12 @@ class VentaGerencialController extends Controller
 
         $sistema = $this->normalizarSistema($request->query('sistema', 'todos'));
 
+        $terminalBuscada = trim((string) $request->query('terminal', ''));
         $agencia = trim((string) $request->query('agencia', ''));
+        if ($agencia === '' && $terminalBuscada !== '') {
+            $agencia = $terminalBuscada;
+        }
+
         if ($agencia === '') {
             $agencia = null;
         }

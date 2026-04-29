@@ -113,7 +113,7 @@
                                         </select>
                                     </div>
                                     <div class="col-12 col-md-4 col-lg-2">
-                                        <label class="form-label">Agencia</label>
+                                        <label class="form-label">Terminal</label>
                                         <select name="agencia" class="form-select">
                                             <option value="">Todas</option>
                                             @foreach(($agenciasDisponibles ?? []) as $agenciaItem)
@@ -124,8 +124,14 @@
                                         </select>
                                     </div>
                                     <div class="col-12 col-md-4 col-lg-2">
-                                        <label class="form-label">Buscar Agencia</label>
-                                        <input type="text" id="buscar-agencia-comparativa" class="form-control" placeholder="Nombre o terminal">
+                                        <label class="form-label">Buscar terminal</label>
+                                        <input
+                                            type="text"
+                                            name="terminal"
+                                            id="buscar-agencia-comparativa"
+                                            class="form-control"
+                                            value="{{ $terminalBuscada ?? '' }}"
+                                            placeholder="Escribe una terminal">
                                     </div>
                                     <div class="col-12 col-lg-4">
                                         <label class="form-label d-none d-lg-block">Acciones</label>
@@ -134,7 +140,7 @@
                                                 <i class="ri-search-line me-1"></i>Buscar
                                             </button>
                                             <a href="{{ route('gerencia.venta-comparativa') }}" class="btn btn-light">Limpiar</a>
-                                            <a href="{{ route('gerencia.venta-comparativa.export.excel', ['fecha' => ($fechaSeleccionada ?? now()->format('Y-m-d')), 'sistema' => ($sistemaSeleccionado ?? 'todos'), 'agencia' => ($agenciaSeleccionada ?? '')]) }}" class="btn btn-success">
+                                            <a href="{{ route('gerencia.venta-comparativa.export.excel', ['fecha' => ($fechaSeleccionada ?? now()->format('Y-m-d')), 'sistema' => ($sistemaSeleccionado ?? 'todos'), 'agencia' => ($agenciaSeleccionada ?? ''), 'terminal' => ($terminalBuscada ?? '')]) }}" class="btn btn-success">
                                                 <i class="ri-file-excel-2-line me-1"></i>Excel
                                             </a>
                                         </div>
@@ -245,7 +251,7 @@
                             <div class="card-header align-items-center d-flex">
                                 <h5 class="card-title mb-0 flex-grow-1">Tendencia de Ventas Semanal</h5>
                                 <span class="badge bg-primary-subtle text-primary">
-                                    {{ ($agenciaSeleccionada ?? '') !== '' ? 'Agencia: ' . $agenciaSeleccionada : 'Todas las agencias' }}
+                                    {{ ($agenciaSeleccionada ?? '') !== '' ? 'Terminal: ' . $agenciaSeleccionada : 'Todas las terminales' }}
                                 </span>
                             </div>
                             <div class="card-body py-2">
@@ -284,6 +290,7 @@
                                             @forelse (($resumenComparativo ?? []) as $item)
                                                 <tr
                                                     data-agencia="{{ $item['agencia'] ?? '' }}"
+                                                    data-terminal="{{ $item['terminal'] ?? ($item['agencia'] ?? '') }}"
                                                     data-nombre-agencia="{{ $item['nombre_agencia'] ?? '' }}"
                                                     data-ventas-hoy="{{ (float) ($item['ventas_hoy'] ?? 0) }}"
                                                     data-ventas-ayer="{{ (float) ($item['ventas_ayer'] ?? 0) }}"
