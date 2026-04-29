@@ -82,7 +82,7 @@ class VentaGerencialController extends Controller
 
     public function comparativa(Request $request)
     {
-        $debeConsultar = $request->hasAny(['fecha', 'sistema', 'agencia', 'terminal']);
+        $debeConsultar = $request->hasAny(['fecha', 'sistema', 'agencia', 'terminal', 'tendencia_rango']);
 
         $fecha = trim((string) $request->query('fecha', now()->format('Y-m-d')));
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
@@ -90,6 +90,7 @@ class VentaGerencialController extends Controller
         }
 
         $sistema = $this->normalizarSistema($request->query('sistema', 'todos'));
+        $tendenciaRango = $this->normalizarTendenciaRango($request->query('tendencia_rango', 'semanal'));
 
         $terminalBuscada = trim((string) $request->query('terminal', ''));
         $agencia = trim((string) $request->query('agencia', ''));
@@ -111,7 +112,7 @@ class VentaGerencialController extends Controller
         if ($debeConsultar) {
             $resumenComparativo = $this->getResumenVentasComparativaPorFecha($fecha, $sistema, $agencia);
             $agenciasDisponibles = $this->getAgenciasDisponiblesComparativa($fecha, $sistema);
-            $tendenciaSemanal = $this->getTendenciaSemanalComparativa($fecha, $sistema, $agencia);
+            $tendenciaSemanal = $this->getTendenciaSemanalComparativa($fecha, $sistema, $agencia, $tendenciaRango);
         }
 
         return view('gerencia.venta-comparativa', [
@@ -119,6 +120,8 @@ class VentaGerencialController extends Controller
             'sistemaSeleccionado' => $sistema,
             'agenciaSeleccionada' => $agencia,
             'terminalBuscada' => $terminalBuscada,
+            'tendenciaRango' => $tendenciaRango,
+            'tendenciaRangoLabel' => $this->getTendenciaRangoLabel($tendenciaRango),
             'agenciasDisponibles' => $agenciasDisponibles,
             'resumenComparativo' => $resumenComparativo,
             'tendenciaSemanal' => $tendenciaSemanal,
@@ -265,6 +268,35 @@ class VentaGerencialController extends Controller
         }
 
         return $valor;
+    }
+
+    private function normalizarTendenciaRango(mixed $rango): string
+    {
+        $valor = strtolower(trim((string) $rango));
+
+        if (!in_array($valor, ['semanal', 'quincenal', 'mensual'], true)) {
+            return 'semanal';
+        }
+
+        return $valor;
+    }
+
+    private function getTendenciaRangoLabel(string $rango): string
+    {
+        return match ($rango) {
+            'quincenal' => 'Quincenal',
+            'mensual' => 'Un mes',
+            default => 'Semanal',
+        };
+    }
+
+    private function getTendenciaRangoDias(string $rango): int
+    {
+        return match ($rango) {
+            'quincenal' => 15,
+            'mensual' => 30,
+            default => 7,
+        };
     }
 
     private function getMapasTablasPorSistema(string $sistema): array
@@ -428,13 +460,14 @@ class VentaGerencialController extends Controller
             ->toArray();
     }
 
-    private function getTendenciaSemanalComparativa(string $fecha, string $sistema, ?string $agenciaFiltro = null): array
+    private function getTendenciaSemanalComparativa(string $fecha, string $sistema, ?string $agenciaFiltro = null, string $rango = 'semanal'): array
     {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
             $fecha = now()->format('Y-m-d');
         }
 
-        $fechaInicio = Carbon::createFromFormat('Y-m-d', $fecha)->subDays(6)->startOfDay();
+        $dias = $this->getTendenciaRangoDias($this->normalizarTendenciaRango($rango));
+        $fechaInicio = Carbon::createFromFormat('Y-m-d', $fecha)->subDays($dias - 1)->startOfDay();
         $fechaFin = Carbon::createFromFormat('Y-m-d', $fecha)->addDay()->startOfDay();
         $filtroAgencia = $agenciaFiltro !== null ? $this->normalizarAgenciaId($agenciaFiltro) : null;
         $mapasTablas = $this->getMapasTablasPorSistema($sistema);

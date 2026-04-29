@@ -100,21 +100,21 @@
                         <div class="card">
                             <div class="card-body">
                                 <form method="GET" action="{{ route('gerencia.venta-comparativa') }}" class="row g-2 align-items-end" id="form-filtro-comparativa">
-                                    <div class="col-12 col-md-4 col-lg-2">
+                                    <div class="col-12 col-md-4 col-xl-2">
                                         <label class="form-label">Fecha</label>
-                                        <input type="date" name="fecha" class="form-control" value="{{ $fechaSeleccionada ?? now()->format('Y-m-d') }}">
+                                        <input type="date" name="fecha" class="form-control form-control-sm" value="{{ $fechaSeleccionada ?? now()->format('Y-m-d') }}">
                                     </div>
-                                    <div class="col-12 col-md-4 col-lg-2">
+                                    <div class="col-12 col-md-4 col-xl-2">
                                         <label class="form-label">Sistema</label>
-                                        <select name="sistema" class="form-select">
+                                        <select name="sistema" class="form-select form-select-sm">
                                             <option value="todos" {{ ($sistemaSeleccionado ?? 'todos') === 'todos' ? 'selected' : '' }}>Todos</option>
                                             <option value="lotobet" {{ ($sistemaSeleccionado ?? 'todos') === 'lotobet' ? 'selected' : '' }}>Lotobet</option>
                                             <option value="lotonet" {{ ($sistemaSeleccionado ?? 'todos') === 'lotonet' ? 'selected' : '' }}>Lotonet</option>
                                         </select>
                                     </div>
-                                    <div class="col-12 col-md-4 col-lg-2">
+                                    <div class="col-12 col-md-4 col-xl-2">
                                         <label class="form-label">Terminal</label>
-                                        <select name="agencia" class="form-select">
+                                        <select name="agencia" class="form-select form-select-sm">
                                             <option value="">Todas</option>
                                             @foreach(($agenciasDisponibles ?? []) as $agenciaItem)
                                                 <option value="{{ $agenciaItem['agencia'] }}" {{ (string) ($agenciaSeleccionada ?? '') === (string) ($agenciaItem['agencia'] ?? '') ? 'selected' : '' }}>
@@ -123,17 +123,25 @@
                                             @endforeach
                                         </select>
                                     </div>
-                                    <div class="col-12 col-md-4 col-lg-2">
+                                    <div class="col-12 col-md-4 col-xl-2">
                                         <label class="form-label">Buscar terminal</label>
                                         <input
                                             type="text"
                                             name="terminal"
                                             id="buscar-agencia-comparativa"
-                                            class="form-control"
+                                            class="form-control form-control-sm"
                                             value="{{ $terminalBuscada ?? '' }}"
                                             placeholder="Escribe una terminal">
                                     </div>
-                                    <div class="col-12 col-lg-4">
+                                    <div class="col-12 col-md-4 col-xl-1">
+                                        <label class="form-label">Tendencia</label>
+                                        <select name="tendencia_rango" class="form-select form-select-sm">
+                                            <option value="semanal" {{ ($tendenciaRango ?? 'semanal') === 'semanal' ? 'selected' : '' }}>Semanal</option>
+                                            <option value="quincenal" {{ ($tendenciaRango ?? 'semanal') === 'quincenal' ? 'selected' : '' }}>Quincenal</option>
+                                            <option value="mensual" {{ ($tendenciaRango ?? 'semanal') === 'mensual' ? 'selected' : '' }}>Un mes</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-8 col-xl-3">
                                         <label class="form-label d-none d-lg-block">Acciones</label>
                                         <div class="d-flex flex-wrap flex-lg-nowrap gap-2">
                                             <button type="submit" class="btn btn-primary" id="btn-filtrar-comparativa">
@@ -249,7 +257,7 @@
 
                         <div class="card mb-3">
                             <div class="card-header align-items-center d-flex">
-                                <h5 class="card-title mb-0 flex-grow-1">Tendencia de Ventas Semanal</h5>
+                                <h5 class="card-title mb-0 flex-grow-1">Tendencia de Ventas ({{ $tendenciaRangoLabel ?? 'Semanal' }})</h5>
                                 <span class="badge bg-primary-subtle text-primary">
                                     {{ ($agenciaSeleccionada ?? '') !== '' ? 'Terminal: ' . $agenciaSeleccionada : 'Todas las terminales' }}
                                 </span>
