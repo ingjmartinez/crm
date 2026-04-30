@@ -96,6 +96,7 @@ Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
     Route::post('/electricidad/averias-dia', [ContabilidadElectricidadController::class, 'storeAveriasDia'])->name('electricidad.averias-dia.store');
     Route::put('/electricidad/averias-dia/{id}/estatus', [ContabilidadElectricidadController::class, 'updateAveriasDiaStatus'])->name('electricidad.averias-dia.update-status');
     Route::delete('/electricidad/averias-dia/{id}', [ContabilidadElectricidadController::class, 'destroyAveriasDia'])->name('electricidad.averias-dia.destroy');
+    Route::view('/centro-costo', 'contabilidad.centro-costo')->name('centro-costo');
     Route::view('/reportes/comisiones', 'contabilidad.reportes.comisiones')->name('reportes.comisiones');
     Route::get('/reportes/estado-resultado', [ContabilidadEstadoResultadoController::class, 'index'])->name('reportes.estado-resultado');
     Route::get('/reportes/estado-resultado/meta', [ContabilidadEstadoResultadoController::class, 'meta'])->name('reportes.estado-resultado.meta');
@@ -111,6 +112,9 @@ Route::post('/api-cuentas/sync', [Api::class, 'syncCuentas']);
 Route::put('/api-cuentas/{id}', [Api::class, 'updateCuenta']);
 Route::delete('/api-cuentas/{id}', [Api::class, 'destroyCuenta']);
 Route::get('/api-entradas', [Api::class, 'getEntradas']);
+Route::get('/api-centros-costo', [Api::class, 'getCentrosCosto']);
+Route::post('/api-centros-costo/visibilidad', [Api::class, 'updateCentrosCostoVisibilidad']);
+Route::post('/api-centros-costo/sync', [Api::class, 'syncCentrosCosto']);
 
 Route::get('/generar-token', [TokenController::class, 'generateToken']);
 Route::get('/iniciar-session', [TokenController::class, 'iniciarSession']);

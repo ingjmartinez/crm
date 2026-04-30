@@ -993,6 +993,11 @@
                                             <span data-key="t-contabilidad-electricidad">Electricidad</span>
                                         </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a href="{{ route('contabilidad.centro-costo') }}" class="nav-link">
+                                            <span data-key="t-contabilidad-centro-costo">Centro de Costo</span>
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>
