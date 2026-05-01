@@ -40,6 +40,44 @@
         .dataTables_wrapper {
             position: relative;
         }
+
+		.mar-tipo-card {
+			height: auto;
+		}
+
+		.mar-tipo-card .card-body {
+			padding: 0.85rem;
+		}
+
+		.mar-tipo-titulo {
+			font-size: 0.95rem;
+			line-height: 1.2;
+			margin-bottom: 0.5rem;
+		}
+
+		.mar-tipo-total {
+			font-size: 1.2rem;
+			line-height: 1.1;
+			margin-bottom: 0;
+		}
+
+		.mar-tipo-label {
+			font-size: 0.72rem;
+			margin-bottom: 0.1rem;
+		}
+
+		.mar-tipo-dato {
+			font-size: 0.9rem;
+			font-weight: 600;
+			margin-bottom: 0;
+		}
+
+		.mar-tipo-grid {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.4rem;
+			margin-top: 0.5rem;
+		}
         
         @media (max-width: 767px) {
             .dataTables_wrapper .dataTables_length,
@@ -56,6 +94,10 @@
                 margin-top: 1rem;
                 font-size: 0.85rem;
             }
+
+			.mar-tipo-total {
+				font-size: 1.05rem;
+			}
         }
     </style>
 	<div class="main-content">
@@ -65,7 +107,14 @@
 					<div class="col-12">
 						<div
 							class="d-flex justify-content-between align-items-start align-items-lg-center flex-column flex-lg-row gap-3 text-center text-lg-start mb-3">
-							<h1 class="h3 mb-0">Dashboard Ventas MAR</h1>
+							<div>
+								<h1 class="h3 mb-1">Dashboard Ventas MAR</h1>
+								<ol class="breadcrumb m-0 justify-content-center justify-content-lg-start">
+									<li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+									<li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
+									<li class="breadcrumb-item active">Mar Ventas</li>
+								</ol>
+							</div>
 							<div class="d-flex align-items-center gap-2 flex-wrap justify-content-center">
 								<span id="badge-agencia" class="badge bg-primary fs-6" style="display: none; padding: 8px 12px;">
 									Agencia: <span id="agencia-id-badge" style="font-weight: bold;"></span>
@@ -133,14 +182,14 @@
 					</div>
 				</div>
 
-				<div class="row mb-4">
+				<div class="row mb-5">
 					<div class="col-12">
 						<h5 class="mb-3">Ventas por Tipo</h5>
 					</div>
 					<div id="cards-container" class="row g-3 w-100 mx-0"></div>
 				</div>
 
-				<div class="row mb-4">
+				<div class="row mb-4 mt-3">
 					<div class="col-md-12">
 						<div class="card shadow-sm">
 							<div class="card-header">
@@ -349,23 +398,23 @@
 					data.tabla.forEach((item, index) => {
 						const color = coloresCards[index % coloresCards.length];
 						const card = document.createElement('div');
-						card.className = 'col-12 col-sm-6 col-lg-4 mb-3';
+						card.className = 'col-12 col-md-6 mb-3';
 						card.innerHTML = `
-							<div class="card shadow-sm h-100" style="border-left: 5px solid ${color};">
+							<div class="card shadow-sm mar-tipo-card" style="border-left: 4px solid ${color};">
 								<div class="card-body d-flex flex-column">
-									<h5 class="card-title" style="color: ${color}; margin-bottom: 0.75rem;">${item.tipo}</h5>
-									<div class="mb-2">
-										<small class="text-muted d-block" style="font-size: 0.8rem;">Total Vendido</small>
-										<h5 class="text-primary mb-0" style="word-break: break-word;">${formatCurrency(item.total)}</h5>
+									<h6 class="card-title mar-tipo-titulo" style="color: ${color};">${item.tipo}</h6>
+									<div>
+										<small class="text-muted d-block mar-tipo-label">Total Vendido</small>
+										<div class="text-primary mar-tipo-total" style="word-break: break-word;">${formatCurrency(item.total)}</div>
 									</div>
-									<div class="row g-2 mt-2">
-										<div class="col-6">
-											<small class="text-muted d-block" style="font-size: 0.75rem;">Transacciones</small>
-											<p class="mb-0" style="font-weight: 600; font-size: 0.95rem;">${item.transacciones}</p>
+									<div class="mar-tipo-grid">
+										<div>
+											<small class="text-muted d-block mar-tipo-label">Transacciones</small>
+											<p class="mar-tipo-dato">${item.transacciones}</p>
 										</div>
-										<div class="col-6">
-											<small class="text-muted d-block" style="font-size: 0.75rem;">% del Total</small>
-											<p class="mb-0" style="font-weight: 600; font-size: 0.95rem;">${item.porcentaje.toFixed(2)}%</p>
+										<div>
+											<small class="text-muted d-block mar-tipo-label">% del Total</small>
+											<p class="mar-tipo-dato">${item.porcentaje.toFixed(2)}%</p>
 										</div>
 									</div>
 								</div>

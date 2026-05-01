@@ -12,6 +12,8 @@
 
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('mantenimiento.index') }}">Mantenimientos</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('agencias.index') }}">Agencias</a></li>
                                     <li class="breadcrumb-item active">Asistencia Comparativa</li>
                                 </ol>

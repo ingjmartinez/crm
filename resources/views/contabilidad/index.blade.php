@@ -14,7 +14,12 @@
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0">Grupo Joselito</h4>
-                            <div class="page-title-right">
+                            <div class="page-title-right d-flex flex-wrap align-items-center justify-content-end gap-2">
+                                <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('contabilidad.index') }}">Contabilidad</a></li>
+                                    <li class="breadcrumb-item active">Inicio Contable</li>
+                                </ol>
                                 <a href="{{ route('contabilidad.electricidad') }}" class="btn btn-outline-primary btn-sm">
                                     Electricidad
                                 </a>

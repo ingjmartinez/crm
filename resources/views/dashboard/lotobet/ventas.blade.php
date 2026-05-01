@@ -87,7 +87,14 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="d-flex justify-content-between align-items-start align-items-lg-center flex-column flex-lg-row gap-3 text-center text-lg-start mb-3">
-                            <h1 class="h3 mb-0">Dashboard Financiero LotoBet - Ventas por Tipo de Producto</h1>
+                            <div>
+                                <h1 class="h3 mb-1">Dashboard Financiero LotoBet - Ventas por Tipo de Producto</h1>
+                                <ol class="breadcrumb m-0 justify-content-center justify-content-lg-start">
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
+                                    <li class="breadcrumb-item active">Lotobet Ventas</li>
+                                </ol>
+                            </div>
                             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-center">
                                 <span id="badge-agencia" class="badge bg-primary fs-6" style="display: none; padding: 8px 12px;">Agencia: <span id="agencia-id-badge" style="font-weight: bold;"></span></span>
                                 <button id="btn-limpiar-agencia" class="btn btn-outline-secondary btn-sm" style="display: none;">Limpiar agencia</button>

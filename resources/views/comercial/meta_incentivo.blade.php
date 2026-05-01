@@ -56,8 +56,8 @@
                             <h4 class="mb-sm-0">Meta Incentivo</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="/">Inicio</a></li>
-                                    <li class="breadcrumb-item">Comercial</li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('comercial.index') }}">Comercial</a></li>
                                     <li class="breadcrumb-item active">Meta Incentivo</li>
                                 </ol>
                             </div>

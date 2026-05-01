@@ -115,7 +115,7 @@
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
-                                    <li class="breadcrumb-item">Procesos</li>
+                                    <li class="breadcrumb-item"><a href="{{ route('procesos.index') }}">Procesos</a></li>
                                     <li class="breadcrumb-item active">{{ $departamentoNombre }}</li>
                                 </ol>
                             </div>

@@ -832,582 +832,103 @@
                                 <span data-key="t-menu">Inicio</span>
                             </a>
                         </li>
+
                         <li class="nav-item">
-                            <a class="nav-link menu-link collapsed" href="#sidebarDash" data-bs-toggle="collapse"
-                                role="button" aria-expanded="true" aria-controls="sidebarDash">
+                            <a href="{{ route('dashboard.index') }}"
+                                class="nav-link menu-link {{ request()->routeIs('inicio.index') || request()->is('dashboard*') || request()->is('ventas-lotobet-dashboard*') || request()->is('ventas-lotonet-dashboard*') || request()->is('ventas-lotobet-flash-dashboard*') || request()->is('ventas-mar-dashboard*') || request()->is('kpi-lotobet*') ? 'active' : '' }}">
                                 <i class="ri-apps-2-line"></i> <span data-key="t-apps">Dashboard</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarDash">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="#sidebarLotobetD" class="nav-link collapsed"
-                                            data-bs-toggle="collapse" role="button" aria-expanded="false"
-                                            aria-controls="sidebarLotobetD" data-key="t-email">
-                                            Lotobet
-                                        </a>
-                                        <div class="collapse menu-dropdown" id="sidebarLotobetD">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/ventas-lotobet-dashboard') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Ventas </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/kpi-lotobet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> KPI Metas </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="#sidebarLotobetDF" class="nav-link collapsed"
-                                            data-bs-toggle="collapse" role="button" aria-expanded="false"
-                                            aria-controls="sidebarLotobetDF" data-key="t-email">
-                                            Lotobet Flash
-                                        </a>
-                                        <div class="collapse menu-dropdown" id="sidebarLotobetDF">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/ventas-lotobet-flash-dashboard') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Ventas </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="#sidebarInvoices" class="nav-link collapsed"
-                                            data-bs-toggle="collapse" role="button" aria-expanded="false"
-                                            aria-controls="sidebarInvoices" data-key="t-invoices">
-                                            Lotonet
-                                        </a>
-                                        <div class="collapse menu-dropdown" id="sidebarInvoices">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/ventas-lotonet-dashboard') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Ventas </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="#sidebarMar" class="nav-link collapsed" data-bs-toggle="collapse"
-                                            role="button" aria-expanded="false" aria-controls="sidebarMar"
-                                            data-key="t-invoices">
-                                            Mar
-                                        </a>
-                                        <div class="collapse menu-dropdown" id="sidebarMar">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/ventas-mar-dashboard') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Ventas </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </li>
-                                </ul>
-                            </div>
                         </li>
+
                         <li class="nav-item">
-                            <a href="#sidebarProcesos" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarProcesos"
-                                data-key="t-procesos">
+                            <a href="{{ route('procesos.index') }}"
+                                class="nav-link menu-link {{ request()->is('procesos*') ? 'active' : '' }}">
                                 <i class="ri-flow-chart"></i> <span data-key="t-procesos">Procesos</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarProcesos">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ route('procesos.departamento', ['departamento' => 'gerencia']) }}" class="nav-link">Gerencia</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('procesos.departamento', ['departamento' => 'contabilidad']) }}" class="nav-link">Contabilidad</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('procesos.departamento', ['departamento' => 'recursos-humanos']) }}" class="nav-link">Recursos Humanos</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('procesos.departamento', ['departamento' => 'operaciones']) }}" class="nav-link">Operaciones</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('procesos.departamento', ['departamento' => 'comercial']) }}" class="nav-link">Comercial</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('procesos.departamento', ['departamento' => 'mantenimiento']) }}" class="nav-link">Mantenimiento</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('procesos.departamento', ['departamento' => 'tecnologia']) }}" class="nav-link">Tecnologia</a>
-                                    </li>
-                                </ul>
-                            </div>
                         </li>
                         <li class="nav-item">
-                            <a href="#sidebarEmpleados" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarEmpleados"
-                                data-key="t-invoices">
-                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Recursos Humanos</span>
+                            <a href="{{ route('recursos-humanos.index') }}"
+                                class="nav-link menu-link {{ request()->is('recursos-humanos*') || request()->is('empleados*') || request()->is('registro-empleados*') || request()->is('entrevistas-online*') || request()->is('ventas-sin-empleado*') ? 'active' : '' }}">
+                                <i class="ri-team-line"></i> <span data-key="t-recursos-humanos">Recursos Humanos</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarEmpleados">
-                                <ul class="nav nav-sm flex-column">
-                                     <li class="nav-item">
-                                        <a href="{{ url('/registro-empleados') }}" class="nav-link" data-key="t-mailbox">
-                                            Solicitud </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/empleados') }}" class="nav-link" data-key="t-mailbox">
-                                            Empleados </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('recursos-humanos.novedades-horario.index') }}" class="nav-link" data-key="t-novedades-horario">
-                                            Novedades de Horario </a>
-                                    </li>
-                                </ul>
-                            </div>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link menu-link collapsed" href="#sidebarContabilidad" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarContabilidad">
+                            <a href="{{ route('contabilidad.index') }}"
+                                class="nav-link menu-link {{ request()->is('contabilidad*') ? 'active' : '' }}">
                                 <i class="ri-dashboard-2-line"></i> <span data-key="t-contabilidad">Contabilidad</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarContabilidad">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ route('contabilidad.index') }}" class="nav-link">
-                                            <span data-key="t-contabilidad-inicio">Inicio</span>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('contabilidad.reportes.comisiones') }}" class="nav-link">
-                                            <span data-key="t-contabilidad-comisiones">Comisiones</span>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('contabilidad.reportes.estado-resultado') }}" class="nav-link">
-                                            <span data-key="t-contabilidad-estado-resultado">Estado de Resultado</span>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('contabilidad.reportes.flujo-ruta') }}" class="nav-link">
-                                            <span data-key="t-contabilidad-flujo-ruta">Flujo de ruta</span>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('contabilidad.electricidad') }}" class="nav-link">
-                                            <span data-key="t-contabilidad-electricidad">Electricidad</span>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('contabilidad.centro-costo') }}" class="nav-link">
-                                            <span data-key="t-contabilidad-centro-costo">Centro de Costo</span>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
                         </li>
                         <li class="nav-item">
-                            <a href="{{ url('/tareas') }}" class="nav-link">
+                            <a href="{{ url('/tareas') }}" class="nav-link menu-link">
                                 <i class="ri-task-line"></i> <span data-key="t-tareas">Tareas</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="{{ route('tareas.proyecto') }}" class="nav-link">
+                            <a href="{{ route('tareas.proyecto') }}" class="nav-link menu-link">
                                 <i class="ri-stack-line"></i> <span data-key="t-proyecto">Proyecto</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link menu-link collapsed" href="#sidebarTecnologia" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarTecnologia">
+                            <a href="{{ route('tecnologia.index') }}"
+                                class="nav-link menu-link {{ request()->is('tecnologia*') ? 'active' : '' }}">
                                 <i class="ri-computer-line"></i> <span data-key="t-tecnologia">Tecnologia</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarTecnologia">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ route('tecnologia.solicitudes.index') }}" class="nav-link" data-key="t-tecnologia-solicitudes">
-                                            Solicitudes
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
                         </li>
                         <li class="nav-item">
-                            <a href="#sidebarMantenimientos" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarMantenimientos"
-                                data-key="t-mantenimientos">
+                            <a href="{{ route('mantenimiento.index') }}"
+                                class="nav-link menu-link {{ request()->is('mantenimiento*') || request()->is('agencias*') || request()->is('usuarios*') || request()->is('coordinador-operador*') || request()->is('roles*') || request()->is('permissions*') ? 'active' : '' }}">
                                 <i class="ri-settings-2-line"></i> <span data-key="t-apps">Mantenimientos</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarMantenimientos">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ url('/agencias') }}" class="nav-link" data-key="t-mailbox">
-                                            Agencias </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('agencias.incumplimientos') }}" class="nav-link" data-key="t-incumplimientos-horario">
-                                            Incumplimientos Horario </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('agencias.asistencia-comparativa') }}" class="nav-link" data-key="t-asistencia-comparativa">
-                                            Asistencia Comparativa </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('mantenimiento.catalogo-juegos.index') }}" class="nav-link" data-key="t-catalogo-juegos">
-                                            Catálogo de Juegos </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/usuarios') }}" class="nav-link" data-key="t-usuarios">
-                                            Usuarios </a>
-                                    </li>
-                                    @if(auth()->check() && auth()->user()->hasRole('superadmin'))
-                                        <li class="nav-item">
-                                            <a href="{{ route('superadmin.sesiones.index') }}" class="nav-link" data-key="t-superadmin-sesiones">
-                                                Sesiones de Usuarios </a>
-                                        </li>
-                                    @endif
-                                    <li class="nav-item">
-                                        <a href="{{ route('coordinador-operador.index') }}" class="nav-link" data-key="t-coordinador-operador">
-                                            Coordinador / Operador </a>
-                                    </li>
-                                    @can('roles.view')
-                                        <li class="nav-item">
-                                            <a href="{{ route('roles.index') }}" class="nav-link" data-key="t-roles">
-                                                Roles </a>
-                                        </li>
-                                    @endcan
-                                    @can('permissions.view')
-                                        <li class="nav-item">
-                                            <a href="{{ route('permissions.index') }}" class="nav-link" data-key="t-permissions">
-                                                Permisos </a>
-                                        </li>
-                                    @endcan
-                                </ul>
-                            </div>
                         </li>
+
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarApps" data-bs-toggle="collapse"
-                                role="button" aria-expanded="true" aria-controls="sidebarApps">
+                                role="button" aria-expanded="false" aria-controls="sidebarApps">
                                 <i class="ri-apps-2-line"></i> <span data-key="t-apps">Apis de ventas</span>
                             </a>
                             <div class="collapse menu-dropdown" id="sidebarApps">
                                 <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ url('/generar-lotobet') }}" class="nav-link">
-                                            <span data-key="t-dashboards">Generar Lotobet</span>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/generar-lotonet') }}" class="nav-link">
-                                            <span data-key="t-dashboards">Generar Lotonet</span>
-                                        </a>
-                                    </li>
-
-                                    <li class="nav-item">
-                                        <a href="#sidebarEmail" class="nav-link collapsed" data-bs-toggle="collapse"
-                                            role="button" aria-expanded="false" aria-controls="sidebarEmail"
-                                            data-key="t-email">
-                                            Lotobet
-                                        </a>
-                                        <div class="collapse menu-dropdown" id="sidebarEmail">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/ventas-por-usuario-lotobet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Ventas por usuario </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/faltantes-lotobet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Faltantes </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/ventas-por-producto-lotobet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Ventas por producto
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/recargas-lotobet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Recargas </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/premios-lotobet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Premios </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/pagos-misma-empresa-lotobet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Pagos Misma Empresa
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/pagos-aotra-empresa-lotobet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Pagos A Otra Empresa
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/pagos-porotra-empresa-lotobet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Pagos Por Otra Empresa
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/asistencias-lotobet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Asistencias
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="#sidebarInvoices" class="nav-link collapsed"
-                                            data-bs-toggle="collapse" role="button" aria-expanded="false"
-                                            aria-controls="sidebarInvoices" data-key="t-invoices">
-                                            Lotonet
-                                        </a>
-                                        <div class="collapse menu-dropdown" id="sidebarInvoices">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/ventas-por-usuario-lotonet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Ventas por usuario </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/faltantes-lotonet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Faltantes </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/paquetico-lotonet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Paquetico </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/recargas-lotonet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Recargas </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/ventas-por-producto-lotonet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Ventas Por Producto
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/premios-lotonet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Premios </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/pagos-misma-empresa-lotonet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Pagos Misma Empresa
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/pagos-aotra-empresa-lotonet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Pagos A Otra Empresa
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/pagos-porotra-empresa-lotonet') }}"
-                                                        class="nav-link" data-key="t-mailbox"> Pagos Por Otra Empresa
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/asistencias-lotonet') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Asistencias
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="#sidebarMar" class="nav-link collapsed" data-bs-toggle="collapse"
-                                            role="button" aria-expanded="false" aria-controls="sidebarMar"
-                                            data-key="t-invoices">
-                                            Mar
-                                        </a>
-                                        <div class="collapse menu-dropdown" id="sidebarMar">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="{{ url('/mar-ventas') }}" class="nav-link"
-                                                        data-key="t-mailbox"> Ventas </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </li>
-
-                                    <li class="nav-item">
-                                        <a href="{{ url('/ventas-flash-lotobet') }}" class="nav-link">
-                                            <span data-key="t-dashboards">Ventas Flash Lotobet</span>
-                                        </a>
-                                    </li>
-                                    <li class="nav-item d-none">
-                                        <a href="{{ url('/ventas-flash-lotonet') }}" class="nav-link">
-                                            <span data-key="t-dashboards">Ventas Flash Lotonet</span>
-                                        </a>
-                                    </li>
+                                    <li class="nav-item"><a href="{{ url('/generar-lotobet') }}" class="nav-link">Generar Lotobet</a></li>
+                                    <li class="nav-item"><a href="{{ url('/generar-lotonet') }}" class="nav-link">Generar Lotonet</a></li>
+                                    <li class="nav-item"><a href="{{ url('/ventas-por-usuario-lotobet') }}" class="nav-link">Lotobet Ventas por usuario</a></li>
+                                    <li class="nav-item"><a href="{{ url('/ventas-por-producto-lotobet') }}" class="nav-link">Lotobet Ventas por producto</a></li>
+                                    <li class="nav-item"><a href="{{ url('/ventas-por-usuario-lotonet') }}" class="nav-link">Lotonet Ventas por usuario</a></li>
+                                    <li class="nav-item"><a href="{{ url('/ventas-por-producto-lotonet') }}" class="nav-link">Lotonet Ventas por producto</a></li>
+                                    <li class="nav-item"><a href="{{ url('/mar-ventas') }}" class="nav-link">Mar Ventas</a></li>
                                 </ul>
                             </div>
                         </li>
+
                         <li class="nav-item">
                             <a href="{{ route('reportes.index') }}"
-                                class="nav-link menu-link {{ request()->is('reportes') || request()->is('reportes-*') ? 'active' : '' }}"
-                                data-key="t-invoices">
+                                class="nav-link menu-link {{ request()->is('reportes') || request()->is('reportes-*') ? 'active' : '' }}">
                                 <i class="ri-apps-2-line"></i> <span data-key="t-apps">Reportes</span>
                             </a>
                         </li>
-                        <li class="nav-item d-none">
-                            <a href="#sidebarReportesBI" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarReportesBI"
-                                data-key="t-invoices">
-                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Reportes BI</span>
+                        <li class="nav-item">
+                            <a href="{{ route('incentivos.index') }}"
+                                class="nav-link menu-link {{ request()->is('incentivos*') ? 'active' : '' }}">
+                                <i class="ri-award-line"></i> <span data-key="t-apps">Incentivos</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarReportesBI">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-bi/resumen-ventas') }}" class="nav-link"
-                                            data-key="t-mailbox"> Resumen Ventas </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-bi/ventas-usuarios') }}" class="nav-link"
-                                            data-key="t-mailbox"> Ventas por Usuarios </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/reportes-bi/faltantes') }}" class="nav-link"
-                                            data-key="t-mailbox"> Faltantes </a>
-                                    </li>
-                                </ul>
-                            </div>
                         </li>
                         <li class="nav-item">
-                            <a href="#sidebarIncentivos" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarIncentivos"
-                                data-key="t-incentivos">
-                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Incentivos</span>
-                            </a>
-                            <div class="collapse menu-dropdown" id="sidebarIncentivos">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ url('/incentivos/procesar') }}" class="nav-link" data-key="t-incentivos-procesar">
-                                            Procesar Incentivos
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/incentivos') }}" class="nav-link" data-key="t-incentivos-gestion">
-                                            Gestión Incentivos
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/incentivos/empleados') }}" class="nav-link" data-key="t-incentivos-empleados">
-                                            Incentivos Empleados
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/incentivos/reporte-pagos') }}" class="nav-link" data-key="t-incentivos-reporte">
-                                            Reporte de Pagos
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/incentivos/reporte-nuevo-incentivo-view') }}" class="nav-link" data-key="t-incentivos-reporte-nuevo">
-                                            Reporte Nuevo Incentivo
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ url('/incentivos/reporte-nuevo-incentivo-v2-view') }}" class="nav-link" data-key="t-incentivos-reporte-nuevo-v2">
-                                            Reporte Nuevo Incentivo V2
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#sidebarOperaciones" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarOperaciones"
-                                data-key="t-operaciones">
+                            <a href="{{ route('operaciones.index') }}"
+                                class="nav-link menu-link {{ request()->is('operaciones*') ? 'active' : '' }}">
                                 <i class="ri-settings-3-line"></i> <span data-key="t-apps">Operaciones</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarOperaciones">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ route('operador-ruta.index') }}" class="nav-link" data-key="t-operaciones-operador-ruta">
-                                            Operador_Ruta
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('ruta.index') }}" class="nav-link" data-key="t-operaciones-ruta">
-                                            Ruta
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('operaciones.panel') }}" class="nav-link" data-key="t-operaciones-panel">
-                                            Panel Operativo
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('operaciones.gestion') }}" class="nav-link" data-key="t-operaciones-gestion">
-                                            Gestion Operativa
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('operaciones.reporte.diario') }}" class="nav-link" data-key="t-operaciones-reporte-diario">
-                                            Reporte Diario
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('operaciones.reporte.mensual') }}" class="nav-link" data-key="t-operaciones-reporte-mensual">
-                                            Reporte Mensual
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
                         </li>
                         <li class="nav-item">
-                            <a href="#sidebarComercial" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarComercial"
-                                data-key="t-comercial">
+                            <a href="{{ route('comercial.index') }}"
+                                class="nav-link menu-link {{ request()->is('comercial*') ? 'active' : '' }}">
                                 <i class="ri-line-chart-line"></i> <span data-key="t-apps">Comercial</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarComercial">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ route('comercial.kpi-ventas') }}" class="nav-link" data-key="t-kpi-ventas">
-                                            kpi-ventas
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('comercial.kpi-ventas-v') }}" class="nav-link" data-key="t-kpi-ventas-v">
-                                            kpi-ventas-v
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('comercial.agencia-plan') }}" class="nav-link" data-key="t-agencia-plan">
-                                            agencia_plan
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('comercial.meta-incentivo') }}" class="nav-link" data-key="t-meta-incentivo">
-                                            Meta Incentivo
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('comercial.ventas-producto') }}" class="nav-link" data-key="t-ventas-producto">
-                                            Ventas por Producto
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            <!-- Menú Gerencia -->
-                            <a href="#sidebarGerencia" class="nav-link collapsed" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarGerencia"
-                                data-key="t-gerencia">
+                        </li>
+
+                        <li class="nav-item">
+                            <a href="{{ route('gerencia.index') }}"
+                                class="nav-link menu-link {{ request()->is('gerencia*') ? 'active' : '' }}">
                                 <i class="ri-briefcase-line"></i> <span data-key="t-gerencia">Gerencia</span>
                             </a>
-                            <div class="collapse menu-dropdown" id="sidebarGerencia">
-                                <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item">
-                                        <a href="{{ route('gerencia.gerencial') }}" class="nav-link" data-key="t-gerencial">
-                                            Gerencial
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('gerencia.venta-gerencial') }}" class="nav-link" data-key="t-venta-gerencial">
-                                            Venta Gerencial
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{{ route('gerencia.venta-comparativa') }}" class="nav-link" data-key="t-venta-comparativa">
-                                            Venta Comparativa
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                                </ul>
-                            </div>
                         </li>
                     </ul>
                 </div>

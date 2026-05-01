@@ -10,7 +10,8 @@
                             <h4 class="mb-sm-0">Monitoreo de Sesiones</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">Super Admin</li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('mantenimiento.index') }}">Mantenimientos</a></li>
                                     <li class="breadcrumb-item active">Sesiones</li>
                                 </ol>
                             </div>
@@ -97,4 +98,3 @@
         });
     </script>
 @endsection
-

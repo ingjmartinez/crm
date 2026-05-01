@@ -10,6 +10,7 @@
                             <h4 class="mb-sm-0">Editar Operador_Ruta</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="{{ route('operaciones.index') }}">Operaciones</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('operador-ruta.index') }}">Operador_Ruta</a></li>
                                     <li class="breadcrumb-item active">Editar</li>
                                 </ol>

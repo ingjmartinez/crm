@@ -13,6 +13,7 @@ use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\EmpleadoController;
+use App\Http\Controllers\EntrevistaOnlineController;
 use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
 use App\Http\Controllers\InicioController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\MarController;
 use App\Http\Controllers\MetaIncentivoController;
+use App\Http\Controllers\ModuleHubController;
 use App\Http\Controllers\NovedadHorarioController;
 use App\Http\Controllers\OperacionesReporteDiarioController;
 use App\Http\Controllers\OperadorRutaController;
@@ -31,6 +33,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PremioController;
 use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\RecargasController;
+use App\Http\Controllers\RecursosHumanosController;
 use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\RutaController;
@@ -63,6 +66,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
+    Route::get('/gerencia', [ModuleHubController::class, 'gerencia'])->name('gerencia.index');
     Route::get('/gerencia/gerencial', [\App\Http\Controllers\Gerencia\GerencialController::class, 'index'])->name('gerencia.gerencial');
     Route::get('/gerencia/gerencial/data', [\App\Http\Controllers\Gerencia\GerencialController::class, 'data'])->name('gerencia.gerencial.data');
     Route::get('/gerencia/venta-gerencial', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'index'])->name('gerencia.venta-gerencial');
@@ -72,8 +76,9 @@ Route::middleware('auth')->group(function () {
 
 Route::get('/', [InicioController::class, 'index'])->name('inicio.index');
 Route::get('/inicio/ventas-data', [InicioController::class, 'ventasData'])->name('inicio.ventas-data');
+Route::get('/dashboard', [ModuleHubController::class, 'dashboard'])->name('dashboard.index');
 
-Route::get('/procesos', [ProcesoController::class, 'index'])->name('procesos.index');
+Route::get('/procesos', [ModuleHubController::class, 'procesos'])->name('procesos.index');
 Route::get('/procesos/{departamento}', [ProcesoController::class, 'departamento'])->name('procesos.departamento');
 Route::post('/procesos/protocolo', [ProcesoController::class, 'guardarProtocolo'])->name('procesos.guardarProtocolo');
 Route::post('/procesos/base/actualizar', [ProcesoController::class, 'actualizarProcesoBase'])->name('procesos.actualizarProcesoBase');
@@ -82,7 +87,8 @@ Route::put('/procesos/{id}', [ProcesoController::class, 'actualizarProceso'])->n
 Route::delete('/procesos/{id}', [ProcesoController::class, 'eliminarProceso'])->name('procesos.eliminarProceso');
 
 Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
-    Route::view('/', 'contabilidad.index')->name('index');
+    Route::get('/', [ModuleHubController::class, 'contabilidad'])->name('index');
+    Route::view('/inicio', 'contabilidad.index')->name('inicio');
     Route::get('/electricidad', [ContabilidadElectricidadController::class, 'index'])->name('electricidad');
     Route::get('/electricidad/data', [ContabilidadElectricidadController::class, 'data'])->name('electricidad.data');
     Route::post('/electricidad', [ContabilidadElectricidadController::class, 'store'])->name('electricidad.store');
@@ -233,6 +239,7 @@ Route::get('/delete-mar-ventas', [MarController::class, 'deleteVentas']);
 Route::get('/ventas-mar-dashboard', [MarController::class, 'dashboardVentasMar']);
 Route::get('/ventas-mar-dashboard/data', [MarController::class, 'dashboardVentasMarData']);
 
+Route::get('/recursos-humanos', [RecursosHumanosController::class, 'index'])->name('recursos-humanos.index');
 Route::get('/empleados', [EmpleadoController::class, 'index']);
 Route::get('/empleados/list', [EmpleadoController::class, 'list']);
 Route::get('/empleados/dashboard', [EmpleadoController::class, 'dashboard']);
@@ -244,6 +251,15 @@ Route::get('/recursos-humanos/novedades-horario', [NovedadHorarioController::cla
     ->name('recursos-humanos.novedades-horario.index');
 Route::get('/recursos-humanos/novedades-horario/list', [NovedadHorarioController::class, 'list'])
     ->name('recursos-humanos.novedades-horario.list');
+
+Route::prefix('entrevistas-online')->name('entrevistas-online.')->group(function () {
+    Route::get('/', [EntrevistaOnlineController::class, 'index'])->name('index');
+    Route::get('/list', [EntrevistaOnlineController::class, 'list'])->name('list');
+    Route::get('/{id}', [EntrevistaOnlineController::class, 'show'])->name('show')->whereNumber('id');
+    Route::post('/', [EntrevistaOnlineController::class, 'store'])->name('store');
+    Route::put('/{id}', [EntrevistaOnlineController::class, 'update'])->name('update')->whereNumber('id');
+    Route::delete('/{id}', [EntrevistaOnlineController::class, 'destroy'])->name('destroy')->whereNumber('id');
+});
 
 Route::get('/empleados-no-regularizados', [EmpleadoController::class, 'noRegularizados']);
 Route::get('/empleados-no-regularizados/list', [EmpleadoController::class, 'listNoRegularizados']);
@@ -323,6 +339,7 @@ Route::resource('roles', RoleController::class)->except(['show']);
 Route::resource('permissions', PermissionController::class)->except(['show']);
 
 Route::prefix('mantenimiento')->name('mantenimiento.')->group(function () {
+    Route::get('/', [ModuleHubController::class, 'mantenimiento'])->name('index');
     Route::get('/catalogo-juegos', [CatalogoJuegoController::class, 'index'])->name('catalogo-juegos.index');
     Route::get('/catalogo-juegos/detectar-nuevos', [CatalogoJuegoController::class, 'detectarNuevos'])->name('catalogo-juegos.detectar-nuevos');
     Route::get('/catalogo-juegos/comparativo-sql', [CatalogoJuegoController::class, 'comparativoSql'])->name('catalogo-juegos.comparativo-sql');
@@ -336,7 +353,8 @@ Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-vent
 Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usuarios'));
 Route::get('/reportes-bi/faltantes', fn() => view('reportes-bi.faltantes'));
 
-Route::get('/comercial', [ComercialController::class, 'index'])->name('comercial.index');
+Route::get('/comercial', [ModuleHubController::class, 'comercial'])->name('comercial.index');
+Route::get('/comercial/resumen', [ComercialController::class, 'index'])->name('comercial.resumen');
 Route::get('/comercial/kpi-ventas', [ComercialController::class, 'kpiVentas'])->name('comercial.kpi-ventas');
 Route::get('/comercial/kpi-ventas-v', [ComercialController::class, 'kpiVentasV'])->name('comercial.kpi-ventas-v');
 Route::get('/comercial/agencia-plan', [ComercialController::class, 'agenciaPlan'])->name('comercial.agencia-plan');
@@ -347,7 +365,8 @@ Route::post('/comercial/meta-incentivo/send-mail', [MetaIncentivoController::cla
 Route::get('/comercial/ventas-producto', fn() => view('comercial.ventas-producto'))->name('comercial.ventas-producto');
 
 // Modulo Operaciones
-Route::get('/operaciones', fn() => view('operaciones.panel'))->name('operaciones.panel');
+Route::get('/operaciones', [ModuleHubController::class, 'operaciones'])->name('operaciones.index');
+Route::get('/operaciones/panel', fn() => view('operaciones.panel'))->name('operaciones.panel');
 Route::get('/operaciones/gestion', fn() => view('operaciones.gestion'))->name('operaciones.gestion');
 Route::get('/operaciones/reportes/diario', [OperacionesReporteDiarioController::class, 'index'])->name('operaciones.reporte.diario');
 Route::get('/operaciones/reportes/diario/exportar/excel', [OperacionesReporteDiarioController::class, 'exportExcel'])->name('operaciones.reporte.diario.export.excel');
@@ -378,7 +397,8 @@ Route::get('operaciones/ruta/{ruta}/detalle', [RutaController::class, 'detalle']
 Route::post('operaciones/ruta/{ruta}/asignar-agencias', [RutaController::class, 'asignarAgencias'])
     ->name('ruta.asignar-agencias');
 
-Route::get('/incentivos', [IncentivosController::class, 'index']);
+Route::get('/incentivos', [ModuleHubController::class, 'incentivos'])->name('incentivos.index');
+Route::get('/incentivos/gestion', [IncentivosController::class, 'index'])->name('incentivos.gestion');
 Route::get('/incentivos/procesar', [IncentivosController::class, 'procesar']);
 Route::get('/incentivos/list', [IncentivosController::class, 'list']);
 Route::post('/incentivos/save', [IncentivosController::class, 'save']);
@@ -407,6 +427,7 @@ Route::get('/incentivos/empleados/list', [EmpleadoController::class, 'listEmplea
 Route::post('/incentivos/empleados/update', [EmpleadoController::class, 'updateEmpleadoIncentivo']);
 
 Route::prefix('tecnologia')->name('tecnologia.')->group(function () {
+    Route::get('/', [ModuleHubController::class, 'tecnologia'])->name('index');
     Route::get('/solicitudes', [TecnologiaSolicitudController::class, 'index'])->name('solicitudes.index');
     Route::get('/solicitudes/list', [TecnologiaSolicitudController::class, 'list'])->name('solicitudes.list');
     Route::post('/solicitudes', [TecnologiaSolicitudController::class, 'store'])->name('solicitudes.store');

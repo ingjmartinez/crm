@@ -13,7 +13,8 @@
 
                             <div class="page-title-right w-100 w-md-auto">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);">Administración</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('mantenimiento.index') }}">Mantenimientos</a></li>
                                     <li class="breadcrumb-item active">Agencias</li>
                                 </ol>
                             </div>
@@ -139,7 +140,7 @@
                     <div class="col-sm-6">
                         <script>
                             document.write(new Date().getFullYear())
-                        </script> © CRM.
+                        </script> Â© CRM.
                     </div>
                 </div>
             </div>
@@ -151,11 +152,11 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="deleteModalLabel">Confirmar eliminación</h5>
+                    <h5 class="modal-title" id="deleteModalLabel">Confirmar eliminaciÃ³n</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    ¿Está seguro que desea eliminar esta agencia?
+                    Â¿EstÃ¡ seguro que desea eliminar esta agencia?
                 </div>
                 <div class="modal-footer d-flex gap-2">
                     <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancelar</button>
@@ -219,14 +220,14 @@
         </div>
     </div>
 
-    <!-- Modal para actualización masiva -->
+    <!-- Modal para actualizaciÃ³n masiva -->
     <div class="modal fade" id="massUpdateModal" tabindex="-1" aria-labelledby="massUpdateModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <form action="{{ route('agencias.mass-update') }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <div class="modal-header">
-                        <h5 class="modal-title" id="massUpdateModalLabel">Actualización masiva de Agencias</h5>
+                        <h5 class="modal-title" id="massUpdateModalLabel">ActualizaciÃ³n masiva de Agencias</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -245,18 +246,18 @@
 
                         <div class="mb-3">
                             <a href="{{ route('agencias.mass-update-template') }}" class="btn btn-outline-primary btn-sm">
-                                <i class="ri-download-line me-1"></i>Descargar plantilla de actualización
+                                <i class="ri-download-line me-1"></i>Descargar plantilla de actualizaciÃ³n
                             </a>
                             <div class="form-text mt-1">Use esta plantilla para actualizar solo los campos que necesite por agencia.</div>
                         </div>
 
                         <div class="alert alert-warning mb-0">
-                            <strong class="d-block mb-2">Reglas de actualización:</strong>
+                            <strong class="d-block mb-2">Reglas de actualizaciÃ³n:</strong>
                             <ul class="mb-2 ps-3">
                                 <li>Para ubicar la agencia, incluya al menos una columna: ID, Terminal o Agencia.</li>
                                 <li>Solo se actualizan los campos que tengan valor en cada fila.</li>
-                                <li>Si una celda viene vacía, ese campo no se modifica.</li>
-                                <li>Puede actualizar 1, 2 o más campos en el mismo archivo.</li>
+                                <li>Si una celda viene vacÃ­a, ese campo no se modifica.</li>
+                                <li>Puede actualizar 1, 2 o mÃ¡s campos en el mismo archivo.</li>
                             </ul>
                             <small class="text-muted">Campos soportados: Agencia, Terminal, Horario AM, Horario PM, Nombre Agencia, Sistema, Empresa, Ciudad, Ruta, Operador, Coordinador, Estatus, Aplica Incentivo.</small>
                         </div>
@@ -1199,7 +1200,7 @@
             $('#btnFiltroEmpresaTodas').removeClass('btn-outline-secondary').addClass('btn-secondary');
         }
 
-        // Configuración responsive de DataTables
+        // ConfiguraciÃ³n responsive de DataTables
         var responsiveColumns = [
             { targets: 3, visible: false },  // Horario AM (oculta para ganar espacio)
             { targets: 4, visible: false },  // Horario PM
@@ -1207,7 +1208,7 @@
             { targets: 11, visible: false }  // Coordinador
         ];
 
-        // En móvil, ocultar más columnas
+        // En mÃ³vil, ocultar mÃ¡s columnas
         if ($(window).width() < 768) {
             responsiveColumns = [
                 { targets: 3, visible: false },  // Horario AM
@@ -1267,7 +1268,7 @@
                     name: 'aplica_incentivo',
                     className: 'text-center',
                     render: function(data) {
-                        return data ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-secondary">No</span>';
+                        return data ? '<span class="badge bg-success">SÃ­</span>' : '<span class="badge bg-secondary">No</span>';
                     }
                 },
                 {
@@ -1294,7 +1295,7 @@
             },
             dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
             initComplete: function() {
-                // Carga secuencial: primero DataTable, luego no registradas para evitar sensación de bloqueo.
+                // Carga secuencial: primero DataTable, luego no registradas para evitar sensaciÃ³n de bloqueo.
                 if (!noRegistradasCargadas) {
                     noRegistradasCargadas = true;
                     window.setTimeout(function() {
@@ -1442,7 +1443,7 @@
             renderParaActualizarModal();
         });
 
-        // Manejar eliminación
+        // Manejar eliminaciÃ³n
         $('#tableAgencias').on('click', '.btn-delete', function() {
             var id = $(this).data('id');
             var form = $('#deleteForm');
@@ -1450,18 +1451,18 @@
             $('#deleteModal').modal('show');
         });
 
-        // Mostrar mensaje de éxito si existe
+        // Mostrar mensaje de Ã©xito si existe
         @if(session('success') && !session('mass_update_result') && !session('import_result'))
             Swal.fire({
                 icon: 'success',
-                title: '¡Éxito!',
+                title: 'Â¡Ã‰xito!',
                 text: '{{ session('success') }}',
                 timer: 3000,
                 showConfirmButton: false
             });
         @endif
 
-        // Resumen de actualización masiva con conteo
+        // Resumen de actualizaciÃ³n masiva con conteo
         @if(session('import_result'))
             const importResult = @json(session('import_result'));
             Swal.fire({
@@ -1487,7 +1488,7 @@
             const massUpdateResult = @json(session('mass_update_result'));
             Swal.fire({
                 icon: 'info',
-                title: 'Actualización masiva finalizada',
+                title: 'ActualizaciÃ³n masiva finalizada',
                 html: `
                     <div class="text-start">
                         <p class="mb-2">Resumen del archivo procesado:</p>
@@ -1496,7 +1497,7 @@
                             <li>Agencias actualizadas: <strong>${Number(massUpdateResult.actualizadas || 0).toLocaleString('es-DO')}</strong></li>
                             <li>Sin cambios: <strong>${Number(massUpdateResult.sin_cambios || 0).toLocaleString('es-DO')}</strong></li>
                             <li>No encontradas: <strong>${Number(massUpdateResult.no_encontradas || 0).toLocaleString('es-DO')}</strong></li>
-                            <li>Filas inválidas: <strong>${Number(massUpdateResult.invalidas || 0).toLocaleString('es-DO')}</strong></li>
+                            <li>Filas invÃ¡lidas: <strong>${Number(massUpdateResult.invalidas || 0).toLocaleString('es-DO')}</strong></li>
                         </ul>
                     </div>
                 `,
@@ -1514,11 +1515,11 @@
             });
         @endif
 
-        // Mostrar errores de validación
+        // Mostrar errores de validaciÃ³n
         @if($errors->any())
             Swal.fire({
                 icon: 'error',
-                title: 'Error de validación',
+                title: 'Error de validaciÃ³n',
                 html: `{!! implode('<br>', $errors->all()) !!}`
             });
         @endif
@@ -1579,14 +1580,14 @@
                     var noEncontradas = response.terminales_no_encontradas || [];
                     var listado = noEncontradas.length
                         ? `<details><summary class="text-danger" style="cursor:pointer;">Detalle de no encontradas (${noEncontradas.length})</summary><div class="small mt-2" style="max-height: 120px; overflow-y:auto;"><ul class="mb-0 ps-3">${noEncontradas.map(function(t){ return `<li>${$('<div>').text(t).html()}</li>`; }).join('')}</ul></div></details>`
-                        : '<small class="text-success">Todas las terminales leídas existen en la tabla de agencias.</small>';
+                        : '<small class="text-success">Todas las terminales leÃ­das existen en la tabla de agencias.</small>';
 
                     resultadoPreviewMasivo
                         .html(`
                             <div class="small">
                                 <div><strong>Filas en archivo:</strong> ${Number(response.total_filas || 0).toLocaleString('es-DO')}</div>
-                                <div><strong>Terminales leídas:</strong> ${Number(response.terminales_leidas || 0).toLocaleString('es-DO')}</div>
-                                <div><strong>Terminales únicas:</strong> ${Number(response.terminales_unicas || 0).toLocaleString('es-DO')}</div>
+                                <div><strong>Terminales leÃ­das:</strong> ${Number(response.terminales_leidas || 0).toLocaleString('es-DO')}</div>
+                                <div><strong>Terminales Ãºnicas:</strong> ${Number(response.terminales_unicas || 0).toLocaleString('es-DO')}</div>
                                 <div><strong>Coinciden en agencias:</strong> ${Number(response.encontradas || 0).toLocaleString('es-DO')}</div>
                                 <div><strong>No existen en agencias:</strong> ${Number(response.no_encontradas || 0).toLocaleString('es-DO')}</div>
                                 <div class="mt-2">${listado}</div>
@@ -1621,7 +1622,7 @@
                 Swal.fire({
                     icon: 'warning',
                     title: 'Reconocimiento requerido',
-                    text: 'Primero debes reconocer terminales antes de ejecutar la actualización masiva.'
+                    text: 'Primero debes reconocer terminales antes de ejecutar la actualizaciÃ³n masiva.'
                 });
                 return;
             }
@@ -1634,11 +1635,11 @@
             const noEncontradas = Number(previewMasivoStats.no_encontradas || 0);
 
             Swal.fire({
-                title: 'Procesando actualización masiva',
+                title: 'Procesando actualizaciÃ³n masiva',
                 html: `
                     <div class="text-start">
                         <div><strong>Filas:</strong> ${totalFilas.toLocaleString('es-DO')}</div>
-                        <div><strong>Terminales únicas:</strong> ${terminalesUnicas.toLocaleString('es-DO')}</div>
+                        <div><strong>Terminales Ãºnicas:</strong> ${terminalesUnicas.toLocaleString('es-DO')}</div>
                         <div><strong>No encontradas:</strong> ${noEncontradas.toLocaleString('es-DO')}</div>
                         <div class="mt-3">
                             <div class="progress" style="height: 10px;">
@@ -1665,7 +1666,7 @@
                         }
 
                         if (progressText) {
-                            progressText.textContent = 'Procesando actualización... ' + progress + '%';
+                            progressText.textContent = 'Procesando actualizaciÃ³n... ' + progress + '%';
                         }
 
                         if (progress >= 92) {

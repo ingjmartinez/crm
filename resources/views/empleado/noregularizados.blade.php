@@ -14,8 +14,9 @@
 
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);">Tables</a></li>
-                                    <li class="breadcrumb-item active">Datatables</li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('recursos-humanos.index') }}">Recursos Humanos</a></li>
+                                    <li class="breadcrumb-item active">Empleados No Regularizados</li>
                                 </ol>
                             </div>
                         </div>

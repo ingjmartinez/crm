@@ -10,8 +10,9 @@
                             <h4 class="mb-sm-0">Comercial</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="/">Inicio</a></li>
-                                    <li class="breadcrumb-item active">Comercial</li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('comercial.index') }}">Comercial</a></li>
+                                    <li class="breadcrumb-item active">Resumen</li>
                                 </ol>
                             </div>
                         </div>

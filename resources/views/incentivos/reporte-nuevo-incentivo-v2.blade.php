@@ -10,7 +10,8 @@
                             <h4 class="mb-sm-0">Reporte Nuevo Incentivo - Parte 2</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);">Incentivos</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('incentivos.index') }}">Incentivos</a></li>
                                     <li class="breadcrumb-item active">Reporte Nuevo Incentivo V2</li>
                                 </ol>
                             </div>

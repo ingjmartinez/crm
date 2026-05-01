@@ -13,7 +13,8 @@
 
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);">Administración</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('mantenimiento.index') }}">Mantenimientos</a></li>
                                     <li class="breadcrumb-item active">Usuarios</li>
                                 </ol>
                             </div>
@@ -48,7 +49,7 @@
                                             <tr>
                                                 <th class="text-center" style="min-width: 50px;">ID</th>
                                                 <th style="min-width: 150px;">Nombre</th>
-                                                <th style="min-width: 200px;">Correo Electrónico</th>
+                                                <th style="min-width: 200px;">Correo ElectrÃ³nico</th>
                                                 <th style="min-width: 200px;">Roles</th>
                                                 <th style="min-width: 150px;">Fecha de Registro</th>
                                                 <th class="text-center" style="min-width: 100px;">Acciones</th>
@@ -72,7 +73,7 @@
                     <div class="col-sm-6">
                         <script>
                             document.write(new Date().getFullYear())
-                        </script> © CRM.
+                        </script> Â© CRM.
                     </div>
                 </div>
             </div>
@@ -84,11 +85,11 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="deleteModalLabel">Confirmar eliminación</h5>
+                    <h5 class="modal-title" id="deleteModalLabel">Confirmar eliminaciÃ³n</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    ¿Está seguro que desea eliminar este usuario? Esta acción no se puede deshacer.
+                    Â¿EstÃ¡ seguro que desea eliminar este usuario? Esta acciÃ³n no se puede deshacer.
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -160,7 +161,7 @@
             dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
         });
 
-        // Manejar eliminación
+        // Manejar eliminaciÃ³n
         $('#tableUsuarios').on('click', '.btn-delete', function() {
             var id = $(this).data('id');
             var form = $('#deleteForm');
@@ -168,11 +169,11 @@
             $('#deleteModal').modal('show');
         });
 
-        // Mostrar mensaje de éxito si existe
+        // Mostrar mensaje de Ã©xito si existe
         @if(session('success'))
             Swal.fire({
                 icon: 'success',
-                title: '¡Éxito!',
+                title: 'Â¡Ã‰xito!',
                 text: '{{ session('success') }}',
                 timer: 3000,
                 showConfirmButton: false
@@ -188,11 +189,11 @@
             });
         @endif
 
-        // Mostrar errores de validación
+        // Mostrar errores de validaciÃ³n
         @if($errors->any())
             Swal.fire({
                 icon: 'error',
-                title: 'Error de validación',
+                title: 'Error de validaciÃ³n',
                 html: `{!! implode('<br>', $errors->all()) !!}`
             });
         @endif

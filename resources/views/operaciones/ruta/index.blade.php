@@ -10,7 +10,7 @@
                             <h4 class="mb-sm-0">Ruta</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="{{ route('operaciones.panel') }}">Operaciones</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('operaciones.index') }}">Operaciones</a></li>
                                     <li class="breadcrumb-item active">Ruta</li>
                                 </ol>
                             </div>

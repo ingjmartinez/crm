@@ -13,7 +13,8 @@
                             <h4 class="mb-sm-0">KPI Lotobet - Metas y Severidad</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);">Dashboard</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
                                     <li class="breadcrumb-item active">KPI Lotobet</li>
                                 </ol>
                             </div>

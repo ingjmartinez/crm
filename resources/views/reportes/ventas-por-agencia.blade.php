@@ -11,6 +11,7 @@
                             <h4 class="mb-sm-0">Ventas por Agencia</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('reportes.index') }}">Reportes</a></li>
                                     <li class="breadcrumb-item active">Ventas por Agencia</li>
                                 </ol>

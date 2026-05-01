@@ -57,6 +57,29 @@
                 font-size: 0.85rem;
             }
         }
+
+        .tipo-card-wrap {
+            margin-bottom: 0.5rem;
+        }
+
+        .tipo-card {
+            height: auto;
+        }
+
+        .tipo-card .card-body {
+            padding: 0.65rem 0.8rem;
+        }
+
+        .tipo-card .card-title {
+            font-size: 0.95rem;
+            line-height: 1.2;
+        }
+
+        @media (max-width: 767.98px) {
+            .tipo-card {
+                height: auto;
+            }
+        }
     </style>
     <div class="main-content">
         <div class="page-content">
@@ -65,7 +88,14 @@
                     <div class="col-12">
                         <div
                             class="d-flex justify-content-between align-items-start align-items-lg-center flex-column flex-lg-row gap-3 text-center text-lg-start mb-3">
-                            <h1 class="h3 mb-0">Dashboard Ventas Flash Lotobet</h1>
+                            <div>
+                                <h1 class="h3 mb-1">Dashboard Ventas Flash Lotobet</h1>
+                                <ol class="breadcrumb m-0 justify-content-center justify-content-lg-start">
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
+                                    <li class="breadcrumb-item active">Lotobet Flash</li>
+                                </ol>
+                            </div>
                             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-center">
                                 <span id="badge-agencia" class="badge bg-primary fs-6" style="display: none; padding: 8px 12px;">
                                     Agencia: <span id="agencia-id-badge" style="font-weight: bold;"></span>
@@ -351,9 +381,9 @@
                     data.tabla.forEach((item, index) => {
                         const color = coloresCards[index % coloresCards.length];
                         const card = document.createElement('div');
-                        card.className = 'col-12 col-sm-6 col-lg-4 mb-3';
+                        card.className = 'col-12 col-sm-6 col-lg-4 tipo-card-wrap';
                         card.innerHTML = `
-                            <div class="card shadow-sm h-100" style="border-left: 5px solid ${color};">
+                            <div class="card shadow-sm tipo-card" style="border-left: 5px solid ${color};">
                                 <div class="card-body d-flex flex-column">
                                     <h5 class="card-title" style="color: ${color}; margin-bottom: 0.75rem;">${item.tipo}</h5>
                                     <div class="mb-2">

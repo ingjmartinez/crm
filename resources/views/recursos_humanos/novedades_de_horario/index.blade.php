@@ -10,7 +10,8 @@
                             <h4 class="mb-sm-0">Novedades_de_Horario</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript:void(0);">Recursos Humanos</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('recursos-humanos.index') }}">Recursos Humanos</a></li>
                                     <li class="breadcrumb-item active">Novedades de Horario</li>
                                 </ol>
                             </div>

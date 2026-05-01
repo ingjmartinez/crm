@@ -1,0 +1,14 @@
+services:
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: unless-stopped
+    environment:
+      PMA_HOST: pruebacrm-mysql-nu9g4v-db-1
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 512M
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
