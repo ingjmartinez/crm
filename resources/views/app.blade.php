@@ -883,18 +883,156 @@
 
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarApps" data-bs-toggle="collapse"
-                                role="button" aria-expanded="false" aria-controls="sidebarApps">
+                                role="button" aria-expanded="true" aria-controls="sidebarApps">
                                 <i class="ri-apps-2-line"></i> <span data-key="t-apps">Apis de ventas</span>
                             </a>
                             <div class="collapse menu-dropdown" id="sidebarApps">
                                 <ul class="nav nav-sm flex-column">
-                                    <li class="nav-item"><a href="{{ url('/generar-lotobet') }}" class="nav-link">Generar Lotobet</a></li>
-                                    <li class="nav-item"><a href="{{ url('/generar-lotonet') }}" class="nav-link">Generar Lotonet</a></li>
-                                    <li class="nav-item"><a href="{{ url('/ventas-por-usuario-lotobet') }}" class="nav-link">Lotobet Ventas por usuario</a></li>
-                                    <li class="nav-item"><a href="{{ url('/ventas-por-producto-lotobet') }}" class="nav-link">Lotobet Ventas por producto</a></li>
-                                    <li class="nav-item"><a href="{{ url('/ventas-por-usuario-lotonet') }}" class="nav-link">Lotonet Ventas por usuario</a></li>
-                                    <li class="nav-item"><a href="{{ url('/ventas-por-producto-lotonet') }}" class="nav-link">Lotonet Ventas por producto</a></li>
-                                    <li class="nav-item"><a href="{{ url('/mar-ventas') }}" class="nav-link">Mar Ventas</a></li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/generar-lotobet') }}" class="nav-link">
+                                            <span data-key="t-dashboards">Generar Lotobet</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/generar-lotonet') }}" class="nav-link">
+                                            <span data-key="t-dashboards">Generar Lotonet</span>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a href="#sidebarEmail" class="nav-link collapsed" data-bs-toggle="collapse"
+                                            role="button" aria-expanded="false" aria-controls="sidebarEmail"
+                                            data-key="t-email">
+                                            Lotobet
+                                        </a>
+                                        <div class="collapse menu-dropdown" id="sidebarEmail">
+                                            <ul class="nav nav-sm flex-column">
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/ventas-por-usuario-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Ventas por usuario </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/faltantes-lotobet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Faltantes </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/ventas-por-producto-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Ventas por producto
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/recargas-lotobet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Recargas </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/premios-lotobet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Premios </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-misma-empresa-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos Misma Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-aotra-empresa-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos A Otra Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-porotra-empresa-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos Por Otra Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/asistencias-lotobet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Asistencias
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="#sidebarInvoices" class="nav-link collapsed"
+                                            data-bs-toggle="collapse" role="button" aria-expanded="false"
+                                            aria-controls="sidebarInvoices" data-key="t-invoices">
+                                            Lotonet
+                                        </a>
+                                        <div class="collapse menu-dropdown" id="sidebarInvoices">
+                                            <ul class="nav nav-sm flex-column">
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/ventas-por-usuario-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Ventas por usuario </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/faltantes-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Faltantes </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/paquetico-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Paquetico </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/recargas-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Recargas </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/ventas-por-producto-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Ventas Por Producto
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/premios-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Premios </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-misma-empresa-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos Misma Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-aotra-empresa-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos A Otra Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-porotra-empresa-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos Por Otra Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/asistencias-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Asistencias
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="#sidebarMar" class="nav-link collapsed" data-bs-toggle="collapse"
+                                            role="button" aria-expanded="false" aria-controls="sidebarMar"
+                                            data-key="t-invoices">
+                                            Mar
+                                        </a>
+                                        <div class="collapse menu-dropdown" id="sidebarMar">
+                                            <ul class="nav nav-sm flex-column">
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/mar-ventas') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Ventas </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a href="{{ url('/ventas-flash-lotobet') }}" class="nav-link">
+                                            <span data-key="t-dashboards">Ventas Flash Lotobet</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item d-none">
+                                        <a href="{{ url('/ventas-flash-lotonet') }}" class="nav-link">
+                                            <span data-key="t-dashboards">Ventas Flash Lotonet</span>
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>
