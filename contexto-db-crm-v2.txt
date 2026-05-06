@@ -1,0 +1,913 @@
+================================================================================
+CONTEXTO DE BASE DE DATOS DEL CRM PARA RECONSTRUCCION V2
+Fecha: 2026-04-27
+Ruta del proyecto: D:\crm
+Base detectada: crm
+Documento companero de: prompt-reconstruccion-crm-v2.txt
+================================================================================
+
+PROPOSITO
+================================================================================
+
+Este documento resume la estructura real de la base de datos actual para crear
+una V2 completamente versionada por migraciones.
+
+Problema central:
+La base actual no nace completa desde migraciones. Una parte esta versionada en
+database/migrations y otra parte fue creada manualmente o importada desde dumps.
+La V2 debe convertir TODO el esquema real en migraciones Laravel ordenadas,
+revisables y reproducibles.
+
+Uso recomendado junto a los 3 TXT:
+1. prompt-reconstruccion-crm-v2.txt: vision, reglas y proceso.
+2. contexto-codigo-crm-v2.txt: mapa del codigo Laravel actual.
+3. contexto-db-crm-v2.txt: mapa de DB real, tablas legacy y migraciones faltantes.
+
+================================================================================
+REGLA PRINCIPAL PARA LA V2
+================================================================================
+
+La V2 debe poder levantarse desde cero con:
+
+composer install
+php artisan migrate --seed
+npm install / npm ci
+npm run build
+
+Eso significa:
+- Toda tabla debe tener migracion create_* o alter_*.
+- Toda vista debe tener migracion.
+- Todo stored procedure debe tener migracion.
+- Todo trigger debe tener migracion.
+- Todo indice importante debe tener migracion.
+- Todo catalogo base debe tener seeder/factory si aplica.
+
+No se debe depender de dumps SQL productivos para construir la estructura.
+
+================================================================================
+ESTADO DE MIGRACIONES ACTUALES
+================================================================================
+
+Migraciones detectadas:
+- 50 archivos en database/migrations.
+
+Estado por php artisan migrate:status:
+- La mayoria estan ejecutadas.
+- Pendientes detectadas:
+  - 2026_04_17_120000_add_indexes_for_venta_gerencial_queries
+  - 2026_04_20_000001_make_agencia_nullable_on_agencias_table
+
+Migraciones actuales cubren parcialmente:
+- users, cache, jobs
+- empleados
+- departamentos_crm
+- tareas
+- tarea_comentarios
+- permission tables de Spatie
+- cuentas_contables
+- detalle_cuentas
+- notifications
+- coordinador_operador
+- coordinador_operador_agencia
+- agencias parcialmente por alters
+- operador_ruta
+- operador_ruta_agencia
+- rutas
+- ruta_agencia
+- reporte_diario_rutas
+- auto_proceso_configs
+- bancos_operaciones
+- contabilidad_electricidad
+- procesos_departamento
+- tecnologia_solicitudes
+- consorcios
+- novedades_horario
+
+Tablas importantes que parecen venir de estructura manual/dumps o no estan
+completamente representadas como migraciones baseline:
+- ventas_producto_net
+- ventas_producto_bet
+- vt_usuarios_net
+- vt_usuarios_bet
+- premios_bet
+- premios_net
+- recargas_bet
+- recargas_net
+- asistencias_bet
+- asistencias_net
+- faltantes_bet
+- faltantes_net
+- pagos_misma_empresa_bet
+- pagos_misma_empresa_net
+- pagos_aotra_empresa_bet
+- pagos_aotra_empresa_net
+- pagos_porotra_empresa_bet
+- pagos_porotra_empresa_net
+- paquetico_net
+- mar_ventas
+- ventas_flash_bet
+- catalogo_juegos
+- plan_agencia
+- plan_agencias_distribucion
+- distribucion_incentivos
+- distribucion_porcentajes
+- porcentaje_administrativo
+- estacionalidad
+- niveles
+- incentivo_temporal
+- incentivo_temporal_c
+- incentivo_jobs
+- incentivo_resultados
+- pago_incentivos
+- pago_incentivos_admin
+- pago_incentivos_coordinador
+- solicitudes_empleo y tablas hijas, si no estan completas en migraciones
+
+Regla:
+Para la V2, cada una de esas tablas necesita decision explicita:
+- crear migracion nueva normalizada
+- mantener tabla legacy con migracion equivalente
+- reemplazar por tabla nueva + ETL
+- convertir a vista/materialized summary
+
+================================================================================
+TABLAS MAS GRANDES Y PRIORIDAD DE PERFORMANCE
+================================================================================
+
+Ordenadas por tamano aproximado:
+
+- ventas_producto_net | InnoDB | 63,289,635 filas | 4217 MB
+- vt_usuarios_net | InnoDB | 50,877,573 filas | 3988 MB
+- ventas_producto_bet | InnoDB | 16,935,834 filas | 1546 MB
+- vt_usuarios_bet | InnoDB | 13,236,094 filas | 1306 MB
+- premios_bet | InnoDB | 11,230,924 filas | 802 MB
+- premios_net | InnoDB | 9,725,064 filas | 604 MB
+- pagos_misma_empresa_net | MyISAM | 5,234,089 filas | 371 MB
+- recargas_net | InnoDB | 3,541,808 filas | 301 MB
+- paquetico_net | InnoDB | 2,753,689 filas | 280 MB
+- asistencias_net | InnoDB | 1,420,433 filas | 219 MB
+- pagos_misma_empresa_bet | InnoDB | 1,520,868 filas | 132 MB
+- recargas_bet | InnoDB | 643,328 filas | 59 MB
+- pagos_aotra_empresa_bet | InnoDB | 641,659 filas | 55 MB
+- pagos_porotra_empresa_net | MyISAM | 788,541 filas | 52 MB
+- pagos_porotra_empresa_bet | InnoDB | 544,189 filas | 44 MB
+- detalle_cuentas | MyISAM | 97,577 filas | 39 MB
+- pagos_aotra_empresa_net | MyISAM | 434,288 filas | 28 MB
+- asistencias_bet | InnoDB | 364,285 filas | 27 MB
+- efectividad_usuarios | InnoDB | 65,599 filas | 10 MB
+- empleados | MyISAM | 15,493 filas | 6 MB
+
+Regla para V2:
+No empezar el rebuild por estas tablas masivas. Primero hacer modulo piloto.
+Para estas tablas se requiere:
+- EXPLAIN de queries reales
+- indices compuestos
+- posible particionamiento por fecha
+- tablas resumen
+- ETL por chunks
+- validacion count/sum
+- plan de rollback
+
+================================================================================
+MOTORES DETECTADOS
+================================================================================
+
+Mezcla actual:
+- InnoDB en muchas tablas nuevas y varias historicas.
+- MyISAM en multiples tablas operativas y algunas grandes.
+- Vistas sin engine.
+
+Tablas MyISAM detectadas:
+- pagos_misma_empresa_net
+- pagos_porotra_empresa_net
+- detalle_cuentas
+- pagos_aotra_empresa_net
+- empleados
+- incentivo_temporal
+- ventas_flash_bet
+- distribucion_incentivos
+- plan_agencia
+- cuentas_contables
+- notifications
+- reporte_diario_rutas
+- permissions
+- roles
+- model_has_roles
+- tareas
+- procesos_departamento
+- consorcios
+- bancos_operaciones
+- tecnologia_solicitudes
+- tarea_comentarios
+- rutas
+- ruta_agencia
+- coordinador_operador_agencia
+- niveles
+- operador_ruta_agencia
+- model_has_permissions
+- contabilidad_electricidad
+- role_has_permissions
+- coordinador_operador
+- operador_ruta
+- distribucion_porcentajes
+- estacionalidad
+- departamentos_crm
+- contabilidad_electricidad_seguimiento_dia
+- coordinador
+- incentivo_temporal_c
+- porcentaje_administrativo
+- novedades_horario
+- incentivo_resultados
+- contabilidad_electricidad_averia_dia
+- incentivo_jobs
+- departamentos
+
+Riesgo:
+MyISAM no aplica foreign keys y no ofrece transacciones reales como InnoDB.
+
+Regla para V2:
+- Todas las tablas nuevas deben ser InnoDB.
+- Conversion de tablas actuales a InnoDB debe hacerse por grupos, en staging,
+  midiendo locks, tiempo y rollback.
+
+================================================================================
+TABLAS SIN PRIMARY KEY
+================================================================================
+
+Detectadas en information_schema:
+- departamentos
+- distribucion_incentivos
+- incentivo_temporal
+- tokens
+- ventas_producto_net
+
+Riesgo:
+- No hay identidad estable por fila.
+- Complica ETL idempotente.
+- Complica actualizaciones y deletes seguros.
+- Complica replicacion y herramientas online schema change.
+
+Regla para V2:
+- Toda tabla debe tener id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, salvo
+  pivots puras con PK compuesta justificada.
+- Si existe ID legacy, preservarlo como legacy_id o columna equivalente.
+
+================================================================================
+FOREIGN KEYS REALES DETECTADAS
+================================================================================
+
+Solo se detectaron estas relaciones reales a nivel motor:
+
+- solicitud_educacion.solicitud_id => solicitudes_empleo.solicitud_id
+- solicitud_empleos.solicitud_id => solicitudes_empleo.solicitud_id
+- solicitud_familiares.solicitud_id => solicitudes_empleo.solicitud_id
+- solicitud_referencias_laborales.solicitud_id => solicitudes_empleo.solicitud_id
+- solicitud_referencias_personales.solicitud_id => solicitudes_empleo.solicitud_id
+
+Riesgo:
+La mayoria de relaciones del sistema existen en el codigo o por convencion, no
+como constraints reales en la base.
+
+Regla para V2:
+- Toda relacion logica debe evaluarse para FK real.
+- Si no se crea FK por volumen/performance, documentar razon y compensacion.
+- Politicas permitidas:
+  - cascadeOnDelete
+  - nullOnDelete
+  - restrictOnDelete
+
+================================================================================
+VISTAS DETECTADAS
+================================================================================
+
+- empleados_no_regularizados
+- vw_usuarios_union
+- vw_ventas_por_producto
+
+Observacion critica:
+- vw_ventas_por_producto ha fallado con ONLY_FULL_GROUP_BY en auditorias previas.
+- La vista debe corregirse y versionarse.
+
+Regla para V2:
+- Cada vista debe tener su propia migracion:
+  - up(): CREATE OR REPLACE VIEW ...
+  - down(): DROP VIEW IF EXISTS ...
+- No apagar ONLY_FULL_GROUP_BY para ocultar errores.
+
+================================================================================
+DUMPS SQL EN REPOSITORIO
+================================================================================
+
+Archivos SQL detectados en database/:
+- CalculoIncentivo.sql
+- crm (1).sql
+- crm.sql
+- crm_limpia.sql
+- registro_empleados.sql
+- vt_usuario2.sql
+
+Riesgo:
+- Pueden contener datos sensibles.
+- Pueden contener estructura que no esta versionada en migraciones.
+- No deben ser la fuente final de verdad de la V2.
+
+Regla para V2:
+- Usar dumps solo como referencia temporal o fuente ETL.
+- Extraer estructura a migraciones.
+- Extraer catalogos a seeders.
+- Sacar dumps reales del repo o ignorarlos, previa aprobacion del usuario.
+
+================================================================================
+RESUMEN DE TABLAS Y COLUMNAS
+================================================================================
+
+Tabla | columnas aproximadas:
+
+- agencias | 16
+- asistencias_bet | 8
+- asistencias_net | 12
+- auto_proceso_configs | 12
+- bancos_operaciones | 4
+- cache | 3
+- cache_locks | 3
+- catalogo_juegos | 4
+- consorcios | 2
+- contabilidad_electricidad | 18
+- contabilidad_electricidad_averia_dia | 14
+- contabilidad_electricidad_seguimiento_dia | 10
+- coordinador | 5
+- coordinador_operador | 9
+- coordinador_operador_agencia | 5
+- cuentas_contables | 7
+- departamentos | 3
+- departamentos_crm | 7
+- detalle_cuentas | 25
+- distribucion_incentivos | 8
+- distribucion_porcentajes | 4
+- efectividad_usuarios | 14
+- empleados | 77
+- empleados_no_regularizados | 1
+- estacionalidad | 5
+- failed_jobs | 7
+- faltantes_bet | 8
+- faltantes_net | 9
+- incentivo_jobs | 9
+- incentivo_resultados | 16
+- incentivo_temporal | 12
+- incentivo_temporal_c | 3
+- job_batches | 10
+- jobs | 7
+- mar_ventas | 39
+- migrations | 3
+- model_has_permissions | 3
+- model_has_roles | 3
+- niveles | 8
+- notifications | 8
+- novedades_horario | 12
+- operador_ruta | 9
+- operador_ruta_agencia | 5
+- pago_incentivos | 10
+- pago_incentivos_admin | 11
+- pago_incentivos_coordinador | 7
+- pagos_aotra_empresa_bet | 10
+- pagos_aotra_empresa_net | 9
+- pagos_misma_empresa_bet | 9
+- pagos_misma_empresa_net | 9
+- pagos_porotra_empresa_bet | 9
+- pagos_porotra_empresa_net | 9
+- paquetico_net | 14
+- password_reset_tokens | 3
+- permissions | 5
+- plan_agencia | 3
+- plan_agencias_distribucion | 15
+- porcentaje_administrativo | 4
+- premios_bet | 7
+- premios_net | 7
+- procesos_departamento | 10
+- recargas_bet | 13
+- recargas_net | 12
+- reporte_diario_rutas | 17
+- role_has_permissions | 2
+- roles | 5
+- ruta_agencia | 5
+- rutas | 6
+- sessions | 6
+- solicitud_educacion | 7
+- solicitud_empleos | 12
+- solicitud_familiares | 8
+- solicitud_referencias_laborales | 6
+- solicitud_referencias_personales | 7
+- solicitudes_empleo | 65
+- tarea_comentarios | 7
+- tareas | 19
+- tecnologia_solicitudes | 17
+- tokens | 3
+- users | 10
+- ventas_flash_bet | 14
+- ventas_producto_bet | 10
+- ventas_producto_net | 7
+- vt_usuarios_bet | 9
+- vt_usuarios_net | 9
+- vw_usuarios_union | 8
+- vw_ventas_por_producto | 5
+
+================================================================================
+ESTRUCTURA DE TABLAS CRITICAS
+================================================================================
+
+agencias:
+- id int PK
+- agencia varchar(25)
+- terminal varchar(25)
+- horario_am varchar(35)
+- horario_pm varchar(35)
+- nombre_agencia varchar(55)
+- sistema varchar(55)
+- empresa varchar(60)
+- ciudad varchar(55)
+- ruta varchar(55)
+- operador varchar(55)
+- coordinador varchar(55)
+- estatus tinyint
+- aplica_incentivo tinyint
+- created_at, updated_at
+
+empleados:
+- id int PK
+- companyid int
+- empleadoid int
+- nombres, apellidos
+- posicion/idposicion
+- depto/iddepto
+- ciudad/idciudad
+- pais/idpais
+- cedula
+- salario, fechas, banco, turnos, cuentas, flags laborales
+- aplica_incentivo
+- porcentaje_incentivo
+- tipo_empleado_incentivo
+- 77 columnas en total
+
+Observacion:
+empleados es candidato fuerte a normalizacion por catalogos:
+- departamentos
+- posiciones
+- ciudades
+- paises
+- bancos
+- turnos
+- calendarios
+- tipos_documento
+- estados_civiles
+
+tareas:
+- id bigint unsigned PK
+- titulo
+- descripcion
+- adjunto_path, adjunto_nombre
+- departamento_id
+- user_id
+- asignado_id
+- tarea_padre_id
+- estado enum('pendiente','en_progreso','completada','cancelada')
+- prioridad enum('baja','media','alta','critica')
+- progreso
+- fecha_inicio
+- fecha_fin
+- fecha_completada
+- cierre_solicitado_at
+- cierre_solicitado_por
+- created_at, updated_at
+
+tecnologia_solicitudes:
+- id bigint unsigned PK
+- user_id
+- asignado_id
+- tipo
+- titulo
+- descripcion
+- prioridad
+- estado
+- progreso
+- detalle_solucion
+- cierre_solicitado_at
+- cierre_solicitado_por
+- asignado_at
+- resuelto_at
+- cerrado_por
+- created_at, updated_at
+
+ventas_producto_net:
+- venta_id int sin PK real, default 0
+- consorcio_id
+- agencia_id
+- producto_id
+- descripcion
+- monto
+- fecha
+- 63M+ filas
+
+ventas_producto_bet:
+- venta_id int PK auto_increment
+- consorcio_id
+- agencia_id
+- producto_id
+- descripcion
+- monto
+- fecha
+- comision
+- comision_supervisor
+- numero_sorteo
+- 16M+ filas
+
+vt_usuarios_net / vt_usuarios_bet:
+- vt_usuario_id int PK auto_increment
+- consorcio_id
+- agencia_id
+- cedula
+- tipo
+- producto_id
+- descripcion
+- monto
+- fecha
+
+premios_bet / premios_net:
+- premio_id int PK auto_increment
+- consorcio_id
+- producto_id
+- monto
+- agencia_id
+- descripcion
+- fecha
+
+recargas_bet:
+- recarga_id int PK auto_increment
+- consorcio_id
+- producto_id
+- monto
+- agencia_id
+- descripcion
+- distribuidora_id
+- distribuidora_nombre
+- fecha
+- proveedor_id
+- proveedor_nombre
+- comision
+- comision_supervisor
+
+recargas_net:
+- recarga_id int PK auto_increment
+- fecha
+- consorcio_id
+- producto_id
+- descripcion
+- agencia_id
+- identificacion
+- monto
+- proveedor_nombre
+- proveedor_id
+- distribuidora_id
+- distribuidora_nombre
+
+pagos_*:
+- Existen tablas por tipo y sistema:
+  - pagos_misma_empresa_bet
+  - pagos_misma_empresa_net
+  - pagos_aotra_empresa_bet
+  - pagos_aotra_empresa_net
+  - pagos_porotra_empresa_bet
+  - pagos_porotra_empresa_net
+- Algunas son InnoDB y otras MyISAM.
+- Requieren decision de unificacion o mantener separadas con esquema comun.
+
+catalogo_juegos:
+- id int PK
+- producto_id
+- tipo
+- descripcion
+
+auto_proceso_configs:
+- id bigint unsigned PK
+- sistema unique
+- enabled
+- hora
+- correo
+- process_date
+- process_day_offset
+- last_run_at
+- last_status
+- last_summary json
+- created_at, updated_at
+
+reporte_diario_rutas:
+- id bigint unsigned PK
+- fecha
+- serial_ruta
+- ruta_id
+- operador_ruta_id
+- banco_nombre
+- entregado
+- procesado
+- gasto
+- diferencia
+- correo_destino
+- observacion
+- comprobantes
+- enviado_operador_at
+- created_at, updated_at
+
+================================================================================
+DECISIONES DE DISENO DB PARA LA V2
+================================================================================
+
+1. Migraciones baseline:
+Crear migraciones desde cero para todo el esquema V2. No copiar dumps como fuente
+final.
+
+2. Naming:
+Normalizar snake_case minuscula. Preservar columnas legacy solo si son necesarias
+para ETL o compatibilidad temporal.
+
+3. PK:
+Todas las tablas con id bigint unsigned auto_increment, salvo pivots justificadas.
+
+4. FKs:
+Agregar FKs reales en tablas operativas. En historicas masivas, evaluar caso por
+caso por performance y por naturaleza inmutable.
+
+5. Bet/Net:
+No unificar automaticamente. Evaluar:
+- columnas
+- volumen
+- queries
+- reportes
+- diferencias de negocio
+- costo de indices y particiones
+
+6. Historicas:
+Para ventas/premios/recargas/pagos/asistencias:
+- evaluar particionamiento por fecha
+- indices compuestos por query real
+- tablas resumen diarias/mensuales
+- ETL por chunks
+
+7. BI:
+Usar modelo operacional normalizado + tablas resumen/materializadas para reportes
+pesados. No forzar 3FN en cada consulta historica si rompe performance.
+
+8. Vistas/SP/triggers:
+Versionar cada uno. Si un stored procedure es logica de negocio mantenible en PHP,
+considerar moverlo a Service + Job.
+
+================================================================================
+ORDEN RECOMENDADO DE MIGRACIONES V2
+================================================================================
+
+Grupo 1 - Infra Laravel:
+- users
+- password_reset_tokens
+- sessions
+- cache
+- jobs
+- failed_jobs
+- notifications
+
+Grupo 2 - Seguridad/RBAC:
+- permissions
+- roles
+- model_has_roles
+- model_has_permissions
+- role_has_permissions
+- audit/activity logs si se aprueba paquete
+
+Grupo 3 - Catalogos:
+- empresas/consorcios
+- sistemas
+- departamentos
+- posiciones
+- ciudades/provincias/paises
+- bancos
+- tipos_documento
+- estados_civiles
+- catalogo_juegos normalizado
+- tipos_pago
+- tipos_solicitud
+
+Grupo 4 - Core operativo:
+- agencias
+- empleados
+- rutas
+- operadores/coordinadores
+- pivots de asignacion
+
+Grupo 5 - Modulos piloto:
+- tareas
+- tarea_comentarios
+- tecnologia_solicitudes
+
+Grupo 6 - Operaciones:
+- asistencia
+- novedades_horario
+- reporte_diario_rutas
+- contabilidad_electricidad
+- procesos_departamento
+
+Grupo 7 - Historicas masivas:
+- ventas_usuario
+- ventas_producto
+- premios
+- recargas
+- pagos
+- faltantes
+- paquetico
+- ventas_flash
+- mar_ventas
+
+Grupo 8 - Incentivos/BI:
+- incentivo_jobs
+- incentivo_resultados
+- plan_agencias
+- distribuciones
+- efectividad_usuarios
+- tablas resumen BI
+
+Grupo 9 - Vistas/SP/triggers:
+- vw_usuarios_union o reemplazo
+- vw_ventas_por_producto corregida o reemplazo
+- CalculoIncentivo o reemplazo en Service/Job
+
+================================================================================
+ETL RECOMENDADO
+================================================================================
+
+Tablas de control:
+- etl_runs
+- etl_run_items
+- etl_conflictos
+- legacy_id_maps
+
+Cada comando ETL debe:
+- leer de DB legacy por chunks
+- transformar nombres/tipos/catalogos
+- hacer upsert idempotente
+- registrar errores por fila sin tumbar todo el proceso
+- validar conteos
+- validar sumas para columnas de monto
+- poder reanudarse
+
+Validaciones minimas por tabla historica:
+- COUNT(*)
+- SUM(monto)
+- MIN(fecha)
+- MAX(fecha)
+- conteo por sistema
+- conteo por mes
+- conteo de nulos en campos clave
+
+No ejecutar ETL destructivo sin aprobacion.
+
+================================================================================
+PREGUNTAS ABIERTAS PARA EL USUARIO
+================================================================================
+
+Antes de reconstruir DB completa, confirmar:
+
+1. MySQL o MariaDB final?
+2. Version exacta del servidor productivo?
+3. Se puede crear una DB nueva crm_v2 en paralelo?
+4. Hay servidor staging con copia real?
+5. Cuanto downtime es aceptable?
+6. Hay reportes externos conectados directo a tablas actuales?
+7. Que tablas son obligatorias historicamente y por cuantos anos?
+8. Los dumps SQL pueden salir del repo?
+9. Lotobet y Lotonet tienen reglas identicas o solo parecidas?
+10. CalculoIncentivo debe quedar como stored procedure o migrar a PHP?
+
+================================================================================
+COMANDOS USADOS PARA ESTE INVENTARIO
+================================================================================
+
+- php artisan migrate:status
+- consultas a information_schema.TABLES
+- consultas a information_schema.COLUMNS
+- consultas a information_schema.KEY_COLUMN_USAGE
+- consulta de tablas sin PRIMARY KEY
+- consulta de vistas
+- Get-ChildItem database -Filter *.sql
+
+================================================================================
+ANEXO — CAMBIOS DE BASE DE DATOS DESDE 2026-04-27 (al 2026-05-04)
+================================================================================
+
+NUEVAS MIGRACIONES INCORPORADAS
+- 2026_04_29_170530_create_centros_de_costo_table.php
+  - Crea tabla centros_de_costo (InnoDB, utf8mb4) idempotente:
+    detecta si la tabla existe y solo asegura indices.
+  - Indices definidos:
+    - PRIMARY KEY (id)
+    - UNIQUE centros_de_costo_id_centro_costo_unique (id_centro_costo)
+    - INDEX  centros_de_costo_id_grupo_index (id_grupo)
+    - INDEX  centros_de_costo_inactivo_descripcion_index
+             (inactivo, descripcion(191))
+- 2026_04_29_180000_add_ocultar_to_centros_de_costo_table.php
+  - Agrega columna ocultar (boolean) a centros_de_costo.
+- 2026_05_01_100000_create_entrevistas_online_table.php
+  - Crea tabla entrevistas_online (InnoDB, utf8mb4) con timestamps,
+    indices fecha_llamada y entrevistado_por.
+
+NUEVA TABLA: centros_de_costo
+Columnas:
+- id                          BIGINT UNSIGNED PK AUTO_INCREMENT
+- id_centro_costo             INT UNSIGNED UNIQUE
+- company_id                  VARCHAR(150) NULL
+- descripcion                 VARCHAR(255) NOT NULL
+- cuenta                      VARCHAR(100) NULL
+- inactivo                    TINYINT(1) DEFAULT 0
+- id_grupo                    VARCHAR(150) NULL  (INDEX)
+- id_sub_grupo                VARCHAR(150) NULL
+- id_division                 VARCHAR(150) NULL
+- id_sociedad                 VARCHAR(150) NULL
+- id_viejo                    VARCHAR(150) NULL
+- id_centro_costo_resumir_en  VARCHAR(150) NULL
+- com_recarga                 TINYINT(1) DEFAULT 0
+- gasto_vta_tradicional       TINYINT(1) DEFAULT 0
+- varios_locales              TINYINT(1) DEFAULT 0
+- aplica_para_ponderar        TINYINT(1) DEFAULT 0
+- valor_ponderar              DECIMAL(14,4) DEFAULT 0
+- creado_por                  VARCHAR(100) NULL
+- fecha_grabado               DATETIME NULL
+- modificado_por              VARCHAR(100) NULL
+- fecha_modificado            DATETIME NULL
+- atributos                   JSON NULL
+- ocultar                     TINYINT(1) (agregada por migracion posterior)
+- created_at, updated_at
+
+Origen y politica:
+- Es una proyeccion de un ERP contable externo (sync via /api-centros-costo/sync).
+- En la V2: tratar como read-only desde la UI (solo flag ocultar editable);
+  la sincronizacion debe ser un Job + Service externo, no un CRUD.
+
+NUEVA TABLA: entrevistas_online
+Columnas:
+- id                       BIGINT UNSIGNED PK AUTO_INCREMENT
+- nombre_completo          VARCHAR(255) NOT NULL
+- edad                     TINYINT UNSIGNED NULL
+- telefono                 VARCHAR(50)  NULL
+- direccion                VARCHAR(500) NULL
+- estado_civil             VARCHAR(50)  NULL
+- hijos                    TINYINT UNSIGNED NULL
+- estudia_actualmente      VARCHAR(255) NULL
+- licencia_vehiculo        VARCHAR(255) NULL
+- laborando_actualmente    VARCHAR(255) NULL
+- ultimo_empleo_posicion   VARCHAR(255) NULL
+- tiempo                   VARCHAR(100) NULL
+- salario                  DECIMAL(12,2) NULL
+- fecha_salida_motivo      VARCHAR(500) NULL
+- comentarios              TEXT NULL
+- fecha_llamada            DATE NULL                 (INDEX)
+- entrevistado_por         VARCHAR(150) NULL         (INDEX)
+- vacante_aplica           VARCHAR(255) NULL
+- experiencia_demostrable  TEXT NULL
+- conoce_del_area          TEXT NULL
+- fortalezas               TEXT NULL
+- debilidades              TEXT NULL
+- manejo_excel             TINYINT UNSIGNED NULL
+- user_id                  BIGINT UNSIGNED NULL
+- created_at, updated_at
+
+Observacion para la V2:
+- estado_civil deberia migrar a estado_civil_id (FK al catalogo).
+- entrevistado_por deberia migrar a entrevistado_por_id (FK a users o
+  empleados).
+- vacante_aplica deberia migrar a vacante_id (FK a tabla de vacantes).
+- user_id deberia tener FK ON DELETE SET NULL contra users.
+- manejo_excel se usa como nivel 0..N: documentar el rango y considerar
+  migrar a un ENUM o referencia a una tabla niveles_excel.
+
+ACTUALIZACION DEL RESUMEN DE TABLAS Y COLUMNAS
+- centros_de_costo | 24 (incluye ocultar y timestamps)
+- entrevistas_online | 26
+
+NOTAS PARA EL ORDEN DE MIGRACIONES V2
+- centros_de_costo cae en Grupo 3 (catalogos) o Grupo 4 (core operativo)
+  segun decision: si se trata como catalogo de contabilidad, va en G3;
+  si se trata como entidad operativa con sync periodico, va en G4 y se
+  acompana de una migracion para etl_runs.
+- entrevistas_online cae en Grupo 5/6 (modulo RRHH). Debe coexistir con
+  solicitudes_empleo y catalogos de RRHH (estados_civiles, vacantes,
+  niveles_excel).
+
+PREGUNTAS ABIERTAS NUEVAS PARA EL USUARIO
+1. centros_de_costo: cuales son las llaves validas de la columna JSON
+   atributos? Hay schema documentado del ERP origen?
+2. entrevistas_online: existira una tabla de vacantes o se mantiene
+   vacante_aplica como string libre?
+3. La columna manejo_excel es 0..3, 0..5 o 0..10? Necesitamos saberlo
+   para validar en FormRequest.
+4. Las entrevistas requieren auditoria con activitylog desde el dia 1?
+5. centro de costo: la sincronizacion via /api-centros-costo/sync es
+   incremental o full reload? Que campo usa como cursor?
+
+================================================================================
+FIN DEL CONTEXTO DE BASE DE DATOS
+================================================================================

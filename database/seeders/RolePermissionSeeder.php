@@ -42,6 +42,12 @@ class RolePermissionSeeder extends Seeder
             'rh' => ['usuarios.view', 'usuarios.list'],
             'comercial' => ['usuarios.view', 'usuarios.list'],
             'monitoreo' => ['usuarios.view', 'usuarios.list'],
+            'servicios_generales' => [
+                'servicios_generales.view',
+                'servicios_generales.create',
+                'servicios_generales.manage',
+                'servicios_generales.close',
+            ],
         ];
 
         foreach ($roles as $roleName => $rolePermissions) {

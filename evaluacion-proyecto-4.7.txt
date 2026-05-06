@@ -1,0 +1,551 @@
+================================================================================
+EVALUACIÓN INTEGRAL DEL PROYECTO CRM
+Fecha: 2026-04-20
+Stack: Laravel 12 + PHP 8.2 + Livewire 3.6 + Tailwind 4 + Vite 7 + MySQL/MariaDB
+================================================================================
+
+
+================================================================================
+PARTE 1 — EVALUACIÓN DE CÓDIGO Y ARQUITECTURA
+================================================================================
+
+
+--------------------------------------------------------------------------------
+A) LO QUE ESTÁ BIEN HECHO
+--------------------------------------------------------------------------------
+
+1. STACK MODERNO Y ACTUALIZADO
+   - Laravel 12, PHP ^8.2, Livewire 3.6, Tailwind 4, Vite 7.
+   - composer.json y package.json al día. No hay deuda de versiones mayores.
+   - Por qué importa: tienes acceso a todas las APIs nuevas del framework
+     (Form Requests, Eloquent casts, Schema::hasTable, etc.).
+
+2. ÍNDICES DEDICADOS PARA QUERIES CALIENTES
+   - Migraciones específicas:
+     * 2026_04_12_210000_add_indexes_for_inicio_dashboard_queries.php
+     * 2026_04_17_120000_add_indexes_for_venta_gerencial_queries.php
+   - Usan patrón defensivo addIndexIfMissing() / dropIndexIfExists() —
+     idempotente, seguro de re-ejecutar, maneja error 1061 (índice duplicado).
+   - Por qué importa: optimización proactiva basada en uso real, no prematura.
+
+3. SERVICIO BIEN ESTRUCTURADO COMO REFERENCIA
+   - app/Services/AutoProcesoService.php es el único servicio "de verdad" y
+     está bien diseñado: maneja timeouts, itera módulos, reporta errores.
+   - Por qué importa: ya tienes un patrón a replicar para limpiar los
+     controladores monolíticos.
+
+4. AUTENTICACIÓN CORRECTA
+   - AuthController hace session regeneration en login/logout.
+   - Tracking de last_login_at / current_login_at vía migración dedicada.
+   - Por qué importa: previene session fixation (vulnerabilidad común).
+
+5. SISTEMA DE ROLES Y PERMISOS PROFESIONAL
+   - Spatie laravel-permission instalado y seedeado (RolePermissionSeeder.php).
+   - Roles: superadmin, admin, contabilidad, rh, comercial, monitoreo.
+   - Por qué importa: te ahorra escribir tu propia ACL frágil.
+
+6. INFRAESTRUCTURA DOCKER MULTI-SERVICIO
+   - app, web (nginx), db, redis, worker, scheduler — separación correcta
+     de responsabilidades.
+   - Por qué importa: queues, scheduler y caché funcionan en producción
+     sin sorpresas.
+
+7. NOTIFICACIONES PERSISTENTES
+   - Migración create_notifications_table presente, integrado con Laravel
+     Notifications nativo.
+   - Por qué importa: feedback al usuario sin reinventar el patrón.
+
+8. VALIDACIÓN ROBUSTA EN PUNTOS CLAVE
+   - AgenciaController líneas 46-71: usa Rule::in(), closures de unicidad,
+     regex de horarios — validación a nivel de Form Request inline.
+   - Por qué importa: bloquea datos basura antes de tocar la DB.
+
+9. MODELO Tarea CON SCOPES Y ACCESSORS
+   - app/Models/Tarea.php tiene scopeAtrasadas, scopeEnProgreso, accessors
+     getAtrasadaAttribute, getDiasAtrasoAttribute, getColorPrioridadAttribute.
+   - Por qué importa: encapsula lógica de dominio en el modelo correcto.
+     Es el patrón que el resto de modelos debe seguir.
+
+
+--------------------------------------------------------------------------------
+B) LO QUE NECESITA MEJORAR (priorizado)
+--------------------------------------------------------------------------------
+
+1. [CRÍTICO — SEGURIDAD] ~42 RUTAS GET EJECUTAN MUTACIONES (save/delete)
+   - routes/web.php: Route::get('/save-ventas-usuarios-lotobet', ...),
+     Route::get('/delete-faltantes-lotobet', ...), etc.
+   - Riesgo: cualquier link, prefetch del navegador, crawler, o imagen
+     <img src="..."> dispara la mutación. CSRF no aplica en GET.
+     Un atacante puede provocarlo con un simple <img> en otro sitio.
+   - Acción: convertir TODOS los endpoints de mutación a POST/PUT/DELETE
+     con @csrf en los formularios.
+
+2. [CRÍTICO — CALIDAD] CERO COBERTURA DE TESTS
+   - tests/Feature/ExampleTest.php y tests/Unit/ExampleTest.php son los
+     ejemplos por defecto de Laravel. No hay tests propios.
+   - Los últimos 5 commits son "ajustes 16-04", "ajustes 17-04", "ajustes
+     v2 20-04", "ajustes v3 20-04" — patrón clásico de debug manual sin red.
+   - Riesgo: cada cambio puede romper algo en silencio. Refactorizar es
+     imposible sin miedo.
+   - Acción: empezar con feature tests del flujo de Incentivos (que llama
+     stored procedures) y de Auth.
+
+3. [ALTO] CONTROLADORES MONOLÍTICOS (17,415 LÍNEAS TOTALES)
+   - AgenciaController.php: 1,754 líneas
+   - IncentivosController.php: 1,397 líneas
+   - ReporteController.php: 876 líneas
+   - TareaController.php: 656 líneas
+   - InicioController.php: 606 líneas
+   - Riesgo: imposibles de testear, leer y mantener. Lógica de negocio
+     mezclada con HTTP, validación y persistencia.
+   - Acción: extraer Services, Actions y Form Requests. AutoProcesoService
+     ya muestra el patrón correcto.
+
+4. [ALTO] LIVEWIRE INSTALADO PERO NO USADO
+   - composer.json declara livewire/livewire ^3.6 pero app/Livewire/ está vacía.
+   - Riesgo: dependencia muerta + oportunidad perdida. Las 1,690 líneas de
+     agencias/index.blade.php podrían reducirse a 200 con componentes
+     Livewire.
+   - Acción: o usarlo, o desinstalarlo.
+
+5. [ALTO] LÍMITES DE PHP HARDCODEADOS EN CONTROLADOR
+   - IncentivosController.php líneas 35-36:
+     ini_set('max_execution_time', 300); ini_set('memory_limit', '512M');
+   - Síntoma de un proceso pesado en el ciclo HTTP que debería ser una Job
+     en cola (queue).
+   - Riesgo: el usuario espera 5 min con la pestaña abierta; si el navegador
+     se cierra, no hay reintento ni notificación.
+   - Acción: mover el cálculo a un Job, notificar por evento/notification
+     cuando termine.
+
+6. [ALTO] CONSTANTES MÁGICAS EN EL CÓDIGO
+   - whereIn('producto_id', [538, 539]) — repetido en varios controladores.
+   - Riesgo: si cambia el catálogo, hay que cazar números por todo el repo.
+   - Acción: enum PHP 8.2 (enum ProductoId: int) o tabla de configuración.
+
+7. [ALTO] RUTAS DUPLICADAS LOTOBET / LOTONET
+   - Patrón save-ventas-usuarios-lotobet vs save-ventas-usuarios-lotonet
+     repetido para casi cada operación.
+   - Riesgo: arreglar un bug = arreglarlo dos veces (y olvidar la mitad).
+   - Acción: un controlador parametrizado por sistema, o un trait
+     compartido.
+
+8. [MEDIO] VISTAS GIGANTES SIN COMPONENTIZAR
+   - resources/views/agencias/index.blade.php: 1,690 líneas (HTML+JS mezclados)
+   - resources/views/tareas/index.blade.php: 1,009 líneas
+   - resources/views/agencias/incumplimientos.blade.php: 786 líneas
+   - resources/views/components/ tiene SOLO 3 componentes.
+   - Riesgo: imposible reutilizar, JS escapa al scope global, difícil de
+     auditar accesibilidad.
+   - Acción: extraer componentes Blade (<x-...>) o pasar a Livewire.
+
+9. [MEDIO] api.php PRÁCTICAMENTE VACÍO
+   - Solo 4 líneas. Las "APIs" viven en web.php sin throttling, sin
+     autenticación API token.
+   - Riesgo: si mañana hay app móvil o integración, hay que mover todo.
+
+10. [MEDIO] MODELOS ANÉMICOS
+    - Agencia.php tiene SOLO $table, $fillable, $casts y una relación.
+    - Sin scopes (scopeActivas, scopeConIncentivo), sin accessors, sin
+      lógica de dominio.
+    - Riesgo: la lógica termina en controladores (ver punto 3). Tarea.php
+      es el ejemplo de cómo deben verse.
+
+11. [MEDIO] ARCHIVOS BASURA EN LA RAÍZ DEL PROYECTO
+    - tmp_check_period.php, tmp_compare_marzo.php,
+      tmp_test_detect_controller.php, tmp_test_endpoint_detect.php,
+      tmp_valida_producto_id.php, database_inventario.txt,
+      diagnostico_dashboard_inicio_vps.txt, .txt
+    - Riesgo: confunden a nuevos devs, podrían contener queries con datos
+      sensibles. Si son desplegados, son endpoints ejecutables.
+    - Acción: borrar o mover a /storage/app/scratch/ y agregar al .gitignore.
+
+12. [MEDIO] ARCHIVO CON NAMING INCORRECTO
+    - app/Http/Controllers/vtproductocontrollernet.php (todo minúsculas).
+    - PSR-4 espera VtProductoControllerNet.php.
+    - Riesgo: en Linux es case-sensitive — puede romper el autoload.
+
+13. [BAJO] SIN MIDDLEWARE PROPIO
+    - app/Http/Middleware/ solo tiene TrustProxies.
+    - Para un CRM con módulos por rol, faltan middlewares como
+      EnsureUserHasModule, AuditAccess, etc.
+
+14. [BAJO] FALTA DE GROUPS CON PREFIX/NAME EN ROUTES
+    - routes/web.php es plano. Cada ruta repite "lotobet/" o "lotonet/".
+    - Acción: Route::prefix('lotobet')->name('lotobet.')->group(...).
+
+15. [BAJO] COMMITS POCO INFORMATIVOS
+    - "ajustes v3 20-04-2026", "cambios 17-04-2026". No describen el QUÉ ni
+      el PORQUÉ.
+    - Riesgo: git blame no ayuda a entender por qué se cambió algo.
+
+
+================================================================================
+PARTE 2 — EVALUACIÓN DE BASE DE DATOS
+================================================================================
+
+
+--------------------------------------------------------------------------------
+A) LO QUE ESTÁ BIEN HECHO (BD)
+--------------------------------------------------------------------------------
+
+1. ESTRATEGIA DE ÍNDICES PROACTIVA
+   - Migraciones dedicadas para índices con verificación previa de
+     existencia (consulta information_schema.statistics).
+   - Composite indexes pensados (fecha+producto, fecha+agencia,
+     estatus+terminal, departamento+estado).
+   - Por qué importa: previene downtime al re-ejecutar migraciones y
+     ataca los hot paths de los dashboards.
+
+2. FOREIGN KEYS CON POLÍTICAS EXPLÍCITAS
+   - cascadeOnDelete, nullOnDelete, restrictOnDelete usados según semántica.
+   - Ej: tareas usa cascadeOnDelete para departamento (si se borra el
+     depto, se va la tarea) y nullOnDelete para asignado_id (la tarea
+     queda huérfana de asignado pero no se pierde).
+   - Por qué importa: garantiza integridad referencial a nivel motor, no
+     solo en código.
+
+3. ENUMS A NIVEL DE BASE DE DATOS
+   - tareas.estado y tareas.prioridad declarados como ENUM en MySQL.
+   - Por qué importa: imposible insertar valores fuera del catálogo, ni
+     siquiera con un INSERT manual.
+
+4. PIVOT TABLES BIEN MODELADAS
+   - ruta_agencia con UNIQUE (ruta_id, agencia_id) — previene duplicados.
+   - coordinador_operador_agencia con timestamps.
+
+5. MIGRACIÓN COMPATIBLE CROSS-ENTORNO
+   - 2026_03_25_110100_create_ruta_agencia_table.php detecta si agencias.id
+     es UNSIGNED para crear el FK con el tipo correcto (defensivo ante
+     bases de datos legacy con tipos mixtos).
+
+6. UNIQUE CONSTRAINTS DONDE IMPORTA
+   - empleados.empleadoid UNIQUE, empleados.cedula UNIQUE,
+     auto_proceso_configs.sistema UNIQUE.
+   - Migración add_unique_company_empleado refuerza unicidad compuesta.
+
+7. INTEGRACIÓN CORRECTA CON SPATIE PERMISSIONS
+   - Tablas estándar de spatie (create_permission_tables) sin
+     modificaciones — fácil de actualizar.
+
+8. CASTS APROPIADOS EN MODELOS CLAVE
+   - Tarea.php castea fechas a date/datetime, progreso a integer.
+   - AutoProcesoConfig castea last_summary a array (JSON nativo de Laravel).
+
+
+--------------------------------------------------------------------------------
+B) LO QUE NECESITA MEJORAR (BD, priorizado)
+--------------------------------------------------------------------------------
+
+1. [CRÍTICO] STORED PROCEDURES FUERA DE VERSIONADO
+   - IncentivosController llama DB::select('CALL CalculoIncentivo(?,?,?)', ...)
+     pero NO existe una migración que cree o modifique ese SP.
+   - Riesgo: si alguien edita el SP en producción, el cambio no está en
+     git. Si pierdes la DB, pierdes el SP. Bloquea migrate:fresh.
+   - Acción: crear migración con DB::unprepared('CREATE PROCEDURE ...')
+     y down() con DROP PROCEDURE. Versionar TODOS los SP/triggers/views.
+
+2. [CRÍTICO] TABLAS LEGACY SIN MIGRACIÓN create_*
+   - VT_usuarios_Bet, VT_usuarios_Net, premios_bet, premios_net, agencias,
+     mar_ventas, tokens, faltantes_bet, faltantes_net, recargas, pagos_*,
+     catalogo_juegos NO tienen migración de creación. Solo aparecen en
+     migraciones add_indexes_* o ALTER.
+   - Riesgo: imposible levantar entornos limpios con php artisan migrate.
+     Onboarding de devs roto. Tests con :memory: imposibles.
+   - Acción: ejecutar `php artisan schema:dump` o crear migraciones
+     create_* baseline para cada tabla legacy.
+
+3. [ALTO] INCONSISTENCIA EN CONFIG DE BD
+   - .env.example tiene DB_CONNECTION=sqlite por defecto, pero el proyecto
+     usa MySQL stored procedures, columnas decimal, etc.
+   - Riesgo: nuevo dev clona, copia .env.example, ejecuta `migrate` y
+     todo "funciona" en SQLite hasta que llama a Incentivos y revienta.
+   - Acción: cambiar default a mysql y documentar variables requeridas.
+
+4. [ALTO] NAMING CONVENTIONS INCONSISTENTES
+   - Tablas en español + inglés mezclados.
+   - Mayúsculas/minúsculas mezcladas: VT_usuarios_Bet (PascalCase+snake),
+     mar_ventas (snake), tareas (snake), MAR ventas con columnas en
+     PascalCase (VentaID, GruNombre, RifDescuento).
+   - Riesgo: queries case-sensitive en Linux fallan si el dev escribe el
+     nombre con otra capitalización.
+   - Acción: estandarizar a snake_case minúsculas (puede requerir
+     RENAME TABLE en migración).
+
+5. [ALTO] DESINCRONIZACIÓN MODEL ↔ MIGRACIÓN
+   - app/Models/Empleado.php tiene fillable con campos como
+     idsucursalturno, moduloturno, idturno, nocalcularsalario,
+     porcientocomision, cuentanav, idcalendario, preaviso, cesantia,
+     vacaciones, navidad, idplaza, doctor — pero la migración
+     create_empleados_table NO los declara.
+   - Empleado.php tiene public $timestamps = false; pero la migración
+     SÍ tiene $table->timestamps().
+   - Riesgo: schema drift. Lo que ves en código no es lo que hay en la DB.
+   - Acción: regenerar la migración acorde al esquema real, o eliminar
+     campos del fillable que no existen.
+
+6. [ALTO] MODELOS SIN RELACIONES DEFINIDAS
+   - VtUsuarioBet, VtUsuarioNet, MarVentas, FaltantesBet, FaltantesNet,
+     Premio, PremioNet, Recarga, Pago* — todos solo tienen $table y
+     $fillable. No hay belongsTo Agencia, no hay belongsTo Empleado.
+   - Riesgo: pierdes Eloquent eager loading (with), terminas con N+1
+     queries y joins manuales en DB::raw.
+   - Acción: añadir las relaciones obvias (agencia(), empleado()).
+
+7. [ALTO] EMPLEADOS NO ESTÁ NORMALIZADA (40+ COLUMNAS PLANAS)
+   - posicion + idposicion, depto + iddepto, ciudad + idciudad,
+     pais + idpais, banco + idbanco — duplicación id+nombre clásica
+     que viola 3FN.
+   - Riesgo: si cambia el nombre de un departamento, hay que actualizar
+     N filas. Puedes tener "Contabilidad" y "CONTABILIDAD" coexistiendo.
+   - Acción: tablas catálogo (departamentos, posiciones, ciudades) con FK.
+
+8. [MEDIO] CERO SOFT DELETES EN TODA LA APP
+   - Ningún modelo usa SoftDeletes.
+   - Riesgo: borrado accidental = pérdida irreversible. En un CRM con
+     historial de incentivos/ventas/tareas, esto es peligroso.
+   - Acción: añadir deleted_at al menos a Agencia, Tarea, Empleado,
+     CoordinadorOperador.
+
+9. [MEDIO] FACTORIES INEXISTENTES (excepto User)
+   - database/factories/ solo tiene UserFactory.php.
+   - Riesgo: imposible escribir feature tests con datos realistas. Esto
+     refuerza el problema 2 de la Parte 1 (cero cobertura).
+   - Acción: generar factories para Agencia, Tarea, Empleado, etc.
+
+10. [MEDIO] SEEDERS INCOMPLETOS
+    - Solo DatabaseSeeder + RolePermissionSeeder + TareasSeeder.
+    - No hay seeders para departamentos, agencias, productos, catalogos.
+    - Riesgo: levantar un entorno de desarrollo requiere conocer la BD
+      legacy o pedir un dump.
+
+11. [MEDIO] PASSWORD HARDCODEADA EN SEEDER
+    - DatabaseSeeder.php línea 25:
+      'password' => Hash::make('password123'),
+    - Riesgo: si alguien ejecuta el seeder en producción, queda un
+      admin@grupojoselito.com con password 'password123'.
+    - Acción: leer de env('SEED_ADMIN_PASSWORD') y forzar cambio en
+      primer login.
+
+12. [MEDIO] PIVOT TABLES SIN MODELO PIVOT CUSTOM
+    - ruta_agencia, coordinador_operador_agencia se manejan implícito.
+    - Riesgo: pierdes eventos (creating, updating) sobre la pivot.
+      Si añades campos a la pivot, no los puedes usar fácil.
+
+13. [MEDIO] MODELOS CON timestamps=false PERO SIN AUDITORÍA
+    - Empleado, MarVentas, FaltantesBet, VtUsuarioBet, Token: sin
+      created_at/updated_at.
+    - Riesgo: imposible saber cuándo se cargó/modificó un registro.
+      Para BI, tu propio módulo de Reportes BI lo necesita.
+
+14. [MEDIO] VALIDACIÓN SOLO EN CÓDIGO PHP, NO CHECK CONSTRAINTS
+    - tareas.progreso (0-100) solo se valida en Form Request / código.
+    - Riesgo: un INSERT directo desde MySQL Workbench mete progreso=999.
+    - Acción: CHECK (progreso BETWEEN 0 AND 100) en migración.
+
+15. [MEDIO] CASTS FALTANTES EN MODELOS NUMÉRICOS
+    - MarVentas, FaltantesBet, Premio: campos decimal/integer sin
+      $casts.
+    - Riesgo: en PHP llegan como strings ("12.50"), comparar con ===
+      falla, sumas con + concatenan en vez de sumar.
+
+16. [BAJO] MEZCLA DE TIPOS DE PRIMARY KEY
+    - id (bigInteger autoincrement) en algunas, primaryKey custom en
+      otras (vt_usuario_id, faltante_id, VentaID, productoid).
+    - Por sí solo no es bug, pero complica los traits genéricos.
+
+17. [BAJO] AUSENCIA DE DICCIONARIO DE DATOS / DIAGRAMA ER
+    - No hay docs/erd.png ni un dbml/dbdiagram en el repo.
+    - Riesgo: el conocimiento del esquema vive en la cabeza del autor.
+
+18. [BAJO] USO INTENSIVO DE DB::select / DB::raw
+    - Muchos controladores hacen queries crudas en vez de usar Eloquent.
+    - Pierdes: casting automático, eager loading, scopes reutilizables.
+    - Trade-off: queries complejas a veces lo justifican, pero usa
+      whereRaw / DB::raw dentro del query builder, no DB::select crudo.
+
+19. [BAJO] FALTA DE BACKUP STRATEGY DECLARADA
+    - Ni en docker compose ni en tareas programadas hay un dump
+      automático de la base.
+    - Riesgo: si el volumen de Docker se corrompe, pérdida total.
+    - Acción: cron diario con mysqldump → S3 / volumen externo.
+
+
+================================================================================
+PARTE 3 — TABLA DE PRIORIDADES (qué atacar primero)
+================================================================================
+
+PRIORIDAD 1 — HACER EN ESTA SEMANA
+  [SEG] Convertir rutas GET de save/delete a POST/DELETE con CSRF.
+  [BD]  Versionar el SP CalculoIncentivo en una migración.
+  [BD]  Cambiar password 'password123' del seeder por env var.
+
+PRIORIDAD 2 — HACER ESTE MES
+  [QA]  Escribir feature tests para Auth, Incentivos, Tareas (3 tests es
+        mejor que 0).
+  [BD]  Crear migraciones baseline para tablas legacy
+        (VT_usuarios_Bet, premios_*, agencias, mar_ventas, tokens, etc.).
+  [REF] Mover el cálculo de incentivos (ini_set 300s/512M) a un Job de
+        cola con notificación al terminar.
+  [LIM] Borrar tmp_*.php de la raíz; renombrar
+        vtproductocontrollernet.php a VtProductoControllerNet.php.
+
+PRIORIDAD 3 — HACER ESTE TRIMESTRE
+  [REF] Extraer Services desde IncentivosController y AgenciaController
+        siguiendo el patrón de AutoProcesoService.
+  [BD]  Sincronizar Empleado model con su migración (eliminar campos
+        fantasma del fillable o crear migración add_*).
+  [BD]  Añadir SoftDeletes a Agencia, Tarea, Empleado, CoordinadorOperador.
+  [BD]  Generar factories para los 5 modelos más usados en tests.
+  [VIS] Decomponer agencias/index.blade.php (1,690 líneas) en componentes
+        Blade o migrar a Livewire (que ya está instalado).
+  [REF] Crear enum ProductoId para reemplazar [538, 539] hardcoded.
+
+PRIORIDAD 4 — DEUDA TÉCNICA A PLANIFICAR
+  [BD]  Normalizar empleados (extraer departamentos, posiciones, ciudades).
+  [BD]  Estandarizar naming convention (snake_case minúsculas).
+  [BD]  Añadir índices CHECK constraints (progreso, estados, etc.).
+  [BD]  Documentar diagrama ER (dbdiagram.io o similar).
+  [REF] Eliminar Livewire si no se va a usar; o adoptarlo para vistas
+        complejas.
+  [REF] Aplicar Route::prefix() y Route::name() en routes/web.php.
+
+
+================================================================================
+RESUMEN EJECUTIVO
+================================================================================
+
+El proyecto está en la fase típica de "creció rápido, ahora hay que
+estabilizar". La fundación es buena (stack moderno, índices conscientes,
+auth correcta, AutoProcesoService como modelo), pero los controladores y
+vistas se han vuelto monolíticos, y la base de datos arrastra deuda de
+una migración legacy (tablas sin migración create_*, SP fuera de versión,
+modelos desincronizados con su esquema).
+
+LOS DOS RIESGOS MÁS GRAVES SON:
+  1. Las ~42 rutas GET que ejecutan mutaciones — vulnerabilidad CSRF
+     real, explotable con un simple <img src> en un correo.
+  2. La ausencia total de tests, combinada con el patrón de "ajustes"
+     iterativos — cada commit es una apuesta.
+
+Resolver esos dos puntos primero te da una base sólida desde donde
+abordar todo lo demás sin romper nada en silencio.
+
+================================================================================
+PARTE 4 — RECOMENDACIÓN DE ATAQUE (ORDEN SUGERIDO POR IMPACTO/ESFUERZO)
+================================================================================
+
+
+--------------------------------------------------------------------------------
+FASE 1 — SEMANA 1: PARAR EL SANGRADO
+--------------------------------------------------------------------------------
+
+1. RUTAS GET → POST/DELETE  (esfuerzo: 1-2 días)
+   - Es la vulnerabilidad más grave y la más barata de arreglar.
+   - Un solo cambio en routes/web.php + añadir @csrf en los formularios
+     o links que las disparan.
+   - EMPEZAR POR LAS delete-* primero — son las que causan daño
+     irreversible si se explotan con un simple <img src="..."> en un
+     correo o web externa.
+
+2. VERSIONAR EL STORED PROCEDURE CalculoIncentivo  (esfuerzo: 2 horas)
+   - Crear migración con:
+       DB::unprepared('CREATE PROCEDURE CalculoIncentivo(...) ...');
+     y un down() con DROP PROCEDURE.
+   - Sin esto: si pierdes la DB o clonas a staging, todo el módulo
+     de incentivos muere y nadie sabe por qué.
+
+3. SACAR PASSWORD DEL SEEDER  (esfuerzo: 15 min)
+   - DatabaseSeeder.php: reemplazar 'password123' por
+     env('SEED_ADMIN_PASSWORD').
+   - Trivial pero crítico si alguien ejecuta db:seed en producción.
+
+
+--------------------------------------------------------------------------------
+FASE 2 — SEMANA 2-4: RED DE SEGURIDAD
+--------------------------------------------------------------------------------
+
+4. TRES FEATURE TESTS MÍNIMOS  (esfuerzo: 2-3 días)
+   - Test 1: Login + logout
+   - Test 2: Crear tarea + asignarla
+   - Test 3: Ejecutar cálculo de incentivo (mockear el SP)
+   - El objetivo NO es cobertura: es tener algo que corra en CI y
+     avise cuando se rompe lo básico.
+   - Con 3 tests ya dejas atrás el patrón "ajustes v1, v2, v3".
+
+5. MOVER IncentivosController A UN JOB  (esfuerzo: 1-2 días)
+   - El ini_set('max_execution_time', 300) + ini_set('memory_limit',
+     '512M') es el SÍNTOMA. La cura es un Job en cola.
+   - Patrón: CalcularIncentivoJob dispatched desde el controller +
+     Notification (persistente en DB, ya tienes la tabla) cuando
+     termine.
+   - Beneficio colateral: esto te enseña el patrón para los otros
+     procesos pesados del CRM.
+
+
+--------------------------------------------------------------------------------
+FASE 3 — MES 2-3: ESTRUCTURA
+--------------------------------------------------------------------------------
+
+6. REFACTORIZAR UN CONTROLADOR GRANDE (NO TODOS)  (esfuerzo: 1-2 sem)
+   - Elegir IncentivosController porque ya lo tocaste en el paso 5.
+   - Extraer:
+       * IncentivoService (lógica de negocio)
+       * CalcularIncentivoAction (caso de uso)
+       * Form Requests (validación)
+   - ESTE REFACTOR SE CONVIERTE EN LA PLANTILLA para los demás.
+   - NO intentes refactorizar los 5 controladores monolíticos a la
+     vez — es una receta para romper todo.
+
+7. COMPONENTIZAR agencias/index.blade.php  (esfuerzo: 3-5 días)
+   - Ya tienes Livewire 3.6 instalado. Úsalo.
+   - Conviértelo en 4-5 componentes Livewire.
+   - Inversión que se paga sola: después tareas/index.blade.php
+     (1,009 líneas) se convierte en 2 días.
+
+8. SoftDeletes EN Agencia, Tarea, Empleado  (esfuerzo: medio día)
+   - Migración add_soft_deletes_* + use SoftDeletes en los modelos.
+   - Te cubre de borrados accidentales sin rediseñar nada.
+
+
+--------------------------------------------------------------------------------
+LO QUE NO HARÍA AHORA (DIFERIR DELIBERADAMENTE)
+--------------------------------------------------------------------------------
+
+- NORMALIZAR tabla empleados (extraer departamentos, posiciones,
+  ciudades): es caro, arriesgado y no está bloqueando hoy.
+  Déjalo para cuando haya tests que cubran el módulo de RH.
+
+- ESTANDARIZAR naming de tablas (VT_usuarios_Bet → vt_usuarios_bet):
+  impacto alto, beneficio bajo. Planifícalo para un sprint completo
+  con migración de renombrado y regresión completa.
+
+- DESINSTALAR Livewire: primero úsalo en el paso 7. Si te gusta,
+  te quedas. Si no, desinstalas con conocimiento de causa.
+
+- CREAR diagrama ER: útil pero no urgente. Hazlo cuando tengas que
+  explicarle el sistema a un dev nuevo — ahí es cuando el esfuerzo
+  se amortiza.
+
+
+--------------------------------------------------------------------------------
+PRINCIPIO RECTOR
+--------------------------------------------------------------------------------
+
+ORDEN DE ATAQUE = SEGURIDAD → TESTS → REFACTOR.
+
+- Si refactorizas ANTES de tener tests: vas a romper cosas en silencio.
+- Si añades tests ANTES de arreglar el CSRF: cualquiera puede borrarte
+  datos mientras escribes tests.
+- Por eso la seguridad va primero, aunque sea menos "creativo" que
+  refactorizar.
+
+El proyecto tiene BUENOS CIMIENTOS (stack moderno, Spatie Permission,
+índices conscientes, Docker, AutoProcesoService como patrón de
+referencia). NO NECESITA REHACERSE. Necesita que le pongas una red
+debajo antes de seguir construyendo encima.
+
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================

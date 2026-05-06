@@ -1,0 +1,1706 @@
+﻿================================================================================
+PROMPT MAESTRO â€” RECONSTRUCCIÃ“N DEL CRM DESDE CERO
+VersiÃ³n: 2.0  |  Fecha: 2026-04-27
+Destinatario: Claude (a usar en una conversaciÃ³n nueva con el proyecto adjunto)
+================================================================================
+
+INSTRUCCIONES PARA EL USUARIO (NO PARA CLAUDE):
+1. Abre una conversaciÃ³n nueva con Claude Code en la carpeta del proyecto
+   actual (d:/crm) o en una carpeta NUEVA donde se vaya a generar el rebuild.
+2. Pega el contenido completo de este archivo como primer mensaje.
+3. Adjunta o asegura que Claude tiene acceso de lectura al proyecto original
+   (carpeta d:/crm completa) para que pueda leer modelos, controladores,
+   migraciones, vistas y datos de inventario.
+4. Confirma a Claude el directorio de salida (puede ser el mismo proyecto
+   trabajado en una rama nueva, o una carpeta hermana p.ej. d:/crm-v2).
+
+================================================================================
+MISIÃ“N
+================================================================================
+
+Vas a reconstruir desde cero un CRM operativo (loterÃ­as Lotobet/Lotonet,
+RRHH, contabilidad, tareas, incentivos, reportes BI) preservando toda la
+funcionalidad existente, pero aplicando:
+
+  A) NormalizaciÃ³n correcta de base de datos hasta 3FN.
+  B) Ãndices completos pensados para los queries reales del sistema.
+  C) Buenas prÃ¡cticas de Laravel 12 (Services, Actions, Form Requests,
+     Jobs en cola, Eloquent con relaciones, Blade components para vistas
+     pesadas).
+  D) Seguridad correcta (rutas POST/DELETE para mutaciones, CSRF, RBAC
+     con Spatie, sin secretos hardcodeados).
+  E) Migraciones idempotentes y versionadas para TODO (incluidos stored
+     procedures, triggers, vistas).
+  F) Escalabilidad real (particionamiento, read replicas, cache layers,
+     cursor pagination) para soportar las tablas histÃ³ricas de 60M+ filas.
+  G) Observabilidad de producciÃ³n (logs estructurados, Sentry, Telescope,
+     slow query log, mÃ©tricas).
+  H) CI/CD automatizado (Pint, Larastan, tests, deploy zero-downtime).
+  I) Plan ejecutable de migraciÃ³n de datos legacy hacia el nuevo esquema
+     SIN downtime y sin pÃ©rdida de informaciÃ³n.
+
+NO se trata de cambiar el negocio. Se trata de re-implementar la misma
+soluciÃ³n con la calidad tÃ©cnica que el proyecto actual NO tiene.
+
+================================================================================
+STACK OBLIGATORIO
+================================================================================
+
+- PHP 8.3 (entorno del usuario; usar features 8.3 como readonly classes,
+  json_validate, typed class constants donde aplique)
+- Laravel 12
+- NO usar Livewire (el intento previo se descartÃ³; UI con Blade +
+  Alpine.js + Vite). Si en una v2 futura se decide adoptar Livewire,
+  se harÃ¡ como migraciÃ³n planificada por mÃ³dulo.
+- Tailwind 4 + Vite 7
+- MySQL 8 / MariaDB 10.6+ (InnoDB en TODAS las tablas â€” nada de MyISAM)
+- Spatie laravel-permission ^6.8 (RBAC)
+- maatwebsite/excel ^3.1 (importaciones/exportaciones)
+- barryvdh/laravel-dompdf ^3.1 (PDFs)
+- Redis 7+ para cachÃ©, colas (queue connection: redis), session, rate limit.
+- Docker compose multi-servicio (app, web/nginx, db, db-replica, redis,
+  worker, scheduler, horizon).
+- Laravel Horizon (gestiÃ³n de Redis queues con dashboard).
+- Laravel Sanctum (auth para API y SPA).
+- Laravel Pint (formato code style â€” ya estÃ¡ en require-dev).
+- Larastan / PHPStan nivel 6+ (anÃ¡lisis estÃ¡tico).
+- Laravel Telescope (debug en dev/staging â€” NO en producciÃ³n).
+- Sentry SDK PHP (errores en producciÃ³n).
+- Spatie Laravel Backup (backups automÃ¡ticos a S3 / local).
+- Spatie Laravel Activitylog (auditorÃ­a de cambios).
+- Laravel Dusk (browser tests para flujos crÃ­ticos).
+
+================================================================================
+PASO 1 â€” LEER EL PROYECTO ACTUAL (OBLIGATORIO ANTES DE CODIFICAR)
+================================================================================
+
+Antes de generar UNA SOLA lÃ­nea de cÃ³digo, debes inspeccionar el proyecto
+original y construir un mapa mental completo. Lee, en este orden:
+
+1. Documentos de contexto en la raÃ­z:
+   - modulos-del-sistema.txt          (quÃ© hace cada mÃ³dulo)
+   - database_inventario.txt          (quÃ© tablas existen y su tamaÃ±o)
+   - evaluacion-proyecto-4.7.txt      (quÃ© estÃ¡ mal y por quÃ©)
+   - evualuacion-proyecto-5.3.txt     (segunda opiniÃ³n tÃ©cnica)
+   - presentacion-crm-info-4.7.txt    (vista de negocio)
+   - diagnostico_dashboard_inicio_vps.txt (issues de producciÃ³n)
+
+2. ConfiguraciÃ³n base:
+   - composer.json
+   - .env.example
+   - docker-compose.yml
+   - dockerfile
+   - config/database.php, config/auth.php, config/queue.php
+
+3. Esquema actual completo:
+   - database/migrations/   (TODAS â€” son ~50)
+   - database/seeders/
+   - database/factories/
+
+4. Modelos (app/Models/):
+   - Lee TODOS. Anota: tabla, fillable, casts, relaciones, scopes, accessors,
+     timestamps si/no, primary key custom si/no.
+   - Modelos clave a estudiar a fondo: Tarea (es el ejemplo de lo que se
+     quiere), Empleado (es el ejemplo de schema drift), Agencia, User,
+     VtUsuarioBet/Net, MarVentas, Premio, Recarga, Pago*, FaltantesBet/Net,
+     CoordinadorOperador, OperadorRuta, Ruta, ReporteDiarioRuta,
+     ContabilidadElectricidad*, AutoProcesoConfig, TecnologiaSolicitud.
+
+5. Controladores (app/Http/Controllers/):
+   - Lee primero los 5 mÃ¡s grandes para entender la lÃ³gica de negocio:
+     AgenciaController (1754 lÃ­neas), IncentivosController (1397),
+     ReporteController (876), TareaController (656), InicioController (606).
+   - Identifica: quÃ© hacen, quÃ© validaciones aplican, quÃ© queries pesados
+     contienen, quÃ© stored procedures invocan (CALL ...).
+
+6. Rutas:
+   - routes/web.php  (471 lÃ­neas, plano, identifica las ~42 rutas GET de
+     mutaciÃ³n que hay que cambiar a POST/DELETE)
+   - routes/api.php  (casi vacÃ­o)
+
+7. Vistas:
+   - resources/views/   (recorre cada subcarpeta para conocer flujo UX)
+   - Especial atenciÃ³n a las gigantes: agencias/index.blade.php (1690 lÃ­neas),
+     tareas/index.blade.php (1009), agencias/incumplimientos.blade.php (786).
+
+8. Servicios, jobs, mails, exports/imports:
+   - app/Services/AutoProcesoService.php  (PATRÃ“N A REPLICAR)
+   - app/Mail/, app/Exports/, app/Imports/, app/Console/
+
+Cuando termines la lectura, ANTES de programar, entrÃ©game:
+
+  (a) Lista completa de entidades de dominio (no tablas â€” entidades).
+  (b) Diagrama ER textual (en formato dbml o markdown) con relaciones,
+      cardinalidades y FKs.
+  (c) Lista de stored procedures, triggers y vistas que descubriste en
+      controladores (DB::select('CALL ...'), DB::statement, DB::unprepared).
+  (d) Lista de Ã­ndices necesarios por query pattern observado.
+  (e) Plan de migraciÃ³n por fases (quÃ© se hace primero, quÃ© despuÃ©s).
+  (f) Riesgos detectados (datos perdidos al normalizar, etc.).
+
+ESPERA MI APROBACIÃ“N antes de empezar a generar cÃ³digo.
+
+================================================================================
+PASO 2 â€” DECISIONES DE DISEÃ‘O (NO NEGOCIABLES)
+================================================================================
+
+NAMING:
+- Todas las tablas en snake_case minÃºsculas y plural en espaÃ±ol:
+  agencias, empleados, ventas_bet, ventas_net, premios_bet, etc.
+- Renombra VT_usuarios_Bet â†’ ventas_usuario_bet (o el nombre que mejor
+  describa el dato, despuÃ©s de leerlo). Documenta cada renombrado.
+- Columnas en snake_case minÃºsculas. Nada de VentaID, GruNombre,
+  RifDescuento. Usa venta_id, grupo_nombre, rif_descuento.
+- Modelos en StudlyCase singular: Agencia, Empleado, VentaBet,
+  PremioNet, PagoMismaEmpresa.
+- Controladores: NombreController.php (PSR-4 estricto, sin minÃºsculas).
+  Renombra vtproductocontrollernet.php â†’ VentaProductoNetController.php.
+- Migraciones con formato Laravel: 2026_MM_DD_HHMMSS_descripcion.php.
+
+PRIMARY KEYS:
+- Todas las tablas: id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY (Laravel
+  default $table->id()).
+- ELIMINAR primary keys custom raras (vt_usuario_id, faltante_id, VentaID,
+  productoid). Si necesitas preservar el valor legacy, ponlo como columna
+  legacy_id INDEX, no como PK.
+- Toda tabla DEBE tener PK. La tabla ventas_producto_net actual no tiene â€”
+  es inaceptable.
+
+ENGINE Y CHARSET:
+- ENGINE InnoDB sin excepciones.
+- CHARSET utf8mb4, COLLATION utf8mb4_unicode_ci.
+
+NORMALIZACIÃ“N HASTA 3FN:
+- Empleados actualmente tiene 40+ columnas con duplicaciÃ³n id+nombre
+  (depto+iddepto, posicion+idposicion, ciudad+idciudad, pais+idpais,
+  banco+idbanco). Extraer a tablas catÃ¡logo:
+    - departamentos      (catÃ¡logo organizacional)
+    - posiciones         (cargos)
+    - ciudades, paises, provincias
+    - bancos
+    - estados_civiles
+    - tipos_documento
+    - turnos, calendarios
+  Cada catÃ¡logo: id, nombre UNIQUE, codigo opcional UNIQUE, activo BOOL,
+  timestamps. Reemplazar columnas planas por foreign keys.
+- Agencias: separa horarios en tabla agencia_horarios (un registro por
+  dÃ­a de la semana) si la lÃ³gica de negocio lo amerita.
+- Productos (juegos): tabla catalogo_juegos NORMALIZADA con tipos,
+  categorÃ­as, sistemas (bet/net) en tablas relacionadas, no como
+  string repetido.
+- Pagos: actualmente hay 6 tablas paralelas (pagos_misma_empresa_bet/net,
+  pagos_aotra_empresa_bet/net, pagos_porotra_empresa_bet/net). Considera
+  UNA sola tabla `pagos` con columnas:
+    sistema (enum: bet, net),
+    tipo_pago_id (FK a tipos_pago: misma_empresa, a_otra_empresa, por_otra_empresa)
+  Si el volumen de datos hace inviable la unificaciÃ³n retroactiva, deja
+  las tablas separadas pero con el MISMO esquema y el MISMO modelo base
+  (HasMany polimÃ³rfico o trait compartido). Documenta la decisiÃ³n.
+- Lo mismo con ventas_bet/net, premios_bet/net, recargas_bet/net,
+  asistencias_bet/net, faltantes_bet/net: explora unificar con columna
+  `sistema` ENUM. Si volumen lo prohibe, mantener separadas pero idÃ©nticas.
+
+INTEGRIDAD REFERENCIAL:
+- TODA relaciÃ³n lÃ³gica debe tener FOREIGN KEY explÃ­cita a nivel motor,
+  con polÃ­tica coherente:
+    - cascadeOnDelete       (hijo no tiene sentido sin padre â€” ej. comentarios de tarea)
+    - nullOnDelete          (hijo sobrevive huÃ©rfano â€” ej. tarea sin asignado)
+    - restrictOnDelete      (no se puede borrar el padre â€” ej. agencia con ventas)
+- nullable() en FK donde aplique semÃ¡nticamente, NO por flojera.
+- Indexa toda FK (Laravel lo hace automÃ¡tico con foreignId, pero verifica).
+
+ENUMS Y CHECK CONSTRAINTS:
+- Estados, prioridades, sistemas, tipos: ENUM a nivel MySQL.
+- Rangos: CHECK constraint en migraciÃ³n. Ejemplos:
+    progreso BETWEEN 0 AND 100
+    porcentaje_comision BETWEEN 0 AND 100
+    monto >= 0
+- En modelos PHP: castea el ENUM a un Enum class de PHP 8.2 (cast 'enum').
+
+UNIQUE CONSTRAINTS:
+- empleados: UNIQUE(empleadoid, empresa) y UNIQUE(cedula).
+- agencias: UNIQUE(codigo_agencia, empresa).
+- ruta_agencia: UNIQUE(ruta_id, agencia_id).
+- coordinador_operador_agencia: UNIQUE(coordinador_operador_id, agencia_id).
+- auto_proceso_configs: UNIQUE(sistema).
+- Identifica mÃ¡s durante el anÃ¡lisis y justifica cada uno.
+
+ÃNDICES:
+- Composite indexes pensados (no individuales redundantes):
+  Ej. en ventas_bet: INDEX(fecha, agencia_id), INDEX(fecha, producto_id),
+       INDEX(fecha, cedula), INDEX(estatus, fecha).
+- Cubrir TODOS los queries observados en los controladores.
+- PatrÃ³n defensivo addIndexIfMissing/dropIndexIfExists (ya existe en
+  2026_04_12_210000_add_indexes_for_inicio_dashboard_queries.php â€” replÃ­calo).
+- Considera covering indexes para los reportes BI mÃ¡s calientes.
+
+SOFT DELETES:
+- Aplica SoftDeletes a: agencias, empleados, tareas, coordinador_operador,
+  operador_ruta, rutas, usuarios, departamentos_crm, consorcios.
+- NO en tablas histÃ³ricas inmutables (ventas, premios, recargas, pagos,
+  asistencias) â€” esas son log inmutable.
+
+TIMESTAMPS:
+- created_at, updated_at en TODAS las tablas operativas.
+- En tablas histÃ³ricas masivas (ventas, premios), agrega creado_en y
+  fuente_carga_id (FK a una tabla cargas_archivos para auditorÃ­a ETL).
+- ELIMINA `public $timestamps = false` cuando la migraciÃ³n SÃ tiene timestamps.
+
+STORED PROCEDURES, TRIGGERS, VIEWS:
+- Cada uno en su PROPIA migraciÃ³n con DB::unprepared('CREATE PROCEDURE...')
+  y down() con DROP. Esto incluye:
+    - CalculoIncentivo (existe, no estÃ¡ versionado)
+    - Cualquier otro SP/trigger/view que descubras leyendo controladores.
+- Si un SP es muy complejo, considera reemplazarlo por cÃ³digo PHP en un
+  Service + Job. SÃ³lo dejar como SP cuando tenga ventaja real (volumen).
+
+================================================================================
+PASO 2.5 â€” ESCALABILIDAD, PERFORMANCE Y MANEJO DE TABLAS MASIVAS
+================================================================================
+
+Este proyecto tiene tablas histÃ³ricas reales de >60M filas y >4 GB
+(ventas_producto_net, vt_usuarios_net, ventas_producto_bet, premios_*).
+La reconstrucciÃ³n NO puede ignorar el tamaÃ±o. Reglas obligatorias:
+
+PARTICIONAMIENTO:
+- Particiona TODAS las tablas histÃ³ricas grandes por RANGE de fecha
+  (mensual o trimestral, segÃºn volumen):
+    ALTER TABLE ventas_bet
+      PARTITION BY RANGE (TO_DAYS(fecha)) (
+        PARTITION p_2025_01 VALUES LESS THAN (TO_DAYS('2025-02-01')),
+        PARTITION p_2025_02 VALUES LESS THAN (TO_DAYS('2025-03-01')),
+        ...
+        PARTITION p_max     VALUES LESS THAN MAXVALUE
+      );
+- En migraciÃ³n: documenta particiÃ³n y aÃ±ade comentario explicando criterio.
+- Comando artisan custom `partitions:rotate` (registrado en scheduler)
+  para crear particiÃ³n del prÃ³ximo mes y opcionalmente DROP de la mÃ¡s
+  vieja segÃºn polÃ­tica de retenciÃ³n.
+- Tablas a particionar: ventas_bet, ventas_net, ventas_producto_bet,
+  ventas_producto_net, vt_usuarios_bet, vt_usuarios_net, premios_bet,
+  premios_net, recargas_bet, recargas_net, paquetico_net, asistencias_bet,
+  asistencias_net, pagos_*, faltantes_*.
+
+ARCHIVADO (HOT/COLD STORAGE):
+- PolÃ­tica: data > 24 meses se mueve a tablas `*_archive` o a almacenamiento
+  frÃ­o (S3 Parquet vÃ­a Laravel S3 + jobs ETL).
+- Comando `data:archive --table=ventas_bet --before=2024-01-01` que mueve
+  por chunks de 50k filas y verifica integridad antes del DELETE.
+- Documentar en docs/retencion-datos.md los plazos por tabla y reglas.
+
+READ REPLICAS / SEPARACIÃ“N READ-WRITE:
+- En config/database.php usar configuraciÃ³n write/read connections:
+    'mysql' => [
+      'write' => ['host' => env('DB_WRITE_HOST', '...')],
+      'read'  => ['host' => [env('DB_READ_HOST_1'), env('DB_READ_HOST_2')]],
+      'sticky' => true,
+      ...
+    ]
+- Reportes BI, dashboards, KPI: leer SIEMPRE desde rÃ©plica
+  (DB::connection('mysql_read')) o usar `->onReadConnection()` explÃ­cito.
+- Mutaciones: writer.
+- Documenta en cada Service de reporte quÃ© connection usa y por quÃ©.
+
+CACHE STRATEGY (multinivel):
+- Cache layers definidos:
+    L1 â€” Cache::tags(['inicio'])->remember('inicio.kpi.global', 60, fn ...) â€” 1 min hot.
+    L2 â€” modelos catÃ¡logo (departamentos, agencias, productos): 1 dÃ­a.
+    L3 â€” reportes BI agregados pre-calculados: invalidaciÃ³n por evento.
+- Tags para invalidaciÃ³n selectiva:
+    Cache::tags(['agencias'])->flush() cuando se crea/edita agencia.
+- TTL definido por tipo de dato â€” NUNCA 'forever' sin justificaciÃ³n.
+- Documentar en docs/cache-strategy.md la matriz key/TTL/invalidador.
+- En modelos: HasCachedAttributes trait para counts caros
+  (ej. ventasDelDia(), faltantesPendientes()).
+
+QUERY OPTIMIZATION:
+- Cursor pagination (no offset) en listados con >10k filas:
+    Model::orderBy('id')->cursorPaginate(50);
+- Chunking masivo siempre con chunkById:
+    Venta::query()->chunkById(1000, fn ($lote) => ...);
+- Evitar SELECT *. Listar columnas explÃ­citas en queries de reportes.
+- N+1: usar with() / load() / loadMissing(). Activar
+  Model::preventLazyLoading() en non-production env.
+- Slow query log activado (en docker-compose.yml) con threshold 500ms.
+- Cualquier query que pase de 1s en producciÃ³n â†’ tarea para optimizar
+  (Ã­ndice, materializar, cachear, particionar).
+
+JOBS Y COLAS:
+- Laravel Horizon para gestionar workers Redis con dashboard.
+- Colas separadas por prioridad: high, default, low, reports, exports.
+- Procesos > 30s SIEMPRE en cola.
+- Backoff exponencial en jobs que fallan: $backoff = [10, 60, 300].
+- Timeout explÃ­cito por job (`public $timeout = 600;`).
+- Notification al usuario cuando un job pesado termina (canal database +
+  toast por Alpine en prÃ³xima peticiÃ³n).
+
+================================================================================
+PASO 2.6 â€” MIGRACIÃ“N DE DATOS LEGACY (ETL DEL VIEJO ESQUEMA AL NUEVO)
+================================================================================
+
+CRÃTICO: la base actual tiene datos productivos. NO se pueden perder.
+La reconstrucciÃ³n NO estÃ¡ completa hasta que los datos estÃ©n migrados.
+
+ESTRATEGIA RECOMENDADA â€” DOBLE ESCRITURA + CUTOVER:
+
+Fase A â€” Snapshot baseline:
+- mysqldump completo del sistema actual con --single-transaction.
+- Restaurar en servidor staging idÃ©ntico al de producciÃ³n.
+- Documentar fecha y hora exacta del snapshot.
+
+Fase B â€” ConstrucciÃ³n del nuevo esquema en paralelo:
+- Crear DB nueva (crm_v2) en el mismo servidor.
+- Aplicar TODAS las migraciones del rebuild en crm_v2.
+- crm_v2 queda vacÃ­a pero con esquema completo.
+
+Fase C â€” ETL inicial (carga histÃ³rica):
+- Por cada tabla, escribir un comando artisan:
+    php artisan etl:migrar --tabla=ventas_bet
+- El comando hace SELECT por chunks de 10k filas desde crm_old â†’
+  transform (renombrar columnas, mapear catÃ¡logos, normalizar) â†’
+  INSERT en crm_v2.
+- Resolver duplicados/colisiones con regla documentada (ej. Ãºltimo gana,
+  o tabla `etl_conflictos` para revisiÃ³n manual).
+- Idempotente: re-ejecutar no duplica (usar upsert con clave natural).
+- ValidaciÃ³n post-migraciÃ³n:
+    SELECT COUNT(*), SUM(monto) FROM crm_old.tabla
+    SELECT COUNT(*), SUM(monto) FROM crm_v2.tabla_nueva
+  Las cifras deben coincidir (o desviaciÃ³n documentada y aprobada).
+
+Fase D â€” Doble escritura (deltas):
+- Mientras el sistema viejo sigue en producciÃ³n, configurar TRIGGERS
+  o un job CDC (Change Data Capture) que copie cada INSERT/UPDATE/DELETE
+  de crm_old hacia crm_v2 con transformaciÃ³n.
+- Alternativa mÃ¡s simple: comando `etl:sync-deltas` corriendo cada 5 min
+  vÃ­a scheduler que migra registros con updated_at > last_sync_at.
+- Mantener doble escritura por mÃ­nimo 1 semana.
+
+Fase E â€” Cutover (cambio de producciÃ³n):
+- Ventana de mantenimiento corta (15-30 min):
+    1. Poner sistema viejo en read-only.
+    2. Ejecutar Ãºltimo etl:sync-deltas para vaciar pendientes.
+    3. Validar conteos clave (filas, sumas) â€” deben coincidir.
+    4. Cambiar DNS / load balancer al sistema nuevo.
+    5. Activar sistema nuevo en write mode.
+    6. Sistema viejo queda como fallback read-only por 30 dÃ­as.
+- Plan de ROLLBACK documentado paso a paso por si algo falla.
+
+Fase F â€” Postcutover:
+- Monitoreo intensivo 72h (logs, latencia, errores).
+- ComparaciÃ³n periÃ³dica de KPIs viejo vs nuevo (mientras viejo aÃºn tenga
+  datos comparables).
+- Borrar crm_old solo despuÃ©s de 30 dÃ­as sin incidentes y con backup
+  inmutable archivado.
+
+ENTREGABLES DEL ETL:
+- app/Console/Commands/Etl/Migrar{Tabla}Command.php â€” uno por tabla.
+- app/Console/Commands/Etl/SyncDeltasCommand.php
+- app/Console/Commands/Etl/ValidarMigracionCommand.php (cuenta y suma).
+- docs/etl-plan.md (mapeo columna por columna entre viejo y nuevo).
+- docs/cutover-runbook.md (paso a paso del dÃ­a D).
+- docs/rollback-plan.md.
+
+================================================================================
+PASO 3 â€” ARQUITECTURA DE CÃ“DIGO
+================================================================================
+
+ESTRUCTURA DE DIRECTORIOS (extender la estÃ¡ndar de Laravel):
+
+  app/
+    Actions/             â† un caso de uso por archivo (CalcularIncentivoAction)
+    Console/Commands/
+    DataTransferObjects/ â† DTOs tipados con readonly properties
+    Enums/               â† enum PHP (Sistema, EstadoTarea, PrioridadTarea, ProductoId)
+    Events/
+    Exceptions/
+    Exports/
+    Http/
+      Controllers/       â† THIN, solo orquestan
+        Api/             â† controladores API separados
+      Middleware/        â† EnsureUserHasModule, AuditAccess, etc.
+      Requests/          â† Form Requests por acciÃ³n (StoreAgenciaRequest)
+      Resources/         â† API Resources
+    Imports/
+    Jobs/                â† procesos pesados (CalcularIncentivoJob, ProcesarVentasJob)
+    Listeners/
+    Mail/
+    Models/              â† Eloquent CON relaciones, scopes, accessors
+    Notifications/
+    Observers/           â† lÃ³gica de eventos sobre modelos
+    Policies/            â† autorizaciÃ³n fina por modelo
+    Providers/
+    Services/            â† lÃ³gica de negocio reutilizable
+    Support/             â† helpers, traits compartidos
+    View/Components/     â† componentes Blade
+
+REGLA DE ORO: controladores < 200 lÃ­neas.
+- Si excede, extrae a Service/Action.
+- AutoProcesoService es el patrÃ³n de referencia.
+
+REGLA: NUNCA `ini_set('max_execution_time', X)` ni `ini_set('memory_limit', X)`
+en un controlador. Si un proceso pasa de 30 segundos, va a un Job.
+
+REGLA: validaciÃ³n SIEMPRE en Form Request, NUNCA inline en el controlador.
+- Mensajes de error en /resources/lang/es/validation.php.
+
+REGLA: ningÃºn controlador hace DB::select/DB::raw para lÃ³gica de negocio.
+- Si la query es compleja, va dentro de un scope del modelo o un Service.
+- DB::raw estÃ¡ permitido DENTRO del query builder (para operaciones SQL),
+  no como escape para query string suelta.
+
+REGLA: ninguna constante mÃ¡gica.
+- whereIn('producto_id', [538, 539]) â†’ ProductoId::lotosBet() o config('catalogos.juegos.bet').
+- Cualquier nÃºmero/id repetido en >1 archivo va a Enum o config.
+
+REGLA: zero cÃ³digo muerto.
+- NO instalar paquetes que no se vayan a usar.
+- La carpeta app/Livewire del proyecto viejo NO se replica.
+
+================================================================================
+PASO 4 â€” MÃ“DULOS A RECONSTRUIR
+================================================================================
+
+Leer modulos-del-sistema.txt para los detalles de cada uno. Resumen:
+
+ 1. Auth (login, logout, recuperar contraseÃ±a por cÃ³digo)
+ 2. Inicio / Dashboard contable
+ 3. Token / sesiÃ³n externa Flash
+ 4. OperaciÃ³n Lotobet (ventas, faltantes, ventas-producto, recargas,
+    premios, pagos misma/otra/por-otra empresa, asistencias)
+ 5. OperaciÃ³n Lotonet (lo mismo + paquetico)
+ 6. MAR (ventas + dashboard)
+ 7. Empleados (CRUD, sincronizaciÃ³n, no-regularizados, ventas sin empleado)
+ 8. Reportes operativos (lista/excel/pdf con filtros)
+ 9. Agencias (CRUD, import/export, plantilla, incumplimientos, mini-reporte
+    por correo)
+10. Seguridad (usuarios, roles, permisos vÃ­a Spatie)
+11. Reportes BI
+12. Incentivos (cÃ¡lculo via SP, configuraciÃ³n de planes, pago, reportes)
+13. Ventas Flash Lotobet/Lotonet + dashboards
+14. Dashboards financieros (Lotobet, Lotonet)
+15. KPI Lotobet (panel principal, productos por agencia)
+16. Registro de empleados (resource)
+17. Tareas colaborativas (Gantt+DataTable, CRUD, adjuntos, comentarios,
+    departamentos, notificaciones in-app + email, solicitud cierre,
+    finalizaciÃ³n por superior)
+18. Layout global con versiÃ³n desde .env
+19. Infraestructura Docker (app/web/db/redis/worker/scheduler)
+20. TecnologÃ­a â€” solicitudes (gestiÃ³n de tickets internos)
+21. Contabilidad â€” Electricidad, Estado de Resultados, Flujo, Reportes,
+    Cuentas, Detalle de cuentas
+22. Comercial
+23. Coordinador / Operador / Ruta / Reporte diario de ruta
+24. Procesos (auto_proceso_configs, procesos por departamento)
+25. Novedades de horario, consorcios
+
+(Si encuentras mÃ³dulos adicionales al leer el cÃ³digo, AGRÃ‰GALOS â€” esta
+lista es punto de partida, no exhaustiva.)
+
+================================================================================
+PASO 5 â€” SEGURIDAD (NO NEGOCIABLE)
+================================================================================
+
+- TODA mutaciÃ³n (save/update/delete) debe ir por POST/PUT/PATCH/DELETE,
+  con @csrf en el form. NUNCA Route::get('/save-...').
+- Rate limiting:
+    auth (login, recuperar): throttle 5,1 (5 por minuto)
+    api: throttle 60,1
+- SesiÃ³n: regenerate() en login, invalidate() en logout.
+- Hashing: Hash::make en todos los seeders/factories â€” NUNCA password
+  plain text guardada.
+- env('SEED_ADMIN_PASSWORD') para password inicial; documentar la variable.
+- Roles desde RolePermissionSeeder (mantener: superadmin, admin,
+  contabilidad, rh, comercial, monitoreo, tecnologia, coordinador,
+  operador). Permisos granulares por mÃ³dulo:acciÃ³n.
+- Middleware EnsureUserHasModule para gating por mÃ³dulo.
+- Audit log: tabla `audit_logs` con user_id, action, model, model_id,
+  changes (JSON), ip, user_agent, created_at. Observer global o paquete
+  como spatie/laravel-activitylog.
+- 2FA opcional en config; al menos dejar el hook listo aunque no se
+  active de inicio.
+- SanitizaciÃ³n de uploads: validar mimes, size, almacenar en
+  storage/app/private (NO public) salvo casos donde el pÃºblico lo
+  requiera (ej. logo de agencia).
+- Rate limiting por usuario (no solo por IP) para acciones costosas:
+    RateLimiter::for('reportes', fn ($req) =>
+      Limit::perMinute(10)->by($req->user()?->id ?: $req->ip())
+    );
+- Brute force: bloqueo temporal de cuenta tras 10 intentos fallidos
+  (usar package laravel/fortify o lÃ³gica manual con tabla
+  `login_attempts`).
+- Headers de seguridad en middleware global (paquete spatie/laravel-csp
+  o middleware propio):
+    Content-Security-Policy
+    X-Frame-Options: DENY
+    X-Content-Type-Options: nosniff
+    Referrer-Policy: strict-origin-when-cross-origin
+    Permissions-Policy
+    Strict-Transport-Security (en producciÃ³n HTTPS)
+- HTTPS only: middleware ForceHttps en producciÃ³n + cookie
+  secure=true, samesite=lax.
+- SanitizaciÃ³n de output: nunca {!! $variable !!} sin razÃ³n documentada.
+- Honeypot field en formularios pÃºblicos (login, recuperar password).
+- Validar TAMAÃ‘O de payloads (max 10MB en general, configurable por ruta).
+- EncriptaciÃ³n a nivel app de campos sensibles (cedula, salario, etc.)
+  con `$casts = ['cedula' => 'encrypted']`.
+
+================================================================================
+PASO 5.5 â€” API REST (PARA INTEGRACIONES Y FUTURO MÃ“VIL)
+================================================================================
+
+- Laravel Sanctum para autenticaciÃ³n de API y SPA.
+- Versionado en URL: /api/v1/...  (futuro v2 sin romper v1).
+- Throttling por token, no solo por IP:
+    Route::middleware(['auth:sanctum', 'throttle:api'])->group(...)
+- Controladores en app/Http/Controllers/Api/V1/.
+- API Resources (app/Http/Resources/) para serializaciÃ³n consistente â€”
+  NUNCA devolver Eloquent crudo en JSON.
+- Errores en formato consistente:
+    {
+      "message": "Validation failed",
+      "errors": { "campo": ["error"] },
+      "code": "VALIDATION_ERROR"
+    }
+- DocumentaciÃ³n OpenAPI 3.0 generada (paquete dedoc/scramble o
+  knuckleswtf/scribe). Endpoint /docs/api accesible en dev.
+- PaginaciÃ³n estÃ¡ndar Laravel + meta.total, meta.per_page, links.next.
+- CORS configurado en config/cors.php solo para dominios autorizados.
+- Webhooks salientes (notificaciÃ³n a sistemas externos) firmados con HMAC.
+- Tokens con scopes (Sanctum::actingAs($user, ['ventas:read'])) para
+  permisos finos por integraciÃ³n.
+
+================================================================================
+PASO 5.6 â€” FRONTEND (BLADE + ALPINE + TAILWIND)
+================================================================================
+
+- NO usar Livewire (descartado en intento previo; carpeta app/Livewire
+  del proyecto viejo no se replica). UI 100% server-rendered con Blade
+  + JS progresivo con Alpine.
+- Layout base Ãºnico con slot para contenido (mantener tema Velzon
+  existente).
+- Componentes Blade reutilizables en app/View/Components/:
+    <x-button>, <x-input>, <x-select>, <x-modal>, <x-table>,
+    <x-card>, <x-alert>, <x-toast>, <x-page-header>, <x-empty-state>,
+    <x-form-field>, <x-data-table>, <x-pagination>.
+- Alpine.js para interactividad cliente (toggles, dropdowns, modales,
+  contadores, tooltips, autocompletes simples). NUNCA jQuery nuevo.
+- Para flujos con muchas piezas dinÃ¡micas (filtros + tabla + paginaciÃ³n
+  sin reload): combinaciÃ³n Blade + Alpine + fetch a endpoints AJAX que
+  devuelven HTML parcial (partials) o JSON, renderizado por Alpine.
+- DataTables: yajra/laravel-datatables en modo server-side para listas
+  con > 1000 filas (paginaciÃ³n, filtros, exportaciÃ³n).
+- Toasts y notificaciones: Alpine store global (window.$toast) +
+  componente <x-toast> escuchando eventos.
+- Loading states explÃ­citos (botones disabled, skeletons, spinners
+  con Alpine x-show).
+- Forms: validaciÃ³n en servidor (Form Requests) + flash de errores
+  con @error en Blade + validaciÃ³n cliente con Alpine para UX inmediata.
+- Accesibilidad: aria-labels, focus visible, navegaciÃ³n por teclado.
+  Auditar con axe-core.
+- Tailwind 4 + design tokens custom (colors corporate, spacing scale).
+- Vite con code splitting; asset preload en layout.
+- Iconos: lucide-icons o heroicons (un solo set, no mezclar).
+
+================================================================================
+PASO 5.7 - RBAC POR DEPARTAMENTO + NIVEL (REGLA: SIN DEPTO = SIN ACCESO)
+================================================================================
+
+REGLA DE NEGOCIO CRITICA:
+- Cada usuario DEBE estar asignado a un departamento + un nivel de acceso.
+- Si un usuario no tiene departamento asignado:
+    * puede iniciar sesion, ver el menu principal y su perfil,
+    * NO puede acceder a NINGUN modulo de datos,
+    * ve un banner: "Tu cuenta no tiene departamento asignado. Contacta
+      al administrador.",
+    * todas las rutas funcionales responden 403 / redirect a /inicio.
+- Esta regla se aplica con middleware EnsureUserHasDepartamento global.
+
+MODELO CONCEPTUAL - 2 EJES:
+   Eje 1 = DEPARTAMENTO (area funcional del negocio).
+   Eje 2 = NIVEL DE ACCESO dentro del departamento.
+
+DEPARTAMENTOS DEL NEGOCIO (10):
+   1. sistema       -> TI, admin del sistema
+   2. operaciones   -> Lotobet, Lotonet, MAR, ventas-flash, procesos
+   3. rrhh          -> empleados, novedades, registro, consorcios
+   4. contabilidad  -> cuentas, electricidad, estado-resultados, flujo
+   5. comercial     -> agencias, ventas-flash, kpi
+   6. tecnologia    -> solicitudes internas / tickets
+   7. monitoreo     -> reportes BI, KPI, dashboards
+   8. campo         -> coordinador, operador, ruta, reporte-diario
+   9. gerencia      -> vista cross-departamental ejecutiva
+  10. auditoria     -> lectura cross-departamental + activity log
+
+NIVELES DE ACCESO (4 + casos especiales):
+   - jefe       -> TODO de su depto: view, list, create, edit, delete,
+                   export, approve, asignar. Ve datos sin filtro.
+   - analista   -> CRUD operativo: view, list, create, edit, export.
+                   NO delete critico, NO approve. Ve datos del depto.
+   - operativo  -> CREATE + VIEW limitado: solo ve sus propios registros
+                   (filtrado por usuario_id, agencias asignadas, rutas
+                   asignadas). NO edita lo ajeno, NO export.
+   - lectura    -> SOLO view + list (sin modificar nada). Ve datos del
+                   depto.
+
+Casos especiales (transversales, NO siguen el eje depto):
+   - superadmin           -> TODO el sistema (incluye gestion de roles).
+   - admin                -> operacion del sistema. NO puede crear
+                             superadmins ni hacer restore de backups.
+   - auditor              -> lectura cross-depto + activity-log.view.
+                             Sin permisos de modificacion.
+   - incentivos_admin     -> gestion completa del modulo de incentivos
+                             (cross-depto: operaciones+rrhh+contabilidad).
+   - incentivos_aprobador -> solo aprueba pagos calculados.
+   - incentivos_calculador-> solo lanza calculo (job en cola).
+   - tareas_user          -> auto-asignado a TODO usuario con depto.
+                             Da: tareas.view, list, create, edit (las
+                             suyas), comentar, solicitar-cierre.
+
+NAMING DE ROLES:
+   - Roles de departamento: {depto}_{nivel}
+       operaciones_jefe, operaciones_analista, operaciones_operativo,
+       operaciones_lectura, rh_jefe, rh_analista, contabilidad_jefe, ...
+   - Roles especiales: superadmin, admin, auditor, incentivos_admin,
+     incentivos_aprobador, incentivos_calculador, tareas_user.
+   - Total roles: 10 deptos x 4 niveles = 40 + 7 especiales = 47 roles
+     (no todos los deptos necesitan los 4 niveles; ajustar en seeder).
+
+NAMING DE PERMISOS:
+   {modulo}.{submodulo?}.{accion}
+   Acciones estandar: view, list, create, edit, delete, export, import,
+                      approve, ejecutar, asignar, cerrar, sincronizar,
+                      responder, notify, download.
+
+CATALOGO DE PERMISOS POR DEPARTAMENTO (~145):
+
+[SISTEMA] (solo superadmin/admin)
+   sistema.usuarios.{view,list,create,edit,delete,asignar-departamento,
+                     asignar-rol}
+   sistema.roles.{view,create,edit,delete}
+   sistema.permissions.view
+   sistema.audit-log.view
+   sistema.backup.{view,run,restore}
+   sistema.horizon.view
+   sistema.telescope.view
+   sistema.health.view
+
+[OPERACIONES]
+   lotobet.ventas.{view,list,create,edit,delete,export}
+   lotobet.faltantes.{view,list,create,delete,export}
+   lotobet.recargas.{view,list,create,delete,export}
+   lotobet.premios.{view,list,create,delete,export}
+   lotobet.pagos-misma-empresa.{view,list,create,delete,export}
+   lotobet.pagos-aotra-empresa.{view,list,create,delete,export}
+   lotobet.pagos-porotra-empresa.{view,list,create,delete,export}
+   lotobet.asistencias.{view,list,create,delete,export}
+   lotobet.ventas-producto.{view,list,export}
+   lotobet.ventas-flash.{view,create,delete,export}
+   lotobet.dashboard.view
+   lotonet.{ventas,faltantes,recargas,premios,pagos-*,asistencias,
+            ventas-producto,ventas-flash,dashboard}.* (igual + paquetico)
+   lotonet.paquetico.{view,list,create,delete,export}
+   mar.ventas.{view,list,create,edit,delete,export}
+   mar.dashboard.view
+   procesos.auto-config.{view,edit,ejecutar}
+   procesos.departamento.{view,manage}
+
+[RRHH]
+   empleados.{view,list,create,edit,delete,export,sincronizar}
+   empleados.no-regularizados.view
+   empleados.ventas-sin-empleado.view
+   registro-empleados.{view,list,create,edit,delete}
+   novedades-horario.{view,list,create,edit,delete,export}
+   consorcios.{view,list,create,edit,delete}
+
+[CONTABILIDAD]
+   contabilidad.cuentas.{view,list,create,edit,delete}
+   contabilidad.detalle-cuentas.{view,list,create,edit,delete}
+   contabilidad.electricidad.{view,list,create,edit,delete,export}
+   contabilidad.estado-resultados.{view,export}
+   contabilidad.flujo-ruta.{view,export}
+   contabilidad.reportes.{view,export}
+
+[COMERCIAL]
+   agencias.{view,list,create,edit,delete,export,import}
+   agencias.incumplimientos.{view,notify}
+   agencias.horarios.edit
+   agencias.plantilla.download
+
+[TECNOLOGIA]
+   tecnologia.solicitudes.{view,list,create,edit,delete,responder,
+                            asignar,cerrar}
+
+[MONITOREO]
+   reportes.ventas-bet.{view,export}
+   reportes.faltantes-bet.{view,export}
+   reportes.cuadre.{view,export}
+   reportes.ventas-agencia.view
+   reportes.ventas-agencia-periodo.view
+   reportes.ventas-cedula.view
+   reportes.cruce-usuarios.view
+   reportes.verificador.{view,export}
+   reportes-bi.resumen-ventas.view
+   reportes-bi.ventas-usuarios.view
+   reportes-bi.faltantes.view
+   kpi.principal.view
+   kpi.data.view
+   kpi.productos-agencia.view
+   dashboard-financiero.lotobet.view
+   dashboard-financiero.lotonet.view
+
+[CAMPO]
+   coordinador-operador.{view,list,create,edit,delete,asignar-agencias}
+   operador-ruta.{view,list,create,edit,delete,asignar-agencias}
+   rutas.{view,list,create,edit,delete}
+   reporte-diario-ruta.{view,list,create,edit,delete,export,
+                        adjuntar-comprobante}
+
+[INCENTIVOS] (transversal)
+   incentivos.view
+   incentivos.calcular
+   incentivos.aprobar
+   incentivos.pago-agente.{view,procesar}
+   incentivos.pago-coordinador.{view,procesar}
+   incentivos.pago-admin.{view,procesar}
+   incentivos.configuracion.{view,edit}
+   incentivos.efectividad.{view,edit}
+   incentivos.planes.{view,edit}
+   incentivos.metas.{view,edit}
+   incentivos.reportes.{view,export}
+
+[TAREAS] (transversal - auto-asignado a todo usuario con depto)
+   tareas.view
+   tareas.list
+   tareas.create
+   tareas.edit
+   tareas.delete
+   tareas.export
+   tareas.asignar
+   tareas.comentar
+   tareas.cerrar
+   tareas.solicitar-cierre
+   tareas-departamentos.{view,manage}
+
+[GERENCIA]
+   gerencia.dashboard.view
+   gerencia.venta-comparativa.view
+   gerencia.cross-departamento.view
+
+[AUDITORIA]
+   auditoria.activity-log.view
+   auditoria.cross-departamento.view
+
+[INICIO Y PERFIL] (todos los logueados, incluso sin depto)
+   inicio.view
+   perfil.view
+   perfil.edit
+
+MATRIZ ROL -> PERMISOS (RESUMEN):
+
+Rol                       | Permisos asignados
+--------------------------|---------------------------------------------
+superadmin                | TODOS (incluye sistema.*)
+admin                     | TODOS excepto sistema.backup.restore y
+                          | sistema.usuarios.crear-superadmin
+auditor                   | auditoria.* + *.view (cross-depto, read-only)
+                          |
+operaciones_jefe          | lotobet.*, lotonet.*, mar.*, procesos.*,
+                          | reportes.{ventas-bet,faltantes-bet,cuadre,
+                          | verificador}.* (lectura/export)
+operaciones_analista      | {lotobet,lotonet,mar}.{ventas,faltantes,
+                          | recargas,premios,pagos-*,asistencias}.{view,
+                          | list,create,edit,export}
+operaciones_operativo     | {lotobet,lotonet}.{ventas,faltantes,pagos-*}
+                          | .{view,list,create} (scope: solo sus datos)
+operaciones_lectura       | {lotobet,lotonet,mar}.*.{view,list}
+                          |
+rh_jefe                   | empleados.*, registro-empleados.*,
+                          | novedades-horario.*, consorcios.*
+rh_analista               | empleados.{view,list,create,edit,export},
+                          | registro-empleados.{view,create,edit},
+                          | novedades-horario.* (CRUD)
+rh_operativo              | novedades-horario.{view,create} (sus datos),
+                          | registro-empleados.{view,create} (sus regs)
+rh_lectura                | empleados.{view,list},
+                          | novedades-horario.{view,list}
+                          |
+contabilidad_jefe         | contabilidad.* + reportes.* (lectura)
+contabilidad_analista     | contabilidad.{cuentas,detalle-cuentas,
+                          | electricidad}.{view,list,create,edit} +
+                          | contabilidad.reportes.view
+contabilidad_operativo    | contabilidad.electricidad.{view,create}
+                          | (scope: sus datos), contabilidad.cuentas.view
+contabilidad_lectura      | contabilidad.*.{view,list}
+                          |
+comercial_jefe            | agencias.*, lotobet.ventas-flash.*,
+                          | lotonet.ventas-flash.*, mar.* + reportes.*
+comercial_analista        | agencias.{view,list,create,edit,export,
+                          | import}, reportes.view, kpi.view
+comercial_operativo       | agencias.view (scope: agencias asignadas),
+                          | lotobet.ventas-flash.create
+comercial_lectura         | agencias.{view,list}, reportes.view
+                          |
+tecnologia_jefe           | tecnologia.*, agencias.view (lectura)
+tecnologia_analista       | tecnologia.solicitudes.{view,list,create,
+                          | edit,responder,asignar,cerrar}
+tecnologia_operativo      | tecnologia.solicitudes.{view,create}
+                          | (scope: sus tickets)
+tecnologia_lectura        | tecnologia.solicitudes.{view,list}
+                          |
+monitoreo_jefe            | reportes.*, reportes-bi.*, kpi.*,
+                          | dashboard-financiero.*
+monitoreo_analista        | reportes.{view,export}, reportes-bi.view,
+                          | kpi.view, dashboard-financiero.view
+monitoreo_lectura         | reportes.view, reportes-bi.view, kpi.view,
+                          | dashboard-financiero.view
+                          |
+campo_jefe                | coordinador-operador.*, operador-ruta.*,
+                          | rutas.*, reporte-diario-ruta.*
+coordinador               | rutas.view (scope: sus rutas), agencias.view
+                          | (scope: agencias asignadas), reporte-diario-
+                          | ruta.view, coordinador-operador.view
+operador                  | rutas.view (scope: sus rutas), reporte-
+                          | diario-ruta.{view,create,edit} (sus rutas),
+                          | agencias.view (sus agencias)
+campo_lectura             | rutas.view, agencias.view, reporte-diario-
+                          | ruta.view (sin scope, todo)
+                          |
+gerencia_general          | gerencia.* + reportes-bi.* (lectura) +
+                          | kpi.* (lectura) + dashboard-financiero.* +
+                          | *.view cross-depto
+                          |
+incentivos_admin          | incentivos.* (todos)
+incentivos_aprobador      | incentivos.{view,aprobar,pago-*.view,
+                          | reportes.view}
+incentivos_calculador     | incentivos.{view,calcular,reportes.view}
+                          |
+tareas_user (auto)        | tareas.{view,list,create,edit,comentar,
+                          | solicitar-cierre}
+
+SCOPE DE DATOS (DENTRO DEL MISMO DEPTO, QUIEN VE QUE):
+
+- jefe / analista: ven TODO el departamento sin filtro adicional.
+- operativo / lectura: ven SOLO datos vinculados a su usuario:
+    * registros donde usuario_id = auth()->id()
+    * agencias asignadas via pivot coordinador_operador_agencia /
+      operador_ruta_agencia
+    * rutas asignadas via operador_ruta
+    * sus propias novedades, asistencias, registros de RRHH
+
+IMPLEMENTACION DEL SCOPE:
+1) Trait BelongsToUserScope en modelos relevantes (Agencia, Ruta,
+   ReporteDiarioRuta, NovedadHorario, RegistroEmpleado, etc.):
+       protected static function bootBelongsToUserScope(): void
+       {
+           static::addGlobalScope('user', function (Builder $q) {
+               $user = auth()->user();
+               if (! $user) return;
+               if ($user->hasRole(['*_jefe','*_analista','superadmin','admin'])) {
+                   return; // ven todo
+               }
+               $q->where(fn ($q) => $q
+                   ->where('usuario_id', $user->id)
+                   ->orWhereIn('agencia_id', $user->agenciasAsignadas()->pluck('id'))
+               );
+           });
+       }
+2) Policies por modelo (AgenciaPolicy, TareaPolicy, IncentivoPolicy,
+   etc.) con metodos viewAny, view, create, update, delete, restore.
+3) Metodos en User:
+       agenciasAsignadas(): BelongsToMany
+       rutasAsignadas(): BelongsToMany
+       esJefeDe(string $depto): bool
+       esLecturaSoloEn(string $depto): bool
+
+SCHEMA DB (cambios sobre users + tabla departamentos):
+
+Tabla `departamentos` (renombrar/extender `departamentos_crm` actual):
+   id BIGINT PK
+   codigo VARCHAR(50) UNIQUE  -- 'sistema','operaciones','rrhh',...
+   nombre VARCHAR(120) NOT NULL
+   descripcion TEXT NULL
+   activo BOOLEAN DEFAULT 1
+   timestamps
+
+Tabla `niveles_acceso` (catalogo simple, en lugar de ENUM puro):
+   id BIGINT PK
+   codigo VARCHAR(20) UNIQUE  -- 'jefe','analista','operativo','lectura'
+   nombre VARCHAR(60) NOT NULL
+   orden TINYINT  -- para ordenar visualmente
+
+Tabla `users` - agregar columnas:
+   departamento_id BIGINT NULL FK departamentos.id ON DELETE RESTRICT
+   nivel_acceso_id BIGINT NULL FK niveles_acceso.id ON DELETE RESTRICT
+   INDEX (departamento_id, nivel_acceso_id)
+
+Reglas:
+   - departamento_id y nivel_acceso_id son NULLABLE en DB para no romper
+     migraciones, pero el CONTROLADOR de creacion/edicion los exige.
+   - Validacion en StoreUserRequest: required, exists, in.
+   - Hook User::saved: si tiene depto + nivel, recalcula el rol primario
+     = "{depto.codigo}_{nivel.codigo}" y lo sincroniza.
+   - Auto-asigna rol 'tareas_user' si depto != null.
+
+MIDDLEWARE EnsureUserHasDepartamento:
+   public function handle(Request $req, Closure $next)
+   {
+       $user = $req->user();
+       if (! $user) return redirect()->route('login');
+
+       $rutasPermitidas = ['inicio','perfil.show','perfil.update','logout'];
+       if (in_array($req->route()?->getName(), $rutasPermitidas)) {
+           return $next($req);
+       }
+
+       if ($user->hasRole('superadmin')) {
+           return $next($req); // bypass
+       }
+
+       if (! $user->departamento_id || ! $user->nivel_acceso_id) {
+           if ($req->expectsJson()) {
+               return response()->json([
+                   'message' => 'Sin departamento asignado',
+                   'code'    => 'NO_DEPARTAMENTO',
+               ], 403);
+           }
+           return redirect()->route('inicio')->with('warning',
+               'Tu cuenta no tiene departamento asignado. '.
+               'Contacta al administrador.');
+       }
+
+       return $next($req);
+   }
+
+   Registrar en bootstrap/app.php (Laravel 12):
+       ->withMiddleware(function (Middleware $middleware) {
+           $middleware->web(append: [EnsureUserHasDepartamento::class]);
+       })
+
+UI / FLUJO DE CREACION DE USUARIO:
+- Form en 1 paso con campos:
+    nombre, email, password, departamento_id (select REQUIRED),
+    nivel_acceso_id (select REQUIRED), roles_adicionales[] (multi-select
+    para incentivos_*, tareas_admin, etc.)
+- Validacion servidor:
+    departamento_id: required|exists:departamentos,id
+    nivel_acceso_id: required|exists:niveles_acceso,id
+- Solo superadmin puede activar checkbox "Crear sin departamento (no
+  recomendado)" - util solo para usuarios placeholder antes de asignar.
+- En la lista de usuarios mostrar badge:
+    Verde: usuario con depto + nivel asignados.
+    Rojo:  usuario sin depto (sin acceso real).
+- Accion rapida "Asignar departamento" desde la lista.
+
+INICIO PARA USUARIO SIN DEPARTAMENTO:
+- /inicio renderiza una landing simple:
+    "Hola {nombre}, tu cuenta esta activa pero no tiene departamento
+    asignado. Por favor contacta al administrador para que te asigne
+    tu area de trabajo. Mientras tanto solo puedes ver tu perfil y
+    cerrar sesion."
+- Menu lateral OCULTO o deshabilitado (solo se ve "Inicio", "Perfil",
+  "Cerrar sesion").
+
+GENERACION PROGRAMATICA:
+- config/permissions.php -> array por departamento con la lista de permisos.
+- config/roles.php -> array de roles -> permisos (usando wildcards y
+  helpers para no repetir).
+- DepartamentoSeeder -> puebla los 10 departamentos.
+- NivelAccesoSeeder -> puebla los 4 niveles.
+- PermissionsSeeder -> lee config/permissions.php y crea/sincroniza.
+- RolesSeeder -> lee config/roles.php, crea roles {depto}_{nivel} +
+  especiales, sincroniza permisos.
+- Idempotente: re-ejecutar no duplica ni rompe asignaciones existentes.
+
+UI DE GESTION:
+- /admin/roles: tabla con todos los roles, count de permisos, count
+  de usuarios asignados.
+- /admin/roles/{role}: matriz visual rol x permiso (checkboxes agrupados
+  por modulo, con expand/collapse).
+- /admin/users/{id}/permissions: ver rol primario (calculado desde
+  depto+nivel) + roles transversales adicionales editables.
+- Cualquier cambio (crear rol, asignar permiso, cambiar depto de
+  usuario) queda en activity_log con before/after.
+
+TEST AUTOMATIZADO (PermissionMatrixTest):
+- Recorre la matriz roles x rutas y valida:
+    contabilidad_lectura debe tener 200 en /contabilidad/cuentas (view).
+    contabilidad_lectura debe tener 403 en /contabilidad/cuentas/store.
+    operaciones_operativo debe ver SOLO sus ventas (count = N esperado).
+    usuario sin depto debe redirect a /inicio en cualquier ruta de datos.
+- Genera reporte tabular de la matriz al pasar (PHPUnit data providers).
+
+DOCUMENTACION:
+- docs/seguridad-rbac.md
+    Tabla completa rol x permisos.
+    Tabla departamento -> modulos accesibles.
+    Diagrama de scope de datos.
+    Procedimiento para anadir un nuevo rol o permiso.
+- docs/onboarding-usuarios.md
+    Como crear un usuario nuevo, asignar depto, validar acceso.
+
+CRITERIOS DE ACEPTACION ESPECIFICOS DE RBAC:
+[  ] Existen 10 departamentos sembrados.
+[  ] Existen 4 niveles de acceso sembrados.
+[  ] Existen los ~145 permisos sembrados desde config/permissions.php.
+[  ] Existen los 47 roles sembrados desde config/roles.php.
+[  ] users tiene departamento_id + nivel_acceso_id (FK).
+[  ] EnsureUserHasDepartamento aplicado globalmente.
+[  ] Usuario sin depto solo ve /inicio + /perfil.
+[  ] StoreUserRequest exige depto y nivel.
+[  ] Rol primario se sincroniza automaticamente al guardar usuario.
+[  ] Global scopes en modelos para filtrar por usuario.
+[  ] Policies en modelos principales.
+[  ] PermissionMatrixTest pasa al 100%.
+[  ] docs/seguridad-rbac.md generado.
+
+================================================================================
+PASO 6 â€” TESTING (MÃNIMO VIABLE)
+================================================================================
+
+- Configurar phpunit.xml con SQLite en memoria SOLO para tests unitarios
+  que no toquen SP/MySQL especÃ­ficos. Tests de integraciÃ³n con MySQL real
+  (vÃ­a docker-compose.test.yml).
+- Cobertura mÃ­nima a entregar:
+    Feature: AuthTest (login, logout, recuperar)
+    Feature: TareaCrudTest (crear, asignar, comentar, cerrar)
+    Feature: AgenciaCrudTest (crear, validar, eliminar)
+    Feature: IncentivoCalculoTest (mockeando el SP)
+    Feature: ReporteVentasExportTest (descarga XLSX/PDF)
+    Feature: ApiV1AuthTest (Sanctum, scopes)
+    Feature: PermissionMatrixTest (cada rol accede solo a su mÃ³dulo)
+    Unit: cada Service tiene su test
+    Unit: cada Action tiene su test
+    Unit: cada Enum y DTO tiene su test
+- Browser tests con Laravel Dusk para flujos crÃ­ticos:
+    Login + dashboard
+    Crear tarea con adjunto
+    Generar y descargar reporte de ventas
+    Ejecutar cÃ¡lculo de incentivo (botÃ³n â†’ notificaciÃ³n)
+- Factories para TODOS los modelos principales (Agencia, Empleado, Tarea,
+  Ruta, CoordinadorOperador, Venta*, Premio*, Pago*).
+- Coverage mÃ­nimo: 60% global, 80% en Services y Actions
+  (configurar en phpunit.xml `<coverage>` y reportar en CI).
+- CI ready: composer test debe correr todo sin intervenciÃ³n.
+- Mutation testing opcional con Infection PHP en mÃ³dulos crÃ­ticos
+  (Incentivos, Pagos).
+
+================================================================================
+PASO 6.5 â€” OBSERVABILIDAD Y MONITOREO
+================================================================================
+
+LOGGING:
+- Channels separados en config/logging.php:
+    'auth'     â†’ storage/logs/auth.log     (logins, logouts, intentos fallidos)
+    'queries'  â†’ slow queries > 500ms
+    'jobs'     â†’ cola (start, success, fail, retry)
+    'etl'      â†’ migraciones de datos legacy
+    'audit'    â†’ cambios de modelos
+    'mail'     â†’ envÃ­os y rebotes
+    'errors'   â†’ errores 5xx
+- Formato JSON estructurado en producciÃ³n
+  (Monolog con LineFormatter custom o paquete formato JSON).
+- Cada log incluye: timestamp, level, message, user_id, request_id,
+  ip, route, method, context.
+- Request ID generado por middleware (UUID) y propagado a logs y
+  respuestas (header X-Request-Id).
+- RotaciÃ³n con paquete monolog rotating handler (max 30 dÃ­as).
+
+ERROR TRACKING:
+- Sentry configurado con DSN en .env (SENTRY_LARAVEL_DSN).
+- Captura automÃ¡tica de excepciones no manejadas.
+- breadcrumbs activos (queries, http, console).
+- Sentry.io release tracking integrado con CI (cada deploy crea release).
+- Alertas configuradas en Sentry (mÃ¡s de N errores/min, error nuevo).
+
+APM / TRAZABILIDAD:
+- Laravel Telescope SOLO en dev y staging (NUNCA en prod).
+- En producciÃ³n, instrumentaciÃ³n opcional con OpenTelemetry exportando
+  a un backend (Tempo, Honeycomb, Datadog).
+
+MÃ‰TRICAS Y HEALTH CHECKS:
+- Endpoint /health (liveness): responde 200 OK simple.
+- Endpoint /ready (readiness): valida DB, Redis, storage. Si algo falla
+  responde 503 con detalle por servicio.
+- Paquete spatie/laravel-health para chequeos:
+    DatabaseConnectionCheck, RedisCheck, ScheduleRunningCheck,
+    QueueCheck, UsedDiskSpaceCheck, BackupsRecentCheck.
+- Endpoint /metrics si se usa Prometheus (paquete spatie/laravel-prometheus).
+- Dashboard interno (/admin/health) con paquete laravel-health-dashboard.
+
+SLOW QUERY LOG:
+- En docker-compose.yml para servicio db, activar:
+    --slow-query-log=1
+    --slow-query-log-file=/var/log/mysql/slow.log
+    --long-query-time=0.5
+    --log-queries-not-using-indexes=1
+- Job semanal `php artisan queries:report-slow` que envÃ­a top 20 al
+  superadmin por email.
+
+ALERTAS:
+- Notificar por email/Slack al admin cuando:
+    - Cola con mÃ¡s de 1000 jobs pendientes.
+    - Job fallido mÃ¡s de 3 veces.
+    - Backup diario no se ejecutÃ³.
+    - Disco > 85%.
+    - Latencia P95 > 2s.
+    - Error rate > 1% en Ãºltimos 5 min.
+
+================================================================================
+PASO 6.6 â€” CI/CD, CALIDAD AUTOMATIZADA Y CODE STYLE
+================================================================================
+
+PINT (FORMATO):
+- pint.json en raÃ­z con reglas Laravel preset + customs.
+- Pre-commit hook con paquete brianium/paratest o husky para correr
+  `vendor/bin/pint --dirty` antes de cada commit.
+- CI valida formato con `vendor/bin/pint --test`.
+
+LARASTAN / PHPSTAN (ESTÃTICO):
+- larastan en require-dev.
+- phpstan.neon con nivel 6 (subir a 8 progresivamente).
+- Excluir migraciones legacy si genera mucho ruido temporalmente,
+  pero siempre con TODO de fecha.
+- CI valida con `vendor/bin/phpstan analyse --memory-limit=2G`.
+
+RECTOR (UPGRADES Y REFACTOR AUTOMATIZADO):
+- rector.php configurado para PHP 8.3 + Laravel 12.
+- Job manual mensual: `vendor/bin/rector process --dry-run`.
+
+GITHUB ACTIONS (.github/workflows/):
+- ci.yml â€” corre en cada push y PR:
+    1. checkout + setup-php@v2 (PHP 8.3, extensiones, composer cache)
+    2. composer install
+    3. setup-node + npm ci + npm run build
+    4. copy .env.testing
+    5. php artisan key:generate
+    6. php artisan migrate:fresh
+    7. vendor/bin/pint --test
+    8. vendor/bin/phpstan analyse
+    9. php artisan test --coverage --min=60
+   10. php artisan dusk (con db de prueba real)
+- deploy.yml â€” manual o en tag v*.*.*:
+    Build imagen Docker, push a registry, deploy a producciÃ³n
+    (vÃ­a rsync, ssh deploy, o paquete deployer.org).
+- security.yml â€” semanal:
+    composer audit
+    npm audit
+    spatie/security-advisories-health-check
+    Sentry release health check.
+
+PRE-COMMIT HOOKS (.husky/ o .git/hooks/):
+- pre-commit: pint + phpstan en archivos staged.
+- commit-msg: validaciÃ³n de formato (regex) con conventional commits.
+
+CONVENTIONAL COMMITS:
+- feat: agregar exportaciÃ³n PDF a reporte de ventas
+- fix: corregir cÃ¡lculo de incentivo cuando agencia no tiene meta
+- refactor: extraer IncentivoService de IncentivosController
+- chore: bump dependencias menores
+- docs: actualizar diccionario de datos
+- test: agregar test de cierre de tarea
+- perf: Ã­ndice compuesto en ventas_bet (fecha, agencia_id)
+- ci: agregar workflow de seguridad
+- BREAKING CHANGE: tabla pagos unificada (ver migraciÃ³n)
+
+VERSIONADO:
+- SemVer en .env como APP_VERSION.
+- CHANGELOG.md mantenido (paquete spatie/laravel-changelog opcional).
+- Tags git por release (v1.0.0).
+
+================================================================================
+PASO 6.7 â€” OPERACIONES, DESPLIEGUE Y BACKUP
+================================================================================
+
+DESPLIEGUE ZERO-DOWNTIME:
+- Estrategia con dos nodos detrÃ¡s de load balancer:
+    1. drain node A (LB deja de mandar trÃ¡fico)
+    2. deploy en node A (pull image, migrate, optimize)
+    3. health check OK â†’ activar node A en LB
+    4. drain node B
+    5. deploy node B
+    6. activar node B
+- Migraciones SIEMPRE backwards-compatible:
+    - Antes de borrar columna: dejar de leerla en cÃ³digo (release N),
+      luego borrarla (release N+1).
+    - Antes de renombrar tabla: crear nueva, doble escritura, leer de
+      nueva, borrar vieja (3 releases).
+- Comando `php artisan down --refresh=15 --retry=60 --secret=...` solo
+  para casos extremos.
+
+BACKUP STRATEGY:
+- spatie/laravel-backup configurado con:
+    - DB dump diario a las 02:00.
+    - Storage (uploads, attachments) diario.
+    - Destino: S3 con encriptaciÃ³n + retenciÃ³n 30 dÃ­as.
+    - Limpieza automÃ¡tica de backups > 30 dÃ­as (excepto 1 mensual).
+- Backup completo semanal a almacenamiento offsite (S3 cross-region o
+  Backblaze B2).
+- Test de restore mensual (comando `backup:test-restore` que prueba en
+  staging).
+- Alerta si backup falla 2 veces seguidas.
+
+CRON / SCHEDULER (app/Console/Kernel.php):
+- 02:00 â€” backup:run
+- 02:30 â€” auto procesos diarios (AutoProcesoService->runDaily())
+- 03:00 â€” etl:sync-deltas (durante migraciÃ³n)
+- 04:00 â€” partitions:rotate (mensual dÃ­a 25)
+- cada 5min â€” queue:monitor + horizon:status
+- cada hora â€” health:check (envÃ­a alerta si falla)
+- diario â€” notifications:send-summary (resumen al admin)
+- semanal lunes 08:00 â€” queries:report-slow
+
+DOCKER PRODUCCIÃ“N:
+- ImÃ¡genes etiquetadas con commit sha + version tag.
+- Multi-stage Dockerfile (build â†’ runtime ligero).
+- Servicios:
+    nginx (con TLS, gzip, brotli)
+    php-fpm (PHP 8.3 + opcache + JIT)
+    mysql 8 (master)
+    mysql 8 (replica) opcional
+    redis 7
+    horizon (workers)
+    scheduler (php artisan schedule:work)
+- Healthchecks Docker en cada servicio.
+- Limites de recursos definidos (mem_limit, cpus).
+- VolÃºmenes para storage y mysql data, NUNCA dentro del contenedor.
+- Logs a stdout/stderr (recolectados por driver de log).
+
+PERFORMANCE PHP:
+- OPcache habilitado en producciÃ³n con preload.
+- JIT activado (opcache.jit=1255, opcache.jit_buffer_size=256M).
+- php-fpm pm=dynamic con valores ajustados al servidor.
+- composer install --optimize-autoloader --no-dev.
+- php artisan config:cache, route:cache, view:cache, event:cache.
+- php artisan optimize en cada deploy.
+
+RUNBOOK (docs/runbook.md):
+Cada incidente comÃºn con pasos:
+- "Cola Redis no procesa": verificar Horizon, restart, ver logs.
+- "DB connections agotadas": revisar slow queries, killear, escalar.
+- "Disco lleno": rotar logs, limpiar storage/app/temp.
+- "Backup fallÃ³": ejecutar manual, verificar S3 creds.
+- "Login no funciona": revisar Redis (sessions), DNS, certificados.
+- "Reporte tarda > 30s": chequear Ã­ndices, particiones, slow log.
+- "Memoria OOM en worker": ajustar memory_limit, reducir chunk size.
+
+================================================================================
+PASO 6.8 â€” INTERNACIONALIZACIÃ“N Y ZONA HORARIA
+================================================================================
+
+- APP_TIMEZONE=America/Santo_Domingo (o la que corresponda al negocio).
+- APP_LOCALE=es, APP_FALLBACK_LOCALE=es.
+- Todas las fechas almacenadas en UTC en DB, mostradas en zona local.
+- Carbon::setLocale('es') en AppServiceProvider boot.
+- Traducciones en /resources/lang/es/ (validation, passwords, auth,
+  pagination, mÃ³dulos custom).
+- Si hay multi-tenant futuro, dejar hook para timezone por usuario
+  (columna users.timezone).
+- Formatos de fecha y nÃºmero consistentes (helpers o Carbon macros):
+    formatoFechaCorta(), formatoFechaLarga(), formatoMoneda($valor, $moneda).
+- Locale en MySQL (collation utf8mb4_unicode_ci).
+- Manejo correcto de DST si la zona aplica.
+
+================================================================================
+PASO 7 â€” ENTREGABLES
+================================================================================
+
+Entrega el cÃ³digo en este orden, esperando aprobaciÃ³n entre fases:
+
+FASE 0 â€” Bootstrap (sin cÃ³digo todavÃ­a):
+  - docs/erd.md (diagrama ER textual o link a dbdiagram.io)
+  - docs/migracion-plan.md (orden de tablas, dependencias, riesgos)
+  - docs/decisiones.md (cada renombrado, cada unificaciÃ³n, cada SP-vs-PHP)
+  - docs/etl-plan.md (mapeo viejoâ†’nuevo columna por columna)
+  - docs/cutover-runbook.md (paso a paso del dÃ­a D)
+  - docs/rollback-plan.md
+
+FASE 1 â€” Esqueleto:
+  - composer.json con deps actualizadas y "php": "^8.3" (incluyendo
+    Sanctum, Horizon, Pint, Larastan, Telescope, Sentry, Backup,
+    Activitylog, Dusk).
+  - .env.example con TODAS las variables necesarias y comentarios
+    (incluir DB_READ_HOST, SENTRY_DSN, BACKUP_S3_*, etc.).
+  - docker-compose.yml + dockerfile multi-stage + nginx config con TLS.
+  - config/* ajustados:
+      database (default mysql, write/read connections),
+      queue (default redis, colas high/default/low/reports/exports),
+      session (driver redis),
+      cache (driver redis con tags),
+      logging (channels separados),
+      sanctum, horizon, telescope, backup, health.
+  - phpunit.xml con suites Unit, Feature, Integration.
+  - phpstan.neon nivel 6.
+  - pint.json con preset Laravel + customs.
+  - rector.php para PHP 8.3 + Laravel 12.
+  - .github/workflows/ci.yml, deploy.yml, security.yml.
+  - .husky/ con pre-commit y commit-msg.
+  - Estructura de directorios vacÃ­a pero presente.
+
+FASE 2 â€” Base de datos:
+  - CatÃ¡logos primero (departamentos, ciudades, paises, bancos,
+    posiciones, turnos, tipos_documento, estados_civiles, etc.)
+  - Tablas core (users, agencias, empleados, rutas, etc.)
+  - Tablas pivot
+  - Tablas operativas (tareas, asistencias, etc.)
+  - Tablas histÃ³ricas (ventas, premios, etc.) CON particiones.
+  - Stored procedures, triggers, views (cada uno en su migraciÃ³n).
+  - Ãndices (en migraciones separadas, idempotentes).
+  - Seeders (catÃ¡logos bÃ¡sicos + 1 superadmin con env).
+  - Factories para todos los modelos principales.
+
+FASE 3 â€” Modelos + relaciones + Enums + DTOs:
+  - Cada modelo con: $table, $fillable, $casts (incluyendo enum casts),
+    $hidden, relaciones, scopes, accessors, mutators, observers si aplica.
+  - Tarea.php es el ejemplo de cÃ³mo deben verse TODOS.
+  - app/Enums/ con todos los enums del dominio.
+  - app/DataTransferObjects/ con DTOs readonly.
+
+FASE 4 â€” Servicios, Actions y Jobs:
+  - AutoProcesoService (replicar el actual)
+  - IncentivoService + CalcularIncentivoAction + CalcularIncentivoJob
+  - VentasService, PremiosService, RecargasService, PagosService
+  - ReporteService (genera todos los reportes â€” usa connection read)
+  - AsistenciaService, EmpleadoService
+  - BackupService (wrapper sobre spatie/laravel-backup si se necesita
+    customizaciÃ³n).
+  - Jobs especÃ­ficos para procesos pesados (CalcularIncentivoJob,
+    GenerarReporteVentasJob, ProcesarImportacionAgenciasJob,
+    EnviarNotificacionMasivaJob).
+
+FASE 5 â€” Controladores (THIN) + Form Requests + Policies + Middleware:
+  - Cada mÃ³dulo en su carpeta.
+  - API en app/Http/Controllers/Api/V1/.
+  - Form Requests por acciÃ³n (Store/Update/Delete/Index).
+  - Policies por modelo principal.
+  - Middleware: EnsureUserHasModule, AuditAccess, ForceHttps,
+    SecurityHeaders, RequestId.
+
+FASE 6 â€” Rutas y API:
+  - web.php agrupado por prefix() y name().
+  - api.php con controladores propios, Sanctum auth, throttling, /v1/.
+  - Todas las mutaciones por POST/PUT/PATCH/DELETE.
+  - OpenAPI / Scribe configurado para documentaciÃ³n auto-generada.
+  - CORS configurado.
+
+FASE 7 â€” Frontend:
+  - Layout principal con footer global y versiÃ³n desde .env.
+  - Componentes Blade (<x-...>) reutilizables (button, input, modal,
+    table, card, alert, toast, page-header, empty-state, form-field,
+    data-table, pagination).
+  - Alpine.js para interactividad (toggles, modales, autocompletes,
+    toasts, loading states).
+  - yajra/laravel-datatables para listas grandes server-side.
+  - Tema Velzon preservado, design tokens en tailwind.config.js.
+
+FASE 8 â€” Mails, Exports, Imports, Notifications, Schedule:
+  - Mailables actuales preservados.
+  - Exports/Imports con maatwebsite/excel.
+  - Notifications canal database + mail + (broadcast opcional).
+  - Console/Kernel.php con todas las tareas programadas listadas en
+    PASO 6.7.
+
+FASE 9 â€” Observabilidad y Operaciones:
+  - Logging channels configurados.
+  - Sentry integrado con release tracking.
+  - Telescope habilitado solo en local/staging.
+  - Health checks (/health, /ready, dashboard).
+  - Slow query log activado en docker-compose.
+  - spatie/laravel-backup configurado.
+  - Horizon dashboard accesible solo a superadmin.
+  - Comando partitions:rotate y data:archive.
+
+FASE 10 â€” MigraciÃ³n de datos legacy (ETL):
+  - Comandos artisan etl:migrar-* por cada tabla con datos.
+  - etl:sync-deltas, etl:validar.
+  - Ejecutar carga inicial en staging contra dump del original.
+  - ValidaciÃ³n de cifras (count, sum) â€” debe coincidir.
+
+FASE 11 â€” Tests y Calidad:
+  - Feature tests de los flujos crÃ­ticos.
+  - Browser tests con Dusk.
+  - Tests de Permissions matrix (cada rol vs cada ruta).
+  - composer test, pint --test, phpstan analyse pasan en verde.
+  - Coverage >= 60% global, >= 80% en Services/Actions.
+
+FASE 12 â€” DocumentaciÃ³n final:
+  - README.md (instalaciÃ³n, comandos, variables, despliegue, testing).
+  - docs/api.md (endpoints + ejemplos curl).
+  - docs/diccionario-datos.md (cada tabla, cada columna, quÃ© significa).
+  - docs/runbook.md (cÃ³mo recuperar el sistema en cada incidente comÃºn).
+  - docs/cache-strategy.md (matriz de keys/TTL/invalidadores).
+  - docs/retencion-datos.md (polÃ­ticas por tabla).
+  - docs/seguridad.md (modelo de amenazas, controles aplicados).
+  - CHANGELOG.md (versiones y cambios).
+
+================================================================================
+RESTRICCIONES DE PROCESO
+================================================================================
+
+- NO sobre-ingenierÃ­as. No agregues features que no existen en el
+  proyecto original. Reconstruir = reproducir lo mismo, mejor hecho.
+- NO pongas cÃ³digo mock/placeholder con TODO. Si una pieza no se puede
+  reconstruir sin mÃ¡s info (ej. cuerpo exacto del SP CalculoIncentivo),
+  PREGÃšNTAME antes en lugar de inventar.
+- NO crees archivos .md de planificaciÃ³n intermedia que el usuario no pidiÃ³.
+  Reporta tu plan en el chat.
+- COMMITS pequeÃ±os, atÃ³micos, con mensaje que diga QUÃ‰ y POR QUÃ‰.
+  Formato: <tipo>: <descripciÃ³n>  (feat|fix|refactor|chore|docs|test).
+- USA TodoWrite para llevar el progreso de las 10 fases.
+- En cada fase, al terminar, REPORTA: quÃ© hiciste, quÃ© decisiones tomaste,
+  quÃ© quedÃ³ pendiente, y ESPERA aprobaciÃ³n antes de seguir.
+
+================================================================================
+LO QUE EL PROYECTO ACTUAL HACE BIEN â€” PRESERVAR
+================================================================================
+
+Estos elementos del proyecto original estÃ¡n bien. NO los rehagas peor:
+
+- PatrÃ³n addIndexIfMissing / dropIndexIfExists en migraciones de Ã­ndices.
+- Modelo Tarea con scopes, accessors, casts (Ãºsalo de plantilla).
+- AutoProcesoService como patrÃ³n de Service.
+- AuthController con regenerate/invalidate.
+- Spatie Permission seedeado con roles del negocio.
+- Notificaciones persistentes (tabla notifications + Notifications nativo).
+- ValidaciÃ³n con Rule::in / closures / regex (extraerla a Form Requests).
+- Foreign keys con polÃ­ticas explÃ­citas (cascadeOnDelete, nullOnDelete,
+  restrictOnDelete) â€” sigue usÃ¡ndolas.
+- ENUM a nivel MySQL en tareas.estado y tareas.prioridad â€” replicar.
+- MigraciÃ³n compatible cross-entorno (detectar UNSIGNED).
+- Mail templates (AsistenciaComparativa, IncumplimientoHorario,
+  NuevoUsuarioMail, AutoProcesoResumen, MetaIncentivoMiniReporte).
+- Imports/Exports con maatwebsite/excel.
+- Stack moderno (no downgrades).
+
+================================================================================
+LO QUE EL PROYECTO ACTUAL HACE MAL â€” ARREGLAR
+================================================================================
+
+(Detalles en evaluacion-proyecto-4.7.txt y evualuacion-proyecto-5.3.txt)
+
+CRÃTICO:
+- ~42 rutas GET con mutaciÃ³n (CSRF expuesto) â†’ POST/DELETE.
+- Cero tests reales â†’ mÃ­nimo de feature tests indicado arriba.
+- Stored procedures fuera de versionado â†’ migraciones DB::unprepared.
+- Tablas legacy sin migraciÃ³n create_* â†’ todas con migraciÃ³n baseline.
+- DB_CONNECTION=sqlite por default en .env.example pero el proyecto
+  usa MySQL â†’ cambiar a mysql.
+
+ALTO:
+- Controladores monolÃ­ticos (1700+ lÃ­neas) â†’ Services + Actions.
+- Livewire instalado y vacÃ­o â†’ desinstalar y NO replicar. UI con
+  Blade + Alpine + Datatables.
+- ini_set en controlador â†’ Job en cola.
+- Constantes mÃ¡gicas [538, 539] â†’ Enum.
+- Rutas duplicadas lotobet/lotonet â†’ controlador parametrizado.
+- Vistas de 1700 lÃ­neas â†’ componentes.
+- api.php vacÃ­o y "API" en web.php â†’ mover a api.php con auth tokens.
+- Modelos anÃ©micos (solo $fillable) â†’ relaciones, scopes, accessors.
+- Schema drift en Empleado (fillable con campos que no existen en migraciÃ³n)
+  â†’ sincronizar.
+- empleados con 40 columnas planas â†’ catÃ¡logos extraÃ­dos (3FN).
+
+MEDIO:
+- Cero soft deletes â†’ aplicar donde corresponde.
+- Cero factories (excepto User) â†’ factory por modelo.
+- Pocos seeders â†’ seeders de catÃ¡logos completos.
+- 'password123' hardcoded en seeder â†’ env('SEED_ADMIN_PASSWORD').
+- Sin pivot models custom â†’ crear donde la pivot tenga eventos/campos.
+- Sin CHECK constraints â†’ agregar en migraciones.
+- Casts faltantes en modelos numÃ©ricos â†’ agregar.
+- Tablas sin PK (ventas_producto_net) â†’ agregar id BIGINT.
+- Engine MyISAM en varias tablas â†’ migrar a InnoDB.
+- Naming inconsistente (VT_usuarios_Bet, GruNombre) â†’ snake_case minÃºsculas.
+
+BAJO:
+- Sin middleware propio â†’ crear EnsureUserHasModule, AuditAccess.
+- routes/web.php plano â†’ prefix() + name() agrupado.
+- Archivos basura en raÃ­z (tmp_*.php, .txt sin nombre) â†’ no replicar.
+- vtproductocontrollernet.php (lowercase) â†’ VentaProductoNetController.php.
+- Sin diccionario de datos â†’ docs/diccionario-datos.md.
+- Sin estrategia de backup â†’ cron de mysqldump en docker.
+- Commits poco informativos â†’ mensajes claros (formato indicado arriba).
+
+================================================================================
+CRITERIO DE FINALIZACIÃ“N
+================================================================================
+
+El proyecto se considera reconstruido cuando:
+
+DB Y MIGRACIONES:
+[  ] composer install && php artisan migrate --seed levanta el sistema
+     desde cero en una DB vacÃ­a sin errores ni warnings.
+[  ] Toda tabla tiene PK, engine InnoDB, FKs explÃ­citas, Ã­ndices apropiados.
+[  ] Tablas histÃ³ricas masivas estÃ¡n particionadas por fecha.
+[  ] Todo SP/trigger/view estÃ¡ versionado en una migraciÃ³n.
+[  ] FK con polÃ­ticas (cascade/null/restrict) coherentes con la semÃ¡ntica.
+[  ] CatÃ¡logos extraÃ­dos (departamentos, ciudades, bancos, etc.) en 3FN.
+[  ] CHECK constraints en columnas con rango (progreso, porcentajes, montos).
+
+CÃ“DIGO:
+[  ] Todos los mÃ³dulos del PASO 4 estÃ¡n funcionales (smoke test manual).
+[  ] NingÃºn controlador supera 200 lÃ­neas.
+[  ] No queda ningÃºn Route::get para mutaciÃ³n.
+[  ] NingÃºn ini_set() en controladores; procesos > 30s en cola.
+[  ] Cero constantes mÃ¡gicas; todo en Enums o config.
+[  ] Modelos con relaciones, scopes, accessors (no anÃ©micos).
+[  ] Vistas grandes componentizadas con Blade + Alpine + Datatables.
+[  ] Livewire NO estÃ¡ instalado en composer.json.
+
+CALIDAD AUTOMATIZADA:
+[  ] composer test pasa al 100% con coverage >= 60% global, >= 80% en
+     Services/Actions.
+[  ] vendor/bin/pint --test pasa sin errores.
+[  ] vendor/bin/phpstan analyse pasa nivel 6 sin errores.
+[  ] composer audit y npm audit sin vulnerabilidades crÃ­ticas.
+[  ] CI (GitHub Actions) verde en main.
+[  ] Pre-commit hooks instalados y funcionando.
+
+SEGURIDAD:
+[  ] Headers de seguridad (CSP, HSTS, X-Frame-Options) presentes.
+[  ] Rate limiting por usuario en endpoints costosos.
+[  ] Brute force protection activo en login.
+[  ] Audit log capturando cambios en modelos crÃ­ticos.
+[  ] Spatie Permission con matriz completa rolÃ—mÃ³duloÃ—acciÃ³n.
+[  ] Sanctum configurado para API con scopes.
+[  ] Encrypted casts en columnas sensibles.
+
+OBSERVABILIDAD:
+[  ] Sentry capturando errores con release tracking.
+[  ] /health y /ready responden correctamente.
+[  ] Logs estructurados JSON en producciÃ³n con channels separados.
+[  ] Slow query log activo con threshold 500ms.
+[  ] Horizon dashboard accesible y procesando colas.
+[  ] Alertas configuradas (cola atascada, backup fallido, error rate).
+
+ESCALABILIDAD:
+[  ] Read replica configurada y reportes la usan.
+[  ] Cache layers documentados con TTL e invalidaciÃ³n.
+[  ] Cursor pagination en listados grandes.
+[  ] Particionamiento aplicado y rotaciÃ³n automÃ¡tica.
+
+OPERACIONES:
+[  ] Backups diarios automatizados a S3 con encriptaciÃ³n y retenciÃ³n.
+[  ] Test de restore mensual programado.
+[  ] Docker compose levanta stack completo en 1 comando.
+[  ] Zero-downtime deploy probado en staging.
+[  ] Comando partitions:rotate y data:archive funcionando.
+
+ETL:
+[  ] Comandos etl:migrar-* por cada tabla legacy.
+[  ] Cifras (count, sum) coinciden post-migraciÃ³n.
+[  ] Plan de cutover y rollback documentados y probados en staging.
+
+DOCUMENTACIÃ“N:
+[  ] El diccionario de datos (docs/diccionario-datos.md) cubre cada tabla.
+[  ] El README explica cÃ³mo levantar dev y prod en menos de 5 comandos.
+[  ] docs/runbook.md con incidentes y resoluciÃ³n.
+[  ] docs/api.md con endpoints documentados (OpenAPI).
+[  ] docs/seguridad.md con modelo de amenazas.
+[  ] CHANGELOG.md con versiones y cambios.
+
+================================================================================
+INICIO
+================================================================================
+
+Cuando recibas este prompt:
+
+1. Confirma que entiendes la misiÃ³n y enumera las 9 metas (A-I).
+2. Lista los archivos del proyecto actual a los que tienes acceso.
+3. Empieza el PASO 1 (lectura completa) sin generar cÃ³digo.
+4. Entrega los seis sub-deliverables del PASO 1 (a-f).
+5. ESPERA aprobaciÃ³n del plan.
+6. Procede fase por fase (FASE 0 â†’ FASE 12) esperando aprobaciÃ³n entre
+   cada una. NO saltes fases.
+7. En cada fase usa TodoWrite para trackear progreso visible.
+
+NO empieces a generar migraciones ni modelos hasta que apruebe el plan
+del PASO 1.
+
+================================================================================
+ANEXO â€” CHECKLIST DE PAQUETES COMPOSER A INCLUIR
+================================================================================
+
+require:
+  php: ^8.3
+  laravel/framework: ^12.0
+  laravel/tinker: ^2.10
+  laravel/sanctum: ^4.0
+  laravel/horizon: ^5.0
+  yajra/laravel-datatables-oracle: ^11.0
+  spatie/laravel-permission: ^6.8
+  spatie/laravel-activitylog: ^4.0
+  spatie/laravel-backup: ^9.0
+  spatie/laravel-health: ^1.0
+  spatie/laravel-csp: ^3.0
+  maatwebsite/excel: ^3.1
+  barryvdh/laravel-dompdf: ^3.1
+  sentry/sentry-laravel: ^4.0
+  predis/predis: ^2.0  (o phpredis ext)
+  dedoc/scramble: ^0.12  (o knuckleswtf/scribe para OpenAPI)
+
+require-dev:
+  laravel/pint: ^1.24
+  laravel/telescope: ^5.0
+  laravel/dusk: ^8.0
+  laravel/pail: ^1.2
+  laravel/sail: ^1.41
+  larastan/larastan: ^3.0
+  rector/rector: ^1.0
+  fakerphp/faker: ^1.23
+  phpunit/phpunit: ^11.5
+  mockery/mockery: ^1.6
+  nunomaduro/collision: ^8.6
+
+================================================================================
+ANEXO â€” VARIABLES .env REQUERIDAS
+================================================================================
+
+# App
+APP_NAME, APP_ENV, APP_KEY, APP_DEBUG, APP_URL, APP_TIMEZONE, APP_LOCALE,
+APP_VERSION
+
+# DB write
+DB_CONNECTION=mysql, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
+
+# DB read replica (opcional pero recomendado)
+DB_READ_HOST_1, DB_READ_HOST_2
+
+# Redis
+REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB
+
+# Queue
+QUEUE_CONNECTION=redis
+
+# Session & Cache
+SESSION_DRIVER=redis, CACHE_STORE=redis
+
+# Mail
+MAIL_MAILER, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD,
+MAIL_ENCRYPTION, MAIL_FROM_ADDRESS, MAIL_FROM_NAME
+
+# Sanctum
+SANCTUM_STATEFUL_DOMAINS
+
+# Sentry
+SENTRY_LARAVEL_DSN, SENTRY_TRACES_SAMPLE_RATE
+
+# Backup
+BACKUP_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+AWS_DEFAULT_REGION
+
+# Telescope (solo dev/staging)
+TELESCOPE_ENABLED
+
+# Horizon
+HORIZON_PREFIX, HORIZON_DOMAIN
+
+# Seeder
+SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
+
+# Sistema CRM (custom)
+CRM_DEFAULT_SISTEMA, CRM_INCENTIVO_LIMIT, CRM_MAX_UPLOAD_MB
+
+================================================================================
+FIN DEL PROMPT MAESTRO
+================================================================================
+

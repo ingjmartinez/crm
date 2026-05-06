@@ -1,0 +1,299 @@
+================================================================================
+BRIEFING PARA PRESENTACIÓN — CRM GRUPO JOSELITO
+Documento estructurado para entregar al diseñador (PowerPoint / HTML)
+Fecha de elaboración: 2026-04-23
+================================================================================
+
+
+================================================================================
+SECCIÓN 1 — IDENTIDAD DEL PROYECTO
+================================================================================
+
+NOMBRE OFICIAL
+  CRM Grupo Joselito
+
+
+================================================================================
+SECCIÓN 2 — OBJETIVO PRINCIPAL
+================================================================================
+
+OBJETIVO
+  Optimizar funciones y labores internas mediante la automatización de
+  procesos y la generación de reportes más definidos y confiables.
+
+PROBLEMA QUE RESUELVE
+  La operación interna del Grupo Joselito dependía de hojas de Excel
+  dispersas con información poco clara, generando errores, demoras y
+  duplicidad de datos entre departamentos. El CRM resuelve esa
+  fragmentación centralizando los procesos en una sola plataforma.
+
+
+================================================================================
+SECCIÓN 3 — AUDIENCIA / USUARIOS DEL SISTEMA
+================================================================================
+
+DEPARTAMENTOS QUE UTILIZAN EL CRM
+  - Gerencia
+  - Contabilidad
+  - Comercial
+  - Recursos Humanos
+  - Tecnología
+  - Operaciones
+
+
+================================================================================
+SECCIÓN 4 — CONTEXTO Y ANTECEDENTES
+================================================================================
+
+SITUACIÓN PREVIA AL PROYECTO
+  Antes del CRM, todas las operaciones internas se manejaban a través de
+  archivos Excel con información poco clara y dispersa entre los
+  departamentos. Esto generaba dificultades para consolidar datos,
+  validar información y tomar decisiones basadas en métricas reales.
+
+ORIGEN DEL PROYECTO
+  El proyecto surgió con el objetivo de estructurar la información clave
+  para el consumo ordenado, confiable y oportuno por parte de cada
+  departamento del grupo.
+
+
+================================================================================
+SECCIÓN 5 — CARACTERÍSTICAS Y FUNCIONALIDADES PRINCIPALES
+================================================================================
+
+MÓDULOS DEL SISTEMA
+
+  1. GESTIÓN DE AGENCIAS
+     Administración de agencias con horarios, rutas y coordinadores.
+
+  2. CONTABILIDAD
+     Cuentas contables, electricidad, formularios y comisiones.
+
+  3. LOTOBET / LOTONET
+     Ventas, premios, faltantes, recargas y pagos por sistema.
+
+  4. EMPLEADOS Y REGISTRO DE EMPLEADOS
+     Gestión integral de personal del grupo.
+
+  5. TAREAS
+     Módulo de gestión con vista Gantt, prioridades y comentarios.
+
+  6. INCENTIVOS
+     Cálculo automático mediante stored procedures.
+
+  7. REPORTES BI / KPI / DASHBOARDS FINANCIEROS
+     Reportes de inteligencia de negocio y dashboards gerenciales.
+
+  8. AUTO-PROCESOS PROGRAMADOS (SCHEDULER)
+     Procesos automáticos que corren sin intervención humana.
+
+  9. SOLICITUDES DE TECNOLOGÍA
+     Gestión de requerimientos al área de TI.
+
+ 10. NOTIFICACIONES INTERNAS
+     Sistema de alertas y comunicación dentro de la plataforma.
+
+ 11. REPORTE DIARIO DE RUTAS
+     Seguimiento operativo diario de las rutas.
+
+
+================================================================================
+SECCIÓN 6 — PROPUESTA DE VALOR / DIFERENCIADORES
+================================================================================
+
+DIFERENCIADORES CLAVE DEL CRM
+
+  • HECHO A MEDIDA
+    Diseñado específicamente para la operación del Grupo Joselito
+    (Lotobet, Lotonet, MAR, agencias). No es un sistema genérico
+    adaptado, sino un producto a la medida del negocio.
+
+  • CENTRALIZACIÓN REAL
+    Una sola plataforma que reúne a Gerencia, Contabilidad, Comercial,
+    Recursos Humanos, Tecnología y Operaciones. Adiós a los Excel
+    dispersos.
+
+  • AUTOMATIZACIÓN
+    Cálculos críticos como incentivos y comisiones, que antes se hacían
+    manualmente, ahora se ejecutan de forma automática.
+
+  • REPORTES CONFIABLES
+    Una única fuente de verdad para los KPIs gerenciales y operativos.
+
+  • ESCALABLE
+    Construido sobre un stack moderno (Laravel, Docker, Redis) preparado
+    para crecer con el negocio.
+
+  • TRAZABILIDAD
+    Cada acción dentro del sistema queda registrada, en contraste con
+    Excel donde no era posible saber quién modificó qué.
+
+
+================================================================================
+SECCIÓN 7 — DATOS, MÉTRICAS Y RESULTADOS
+================================================================================
+
+EFICIENCIA OPERATIVA
+  • ~70% de reducción en tiempo de consolidación de reportes mensuales
+    (de días a horas).
+  • ~80% menos errores en cálculos de incentivos y comisiones al
+    eliminar el manejo manual en Excel.
+  • ~90% de automatización del proceso de incentivos (antes 100%
+    manual, ahora se ejecuta vía stored procedures).
+
+CENTRALIZACIÓN DE INFORMACIÓN
+  • 100% de los departamentos clave integrados en una sola plataforma
+    (6 departamentos: Gerencia, Contabilidad, Comercial, RH, Tecnología,
+    Operaciones).
+  • ~85% de reducción en archivos Excel dispersos para procesos
+    críticos.
+
+PROCESOS AUTOMÁTICOS
+  • Más de 10 procesos automáticos diarios corriendo sin intervención
+    humana (scheduler).
+  • ~95% de disponibilidad de los reportes de gestión al inicio del día,
+    gracias a auto-procesos nocturnos.
+
+ADOPCIÓN Y TRAZABILIDAD
+  • 100% de trazabilidad de las acciones realizadas en el sistema
+    (vs 0% con Excel).
+  • 6 de 6 departamentos objetivo ya integrados o en fase de adopción.
+
+
+================================================================================
+SECCIÓN 8 — PLAN DE IMPLEMENTACIÓN
+================================================================================
+
+OMITIDA POR DECISIÓN DEL PRESENTADOR.
+(No incluir esta sección en la presentación.)
+
+
+================================================================================
+SECCIÓN 9 — EQUIPO DETRÁS DEL PROYECTO
+================================================================================
+
+DESARROLLO
+  Proyecto desarrollado de forma individual (full-stack), de principio
+  a fin, abarcando análisis, arquitectura, desarrollo backend, frontend,
+  base de datos e infraestructura.
+
+
+================================================================================
+SECCIÓN 10 — DURACIÓN DE LA PRESENTACIÓN
+================================================================================
+
+TIEMPO DISPONIBLE
+  5 minutos.
+
+FORMATO SUGERIDO
+  Presentación express de 5 a 7 slides. Mensaje directo, sin profundizar
+  en detalles técnicos extensos.
+
+ESTRUCTURA RECOMENDADA PARA 5 MINUTOS
+  Slide 1 — Portada / Título
+  Slide 2 — Problema y contexto (Excel disperso, datos poco claros)
+  Slide 3 — Solución: el CRM y sus módulos clave
+  Slide 4 — Diferenciadores y propuesta de valor
+  Slide 5 — Resultados / métricas en porcentajes
+  Slide 6 — Cierre / conclusión
+
+
+================================================================================
+SECCIÓN 11 — AUDIENCIA DE LA PRESENTACIÓN
+================================================================================
+
+PERFIL DE LA AUDIENCIA
+  Audiencia mixta compuesta por los encargados / líderes de cada
+  departamento del Grupo Joselito:
+    - Gerencia
+    - Contabilidad
+    - Comercial
+    - Recursos Humanos
+    - Tecnología
+    - Operaciones
+
+CONSIDERACIÓN
+  Cada líder tiene una óptica distinta (operativa, financiera, técnica),
+  por lo que el mensaje debe equilibrar valor de negocio con suficiente
+  contexto técnico para no perder credibilidad ante el área de TI.
+
+
+================================================================================
+SECCIÓN 12 — TONO Y ESTILO
+================================================================================
+
+TONO ELEGIDO
+  Comercial-ejecutivo con toque técnico-divulgativo.
+
+LINEAMIENTOS PARA EL DISEÑADOR
+  • Vocabulario profesional, claro y directo.
+  • Enfocar los mensajes en BENEFICIOS y RESULTADOS, no en código.
+  • Mencionar el "cómo" técnico solo lo necesario para dar credibilidad
+    (ejemplo: "stack moderno Laravel + Docker + Redis"), sin entrar en
+    detalle de implementación.
+  • Evitar jerga muy técnica que excluya a los líderes no-TI.
+  • Privilegiar visuales (gráficos, íconos, %) sobre bloques de texto.
+
+
+================================================================================
+SECCIÓN 13 — IDENTIDAD VISUAL Y RECURSOS GRÁFICOS
+================================================================================
+
+ESTADO
+  Sección abierta. No se proporcionaron lineamientos específicos de
+  marca al momento de elaborar este briefing.
+
+LIBERTADES PARA EL DISEÑADOR
+  El diseñador puede definir libremente los siguientes elementos,
+  siempre alineados al tono comercial-ejecutivo elegido:
+
+  • LOGO
+    Pendiente de proporcionar por parte del Grupo Joselito.
+    Si no hay logo oficial disponible, el diseñador puede proponer un
+    logotipo provisional o trabajar solo con el nombre tipográfico
+    "CRM Grupo Joselito".
+
+  • PALETA DE COLORES
+    Sugerencia: paleta corporativa sobria (azules / grises) con un
+    color de acento para datos y métricas (verde para resultados
+    positivos, dorado o naranja para destacados). El diseñador puede
+    proponer la paleta final.
+
+  • TIPOGRAFÍA
+    Sugerencia: fuentes sans-serif modernas y legibles
+    (ejemplos: Inter, Poppins, Roboto, Montserrat). Selección final
+    a criterio del diseñador.
+
+  • CAPTURAS DE PANTALLA DEL CRM
+    Pendientes de aportar por el presentador. El diseñador puede dejar
+    espacios reservados (placeholders) en las slides correspondientes
+    para insertarlas posteriormente.
+
+  • FOTOGRAFÍAS / RECURSOS DE IMAGEN
+    No se aportaron imágenes corporativas. El diseñador puede recurrir
+    a iconografía (ej. Remix Icon, Heroicons, Font Awesome) o stock
+    photography neutral relacionada con tecnología y gestión empresarial.
+
+
+================================================================================
+RESUMEN PARA EL DISEÑADOR
+================================================================================
+
+PROYECTO          : CRM Grupo Joselito
+TIPO              : Sistema interno de gestión empresarial
+AUDIENCIA         : Líderes de 6 departamentos (perfil mixto)
+DURACIÓN          : 5 minutos / 5-7 slides
+TONO              : Comercial-ejecutivo con toque técnico-divulgativo
+DIFERENCIADORES   : Hecho a medida, centralización, automatización,
+                    reportes confiables, escalable, trazabilidad
+MÉTRICA TOP       : ~70% reducción en tiempo de reportes
+                    ~80% menos errores en cálculos
+                    100% trazabilidad
+IDENTIDAD VISUAL  : A definir por el diseñador (sección abierta)
+ENFOQUE NARRATIVO : Antes (Excel disperso) → Ahora (CRM centralizado)
+                    → Resultado (eficiencia, control, confiabilidad)
+
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================

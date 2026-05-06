@@ -1,0 +1,645 @@
+================================================================================
+CONTEXTO DE CODIGO DEL PROYECTO CRM PARA RECONSTRUCCION V2
+Fecha: 2026-04-27
+Ruta analizada: D:\crm
+Documento companero de: prompt-reconstruccion-crm-v2.txt
+================================================================================
+
+PROPOSITO
+================================================================================
+
+Este documento resume el codigo actual del CRM para que un agente pueda leer el
+proyecto con direccion y reconstruir una V2 sin inventar el negocio.
+
+No reemplaza la lectura del codigo fuente. Es un mapa de navegacion:
+- que carpetas leer primero
+- que modulos existen
+- donde esta la logica mas riesgosa
+- que patrones preservar
+- que patrones corregir
+- que archivos revisar antes de generar migraciones, services, controllers o UI
+
+Uso recomendado junto a los 3 TXT:
+1. prompt-reconstruccion-crm-v2.txt: vision, reglas y proceso.
+2. contexto-codigo-crm-v2.txt: mapa del codigo Laravel actual.
+3. contexto-db-crm-v2.txt: mapa de base de datos real y migraciones faltantes.
+
+================================================================================
+STACK Y ESTADO GENERAL DEL CODIGO
+================================================================================
+
+Framework y paquetes principales detectados:
+- Laravel Framework: 12.34.0
+- PHP del entorno: 8.3.x
+- barryvdh/laravel-dompdf: 3.1.1
+- laravel/pint: 1.25.1
+- laravel/sail: 1.46.0
+- laravel/tinker: 2.10.1
+- livewire/livewire: 3.6.4
+- maatwebsite/excel: 3.1.67
+- phpunit/phpunit: 11.5.42
+- spatie/laravel-permission: 6.24.1
+
+Frontend declarado:
+- Vite
+- Tailwind
+- Axios
+- Librerias estaticas en public/libs
+- Template visual tipo Velzon dentro del proyecto
+
+Conteo aproximado:
+- 325 archivos PHP relevantes en app, routes, config, database, resources y tests.
+- 50 migraciones PHP en database/migrations.
+- 361 rutas Laravel detectadas por php artisan route:list --except-vendor.
+
+Advertencia:
+El proyecto tiene Livewire instalado, pero el prompt V2 indica que la nueva version
+debe usar Blade + Alpine.js + Vite, no Livewire, salvo decision futura aprobada.
+
+================================================================================
+CARPETAS PRINCIPALES
+================================================================================
+
+app/
+- Console
+- Exports
+- Http
+- Imports
+- Livewire
+- Mail
+- Models
+- Notifications
+- Providers
+- Services
+- Support
+
+routes/
+- web.php: contiene casi todo el sistema.
+- api.php: casi vacio o subutilizado.
+
+resources/views/
+- Contiene la UI principal Blade.
+- Hay vistas muy grandes con HTML, JS y logica mezclada.
+
+database/
+- migrations: parte del esquema esta versionada.
+- seeders/factories: base limitada.
+- varios dumps SQL estan dentro del repo.
+
+public/
+- libs y assets del template.
+- Deben preservarse o migrarse de forma controlada si se desea mantener UI.
+
+================================================================================
+MODULOS DE NEGOCIO DETECTADOS
+================================================================================
+
+Core:
+- Inicio/dashboard
+- Usuarios
+- Roles
+- Permisos
+- Sesiones superadmin
+
+Comercial / ventas:
+- Ventas por usuario Lotobet/Lotonet
+- Ventas por producto Lotobet/Lotonet
+- Ventas flash
+- Ventas MAR
+- KPI ventas
+- Ventas por agencia
+- Ventas por cedula
+- Cruce/verificador de usuarios
+
+Agencias / operaciones:
+- Agencias
+- Agencias inactivas
+- Agencias sin venta
+- Agencias no registradas
+- Incumplimientos de horario
+- Asistencia comparativa
+- Rutas
+- Operador ruta
+- Coordinador operador
+- Reporte diario de rutas
+
+RRHH:
+- Empleados
+- Registro de empleados
+- Solicitudes de empleo
+- Novedades de horario
+- Empleados no regularizados
+- Ventas sin empleado
+
+Contabilidad:
+- Cuentas contables
+- Detalle de cuentas
+- Electricidad
+- Averias del dia
+- Seguimiento del dia
+- Estado de resultado
+- Flujo de ruta
+- Comisiones
+
+Incentivos:
+- Calculo de incentivos
+- Plan agencia
+- Distribucion de incentivos
+- Pago incentivos admin/agente/coordinador
+- Efectividad de usuarios
+- Metas
+
+Tecnologia:
+- Solicitudes de tecnologia
+- Flujo de asignacion, progreso y cierre
+
+Procesos:
+- Procesos por departamento
+- Auto proceso programado Lotobet/Lotonet
+
+Integraciones externas:
+- Lotobet
+- Lotonet
+- API contable/cuentas
+- Posibles APIs externas con tokens/cookies actuales
+
+================================================================================
+MODELOS DETECTADOS
+================================================================================
+
+Modelos en app/Models:
+- Agencia
+- Asistencia
+- AsistenciaNet
+- AutoProcesoConfig
+- BancoOperacion
+- CatalogoJuego
+- Consorcio
+- ContabilidadElectricidad
+- ContabilidadElectricidadAveriaDia
+- ContabilidadElectricidadSeguimientoDia
+- CoordinadorOperador
+- CuentaContable
+- DepartamentoCrm
+- DetalleCuenta
+- Empleado
+- FaltantesBet
+- FaltantesNet
+- MarVentas
+- NovedadHorario
+- OperadorRuta
+- PagoAOtraEmpresa
+- PagoAOtraEmpresaNet
+- PagoMismaEmpresa
+- PagoMismaEmpresaNet
+- PagoPorOtraEmpresa
+- PagoPorOtraEmpresaNet
+- Paquetico
+- Premio
+- PremioNet
+- ProcesoDepartamento
+- Recarga
+- RecargaNet
+- RegistroEmpleado
+- ReporteDiarioRuta
+- Ruta
+- SolicitudEducacion
+- SolicitudEmpleo
+- SolicitudFamiliar
+- SolicitudReferenciaLaboral
+- SolicitudReferenciaPersonal
+- Tarea
+- TareaComentario
+- TecnologiaSolicitud
+- Token
+- User
+- VtProducto
+- VtProductoNet
+- VtUsuarioBet
+- VtUsuarioNet
+- VwUsuariosUnion
+
+Lectura obligatoria para reconstruccion:
+1. User
+2. Tarea
+3. TareaComentario
+4. Agencia
+5. Empleado
+6. AutoProcesoConfig
+7. TecnologiaSolicitud
+8. ReporteDiarioRuta
+9. VtUsuarioBet / VtUsuarioNet
+10. VtProducto / VtProductoNet
+11. Premio / PremioNet
+12. Recarga / RecargaNet
+13. Pago* Bet/Net
+
+Patron que conviene preservar:
+- Tarea parece ser uno de los modelos mas cercanos al estilo deseado:
+  casts, enums/estados de negocio, relaciones, scopes y flujo de cierre.
+
+Patron que conviene corregir:
+- Muchos modelos solo exponen fillable/table sin relaciones completas.
+- Algunos modelos reflejan tablas legacy con PK custom o sin timestamps.
+- Hay drift entre estructura real de DB y lo que algunos modelos/migraciones
+  declaran.
+
+================================================================================
+CONTROLADORES MAS GRANDES
+================================================================================
+
+Estos son los archivos donde se concentra mas logica de negocio:
+
+- app\Http\Controllers\AgenciaController.php: 1504 lineas
+- app\Http\Controllers\IncentivosController.php: 1244 lineas
+- app\Http\Controllers\ReporteController.php: 967 lineas
+- app\Http\Controllers\TareaController.php: 555 lineas
+- app\Http\Controllers\InicioController.php: 529 lineas
+- app\Http\Controllers\ComercialController.php: 478 lineas
+- app\Http\Controllers\TecnologiaSolicitudController.php: 464 lineas
+- app\Http\Controllers\AsistenciaComparativaController.php: 435 lineas
+- app\Http\Controllers\Gerencia\VentaGerencialController.php: 425 lineas
+- app\Http\Controllers\Api.php: 424 lineas
+- app\Http\Controllers\Gerencia\GerencialController.php: 413 lineas
+- app\Http\Controllers\FinanceDashboardController.php: 408 lineas
+- app\Http\Controllers\EmpleadoController.php: 403 lineas
+- app\Http\Controllers\VentasController.php: 378 lineas
+- app\Http\Controllers\ContabilidadFlujoRutaController.php: 362 lineas
+
+Como debe leerlos el agente:
+1. No refactorizar de golpe.
+2. Extraer reglas por modulo.
+3. Identificar queries pesados.
+4. Identificar validaciones que deben pasar a Form Requests.
+5. Identificar integraciones externas que deben pasar a Services.
+6. Identificar procesos lentos que deben pasar a Jobs.
+7. Identificar respuestas usadas por vistas/AJAX antes de cambiar firmas.
+
+================================================================================
+VISTAS BLADE MAS GRANDES
+================================================================================
+
+- resources\views\app.blade.php: 2161 lineas
+- resources\views\agencias\index.blade.php: 1525 lineas
+- resources\views\operaciones\reportes\diario.blade.php: 1487 lineas
+- resources\views\gerencia\gerencial.blade.php: 1364 lineas
+- resources\views\incentivos\index.blade.php: 1363 lineas
+- resources\views\comercial\ventas-producto.blade.php: 1232 lineas
+- resources\views\tareas\index.blade.php: 932 lineas
+- resources\views\mantenimiento\catalogo_juegos\index.blade.php: 920 lineas
+- resources\views\contabilidad\reportes\flujo_ruta.blade.php: 808 lineas
+- resources\views\contabilidad\electricidad.blade.php: 791 lineas
+- resources\views\contabilidad\reportes\estado_resultado.blade.php: 759 lineas
+- resources\views\kpi-lotobet\index.blade.php: 744 lineas
+- resources\views\tecnologia\solicitudes.blade.php: 736 lineas
+- resources\views\comercial\kpi-ventas.blade.php: 733 lineas
+- resources\views\agencias\asistencia_comparativa.blade.php: 713 lineas
+
+Regla para V2:
+- No copiar vistas gigantes tal cual.
+- Primero preservar comportamiento.
+- Luego dividir en layout, componentes Blade, parciales y JS en resources/js.
+- Mantener template/identidad visual si el usuario lo aprueba.
+
+================================================================================
+SERVICES, COMANDOS, JOBS Y PROCESOS
+================================================================================
+
+Service detectado:
+- app\Services\AutoProcesoService.php
+
+Comandos detectados:
+- app\Console\Commands\IncentivoProcessJobs.php
+- app\Console\Commands\RunAutoProcesoProgramado.php
+- app\Console\Commands\RunCalculoIncentivo.php
+
+Scheduler detectado:
+- * * * * * php artisan auto-proceso:run-due
+
+Regla para V2:
+- AutoProcesoService debe estudiarse antes de disenar procesos.
+- No llamar controladores desde servicios/jobs.
+- Crear clientes externos separados:
+  - LotobetClient
+  - LotonetClient
+  - ContabilidadClient
+- Crear jobs por proceso:
+  - SyncVentasUsuariosJob
+  - SyncVentasProductoJob
+  - SyncPremiosJob
+  - SyncRecargasJob
+  - SyncFaltantesJob
+  - SyncAsistenciasJob
+  - CalcularIncentivoJob
+- Registrar ejecuciones en una tabla tipo proceso_runs/etl_runs.
+
+================================================================================
+RUTAS Y RIESGOS
+================================================================================
+
+Estado:
+- 361 rutas detectadas.
+- La mayor parte del sistema vive en routes/web.php.
+- routes/api.php esta subutilizado.
+- Hay rutas tipo API dentro de web.php usando middleware web/sesion.
+
+Rutas GET que mutan datos o disparan procesos:
+- /generar-token
+- /iniciar-session
+- /save-ventas-usuarios-lotobet
+- /delete-ventas-usuarios-lotobet
+- /save-faltantes-lotobet
+- /delete-faltantes-lotobet
+- /save-ventas-producto-lotobet
+- /delete-ventas-producto-lotobet
+- /save-recargas-lotobet
+- /delete-recargas-lotobet
+- /save-premios-lotobet
+- /delete-premios-lotobet
+- /save-pagos-misma-empresa-lotobet
+- /delete-pagos-misma-empresa-lotobet
+- /save-pagos-aotra-empresa-lotobet
+- /delete-pagos-aotra-empresa-lotobet
+- /save-pagos-porotra-empresa-lotobet
+- /delete-pagos-porotra-empresa-lotobet
+- /save-asistencias-lotobet
+- /delete-asistencias-lotobet
+- /save-ventas-usuarios-lotonet
+- /delete-ventas-usuarios-lotonet
+- /save-faltantes-lotonet
+- /delete-faltantes-lotonet
+- /save-paquetico-lotonet
+- /delete-paquetico-lotonet
+- /save-recargas-lotonet
+- /delete-recargas-lotonet
+- /save-ventas-producto-lotonet
+- /delete-ventas-producto-lotonet
+- /save-premios-lotonet
+- /delete-premios-lotonet
+- /save-pagos-misma-empresa-lotonet
+- /delete-pagos-misma-empresa-lotonet
+- /save-pagos-aotra-empresa-lotonet
+- /delete-pagos-aotra-empresa-lotonet
+- /save-pagos-porotra-empresa-lotonet
+- /delete-pagos-porotra-empresa-lotonet
+- /save-asistencias-lotonet
+- /delete-asistencias-lotonet
+- /save-mar-ventas
+- /delete-mar-ventas
+- /empleados/sincronizar
+- /incentivos/procesar
+- /delete-ventas-flash-lotobet
+- /delete-ventas-flash-lotonet
+
+Regla para V2:
+- GET solo consulta.
+- POST crea/dispara procesos.
+- PUT/PATCH actualiza.
+- DELETE elimina.
+- Toda mutacion debe tener CSRF, auth, permission y audit log.
+
+================================================================================
+SEGURIDAD EN CODIGO
+================================================================================
+
+Zonas que requieren revision obligatoria:
+- app\Http\Controllers\TokenController.php
+- app\Http\Controllers\Api.php
+- app\Http\Controllers\AsistenciaController.php
+- Controladores save/get/delete de Lotobet/Lotonet
+- docker-compose.yml
+- Dumps SQL dentro de database/
+
+Riesgos conocidos:
+- Credenciales hardcodeadas.
+- Cookies/tokens en codigo.
+- cURL con SSL verification desactivado.
+- Rutas GET mutando datos.
+- Dumps SQL versionados.
+- API interna dentro de web.php.
+
+Regla para V2:
+- Nunca copiar secretos.
+- Usar .env y config/services.php.
+- Usar Laravel HTTP Client cuando sea viable.
+- No imprimir ni documentar valores reales de tokens/passwords.
+
+================================================================================
+TESTS Y CALIDAD
+================================================================================
+
+Estado conocido:
+- Suite de pruebas casi de plantilla.
+- ExampleTest falla porque / redirige y el test espera 200.
+- Pint detecta muchos archivos con problemas de estilo.
+
+Regla para V2:
+- No empezar con coverage perfecto.
+- Crear pruebas de riesgo primero:
+  1. login/logout
+  2. permisos por modulo
+  3. rutas POST/DELETE corregidas
+  4. modulo piloto
+  5. ETL piloto
+- Pint debe aplicarse por lote, no como cambio masivo mezclado.
+
+================================================================================
+MODULO PILOTO RECOMENDADO
+================================================================================
+
+Opcion A: Tareas
+Motivo:
+- Tiene modelo relativamente mejor estructurado.
+- Tiene comentarios, estados, prioridades, progreso y cierre.
+- Permite probar Form Requests, Policies, Controller thin, Blade components y tests.
+
+Opcion B: Tecnologia Solicitudes
+Motivo:
+- Es pequeno comparado con ventas.
+- Tiene flujo real de asignacion/progreso/cierre.
+- Buen candidato para validar arquitectura antes de tocar datos masivos.
+
+No empezar V2 por:
+- Ventas producto net
+- vt_usuarios_net
+- Incentivos completos
+- Reportes BI pesados
+
+Esos modulos dependen de DB masiva, performance y reglas historicas.
+
+================================================================================
+MODO DE LECTURA Y CONSTRUCCION POR FASES
+================================================================================
+
+Este contexto de codigo debe usarse por fases para no sobrecargar al agente.
+
+Orden recomendado al leer:
+1. Leer primero los 3 TXT de contexto.
+2. Leer composer.json, package.json, routes/web.php y config principal.
+3. Leer modelos del modulo piloto.
+4. Leer controlador del modulo piloto.
+5. Leer vistas del modulo piloto.
+6. Leer migraciones/tablas relacionadas del modulo piloto.
+7. Entregar plan de esa fase antes de tocar codigo.
+
+Reglas:
+- Una fase activa a la vez.
+- Un modulo o flujo por fase.
+- No mezclar refactor, DB, UI y formato masivo en el mismo lote.
+- No tocar ventas/incentivos/reportes BI hasta validar primero un modulo piloto.
+- Cada fase debe terminar con archivos modificados, comandos ejecutados y riesgos
+  residuales.
+
+Fases sugeridas desde el punto de vista del codigo:
+1. Descubrimiento del modulo piloto.
+2. Migraciones y modelo del modulo piloto.
+3. Form Requests, Policies y permisos.
+4. Service/Action y Controller delgado.
+5. Vistas Blade/componentes/JS.
+6. Tests Feature.
+7. ETL piloto si el modulo tiene datos legacy.
+8. Repetir patron por el siguiente modulo.
+
+================================================================================
+ENTREGABLE ESPERADO DEL AGENTE AL LEER ESTE TXT
+================================================================================
+
+Antes de codificar, el agente debe entregar:
+
+1. Mapa de modulos y archivos leidos.
+2. Lista de entidades de dominio.
+3. Lista de rutas riesgosas confirmadas.
+4. Lista de integraciones externas.
+5. Propuesta de modulo piloto.
+6. Plan de reconstruccion incremental.
+7. Riesgos bloqueantes.
+8. Preguntas al usuario sobre reglas de negocio no claras.
+
+No debe generar codigo hasta que el usuario apruebe el plan.
+
+================================================================================
+COMANDOS USADOS PARA ESTE INVENTARIO
+================================================================================
+
+- rg --files
+- php artisan route:list --except-vendor
+- php artisan migrate:status
+- php artisan schedule:list
+- composer show --direct
+- Get-ChildItem app/Models
+- Get-ChildItem app/Services
+- Get-ChildItem app/Console/Commands
+- Conteo de lineas de controladores y vistas Blade
+- rg sobre routes/web.php para rutas GET riesgosas
+
+================================================================================
+ANEXO — CAMBIOS DE CODIGO DESDE 2026-04-27 (al 2026-05-04)
+================================================================================
+
+Esta seccion incrementa el mapa de codigo con las funciones nuevas y archivos
+incorporados despues de la primera redaccion del documento.
+
+NUEVOS CONTROLADORES
+- app\Http\Controllers\ModuleHubController.php
+  - Renderiza pantallas hub para cada modulo top-level.
+  - Metodos: dashboard, comercial, contabilidad, operaciones, mantenimiento,
+    tecnologia, incentivos, procesos, gerencia y un show(string $module)
+    generico que lee config('module_hubs.{module}').
+  - Filtra items por permisos del usuario via collect()->filter.
+- app\Http\Controllers\RecursosHumanosController.php
+  - Sub-hub de RRHH. index() lee config('recursos_humanos') y agrupa por
+    categoria.
+- app\Http\Controllers\EntrevistaOnlineController.php
+  - CRUD REST completo (index/list/show/store/update/destroy) para
+    entrevistas a candidatos. Usa rutas verb-correct (POST/PUT/DELETE).
+
+NUEVOS MODELOS
+- app\Models\EntrevistaOnline (tabla entrevistas_online)
+  - Casts: fecha_llamada (date), salario (decimal:2), edad/hijos/manejo_excel/
+    user_id (integer).
+- app\Models\CentroDeCosto (tabla centros_de_costo)
+  - Fillable extenso (21+ columnas) incluyendo flags booleanos
+    (com_recarga, gasto_vta_tradicional, varios_locales, aplica_para_ponderar)
+    y atributos JSON.
+
+NUEVO MIDDLEWARE
+- app\Http\Middleware\ExpireInactiveSession.php
+  - Registrado en bootstrap/app.php como ->web(append: [...]).
+  - Expira sesion por inactividad usando session('auth_last_activity_at')
+    contra config('session.lifetime') * 60.
+  - Cierra cualquier sesion via remember.
+  - Excluye rutas tipo poll (tareas/notificaciones*) del refresco de
+    actividad.
+  - Aplica headers no-cache en la respuesta.
+
+NUEVOS CONFIG FILES
+- config/module_hubs.php
+  - Define 9 hubs: dashboard, comercial, contabilidad, operaciones,
+    mantenimiento, tecnologia, incentivos, procesos, gerencia.
+  - Cada hub: titulo, breadcrumb, items[] con nombre, descripcion, url,
+    icono (remixicon), categoria, tags, activo.
+- config/recursos_humanos.php
+  - Lista plana de modulos del sub-hub RRHH (Solicitudes de Empleo,
+    Empleados, Novedades de Horario, Entrevista Online, Empleados No
+    Regularizados, Ventas Sin Empleado).
+
+NUEVAS VISTAS
+- resources/views/module-hub/index.blade.php
+- resources/views/recursos_humanos/index.blade.php
+- resources/views/entrevista-online/index.blade.php
+- resources/views/entrevista-online/modal-form.blade.php
+- resources/views/contabilidad/centro-costo.blade.php
+
+NUEVAS RUTAS RELEVANTES (routes/web.php)
+- GET /                              => ModuleHubController@dashboard
+- GET /dashboard                     => ModuleHubController@dashboard
+- GET /comercial                     => ModuleHubController@comercial
+- GET /contabilidad                  => ModuleHubController@contabilidad
+- GET /operaciones                   => ModuleHubController@operaciones
+- GET /mantenimiento                 => ModuleHubController@mantenimiento
+- GET /tecnologia                    => ModuleHubController@tecnologia
+- GET /incentivos                    => ModuleHubController@incentivos
+- GET /procesos                      => ModuleHubController@procesos
+- GET /gerencia                      => ModuleHubController@gerencia
+- GET /recursos-humanos              => RecursosHumanosController@index
+- GET /contabilidad/centro-costo     => view contabilidad.centro-costo
+- GET /api-centros-costo                  (Api@getCentrosCosto)
+- POST /api-centros-costo/visibilidad     (Api@updateCentrosCostoVisibilidad)
+- POST /api-centros-costo/sync            (Api@syncCentrosCosto)
+- Prefix /entrevistas-online (5 rutas REST):
+  - GET    /entrevistas-online            -> index
+  - GET    /entrevistas-online/list       -> list
+  - GET    /entrevistas-online/{id}       -> show
+  - POST   /entrevistas-online            -> store
+  - PUT    /entrevistas-online/{id}       -> update
+  - DELETE /entrevistas-online/{id}       -> destroy
+
+CONTROLADORES MODIFICADOS RECIENTEMENTE
+- app\Http\Controllers\AuthController.php
+  - Coordinado con ExpireInactiveSession.
+- app\Http\Controllers\Api.php
+  - Nuevos metodos: getCentrosCosto, updateCentrosCostoVisibilidad,
+    syncCentrosCosto.
+- app\Http\Controllers\Gerencia\VentaGerencialController.php
+  - Ampliado para venta-comparativa y reportes nuevos.
+
+OBSERVACIONES PARA LA V2
+1. ModuleHubController es buena practica que la V2 debe formalizar como
+   Servicio con cache, permisos y validacion de items.
+2. RecursosHumanosController repite el patron de ModuleHubController. En la
+   V2 conviene un solo HubResolver con configuracion por archivo (modules/*.php)
+   y sub-modulo opcional.
+3. EntrevistaOnlineController ya usa verbos REST correctos (POST/PUT/DELETE):
+   es el patron a seguir para todos los nuevos modulos. NO regresar a GET
+   para mutaciones.
+4. ExpireInactiveSession es el primer middleware de sesion estricto del
+   proyecto. La V2 debe extenderlo (no reemplazarlo) y volverlo configurable.
+5. centros_de_costo es una proyeccion de un sistema externo. En la V2 manejar
+   con un Service de sync (LotobetClient/ContabilidadClient) y un Job de
+   actualizacion. No CRUD libre.
+6. La nueva navegacion por hubs implica que la V2 debe consolidar app.blade.php:
+   menu lateral y hub deben compartir la misma fuente declarativa con permisos.
+
+================================================================================
+FIN DEL CONTEXTO DE CODIGO
+================================================================================
