@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call(ConsorciosSeeder::class);
         $this->call(RolePermissionSeeder::class);
+        $this->call(ServiciosGeneralesRolePermissionSeeder::class);
 
         $superAdminRole = Role::where('name', 'superadmin')->where('guard_name', 'web')->first();
         if ($superAdminRole) {
