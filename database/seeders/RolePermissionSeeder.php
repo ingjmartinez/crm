@@ -25,6 +25,10 @@ class RolePermissionSeeder extends Seeder
             'permissions.create',
             'permissions.edit',
             'permissions.delete',
+            'servicios_generales.view',
+            'servicios_generales.create',
+            'servicios_generales.manage',
+            'servicios_generales.close',
         ];
 
         foreach ($permissions as $permission) {
