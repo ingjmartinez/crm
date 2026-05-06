@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -40,10 +41,14 @@ class AuthController extends Controller
             $request->session()->put('auth_last_activity_at', time());
 
             $user = Auth::user();
-            if ($user) {
-                $user->last_login_at = $user->current_login_at;
-                $user->current_login_at = now();
-                $user->save();
+            if ($user && Schema::hasColumn('users', 'current_login_at') && Schema::hasColumn('users', 'last_login_at')) {
+                try {
+                    $user->last_login_at = $user->current_login_at;
+                    $user->current_login_at = now();
+                    $user->save();
+                } catch (Throwable $error) {
+                    report($error);
+                }
             }
 
             return redirect()->intended('/');

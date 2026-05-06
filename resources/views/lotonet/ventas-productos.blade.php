@@ -264,47 +264,133 @@
                 .catch(error => console.error('Error fetching data:', error));
         });
 
+        const rangeModalElement = document.getElementById('myModal');
+
+        const closeRangeModal = async () => {
+            if (!rangeModalElement) return;
+            const modalInstance = window.bootstrap?.Modal.getInstance(rangeModalElement);
+            if (!modalInstance) return;
+            await new Promise((resolve) => {
+                let resolved = false;
+                const finish = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    rangeModalElement.removeEventListener('hidden.bs.modal', finish);
+                    resolve();
+                };
+                rangeModalElement.addEventListener('hidden.bs.modal', finish, { once: true });
+                modalInstance.hide();
+                setTimeout(finish, 400);
+            });
+        };
+
+        const escapeLotonetHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        const getDateRange = (fechaInicio, fechaFin) => {
+            const dates = [];
+            let currentDate = new Date(`${fechaInicio}T12:00:00`);
+            const endDate = new Date(`${fechaFin}T12:00:00`);
+            while (currentDate <= endDate) {
+                const year = currentDate.getFullYear();
+                const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+                const day = String(currentDate.getDate()).padStart(2, '0');
+                dates.push(`${year}-${month}-${day}`);
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            return dates;
+        };
+
+        const requestJson = async (url) => {
+            const response = await fetch(url);
+            const rawText = await response.text();
+            let payload = null;
+            try {
+                payload = rawText ? JSON.parse(rawText) : null;
+            } catch (_error) {
+                payload = null;
+            }
+            if (!response.ok) {
+                return { ok: false, payload, message: payload?.error || payload?.message || rawText || `Error HTTP ${response.status}` };
+            }
+            if (payload && payload.code !== undefined && Number(payload.code) !== 0) {
+                return { ok: false, payload, message: payload.message || payload.error || 'El proceso devolvio un error.' };
+            }
+            return { ok: true, payload, message: payload?.message || payload?.success || 'Proceso completado.' };
+        };
+
+        const buildResultsHtml = (results) => {
+            const rows = results.map((result) => {
+                const badgeClass = result.status === 'ok'
+                    ? 'success'
+                    : (result.status === 'warning' ? 'warning text-dark' : 'danger');
+                const total = result.total !== null && result.total !== undefined
+                    ? Number(result.total).toLocaleString('es-DO')
+                    : '-';
+                return `
+                    <tr>
+                        <td>${escapeLotonetHtml(result.date)}</td>
+                        <td><span class="badge bg-${badgeClass}">${escapeLotonetHtml(result.label)}</span></td>
+                        <td>${escapeLotonetHtml(result.message)}</td>
+                        <td>${escapeLotonetHtml(total)}</td>
+                    </tr>
+                `;
+            }).join('');
+            return `
+                <div class="table-responsive text-start">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Estado</th>
+                                <th>Detalle</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        };
+
+        const showBatchSummary = async (title, results) => {
+            const hasErrors = results.some((result) => result.status === 'error');
+            const hasWarnings = results.some((result) => result.status === 'warning');
+            const icon = hasErrors ? 'error' : (hasWarnings ? 'warning' : 'success');
+            await closeRangeModal();
+            return Swal.fire({
+                title,
+                html: buildResultsHtml(results),
+                icon,
+                width: 900,
+                confirmButtonText: 'Cerrar'
+            });
+        };
+
         const btnGuardarDataFecha = document.getElementById('btnGuardarDataFecha');
         btnGuardarDataFecha.addEventListener('click', async () => {
-            // Quiero consultar un api y hacer una peticion por cada fecha entre el rango seleccionado
             const fechaInicio = document.getElementById('fechaInicio').value;
             const fechaFin = document.getElementById('fechaFin').value;
             if (!fechaInicio || !fechaFin) {
-                Swal.fire({
-                    title: "Error",
-                    text: "Por favor, selecciona ambas fechas",
-                    icon: "error"
-                });
+                Swal.fire({ title: "Error", text: "Por favor, selecciona ambas fechas", icon: "error" });
+                return;
+            }
+            if (new Date(fechaInicio) > new Date(fechaFin)) {
+                Swal.fire({ title: "Error", text: "La fecha de inicio debe ser anterior a la fecha de fin", icon: "error" });
                 return;
             }
 
-            // recorrer la fecha entre el rango
-            const startDate = new Date(fechaInicio);
-            const endDate = new Date(fechaFin);
+            const responses = [];
+            const dates = getDateRange(fechaInicio, fechaFin);
 
-            if (startDate > endDate) {
-                Swal.fire({
-                    title: "Error",
-                    text: "La fecha de inicio debe ser anterior a la fecha de fin",
-                    icon: "error"
-                });
-                return;
-            }
-
-            let responses = [];
-            let currentDate = new Date(startDate);
-            const dates = [];
-
-            while (currentDate <= endDate) {
-                dates.push(currentDate.toISOString().split('T')[0]); // Formato YYYY-MM-DD
-                currentDate.setDate(currentDate.getDate() + 1); // Incrementar un día
-            }
-
-            // Ejecutar las peticiones una a una (secuencialmente)
             btnGuardarDataFecha.disabled = true;
             try {
                 Swal.fire({
-                    title: "Guardando información ...",
+                    title: "Guardando informacion ...",
                     html: `0 / ${dates.length}`,
                     allowOutsideClick: false,
                     showConfirmButton: false,
@@ -313,45 +399,25 @@
 
                 for (let i = 0; i < dates.length; i++) {
                     const date = dates[i];
-                    // Actualizar progreso en el modal
-                    Swal.update({
-                        html: `Procesando ${date} (${i + 1} / ${dates.length})`
-                    });
+                    Swal.update({ html: `Procesando ${date} (${i + 1} / ${dates.length})` });
 
-                    const response = await fetch(`/save-ventas-producto-lotonet?fecha=${date}`);
-                    if (!response.ok) {
-                        const text = await response.text().catch(() => null);
-                        throw new Error(text || `Error HTTP ${response.status}`);
-                    }
-                    const data = await response.json().catch(() => null);
+                    const result = await requestJson(`/save-ventas-producto-lotonet?fecha=${date}`);
+                    const payload = result.payload || {};
+                    const total = payload.total ?? null;
+                    let status = result.ok ? 'ok' : 'error';
+                    let label = result.ok ? 'Guardado' : 'Error';
 
-                    // Si tu API devuelve un código de error, puedes manejarlo aquí
-                    if (data && data.code !== undefined && data.code !== 0) {
-                        throw new Error(data.message || `Error guardando fecha ${date}`);
+                    if (result.ok && Number(total || 0) === 0) {
+                        status = 'warning';
+                        label = 'Sin data';
                     }
 
-                    if (!data.total) {
-                        responses.push(data.message);
-                    } else {
-                        responses.push('Fecha: ' + date + ' Total: ' + data.total);
-                    }
-                    // Opcional: puedes hacer una pequeña pausa si tu API lo requiere
-                    // await new Promise(r => setTimeout(r, 200));
+                    responses.push({ date, status, label, message: result.message, total });
                 }
 
-                // Cerrar modal del range y notificar éxito
-                document.getElementById('btnClose').click();
-                Swal.fire({
-                    title: "Listo",
-                    html: responses.join('<br>'),
-                    icon: "success"
-                });
+                await showBatchSummary("Resultado del proceso", responses);
             } catch (error) {
-                Swal.fire({
-                    title: "Error",
-                    text: error.message || "Ocurrió un error al procesar las fechas",
-                    icon: "error"
-                });
+                Swal.fire({ title: "Error", text: error.message || "Ocurrio un error al procesar las fechas", icon: "error" });
             } finally {
                 btnGuardarDataFecha.disabled = false;
             }
@@ -362,49 +428,31 @@
             const fechaInicio = document.getElementById('fechaInicio').value;
             const fechaFin = document.getElementById('fechaFin').value;
             if (!fechaInicio || !fechaFin) {
-                Swal.fire({
-                    title: "Error",
-                    text: "Por favor, selecciona ambas fechas",
-                    icon: "error"
-                });
+                Swal.fire({ title: "Error", text: "Por favor, selecciona ambas fechas", icon: "error" });
                 return;
             }
-
-            const startDate = new Date(fechaInicio);
-            const endDate = new Date(fechaFin);
-
-            if (startDate > endDate) {
-                Swal.fire({
-                    title: "Error",
-                    text: "La fecha de inicio debe ser anterior a la fecha de fin",
-                    icon: "error"
-                });
+            if (new Date(fechaInicio) > new Date(fechaFin)) {
+                Swal.fire({ title: "Error", text: "La fecha de inicio debe ser anterior a la fecha de fin", icon: "error" });
                 return;
             }
 
             const confirmed = await Swal.fire({
-                title: 'Confirmar eliminación',
+                title: 'Confirmar eliminacion',
                 html: `¿Eliminar data desde <strong>${fechaInicio}</strong> hasta <strong>${fechaFin}</strong>?`,
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonText: 'Sí, eliminar',
+                confirmButtonText: 'Si, eliminar',
                 cancelButtonText: 'Cancelar'
             });
             if (!confirmed.isConfirmed) return;
 
-            let responses = [];
-            let currentDate = new Date(startDate);
-            const dates = [];
-
-            while (currentDate <= endDate) {
-                dates.push(currentDate.toISOString().split('T')[0]);
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
+            const responses = [];
+            const dates = getDateRange(fechaInicio, fechaFin);
 
             btnEliminarDataFecha.disabled = true;
             try {
                 Swal.fire({
-                    title: "Eliminando información ...",
+                    title: "Eliminando informacion ...",
                     html: `0 / ${dates.length}`,
                     allowOutsideClick: false,
                     showConfirmButton: false,
@@ -413,40 +461,22 @@
 
                 for (let i = 0; i < dates.length; i++) {
                     const date = dates[i];
-                    Swal.update({
-                        html: `Eliminando ${date} (${i + 1} / ${dates.length})`
+                    Swal.update({ html: `Eliminando ${date} (${i + 1} / ${dates.length})` });
+
+                    const result = await requestJson(`/delete-ventas-producto-lotonet?fecha=${date}`);
+                    const payload = result.payload || {};
+                    responses.push({
+                        date,
+                        status: result.ok ? 'ok' : 'error',
+                        label: result.ok ? 'Eliminado' : 'Error',
+                        message: result.message,
+                        total: payload.total ?? null
                     });
-
-                    const response = await fetch(`/delete-ventas-producto-lotonet?fecha=${date}`);
-                    if (!response.ok) {
-                        const text = await response.text().catch(() => null);
-                        throw new Error(text || `Error HTTP ${response.status}`);
-                    }
-                    const data = await response.json().catch(() => null);
-
-                    if (data && data.code !== undefined && data.code !== 0) {
-                        throw new Error(data.message || `Error eliminando fecha ${date}`);
-                    }
-
-                    if (!data.total) {
-                        responses.push(data.message);
-                    } else {
-                        responses.push('Fecha: ' + date + ' Total: ' + data.total);
-                    }
                 }
 
-                document.getElementById('btnClose').click();
-                Swal.fire({
-                    title: "Listo",
-                    html: responses.join('<br>'),
-                    icon: "success"
-                });
+                await showBatchSummary("Resultado de la eliminacion", responses);
             } catch (error) {
-                Swal.fire({
-                    title: "Error",
-                    text: error.message || "Ocurrió un error al procesar las fechas",
-                    icon: "error"
-                });
+                Swal.fire({ title: "Error", text: error.message || "Ocurrio un error al procesar las fechas", icon: "error" });
             } finally {
                 btnEliminarDataFecha.disabled = false;
             }
