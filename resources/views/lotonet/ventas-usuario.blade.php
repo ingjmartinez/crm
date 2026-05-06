@@ -147,7 +147,7 @@
             });
         };
 
-        const escapeHtml = (value) => String(value ?? '')
+        const escapeLotonetHtml = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
@@ -226,14 +226,14 @@
             ventas.forEach((item) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${escapeHtml(item.consorcio_id)}</td>
-                    <td>${escapeHtml(item.agencia_id)}</td>
-                    <td>${escapeHtml(item.producto_id)}</td>
-                    <td>${escapeHtml(item.cedula)}</td>
-                    <td>${escapeHtml(item.descripcion)}</td>
-                    <td>${escapeHtml(item.tipo)}</td>
-                    <td>${escapeHtml(item.monto)}</td>
-                    <td>${escapeHtml(fecha)}</td>
+                    <td>${escapeLotonetHtml(item.consorcio_id)}</td>
+                    <td>${escapeLotonetHtml(item.agencia_id)}</td>
+                    <td>${escapeLotonetHtml(item.producto_id)}</td>
+                    <td>${escapeLotonetHtml(item.cedula)}</td>
+                    <td>${escapeLotonetHtml(item.descripcion)}</td>
+                    <td>${escapeLotonetHtml(item.tipo)}</td>
+                    <td>${escapeLotonetHtml(item.monto)}</td>
+                    <td>${escapeLotonetHtml(fecha)}</td>
                 `;
                 tableBody.appendChild(row);
             });
@@ -259,10 +259,10 @@
 
                 return `
                     <tr>
-                        <td>${escapeHtml(result.date)}</td>
-                        <td><span class="badge bg-${badgeClass}">${escapeHtml(result.label)}</span></td>
-                        <td>${escapeHtml(result.message)}</td>
-                        <td>${escapeHtml(total)}</td>
+                        <td>${escapeLotonetHtml(result.date)}</td>
+                        <td><span class="badge bg-${badgeClass}">${escapeLotonetHtml(result.label)}</span></td>
+                        <td>${escapeLotonetHtml(result.message)}</td>
+                        <td>${escapeLotonetHtml(total)}</td>
                     </tr>
                 `;
             }).join('');

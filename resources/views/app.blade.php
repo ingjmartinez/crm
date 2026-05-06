@@ -868,6 +868,14 @@
                                 <i class="ri-stack-line"></i> <span data-key="t-proyecto">Proyecto</span>
                             </a>
                         </li>
+                        @can('servicios_generales.view')
+                            <li class="nav-item">
+                                <a href="{{ route('servicios-generales.index') }}"
+                                    class="nav-link menu-link {{ request()->is('servicios-generales*') ? 'active' : '' }}">
+                                    <i class="ri-tools-line"></i> <span data-key="t-servicios-generales">Servicios Generales</span>
+                                </a>
+                            </li>
+                        @endcan
                         <li class="nav-item">
                             <a href="{{ route('tecnologia.index') }}"
                                 class="nav-link menu-link {{ request()->is('tecnologia*') ? 'active' : '' }}">

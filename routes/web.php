@@ -39,6 +39,7 @@ use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\RutaController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SuperAdminSesionController;
+use App\Http\Controllers\ServicioGeneralRequerimientoController;
 use App\Http\Controllers\TareaController;
 use App\Http\Controllers\TecnologiaSolicitudController;
 use App\Http\Controllers\TokenController;
@@ -420,6 +421,8 @@ Route::get('/incentivos/reporte-nuevo-incentivo-view', [IncentivosController::cl
 Route::get('/incentivos/reporte-nuevo-incentivo', [IncentivosController::class, 'reporteNuevoIncentivo']);
 Route::get('/incentivos/reporte-nuevo-incentivo-v2-view', [IncentivosController::class, 'reporteNuevoIncentivoV2View']);
 Route::get('/incentivos/reporte-nuevo-incentivo-v2', [IncentivosController::class, 'reporteNuevoIncentivoV2']);
+Route::get('/incentivos/reporte-nuevo-incentivo-v3-view', [IncentivosController::class, 'reporteNuevoIncentivoV3View']);
+Route::get('/incentivos/reporte-nuevo-incentivo-v3', [IncentivosController::class, 'reporteNuevoIncentivoV3']);
 Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
 
 Route::get('/incentivos/empleados', [EmpleadoController::class, 'incentivos']);
@@ -436,6 +439,27 @@ Route::prefix('tecnologia')->name('tecnologia.')->group(function () {
     Route::post('/solicitudes/{solicitud}/solicitar-cierre', [TecnologiaSolicitudController::class, 'solicitarCierre'])->name('solicitudes.solicitar-cierre');
     Route::post('/solicitudes/{solicitud}/finalizar', [TecnologiaSolicitudController::class, 'finalizar'])->name('solicitudes.finalizar');
 });
+
+Route::prefix('servicios-generales')->name('servicios-generales.')
+    ->middleware('permission:servicios_generales.view')
+    ->group(function () {
+        Route::get('/', [ModuleHubController::class, 'serviciosGenerales'])->name('index');
+        Route::get('/requerimientos', [ServicioGeneralRequerimientoController::class, 'index'])->name('requerimientos.index');
+        Route::get('/requerimientos/list', [ServicioGeneralRequerimientoController::class, 'list'])->name('requerimientos.list');
+        Route::post('/requerimientos', [ServicioGeneralRequerimientoController::class, 'store'])
+            ->middleware('permission:servicios_generales.create')
+            ->name('requerimientos.store');
+        Route::get('/requerimientos/{requerimiento}', [ServicioGeneralRequerimientoController::class, 'show'])->name('requerimientos.show');
+        Route::put('/requerimientos/{requerimiento}', [ServicioGeneralRequerimientoController::class, 'update'])
+            ->middleware('permission:servicios_generales.manage')
+            ->name('requerimientos.update');
+        Route::post('/requerimientos/{requerimiento}/solicitar-cierre', [ServicioGeneralRequerimientoController::class, 'solicitarCierre'])
+            ->middleware('permission:servicios_generales.manage')
+            ->name('requerimientos.solicitar-cierre');
+        Route::post('/requerimientos/{requerimiento}/finalizar', [ServicioGeneralRequerimientoController::class, 'finalizar'])
+            ->middleware('permission:servicios_generales.close')
+            ->name('requerimientos.finalizar');
+    });
 
 Route::get('/generar-lotobet', fn() => view('lotobet.index'));
 Route::get('/generar-lotonet', fn() => view('lotonet.index'));

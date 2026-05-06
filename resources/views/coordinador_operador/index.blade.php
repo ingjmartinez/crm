@@ -7,12 +7,12 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">Coordinador / Operador</h4>
+                            <h4 class="mb-sm-0">Coordinador</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('mantenimiento.index') }}">Mantenimientos</a></li>
-                                    <li class="breadcrumb-item active">Coordinador / Operador</li>
+                                    <li class="breadcrumb-item active">Coordinador</li>
                                 </ol>
                             </div>
                         </div>
@@ -40,7 +40,7 @@
                                 <div class="row mb-3">
                                     <div class="col-12 col-md-5 col-lg-4">
                                         <label for="buscarCoordinador" class="form-label">Buscar coordinador</label>
-                                        <input type="text" id="buscarCoordinador" class="form-control" placeholder="Escribe nombre o cÃ©dula...">
+                                        <input type="text" id="buscarCoordinador" class="form-control" placeholder="Escribe nombre o cedula...">
                                     </div>
                                 </div>
 
@@ -52,8 +52,8 @@
                                                 <th>Nombre</th>
                                                 <th>Apellido</th>
                                                 <th>Correo</th>
-                                                <th>CÃ©dula</th>
-                                                <th>TelÃ©fono</th>
+                                                <th>Cédula</th>
+                                                <th>Teléfono</th>
                                                 <th>Puesto</th>
                                                 <th class="text-center">Agencias Asignadas</th>
                                                 <th class="text-center" style="width:140px;">Acciones</th>
@@ -94,7 +94,7 @@
                                                             <a href="{{ route('coordinador-operador.edit', $item->id) }}" class="btn btn-success btn-sm" title="Editar">
                                                                 <i class="ri-pencil-line"></i>
                                                             </a>
-                                                            <form action="{{ route('coordinador-operador.destroy', $item->id) }}" method="POST" onsubmit="return confirm('Â¿EstÃ¡ seguro de eliminar este registro?')">
+                                                            <form action="{{ route('coordinador-operador.destroy', $item->id) }}" method="POST" onsubmit="return confirm('¿Está seguro de eliminar este registro?')">
                                                                 @csrf
                                                                 @method('DELETE')
                                                                 <button type="submit" class="btn btn-danger btn-sm" title="Eliminar">
@@ -145,8 +145,8 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="terminalesMasivos" class="form-label mb-1">AsignaciÃ³n masiva por terminal</label>
-                            <textarea id="terminalesMasivos" class="form-control" rows="4" placeholder="Pega aquÃ­ los cÃ³digos de terminal desde Excel o TXT (uno por lÃ­nea, columna o separados por coma)"></textarea>
+                            <label for="terminalesMasivos" class="form-label mb-1">Asignación masiva por terminal</label>
+                            <textarea id="terminalesMasivos" class="form-control" rows="4" placeholder="Pega aqui los codigos de terminal desde Excel o TXT (uno por linea, columna o separados por coma)"></textarea>
                             <div class="d-flex flex-wrap gap-2 mt-2">
                                 <button type="button" class="btn btn-outline-primary btn-sm" id="btnAplicarTerminalesMasivos">Marcar terminales pegadas</button>
                                 <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarTerminalesMasivos">Limpiar pegado</button>
@@ -176,7 +176,7 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Guardar asignaciÃ³n</button>
+                        <button type="submit" class="btn btn-primary">Guardar asignación</button>
                     </div>
                 </form>
             </div>
@@ -280,7 +280,7 @@
 
             if (detalleTerminalesNoCoinciden) {
                 if (!noCoinciden.length) {
-                    detalleTerminalesNoCoinciden.innerHTML = '<small class="text-success">Detalle: todos los cÃ³digos coinciden con la tabla de agencias.</small>';
+                    detalleTerminalesNoCoinciden.innerHTML = '<small class="text-success">Detalle: todos los codigos coinciden con la tabla de agencias.</small>';
                 } else {
                     const listado = noCoinciden
                         .map(function (terminal) {

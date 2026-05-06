@@ -49,6 +49,11 @@ class ModuleHubController extends Controller
         return $this->show('gerencia');
     }
 
+    public function serviciosGenerales()
+    {
+        return $this->show('servicios_generales');
+    }
+
     public function show(string $module)
     {
         $hub = config("module_hubs.{$module}");

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CoordinadorOperador;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1244,6 +1245,169 @@ class IncentivosController extends Controller
         ]);
     }
 
+    public function reporteNuevoIncentivoV3View()
+    {
+        $coordinadores = CoordinadorOperador::query()
+            ->where('puesto', 'coordinador')
+            ->withCount('agencias')
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get(['id', 'nombre', 'apellido'])
+            ->map(function ($coordinador) {
+                return [
+                    'id' => $coordinador->id,
+                    'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
+                    'agencias' => (int) $coordinador->agencias_count,
+                    'agencias_validas' => 0,
+                    'monto_usuarios' => 0,
+                    'pct' => 0.0055,
+                ];
+            })
+            ->values();
+
+        return view('incentivos.reporte-nuevo-incentivo-v3', compact('coordinadores'));
+    }
+
+    public function reporteNuevoIncentivoV3(Request $request)
+    {
+        $request->merge([
+            'tramo_activo' => 'tramo2',
+        ]);
+
+        $response = $this->reporteNuevoIncentivoV2($request);
+        $payload = $response->getData(true);
+
+        if (!isset($payload['data']) || !is_array($payload['data'])) {
+            return $response;
+        }
+
+        $totalIncentivo = 0;
+        foreach ($payload['data'] as &$row) {
+            $ventasMesActual = (float) str_replace(',', '', $row['ventas_mes_actual'] ?? 0);
+            $nuevoIncentivo = (float) str_replace(',', '', $row['nuevo_incentivo'] ?? 0);
+
+            if ($ventasMesActual >= 1000001 && $nuevoIncentivo > 50000) {
+                $nuevoIncentivo = 50000;
+                $row['pago_escala'] = number_format($nuevoIncentivo, 2, '.', ',');
+                $row['nuevo_incentivo'] = number_format($nuevoIncentivo, 2, '.', ',');
+            }
+
+            $totalIncentivo += $nuevoIncentivo;
+        }
+        unset($row);
+
+        $qualifiedCedulas = collect($payload['data'])
+            ->filter(function ($row) {
+                return ($row['cumple_minimo'] ?? 'NO') === 'SI'
+                    && (float) str_replace(',', '', $row['nuevo_incentivo'] ?? 0) > 0;
+            })
+            ->pluck('cedula')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $coordinatorValidAgencies = [];
+        $coordinatorUserIncentiveAmounts = [];
+        if ($qualifiedCedulas->isNotEmpty()) {
+            $incentiveByCedula = collect($payload['data'])
+                ->filter(function ($row) {
+                    return ($row['cumple_minimo'] ?? 'NO') === 'SI'
+                        && (float) str_replace(',', '', $row['nuevo_incentivo'] ?? 0) > 0;
+                })
+                ->mapWithKeys(function ($row) {
+                    return [
+                        (string) $row['cedula'] => (float) str_replace(',', '', $row['nuevo_incentivo'] ?? 0),
+                    ];
+                });
+
+            $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
+            $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
+            $sistema = $request->input('sistema', 'Todos');
+
+            $buildAgencyQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada, $qualifiedCedulas) {
+                return DB::table($tabla)
+                    ->selectRaw('cedula, TRIM(CAST(agencia_id AS CHAR)) AS terminal')
+                    ->whereBetween('fecha', [$fechaIniSeleccionada, $fechaFinSeleccionada])
+                    ->whereIn('cedula', $qualifiedCedulas->all())
+                    ->whereNotNull('agencia_id')
+                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''");
+            };
+
+            if ($sistema === 'Lotobet') {
+                $validTerminalQuery = $buildAgencyQuery('vt_usuarios_bet');
+            } elseif ($sistema === 'Lotonet') {
+                $validTerminalQuery = $buildAgencyQuery('vt_usuarios_net');
+            } else {
+                $validTerminalQuery = $buildAgencyQuery('vt_usuarios_bet')
+                    ->unionAll($buildAgencyQuery('vt_usuarios_net'));
+            }
+
+            $validTerminals = DB::query()
+                ->fromSub($validTerminalQuery, 'valid_agencies')
+                ->select('terminal')
+                ->distinct()
+                ->pluck('terminal');
+
+            $validCedulaTerminals = DB::query()
+                ->fromSub($validTerminalQuery, 'valid_agencies')
+                ->select('cedula', 'terminal')
+                ->distinct()
+                ->get();
+
+            if ($validTerminals->isNotEmpty()) {
+                $coordinatorAgencyRows = DB::table('coordinador_operador_agencia as coa')
+                    ->join('agencias as a', 'a.id', '=', 'coa.agencia_id')
+                    ->join('coordinador_operador as co', 'co.id', '=', 'coa.coordinador_operador_id')
+                    ->where('co.puesto', 'coordinador')
+                    ->whereIn(DB::raw('TRIM(CAST(a.terminal AS CHAR))'), $validTerminals->all())
+                    ->selectRaw('coa.coordinador_operador_id, coa.agencia_id, TRIM(CAST(a.terminal AS CHAR)) AS terminal')
+                    ->get();
+
+                $coordinatorValidAgencies = $coordinatorAgencyRows
+                    ->groupBy('coordinador_operador_id')
+                    ->map(function ($rows) {
+                        return $rows->pluck('agencia_id')->unique()->count();
+                    })
+                    ->mapWithKeys(function ($total, $coordinadorId) {
+                        return [(string) $coordinadorId => (int) $total];
+                    })
+                    ->all();
+
+                $coordinatorTerminals = $coordinatorAgencyRows
+                    ->groupBy('coordinador_operador_id')
+                    ->map(function ($rows) {
+                        return $rows->pluck('terminal')->unique()->flip();
+                    })
+                    ->all();
+
+                $coordinatorCedulas = [];
+                foreach ($validCedulaTerminals as $row) {
+                    foreach ($coordinatorTerminals as $coordinadorId => $terminales) {
+                        if (isset($terminales[$row->terminal])) {
+                            $coordinatorCedulas[(string) $coordinadorId][(string) $row->cedula] = true;
+                        }
+                    }
+                }
+
+                foreach ($coordinatorCedulas as $coordinadorId => $cedulasMap) {
+                    $coordinatorUserIncentiveAmounts[(string) $coordinadorId] = collect(array_keys($cedulasMap))
+                        ->sum(function ($cedula) use ($incentiveByCedula) {
+                            return (float) ($incentiveByCedula[(string) $cedula] ?? 0);
+                        });
+                }
+            }
+        }
+
+        $payload['meta']['tipo_pago'] = $request->input('tipo_pago', 'tramos_60');
+        $payload['meta']['tramo_activo'] = 'incentivo_v3';
+        $payload['meta']['coordinador_agencias_validas'] = $coordinatorValidAgencies;
+        $payload['meta']['coordinador_monto_usuarios'] = $coordinatorUserIncentiveAmounts;
+        $payload['meta']['total_incentivo'] = $totalIncentivo;
+        $payload['meta']['total_incentivo_format'] = number_format($totalIncentivo, 2, '.', ',');
+
+        return response()->json($payload);
+    }
+
     public function reportePagoIncentivos(Request $request)
     {
         ini_set('max_execution_time', 600); // 10 minutes
@@ -1395,3 +1559,4 @@ class IncentivosController extends Controller
         return response()->json($data);
     }
 }
+

@@ -295,7 +295,7 @@ return [
                 'activo' => true,
             ],
             [
-                'nombre' => 'Coordinador / Operador',
+                'nombre' => 'Coordinador',
                 'descripcion' => 'Administra coordinadores, operadores y asignaciones.',
                 'url' => '/coordinador-operador',
                 'icono' => 'ri-group-line',
@@ -347,6 +347,23 @@ return [
                 'icono' => 'ri-customer-service-2-line',
                 'categoria' => 'Soporte',
                 'tags' => ['tecnologia', 'solicitudes', 'soporte'],
+                'activo' => true,
+            ],
+        ],
+    ],
+
+    'servicios_generales' => [
+        'titulo' => 'Servicios Generales',
+        'breadcrumb' => 'Servicios Generales',
+        'items' => [
+            [
+                'nombre' => 'Requerimientos',
+                'descripcion' => 'Registra tickets para los tecnicos: internet, electricidad, sistema frizado o cambio de inversor.',
+                'url' => '/servicios-generales/requerimientos',
+                'icono' => 'ri-tools-line',
+                'categoria' => 'Soporte',
+                'tags' => ['servicios generales', 'requerimientos', 'tecnicos', 'mantenimiento', 'inversor', 'internet', 'luz'],
+                'permission' => 'servicios_generales.view',
                 'activo' => true,
             ],
         ],
@@ -408,6 +425,15 @@ return [
                 'icono' => 'ri-file-copy-2-line',
                 'categoria' => 'Reportes',
                 'tags' => ['reporte', 'nuevo incentivo', 'v2'],
+                'activo' => true,
+            ],
+            [
+                'nombre' => 'Reporte Nuevo Incentivo V3',
+                'descripcion' => 'Tercera version del reporte de incentivos con pagos 60, 70 y 80.',
+                'url' => '/incentivos/reporte-nuevo-incentivo-v3-view',
+                'icono' => 'ri-file-list-3-line',
+                'categoria' => 'Reportes',
+                'tags' => ['reporte', 'nuevo incentivo', 'v3', 'pagos 60', 'pagos 70', 'pagos 80'],
                 'activo' => true,
             ],
         ],
