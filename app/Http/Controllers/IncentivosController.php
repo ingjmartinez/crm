@@ -1308,6 +1308,7 @@ class IncentivosController extends Controller
 
         $coordinatorValidAgencies = [];
         $coordinatorUserIncentiveAmounts = [];
+        $coordinatorUserDetails = [];
         if ($qualifiedCedulas->isNotEmpty()) {
             $incentiveByCedula = collect($payload['data'])
                 ->filter(function ($row) {
@@ -1318,6 +1319,13 @@ class IncentivosController extends Controller
                     return [
                         (string) $row['cedula'] => (float) str_replace(',', '', $row['nuevo_incentivo'] ?? 0),
                     ];
+                });
+            $employeeNamesByCedula = DB::table('empleados')
+                ->whereIn('cedula', $qualifiedCedulas->all())
+                ->selectRaw("CAST(cedula AS CHAR) AS cedula, TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, ''))) AS nombre")
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    return [(string) $row->cedula => (string) $row->nombre];
                 });
 
             $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
@@ -1390,10 +1398,24 @@ class IncentivosController extends Controller
                 }
 
                 foreach ($coordinatorCedulas as $coordinadorId => $cedulasMap) {
-                    $coordinatorUserIncentiveAmounts[(string) $coordinadorId] = collect(array_keys($cedulasMap))
+                    $cedulas = array_keys($cedulasMap);
+                    $coordinatorUserIncentiveAmounts[(string) $coordinadorId] = collect($cedulas)
                         ->sum(function ($cedula) use ($incentiveByCedula) {
                             return (float) ($incentiveByCedula[(string) $cedula] ?? 0);
                         });
+                    $coordinatorUserDetails[(string) $coordinadorId] = collect($cedulas)
+                        ->map(function ($cedula) use ($incentiveByCedula, $employeeNamesByCedula) {
+                            $cedulaString = (string) $cedula;
+
+                            return [
+                                'cedula' => $cedulaString,
+                                'usuario' => $employeeNamesByCedula[$cedulaString] ?? '',
+                                'incentivo' => (float) ($incentiveByCedula[$cedulaString] ?? 0),
+                            ];
+                        })
+                        ->sortByDesc('incentivo')
+                        ->values()
+                        ->all();
                 }
             }
         }
@@ -1402,6 +1424,7 @@ class IncentivosController extends Controller
         $payload['meta']['tramo_activo'] = 'incentivo_v3';
         $payload['meta']['coordinador_agencias_validas'] = $coordinatorValidAgencies;
         $payload['meta']['coordinador_monto_usuarios'] = $coordinatorUserIncentiveAmounts;
+        $payload['meta']['coordinador_detalle_usuarios'] = $coordinatorUserDetails;
         $payload['meta']['total_incentivo'] = $totalIncentivo;
         $payload['meta']['total_incentivo_format'] = number_format($totalIncentivo, 2, '.', ',');
 

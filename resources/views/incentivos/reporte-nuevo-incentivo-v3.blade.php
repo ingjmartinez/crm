@@ -268,6 +268,7 @@
                                     <th style="min-width: 100px;">Agencias</th>
                                     <th style="min-width: 100px;">Válidas</th>
                                     <th style="min-width: 160px;">Monto</th>
+                                    <th style="min-width: 120px;">Detalle</th>
                                     <th style="min-width: 120px;">% Total</th>
                                     <th style="min-width: 160px;">Monto Coordinador</th>
                                 </tr>
@@ -279,6 +280,34 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-soft-secondary" id="btnRestaurarCoordinadores">Restaurar plantilla</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalCoordinadorDetalle" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="coordinatorDetailTitle">Detalle de Usuarios</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive" style="max-height: 420px;">
+                        <table class="table table-bordered table-sm align-middle mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="min-width: 140px;">Cedula</th>
+                                    <th style="min-width: 260px;">Usuario</th>
+                                    <th style="min-width: 160px;">Incentivo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyCoordinadorDetalle"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-soft-secondary" id="btnBackToCoordinadores">Atras</button>
                 </div>
             </div>
         </div>
@@ -448,6 +477,7 @@
     let currentDistributionBase = 0;
     let currentAdministrativeBase = 0;
     let currentCoordinatorBase = 0;
+    let coordinatorUserDetailsByCoordinator = {};
 
     function toNumber(value) {
         if (value === null || value === undefined) return 0;
@@ -539,6 +569,14 @@
         return coordinatorRows.reduce((sum, row) => sum + toNumber(row.monto_usuarios), 0);
     }
 
+    function getCoordinatorDetailUsers(row) {
+        if (!row || row.id === null || row.id === undefined) {
+            return [];
+        }
+
+        return coordinatorUserDetailsByCoordinator[String(row.id)] || [];
+    }
+
     function formatAdministrativePct(value) {
         return (toNumber(value) * 100).toFixed(2);
     }
@@ -616,18 +654,23 @@
         tbody.innerHTML = '';
 
         if (!coordinatorRows.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay coordinadores registrados.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay coordinadores registrados.</td></tr>';
             updateCoordinatorSummary();
             return;
         }
 
         coordinatorRows.forEach((row, idx) => {
+            const detailUsers = getCoordinatorDetailUsers(row);
+            const hasDetail = detailUsers.length > 0;
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><input type="text" class="form-control form-control-sm coord-input" data-field="nombre" data-idx="${idx}" value="${escapeHtml(row.nombre)}"></td>
                 <td class="text-center fw-semibold">${toNumber(row.agencias)}</td>
                 <td class="text-center fw-semibold text-success">${toNumber(row.agencias_validas)}</td>
                 <td class="text-end fw-semibold">${formatMoney(row.monto_usuarios)}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-primary btn-ver-detalle-coord" data-idx="${idx}" ${hasDetail ? '' : 'disabled'}>Ver</button>
+                </td>
                 <td>
                     <div class="input-group input-group-sm">
                         <input type="number" class="form-control coord-pct-input" data-idx="${idx}" min="0" step="0.01" value="${formatCoordinatorPct(row)}" readonly>
@@ -642,9 +685,35 @@
         updateCoordinatorSummary();
     }
 
+    function renderCoordinatorDetailTable(row) {
+        const tbody = document.getElementById('tbodyCoordinadorDetalle');
+        const title = document.getElementById('coordinatorDetailTitle');
+        const users = getCoordinatorDetailUsers(row);
+        const coordinatorName = row?.nombre || 'Coordinador';
+
+        title.textContent = `Detalle de Usuarios - ${coordinatorName}`;
+        tbody.innerHTML = '';
+
+        if (!users.length) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No hay usuarios para este coordinador.</td></tr>';
+            return;
+        }
+
+        users.forEach((user) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="fw-semibold">${escapeHtml(user.cedula)}</td>
+                <td>${escapeHtml(user.usuario)}</td>
+                <td class="text-end fw-semibold">${formatMoney(user.incentivo)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
     function updateCoordinatorValidAgencies(meta) {
         const validAgenciesByCoordinator = meta?.coordinador_agencias_validas || {};
         const userAmountsByCoordinator = meta?.coordinador_monto_usuarios || {};
+        coordinatorUserDetailsByCoordinator = meta?.coordinador_detalle_usuarios || {};
 
         coordinatorRows = coordinatorRows.map((row) => ({
             ...row,
@@ -863,6 +932,30 @@
             modal.show();
         });
 
+        document.querySelector('#tbodyCoordinadores').addEventListener('click', function(event) {
+            const button = event.target.closest('.btn-ver-detalle-coord');
+            if (!button) {
+                return;
+            }
+
+            const idx = parseInt(button.dataset.idx, 10);
+            const row = coordinatorRows[idx];
+            if (!row) {
+                return;
+            }
+
+            renderCoordinatorDetailTable(row);
+            bootstrap.Modal.getInstance(document.getElementById('modalCoordinadores'))?.hide();
+            const detailModal = new bootstrap.Modal(document.getElementById('modalCoordinadorDetalle'));
+            detailModal.show();
+        });
+
+        document.querySelector('#btnBackToCoordinadores').addEventListener('click', function() {
+            bootstrap.Modal.getInstance(document.getElementById('modalCoordinadorDetalle'))?.hide();
+            const modal = new bootstrap.Modal(document.getElementById('modalCoordinadores'));
+            modal.show();
+        });
+
         document.querySelector('#tbodyAdministrativos').addEventListener('input', function(event) {
             const input = event.target;
             if (!input.classList.contains('admin-input')) {
@@ -924,6 +1017,7 @@
 
         document.querySelector('#btnRestaurarCoordinadores').addEventListener('click', function() {
             coordinatorRows = getDefaultCoordinatorRows();
+            coordinatorUserDetailsByCoordinator = {};
             renderCoordinatorTable();
         });
 
