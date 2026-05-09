@@ -796,7 +796,7 @@ COMANDOS USADOS PARA ESTE INVENTARIO
 - Get-ChildItem database -Filter *.sql
 
 ================================================================================
-ANEXO — CAMBIOS DE BASE DE DATOS DESDE 2026-04-27 (al 2026-05-04)
+ANEXO — CAMBIOS DE BASE DE DATOS DESDE 2026-04-27 (al 2026-05-06)
 ================================================================================
 
 NUEVAS MIGRACIONES INCORPORADAS
@@ -897,7 +897,7 @@ NOTAS PARA EL ORDEN DE MIGRACIONES V2
   solicitudes_empleo y catalogos de RRHH (estados_civiles, vacantes,
   niveles_excel).
 
-PREGUNTAS ABIERTAS NUEVAS PARA EL USUARIO
+PREGUNTAS ABIERTAS NUEVAS PARA EL USUARIO (al 2026-05-04)
 1. centros_de_costo: cuales son las llaves validas de la columna JSON
    atributos? Hay schema documentado del ERP origen?
 2. entrevistas_online: existira una tabla de vacantes o se mantiene
@@ -907,6 +907,88 @@ PREGUNTAS ABIERTAS NUEVAS PARA EL USUARIO
 4. Las entrevistas requieren auditoria con activitylog desde el dia 1?
 5. centro de costo: la sincronizacion via /api-centros-costo/sync es
    incremental o full reload? Que campo usa como cursor?
+
+================================================================================
+ANEXO ADICIONAL — CAMBIOS DE DB DESDE 2026-05-05 (al 2026-05-06)
+================================================================================
+
+NUEVA MIGRACION (commit cc99848 — 2026-05-05)
+- 2026_05_04_120000_create_servicios_generales_requerimientos_table.php
+  - Engine: InnoDB, utf8mb4, timestamps.
+  - FKs reales con politicas correctas:
+      user_id          => users.id CASCADE ON DELETE
+      asignado_id      => users.id NULL ON DELETE (nullable)
+      cierre_solicitado_por => users.id NULL ON DELETE (nullable)
+      cerrado_por      => users.id NULL ON DELETE (nullable)
+  - Indices compuestos definidos:
+      INDEX (tipo, estado)
+      INDEX (asignado_id, estado)
+      INDEX (user_id, created_at)
+  - Esta migracion es ejemplo del patron correcto de FK + indice compuesto.
+    La V2 debe replicar este patron en todos los modulos de tickets.
+
+NUEVA TABLA: servicios_generales_requerimientos
+Columnas:
+- id                     BIGINT UNSIGNED PK AUTO_INCREMENT
+- user_id                BIGINT UNSIGNED NOT NULL FK => users CASCADE
+- asignado_id            BIGINT UNSIGNED NULL FK => users NULL
+- tipo                   VARCHAR(30) NOT NULL
+- titulo                 VARCHAR(160) NOT NULL
+- descripcion            TEXT NOT NULL
+- prioridad              VARCHAR(20) DEFAULT 'media'
+- estado                 VARCHAR(20) DEFAULT 'pendiente'
+- progreso               TINYINT UNSIGNED DEFAULT 0
+- detalle_solucion       TEXT NULL
+- cierre_solicitado_at   TIMESTAMP NULL
+- cierre_solicitado_por  BIGINT UNSIGNED NULL FK => users NULL
+- asignado_at            TIMESTAMP NULL
+- resuelto_at            TIMESTAMP NULL
+- cerrado_por            BIGINT UNSIGNED NULL FK => users NULL
+- created_at, updated_at
+
+Tipos validos (hardcodeados en el controlador; deben moverse a catalogo en V2):
+- internet
+- electricidad
+- sistema_frizado
+- inversor
+
+Estados validos (por convencion, mismos que tareas/tecnologia_solicitudes):
+- pendiente
+- en_progreso
+- completada/cerrada
+
+Observaciones para la V2:
+- tipo y estado son VARCHAR libre en la migracion actual; en la V2 deben ser
+  ENUM o FK a catalogos, con CHECK constraint y cast a PHP Enum.
+- prioridad sigue el mismo patron que tareas: baja/media/alta/critica.
+- Los 4 campos FK hacia users (distintos roles) es un patron repetido en tres
+  modulos: Tarea, TecnologiaSolicitud y ServicioGeneralRequerimiento. En la V2
+  evaluar si un modelo base de ticket puede abstraer estas columnas.
+- La tabla cae en Grupo 5 del orden de migraciones V2 (modulos piloto/operativos),
+  colocada DESPUES de users y antes de las tablas historicas masivas.
+
+COLUMNAS PENDIENTES DE AGREGAR EN USERS (detectado en commit c55851c)
+- current_login_at  TIMESTAMP NULL
+- last_login_at     TIMESTAMP NULL
+- Actualmente se verifican con Schema::hasColumn en AuthController porque no
+  estan en ninguna migracion versionada. En la V2 deben incluirse en la
+  migracion baseline de users para eliminar el check defensivo.
+
+ACTUALIZACION DEL RESUMEN DE TABLAS
+- servicios_generales_requerimientos | 16 (incluye timestamps y 4 FK)
+
+CONTEO DE MIGRACIONES ACTUALIZADO
+- El proyecto tiene ahora 51 migraciones en database/migrations (antes 50).
+- Nueva migracion: 2026_05_04_120000_create_servicios_generales_requerimientos_table.php
+
+PREGUNTAS ABIERTAS ADICIONALES (al 2026-05-06)
+6. servicios_generales_requerimientos.tipo: los 4 tipos actuales (internet,
+   electricidad, sistema_frizado, inversor) son el catalogo definitivo o
+   se esperan mas tipos?
+7. El campo progreso en servicios_generales es manual (0..100) igual que
+   en tareas, o sigue un flujo automatico por estado?
+8. users.current_login_at y users.last_login_at: deben quedar en la tabla
+   users de la V2? Si si, en que migracion/grupo se agregan?
 
 ================================================================================
 FIN DEL CONTEXTO DE BASE DE DATOS

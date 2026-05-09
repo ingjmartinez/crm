@@ -1,5 +1,6 @@
 GUIA COMPACTA PARA CONSTRUIR CRM V2 POR FASES
 ==============================================
+Ultima actualizacion: 2026-05-06
 
 Objetivo
 --------
@@ -337,3 +338,36 @@ REGLA FINAL
 Si el chat se pone pesado, abrir chat nuevo con el PROMPT BASE y solo la fase
 actual. No pegar todo el historial. La guia y los tres archivos de contexto son
 la memoria estable.
+
+
+ESTADO DEL PROYECTO AL 2026-05-06
+===================================
+
+Commits cubiertos en los contextos: hasta c55851c (2026-05-06).
+
+Modulos nuevos desde la primera redaccion del contexto:
+- Servicios Generales (ServicioGeneralRequerimientoController, tabla, 4 notif)
+- Entrevista Online (EntrevistaOnlineController, tabla entrevistas_online)
+- Centro de Costo (CentroDeCosto, tablas centros_de_costo, sync ERP)
+- Recursos Humanos hub (RecursosHumanosController)
+- Module Hubs (ModuleHubController — 10 hubs declarados)
+
+Cambios transversales relevantes:
+- Gate::before para superadmin bypass (AppServiceProvider)
+- ExpireInactiveSession middleware (inactividad + remember-me bloqueado)
+- IncentivosController con 3 versiones de reporte (v1, v2, v3)
+- AuthController con guard defensivo para columnas login_at
+- 9 vistas Lotonet reestructuradas para corregir errores 500
+
+Conteos actuales:
+- Migraciones: 51
+- Rutas totales: 394
+- Lineas routes/web.php: 520
+- Modelos principales: 47 aprox
+- Controladores: ~30 aprox
+
+Pendientes de respuesta antes de avanzar V2:
+- Ver "PREGUNTAS ABIERTAS" en contexto-db-crm-v2.txt (8 preguntas)
+- usuarios.current_login_at / last_login_at: confirmar si van en users V2
+- servicios_generales.tipo: catalogo definitivo o pueden agregarse mas tipos?
+- entrevistas_online.manejo_excel: rango valido (0..3? 0..5?)

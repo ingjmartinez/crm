@@ -1837,3 +1837,71 @@ H) Reglas para futuras adiciones de "hubs/sub-hubs"
   icono, categoria, tags, activo y permission required.
 - No aceptar PRs que agreguen items al menu pero olviden el hub.
 - Los hubs son la unica forma valida de descubrir un modulo en la V2.
+
+================================================================================
+NOVEDADES INCORPORADAS 2026-05-05 / 2026-05-06 (commits cc99848 al c55851c)
+================================================================================
+
+I) Modulo Servicios Generales (tickets de requerimientos tecnicos)
+- Nuevo controlador: app/Http/Controllers/ServicioGeneralRequerimientoController.php
+  (531 lineas). Tercer modulo del estilo "tickets" junto a Tarea y TecnologiaSolicitud.
+- Flujo: crear requerimiento => asignar tecnico => actualizar progreso =>
+  solicitar cierre => finalizar/cerrar.
+- Tipos de requerimiento: internet, electricidad, sistema_frizado, inversor.
+  (actualmente hardcoded como constante de clase; en V2 mover a Enum PHP).
+- Rol nuevo: servicios_generales con 4 permisos granulares:
+    servicios_generales.view
+    servicios_generales.create
+    servicios_generales.manage
+    servicios_generales.close
+- Tabla: servicios_generales_requerimientos (InnoDB, 16 columnas).
+  - FK correctas hacia users con politicas CASCADE y NULL.
+  - Indices compuestos: (tipo, estado), (asignado_id, estado), (user_id, created_at).
+  - Patron de migracion limpia: usar como referencia en V2.
+- 4 Notifications con canal database + mail.
+- Rutas REST correctas (POST/PUT/DELETE — NO GET para mutaciones).
+- Hub propio 'servicios_generales' agregado a config/module_hubs.php.
+  El sistema ahora tiene 10 hubs declarados en total.
+- En la V2:
+  - Crear StoreServicioGeneralRequerimientoRequest / UpdateRequest.
+  - Policy: ServicioGeneralRequerimientoPolicy.
+  - Reemplazar deteccion de staff por keyword con permiso Spatie explicito.
+  - Extraer logica de staffUsers/esAdmin a un Service compartido de tickets.
+  - Evaluar trait TicketableController compartido con Tarea y TecnologiaSolicitud.
+  - Auditar con activitylog (cambios de estado, asignaciones, cierres).
+
+J) Reporte de Incentivos V3
+- Nueva vista: resources/views/incentivos/reporte-nuevo-incentivo-v3.blade.php (1048 lineas).
+- Nuevas rutas y metodos en IncentivosController:
+    GET /incentivos/reporte-nuevo-incentivo-v3-view
+    GET /incentivos/reporte-nuevo-incentivo-v3
+- IncentivosController llega a ~1409 lineas totales (antes ~1244).
+  Urgente en V2: extraer a IncentivoService + IncentivoReporteService.
+- Ahora existen 3 versiones del reporte de nuevo incentivo (v1, v2, v3).
+  En la V2 unificar o dejar como parametro de version.
+
+K) Gate::before para superadmin (AppServiceProvider)
+- Gate::before(fn) permite que superadmin bypass cualquier check de Spatie.
+- Impacto en V2: replicar este patron en AppServiceProvider desde el inicio.
+  Documentar en docs/seguridad.md.
+
+L) AuthController — guard defensivo de columnas login_at
+- Schema::hasColumn + try/catch en el save de current_login_at/last_login_at
+  para evitar errores 500 en entornos sin esas columnas.
+- Causa raiz: las columnas no estan en ninguna migracion versionada.
+- En la V2 agregar current_login_at y last_login_at a la migracion baseline
+  de users y eliminar el check defensivo.
+
+M) Vistas Lotonet ajustadas
+- 9 vistas de operaciones Lotonet reestructuradas para corregir errores 500.
+  Indica que los templates dependian de variables no garantizadas.
+  En la V2 asegurar que los controladores pasen defaults y usar optional()
+  o null-coalescing en Blade.
+
+N) Estado de rutas actualizado
+- routes/web.php: 520 lineas.
+- Total de rutas del sistema: 394 (antes 361).
+  Las 33 rutas nuevas corresponden principalmente a:
+  - Servicios Generales (6 rutas)
+  - Reporte Incentivo V3 (2 rutas)
+  - Ajustes de menu/hub para los 10 hubs

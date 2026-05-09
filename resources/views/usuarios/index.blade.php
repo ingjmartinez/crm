@@ -49,7 +49,7 @@
                                             <tr>
                                                 <th class="text-center" style="min-width: 50px;">ID</th>
                                                 <th style="min-width: 150px;">Nombre</th>
-                                                <th style="min-width: 200px;">Correo ElectrÃ³nico</th>
+                                                <th style="min-width: 200px;">Correo Electr&oacute;nico</th>
                                                 <th style="min-width: 200px;">Roles</th>
                                                 <th style="min-width: 150px;">Fecha de Registro</th>
                                                 <th class="text-center" style="min-width: 100px;">Acciones</th>
@@ -73,7 +73,7 @@
                     <div class="col-sm-6">
                         <script>
                             document.write(new Date().getFullYear())
-                        </script> Â© CRM.
+                        </script> &copy; CRM.
                     </div>
                 </div>
             </div>
@@ -85,11 +85,11 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="deleteModalLabel">Confirmar eliminaciÃ³n</h5>
+                    <h5 class="modal-title" id="deleteModalLabel">Confirmar eliminaci&oacute;n</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    Â¿EstÃ¡ seguro que desea eliminar este usuario? Esta acciÃ³n no se puede deshacer.
+                    &iquest;Est&aacute; seguro que desea eliminar este usuario? Esta acci&oacute;n no se puede deshacer.
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -161,7 +161,7 @@
             dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
         });
 
-        // Manejar eliminaciÃ³n
+        // Manejar eliminacion
         $('#tableUsuarios').on('click', '.btn-delete', function() {
             var id = $(this).data('id');
             var form = $('#deleteForm');
@@ -169,11 +169,11 @@
             $('#deleteModal').modal('show');
         });
 
-        // Mostrar mensaje de Ã©xito si existe
+        // Mostrar mensaje de exito si existe
         @if(session('success'))
             Swal.fire({
                 icon: 'success',
-                title: 'Â¡Ã‰xito!',
+                title: '\u00A1\u00C9xito!',
                 text: '{{ session('success') }}',
                 timer: 3000,
                 showConfirmButton: false
@@ -189,11 +189,11 @@
             });
         @endif
 
-        // Mostrar errores de validaciÃ³n
+        // Mostrar errores de validacion
         @if($errors->any())
             Swal.fire({
                 icon: 'error',
-                title: 'Error de validaciÃ³n',
+                title: 'Error de validaci\u00F3n',
                 html: `{!! implode('<br>', $errors->all()) !!}`
             });
         @endif

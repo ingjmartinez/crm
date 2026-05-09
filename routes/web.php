@@ -18,6 +18,7 @@ use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\IncentivosController;
+use App\Http\Controllers\IncentivoConfiguracionController;
 use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\MarController;
 use App\Http\Controllers\MetaIncentivoController;
@@ -423,7 +424,17 @@ Route::get('/incentivos/reporte-nuevo-incentivo-v2-view', [IncentivosController:
 Route::get('/incentivos/reporte-nuevo-incentivo-v2', [IncentivosController::class, 'reporteNuevoIncentivoV2']);
 Route::get('/incentivos/reporte-nuevo-incentivo-v3-view', [IncentivosController::class, 'reporteNuevoIncentivoV3View']);
 Route::get('/incentivos/reporte-nuevo-incentivo-v3', [IncentivosController::class, 'reporteNuevoIncentivoV3']);
+Route::get('/incentivos/reporte-nuevo-incentivo-v4-view', [IncentivosController::class, 'reporteNuevoIncentivoV4View']);
+Route::get('/incentivos/reporte-nuevo-incentivo-v4', [IncentivosController::class, 'reporteNuevoIncentivoV4']);
 Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
+Route::get('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoIndex'])->name('incentivos.incentivo-administrativo.index');
+Route::post('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoStore'])->name('incentivos.incentivo-administrativo.store');
+Route::put('/incentivos/incentivo-administrativo/{incentivoAdministrativo}', [IncentivoConfiguracionController::class, 'incentivoAdministrativoUpdate'])->name('incentivos.incentivo-administrativo.update');
+Route::delete('/incentivos/incentivo-administrativo/{incentivoAdministrativo}', [IncentivoConfiguracionController::class, 'incentivoAdministrativoDestroy'])->name('incentivos.incentivo-administrativo.destroy');
+Route::get('/incentivos/porcentaje-incentivo', [IncentivoConfiguracionController::class, 'porcentajeIncentivoIndex'])->name('incentivos.porcentaje-incentivo.index');
+Route::post('/incentivos/porcentaje-incentivo', [IncentivoConfiguracionController::class, 'porcentajeIncentivoStore'])->name('incentivos.porcentaje-incentivo.store');
+Route::put('/incentivos/porcentaje-incentivo/{porcentajeIncentivo}', [IncentivoConfiguracionController::class, 'porcentajeIncentivoUpdate'])->name('incentivos.porcentaje-incentivo.update');
+Route::delete('/incentivos/porcentaje-incentivo/{porcentajeIncentivo}', [IncentivoConfiguracionController::class, 'porcentajeIncentivoDestroy'])->name('incentivos.porcentaje-incentivo.destroy');
 
 Route::get('/incentivos/empleados', [EmpleadoController::class, 'incentivos']);
 Route::get('/incentivos/empleados/list', [EmpleadoController::class, 'listEmpleados']);

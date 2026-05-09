@@ -533,7 +533,7 @@ COMANDOS USADOS PARA ESTE INVENTARIO
 - rg sobre routes/web.php para rutas GET riesgosas
 
 ================================================================================
-ANEXO — CAMBIOS DE CODIGO DESDE 2026-04-27 (al 2026-05-04)
+ANEXO — CAMBIOS DE CODIGO DESDE 2026-04-27 (al 2026-05-06)
 ================================================================================
 
 Esta seccion incrementa el mapa de codigo con las funciones nuevas y archivos
@@ -639,6 +639,137 @@ OBSERVACIONES PARA LA V2
    actualizacion. No CRUD libre.
 6. La nueva navegacion por hubs implica que la V2 debe consolidar app.blade.php:
    menu lateral y hub deben compartir la misma fuente declarativa con permisos.
+
+================================================================================
+ANEXO — CAMBIOS ADICIONALES DESDE 2026-05-05 (al 2026-05-06)
+================================================================================
+
+Esta seccion complementa el anexo anterior con los cambios incorporados en los
+commits cc99848, a098633, a04c9d7, 2598ddf y c55851c.
+
+NUEVO MODULO: Servicios Generales (commit cc99848 — 2026-05-05)
+- app\Http\Controllers\ServicioGeneralRequerimientoController.php (531 lineas)
+  - CRUD REST completo: index, list (JSON), show (JSON), store, update,
+    solicitarCierre, finalizar.
+  - Rutas bajo prefix /servicios-generales con middleware de permiso por accion:
+      GET    /servicios-generales/requerimientos         (permission:servicios_generales.view)
+      GET    /servicios-generales/requerimientos/list    (permission:servicios_generales.view)
+      POST   /servicios-generales/requerimientos         (permission:servicios_generales.create)
+      GET    /servicios-generales/requerimientos/{id}    (permission:servicios_generales.view)
+      PUT    /servicios-generales/requerimientos/{id}    (permission:servicios_generales.manage)
+      POST   /servicios-generales/requerimientos/{id}/solicitar-cierre  (permission:servicios_generales.manage)
+      POST   /servicios-generales/requerimientos/{id}/finalizar         (permission:servicios_generales.close)
+  - Tipos validos hardcodeados como constante de clase:
+      internet, electricidad, sistema_frizado, inversor.
+    En la V2 deben moverse a un Enum PHP o a config.
+  - Detecta si la tabla existe (tablaExiste()) para devolver estado setup_pending
+    en lugar de fallar. Patron util en entornos donde migraciones son parciales.
+  - Diferencia de acceso: usuarios normales ven sus propios requerimientos;
+    roles staff/admin ven todos. La logica se basa en keywords de nombre de rol,
+    lo que es fragil. En la V2 usar Spatie Permission con permiso explicito.
+  - staffUsers() devuelve usuarios cuyo nombre de rol coincide con keywords
+    (servicios generales, mantenimiento, tecnico, soporte, operaciones).
+  - esAdmin() verifica roles: superadmin, admin, superior.
+  - Patron similar a TareaController y TecnologiaSolicitudController.
+
+- app\Models\ServicioGeneralRequerimiento.php
+  - Tabla: servicios_generales_requerimientos
+  - fillable: user_id, asignado_id, tipo, titulo, descripcion, prioridad,
+    estado, progreso, detalle_solucion, cierre_solicitado_at,
+    cierre_solicitado_por, asignado_at, resuelto_at, cerrado_por.
+  - Casts: progreso (integer), cierre_solicitado_at/asignado_at/resuelto_at
+    (datetime).
+  - Relaciones: creador(), asignado(), cierreSolicitadoPor(), cerradoPor()
+    (todas belongsTo User).
+  - Accessor: getTicketCodigoAttribute() => 'REQ-' + id cero-padded a 6 digits.
+  - Patron similar al de TecnologiaSolicitud: reutilizable como plantilla.
+
+- 4 Notifications nuevas bajo app\Notifications\:
+    ServicioGeneralRequerimientoActualizadaNotification (89 lineas, canal database + mail)
+    ServicioGeneralRequerimientoAsignadaNotification   (51 lineas, canal database + mail)
+    ServicioGeneralRequerimientoCierreSolicitadoNotification (51 lineas)
+    ServicioGeneralRequerimientoFinalizadaNotification  (50 lineas)
+
+- database\seeders\ServiciosGeneralesRolePermissionSeeder.php (40 lineas)
+  - Crea rol 'servicios_generales' si no existe.
+  - Asigna 4 permisos: servicios_generales.view, .create, .manage, .close.
+
+- resources\views\servicios-generales\requerimientos.blade.php (803 lineas)
+  - Vista principal con DataTable client-side, modal de formulario, panel de
+    estadisticas y filtros por estado/tipo.
+
+NUEVO HUB: servicios_generales en config/module_hubs.php
+- Se agrego hub 'servicios_generales' con un item 'Requerimientos' con
+  permission: servicios_generales.view.
+- Ahora el sistema tiene 10 hubs declarados:
+    dashboard, comercial, contabilidad, operaciones, mantenimiento,
+    tecnologia, incentivos, procesos, gerencia, servicios_generales.
+
+NUEVO REPORTE DE INCENTIVOS V3 (commit cc99848)
+- Nueva vista: resources\views\incentivos\reporte-nuevo-incentivo-v3.blade.php (1048 lineas)
+- Nuevas rutas en IncentivosController:
+    GET /incentivos/reporte-nuevo-incentivo-v3-view  => reporteNuevoIncentivoV3View
+    GET /incentivos/reporte-nuevo-incentivo-v3       => reporteNuevoIncentivoV3
+- IncentivosController crecio ~165 lineas para agregar los metodos v3.
+- IncentivosController actualizado tiene aproximadamente 1409 lineas totales.
+
+CAMBIOS EN CODIGO EXISTENTE
+- app\Providers\AppServiceProvider.php (commit a098633)
+  - Se agrego Gate::before para que superadmin tenga bypass global de todos
+    los permisos Spatie:
+      Gate::before(function ($user, string $ability) {
+          return $user->hasRole('superadmin') ? true : null;
+      });
+  - Impacto en V2: este patron debe documentarse en docs/seguridad.md como
+    decisivo; el superadmin NO debe aparecer bloqueado por ningun permiso.
+
+- app\Http\Controllers\AuthController.php (commit c55851c)
+  - Guard defensivo con Schema::hasColumn antes de escribir last_login_at
+    y current_login_at:
+      if ($user && Schema::hasColumn('users', 'current_login_at') &&
+          Schema::hasColumn('users', 'last_login_at')) { ... }
+  - Envuelve el save() en try/catch con report($error) para no romper login
+    si las columnas no existen todavia.
+  - Motivo: las columnas current_login_at y last_login_at no estan en la
+    migracion baseline de users, lo que causaba errores 500.
+  - En la V2 agregar esas columnas en la migracion de users para eliminar
+    el check defensivo.
+
+- database\seeders\RolePermissionSeeder.php (commits a04c9d7 + cc99848)
+  - Agregados permisos al array global:
+      servicios_generales.view, .create, .manage, .close
+  - Agregado rol 'servicios_generales' con sus 4 permisos.
+
+- routes/web.php: ahora tiene 520 lineas y el sistema expone 394 rutas totales
+  (antes tenia 361 rutas segun el contexto original — crecio 33 rutas).
+
+VISTAS LOTONET AJUSTADAS (commit c55851c)
+- Ajustes en las 9 vistas de operaciones Lotonet para resolver errores 500:
+    resources/views/lotonet/asistencias.blade.php
+    resources/views/lotonet/faltantes.blade.php
+    resources/views/lotonet/pagos-aotra-empresa.blade.php
+    resources/views/lotonet/pagos-misma-empresa.blade.php
+    resources/views/lotonet/pagos-porotra-empresa.blade.php
+    resources/views/lotonet/paquetico.blade.php
+    resources/views/lotonet/premios.blade.php
+    resources/views/lotonet/recargas.blade.php
+    resources/views/lotonet/ventas-productos.blade.php
+
+OBSERVACIONES ADICIONALES PARA LA V2
+7. ServicioGeneralRequerimientoController es el tercer modulo con patron
+   tickets (Tarea, TecnologiaSolicitud, ServicioGeneralRequerimiento). En la V2
+   considerar un trait o clase base TicketController compartido para evitar
+   duplicacion de logica de cierre/finalizacion/notificaciones.
+8. La deteccion de staff por keyword en nombre de rol es fragil. En la V2 usar
+   un permiso especifico: servicios_generales.staff o configuracion declarativa
+   por rol.
+9. Los errores 500 en vistas Lotonet indican que los templates dependen de datos
+   que pueden no estar presentes. En la V2 asegurar que los controladores pasen
+   datos con valores seguros (null coalescing, optional()).
+10. Gate::before para superadmin es la practica correcta con Spatie. Documentar
+    y replicar en V2. No deben existir permission checks que bloqueen al superadmin.
+11. El campo current_login_at / last_login_at en users debe versionarse en la
+    migracion V2 para eliminar el check defensivo de AuthController.
 
 ================================================================================
 FIN DEL CONTEXTO DE CODIGO

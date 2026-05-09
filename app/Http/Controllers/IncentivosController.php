@@ -1431,6 +1431,41 @@ class IncentivosController extends Controller
         return response()->json($payload);
     }
 
+    public function reporteNuevoIncentivoV4View()
+    {
+        $coordinadores = CoordinadorOperador::query()
+            ->where('puesto', 'coordinador')
+            ->withCount('agencias')
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get(['id', 'nombre', 'apellido'])
+            ->map(function ($coordinador) {
+                return [
+                    'id' => $coordinador->id,
+                    'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
+                    'agencias' => (int) $coordinador->agencias_count,
+                    'agencias_validas' => 0,
+                    'monto_usuarios' => 0,
+                    'pct' => 0.0055,
+                ];
+            })
+            ->values();
+
+        return view('incentivos.reporte-nuevo-incentivo-v4', compact('coordinadores'));
+    }
+
+    public function reporteNuevoIncentivoV4(Request $request)
+    {
+        $response = $this->reporteNuevoIncentivoV3($request);
+        $payload = $response->getData(true);
+
+        if (isset($payload['meta']) && is_array($payload['meta'])) {
+            $payload['meta']['tramo_activo'] = 'incentivo_v4';
+        }
+
+        return response()->json($payload, $response->status());
+    }
+
     public function reportePagoIncentivos(Request $request)
     {
         ini_set('max_execution_time', 600); // 10 minutes

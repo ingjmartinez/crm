@@ -7,12 +7,12 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">Reporte Nuevo Incentivo V3</h4>
+                            <h4 class="mb-sm-0">Reporte Nuevo Incentivo V4</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('incentivos.index') }}">Incentivos</a></li>
-                                    <li class="breadcrumb-item active">Reporte Nuevo Incentivo V3</li>
+                                    <li class="breadcrumb-item active">Reporte Nuevo Incentivo V4</li>
                                 </ol>
                             </div>
                         </div>
@@ -27,10 +27,7 @@
                                 <h4 class="mb-0" id="ni_total_vendido">0.00</h4>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6">
-                        <div class="card card-animate">
+                        <div class="card card-animate mt-3">
                             <div class="card-body d-flex justify-content-between align-items-center">
                                 <div>
                                     <p class="text-uppercase fw-medium text-muted mb-1">Usuarios que Cumplieron</p>
@@ -43,6 +40,43 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="col-lg-4 col-md-6">
+                        <div class="card card-animate">
+                            <div class="card-body text-start" style="min-height: 178px;">
+                                <p class="text-uppercase fw-medium text-muted mb-1">Desglose de porcentajes</p>
+                                <div class="table-responsive mt-2">
+                                    <table class="table table-sm table-bordered mb-0 align-middle">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Categoria</th>
+                                                <th class="text-end">% Configurado</th>
+                                                <th class="text-end">Monto</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="ni_pct_puesto_resumen">
+                                            <tr>
+                                                <td>1 Gtes. y Encarg.</td>
+                                                <td class="text-end">0.00%</td>
+                                                <td class="text-end">0.00</td>
+                                            </tr>
+                                            <tr>
+                                                <td>2 Monitoreo</td>
+                                                <td class="text-end">0.00%</td>
+                                                <td class="text-end">0.00</td>
+                                            </tr>
+                                            <tr>
+                                                <td>4 Operadores + 5 Servs. Tecnicos</td>
+                                                <td class="text-end">0.00%</td>
+                                                <td class="text-end">0.00</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-lg-4 col-md-6">
                         <div class="card card-animate">
                             <div class="card-body text-start" style="min-height: 178px;">
@@ -62,7 +96,7 @@
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between">
                                 <div>
-                                    <h5 class="card-title mb-0">Calculo por sistema y tipo de pago (V3)</h5>
+                                    <h5 class="card-title mb-0">Calculo por sistema y tipo de pago (V4)</h5>
                                     <small class="text-muted">Configura tramos de venta mensual por pago a 60, 70 u 80.</small>
                                 </div>
                                 <div class="d-flex gap-3 align-items-end flex-wrap">
@@ -93,7 +127,7 @@
                                     </div>
                                     <div>
                                         <label class="mb-0" for="ni_min_dias">Mín. días venta</label>
-                                        <input type="number" id="ni_min_dias" class="form-control" value="10" min="1" step="1">
+                                        <input type="number" id="ni_min_dias" class="form-control" value="1" min="1" step="1">
                                     </div>
                                     <div>
                                         <label class="mb-0" for="ni_tipo_pago">Tipo de pago</label>
@@ -104,9 +138,9 @@
                                         </select>
                                     </div>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigPct">Configurar Tipo de Pago</button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigPuestoPct">Configurar % de puesto</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdminPct">Porcentaje</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
-                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigOperadores">Operadores</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
                                 </div>
@@ -194,26 +228,54 @@
                 </div>
                 <div class="modal-body">
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="border rounded p-2">
                                 <small class="text-muted d-block">Bolsa administrativa total</small>
                                 <strong id="admin_base_total">0.00</strong>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="border rounded p-2">
-                                <small class="text-muted d-block">Monto para Administrativo</small>
+                                <small class="text-muted d-block" id="admin_distribuido_label">Monto por filtro activo</small>
                                 <strong id="admin_distribuido_total">0.00</strong>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label mb-1" for="adminGrupoCalculo">Calcular administrativo por</label>
-                            <select id="adminGrupoCalculo" class="form-select">
-                                <option value="todos">Todos los grupos</option>
-                                <option value="1. Gtes. Y Encarg.">1. Gtes. Y Encarg.</option>
-                                <option value="2. Monitoreo">2. Monitoreo</option>
-                                <option value="5. Servs. Tecnicos">5. Servs. Tecnicos</option>
-                            </select>
+                        <div class="col-md-4">
+                            <div class="border rounded p-2">
+                                <small class="text-muted d-block">Total distribuido en tabla</small>
+                                <strong id="admin_tabla_total">0.00</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <div class="border rounded p-2 h-100">
+                                        <small class="text-muted d-block">1 Gtes. y Encarg.</small>
+                                        <div class="fw-semibold" id="admin_cat_g1">27.00% | 0.00</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="border rounded p-2 h-100">
+                                        <small class="text-muted d-block">2 Monitoreo</small>
+                                        <div class="fw-semibold" id="admin_cat_g2">13.00% | 0.00</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="border rounded p-2 h-100">
+                                        <small class="text-muted d-block">4 Operadores + 5 Servs. Tecnicos</small>
+                                        <div class="fw-semibold" id="admin_cat_g45">60.00% | 0.00</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label mb-1 d-block">Filtrar grupo</label>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn btn-primary" id="btnAdminFiltroTodos">Todo</button>
+                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG1">1 Gtes. y Encarg.</button>
+                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG2">2 Monitoreo</button>
+                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG45">4 Operadores + 5 Servs. Tecnicos</button>
+                            </div>
                         </div>
                     </div>
                     <div class="table-responsive" style="max-height: 520px;">
@@ -224,7 +286,7 @@
                                     <th style="min-width: 260px;">Nombre</th>
                                     <th style="min-width: 140px;">Empresa</th>
                                     <th style="min-width: 120px;">% Total</th>
-                                    <th style="min-width: 160px;">Monto Administrativo</th>
+                                    <th style="min-width: 160px;" id="admin_monto_col_label">Monto</th>
                                 </tr>
                             </thead>
                             <tbody id="tbodyAdministrativos"></tbody>
@@ -241,6 +303,62 @@
                     <button type="button" class="btn btn-success" id="btnExportAdministrativosExcel">Excel</button>
                     <button type="button" class="btn btn-soft-secondary" id="btnRestaurarAdministrativos">Restaurar plantilla</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalConfigPuestoPct" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Configurar % de puesto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 260px;">Categoria</th>
+                                    <th style="min-width: 160px;">% Manual</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>1 Gtes. y Encarg.</td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" id="puesto_pct_g1" class="form-control" value="27" min="0" step="0.01">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>2 Monitoreo</td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" id="puesto_pct_g2" class="form-control" value="13" min="0" step="0.01">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>4 Operadores + 5 Servs. Tecnicos</td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" id="puesto_pct_g45" class="form-control" value="60" min="0" step="0.01">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnGuardarPuestoPct">Guardar</button>
                 </div>
             </div>
         </div>
@@ -288,58 +406,6 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-success" id="btnExportCoordinadoresExcel">Excel</button>
                     <button type="button" class="btn btn-soft-secondary" id="btnRestaurarCoordinadores">Restaurar plantilla</button>
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="modalOperadores" class="modal fade" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Desglose Operadores</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <div class="border rounded p-2">
-                                <small class="text-muted d-block">Bolsa administrativa total</small>
-                                <strong id="op_base_total">0.00</strong>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="border rounded p-2">
-                                <small class="text-muted d-block">Monto para Operadores</small>
-                                <strong id="op_distribuido_total">0.00</strong>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="table-responsive" style="max-height: 520px;">
-                        <table class="table table-bordered table-sm align-middle mb-0">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th style="min-width: 180px;">Grupo</th>
-                                    <th style="min-width: 260px;">Nombre</th>
-                                    <th style="min-width: 140px;">Empresa</th>
-                                    <th style="min-width: 120px;">% Total</th>
-                                    <th style="min-width: 160px;">Monto Operador</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbodyOperadores"></tbody>
-                            <tfoot class="table-light">
-                                <tr>
-                                    <th colspan="4" class="text-end">Total</th>
-                                    <th class="text-end" id="op_col_total">0.00</th>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-success" id="btnExportOperadoresExcel">Excel</button>
-                    <button type="button" class="btn btn-soft-secondary" id="btnRestaurarOperadores">Restaurar plantilla</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -937,6 +1003,11 @@
     let cachedTipoPago = null;
     let adminPctBruto = 0;
     let administrativeGroupFilter = 'todos';
+    let puestoPctConfig = {
+        g1: 27,
+        g2: 13,
+        g45: 60,
+    };
     let currentDistributionBase = 0;
     let currentAdministrativePoolBase = 0;
     let currentAdministrativeBase = 0;
@@ -957,6 +1028,36 @@
 
     function formatMoney(value) {
         return toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function updatePuestoPctSummaryCard() {
+        const target = document.getElementById('ni_pct_puesto_resumen');
+        if (!target) {
+            return;
+        }
+
+        const montoBase = toNumber(currentAdministrativePoolBase);
+        const montoG1 = montoBase * (toNumber(puestoPctConfig.g1) / 100);
+        const montoG2 = montoBase * (toNumber(puestoPctConfig.g2) / 100);
+        const montoG45 = montoBase * (toNumber(puestoPctConfig.g45) / 100);
+
+        target.innerHTML = `
+            <tr>
+                <td>1 Gtes. y Encarg.</td>
+                <td class="text-end">${toNumber(puestoPctConfig.g1).toFixed(2)}%</td>
+                <td class="text-end">${formatMoney(montoG1)}</td>
+            </tr>
+            <tr>
+                <td>2 Monitoreo</td>
+                <td class="text-end">${toNumber(puestoPctConfig.g2).toFixed(2)}%</td>
+                <td class="text-end">${formatMoney(montoG2)}</td>
+            </tr>
+            <tr>
+                <td>4 Operadores + 5 Servs. Tecnicos</td>
+                <td class="text-end">${toNumber(puestoPctConfig.g45).toFixed(2)}%</td>
+                <td class="text-end">${formatMoney(montoG45)}</td>
+            </tr>
+        `;
     }
 
     function escapeHtml(value) {
@@ -996,33 +1097,17 @@
     }
 
     function exportAdministrativosExcel() {
-        const rows = getActiveAdministrativeRows().map((row) => [
+        const rows = getAdministrativeDisplayRows().map((row) => [
             row.grupo,
             row.nombre,
             row.empresa,
             formatAdministrativePct(row.pct),
-            formatMoney(getAdministrativeAmount(row)),
+            formatMoney(getAdministrativeDisplayAmount(row)),
         ]);
 
         exportRowsToExcelCsv(
-            'administrativos_validacion.csv',
-            ['Grupo', 'Nombre', 'Empresa', '% Total', 'Monto Administrativo'],
-            rows
-        );
-    }
-
-    function exportOperadoresExcel() {
-        const rows = operatorRows.map((row) => [
-            row.grupo,
-            row.nombre,
-            row.empresa,
-            formatAdministrativePct(row.pct),
-            formatMoney(getOperatorAmount(row)),
-        ]);
-
-        exportRowsToExcelCsv(
-            'operadores_validacion.csv',
-            ['Grupo', 'Nombre', 'Empresa', '% Total', 'Monto Operador'],
+            'administrativos_v4_validacion.csv',
+            ['Grupo', 'Nombre', 'Empresa', '% Total', 'Monto'],
             rows
         );
     }
@@ -1038,7 +1123,7 @@
         ]);
 
         exportRowsToExcelCsv(
-            'coordinadores_validacion.csv',
+            'coordinadores_v4_validacion.csv',
             ['Nombre', 'Agencias', 'Validas', 'Monto', '% Total', 'Monto Coordinador'],
             rows
         );
@@ -1046,36 +1131,131 @@
 
     function normalizeAdministrativeGroup(value) {
         const group = String(value ?? '').trim();
-        if (group.includes('Servs. Tecnicos')) {
+        if (group.includes('Servs. Tecnicos') || group.includes('Servs Tecnicos')) {
             return '5. Servs. Tecnicos';
         }
 
         return group;
     }
 
-    function getActiveAdministrativeRows() {
-        if (administrativeGroupFilter === 'todos') {
-            return administrativeRows;
-        }
+    function updateAdministrativeFilterButtons() {
+        const active = administrativeGroupFilter;
+        const buttonMap = [
+            { id: 'btnAdminFiltroTodos', value: 'todos' },
+            { id: 'btnAdminFiltroG1', value: '1. Gtes. Y Encarg.' },
+            { id: 'btnAdminFiltroG2', value: '2. Monitoreo' },
+            { id: 'btnAdminFiltroG45', value: '4_5' },
+        ];
 
-        return administrativeRows.filter((row) => normalizeAdministrativeGroup(row.grupo) === administrativeGroupFilter);
+        buttonMap.forEach((item) => {
+            const button = document.getElementById(item.id);
+            if (!button) return;
+
+            const isActive = active === item.value;
+            button.classList.toggle('btn-primary', isActive);
+            button.classList.toggle('btn-outline-primary', !isActive);
+        });
     }
 
-    function getAdministrativePctTotal() {
-        return getActiveAdministrativeRows().reduce((sum, row) => sum + toNumber(row.pct), 0);
+    function renderPuestoPctInputs() {
+        const g1Input = document.getElementById('puesto_pct_g1');
+        const g2Input = document.getElementById('puesto_pct_g2');
+        const g45Input = document.getElementById('puesto_pct_g45');
+
+        if (g1Input) g1Input.value = puestoPctConfig.g1;
+        if (g2Input) g2Input.value = puestoPctConfig.g2;
+        if (g45Input) g45Input.value = puestoPctConfig.g45;
+    }
+
+    function readPuestoPctInputs() {
+        puestoPctConfig.g1 = Math.max(0, parseFloat(document.getElementById('puesto_pct_g1')?.value || 0) || 0);
+        puestoPctConfig.g2 = Math.max(0, parseFloat(document.getElementById('puesto_pct_g2')?.value || 0) || 0);
+        puestoPctConfig.g45 = Math.max(0, parseFloat(document.getElementById('puesto_pct_g45')?.value || 0) || 0);
+    }
+
+    function getPuestoPctByCategoryKey(categoryKey) {
+        if (categoryKey === 'g1') return toNumber(puestoPctConfig.g1);
+        if (categoryKey === 'g2') return toNumber(puestoPctConfig.g2);
+        if (categoryKey === 'g45') return toNumber(puestoPctConfig.g45);
+        return 0;
+    }
+
+    function getPuestoCategoryBudget(categoryKey) {
+        return toNumber(currentAdministrativePoolBase) * (getPuestoPctByCategoryKey(categoryKey) / 100);
+    }
+
+    function getAdministrativeCategoryKeyByGroup(groupValue) {
+        const group = normalizeAdministrativeGroup(groupValue);
+        if (group === '1. Gtes. Y Encarg.') return 'g1';
+        if (group === '2. Monitoreo') return 'g2';
+        if (group === '4. Operadores' || group === '5. Servs. Tecnicos') return 'g45';
+        return null;
+    }
+
+    function getAdministrativeCategoryPctTotal(categoryKey) {
+        const allRows = [
+            ...administrativeRows.map((row) => ({ ...row, grupo: normalizeAdministrativeGroup(row.grupo) })),
+            ...operatorRows.map((row) => ({ ...row, grupo: normalizeAdministrativeGroup(row.grupo) })),
+        ];
+
+        return allRows
+            .filter((row) => getAdministrativeCategoryKeyByGroup(row.grupo) === categoryKey)
+            .reduce((sum, row) => sum + toNumber(row.pct), 0);
+    }
+
+    function getAdministrativeAmountByRow(row) {
+        const categoryKey = getAdministrativeCategoryKeyByGroup(row?.grupo);
+        if (!categoryKey) {
+            return 0;
+        }
+
+        const categoryPctTotal = getAdministrativeCategoryPctTotal(categoryKey);
+        if (categoryPctTotal <= 0) {
+            return 0;
+        }
+
+        const categoryBudget = getPuestoCategoryBudget(categoryKey);
+        return categoryBudget * (toNumber(row.pct) / categoryPctTotal);
     }
 
     function getAdministrativeAmount(row) {
-        if (administrativeGroupFilter !== 'todos' && normalizeAdministrativeGroup(row.grupo) !== administrativeGroupFilter) {
-            return 0;
+        return getAdministrativeAmountByRow(row);
+    }
+
+    function getAdministrativeDisplayRows() {
+        const adminItems = administrativeRows.map((row, idx) => ({
+            ...row,
+            grupo: normalizeAdministrativeGroup(row.grupo),
+            __tipo: 'admin',
+            __idx: idx,
+        }));
+
+        const operatorItems = operatorRows.map((row, idx) => ({
+            ...row,
+            grupo: normalizeAdministrativeGroup(row.grupo),
+            __tipo: 'operador',
+            __idx: idx,
+        }));
+
+        const allRows = [...adminItems, ...operatorItems];
+
+        if (administrativeGroupFilter === 'todos') {
+            return allRows;
         }
 
-        const pctTotal = getAdministrativePctTotal();
-        if (pctTotal <= 0) {
-            return 0;
+        if (administrativeGroupFilter === '4_5') {
+            return allRows.filter((row) => row.grupo === '4. Operadores' || row.grupo === '5. Servs. Tecnicos');
         }
 
-        return currentAdministrativeBase * (toNumber(row.pct) / pctTotal);
+        return allRows.filter((row) => row.grupo === administrativeGroupFilter);
+    }
+
+    function getAdministrativeDisplayAmount(row) {
+        if (row.__tipo === 'operador') {
+            return getAdministrativeAmountByRow(operatorRows[row.__idx] || row);
+        }
+
+        return getAdministrativeAmountByRow(administrativeRows[row.__idx] || row);
     }
 
     function getCoordinatorPctTotal() {
@@ -1116,43 +1296,49 @@
         return (toNumber(value) * 100).toFixed(2);
     }
 
-    function getAdministrativeRawPctTotal() {
-        return administrativeRows.reduce((sum, row) => sum + toNumber(row.pct), 0);
-    }
+    function getAdministrativeFilteredBudget() {
+        if (administrativeGroupFilter === '1. Gtes. Y Encarg.') return getPuestoCategoryBudget('g1');
+        if (administrativeGroupFilter === '2. Monitoreo') return getPuestoCategoryBudget('g2');
+        if (administrativeGroupFilter === '4_5') return getPuestoCategoryBudget('g45');
 
-    function getOperatorPctTotal() {
-        return operatorRows.reduce((sum, row) => sum + toNumber(row.pct), 0);
+        return getPuestoCategoryBudget('g1') + getPuestoCategoryBudget('g2') + getPuestoCategoryBudget('g45');
     }
 
     function recalculateAdministrativeOperatorBases() {
-        const administrativeRawPctTotal = getAdministrativeRawPctTotal();
-        const operatorPctTotal = getOperatorPctTotal();
-        const combinedPctTotal = administrativeRawPctTotal + operatorPctTotal;
-
-        if (combinedPctTotal <= 0 || currentAdministrativePoolBase <= 0) {
-            currentAdministrativeBase = 0;
-            currentOperatorBase = 0;
-            return;
-        }
-
-        currentAdministrativeBase = currentAdministrativePoolBase * (administrativeRawPctTotal / combinedPctTotal);
-        currentOperatorBase = currentAdministrativePoolBase * (operatorPctTotal / combinedPctTotal);
+        currentAdministrativeBase = getPuestoCategoryBudget('g1') + getPuestoCategoryBudget('g2');
+        currentOperatorBase = getPuestoCategoryBudget('g45');
     }
 
     function getOperatorAmount(row) {
-        const pctTotal = getOperatorPctTotal();
-        if (pctTotal <= 0) {
-            return 0;
-        }
-
-        return currentOperatorBase * (toNumber(row.pct) / pctTotal);
+        return getAdministrativeAmountByRow(row);
     }
 
     function updateAdministrativeSummary() {
-        const totalDistribuido = administrativeRows.reduce((sum, row) => sum + getAdministrativeAmount(row), 0);
+        const visibleRows = getAdministrativeDisplayRows();
+        const totalDistribuido = visibleRows.reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
+        const montoG1 = getPuestoCategoryBudget('g1');
+        const montoG2 = getPuestoCategoryBudget('g2');
+        const montoG45 = getPuestoCategoryBudget('g45');
+        const montoFiltro = getAdministrativeFilteredBudget();
 
         document.getElementById('admin_base_total').textContent = formatMoney(currentAdministrativePoolBase);
-        document.getElementById('admin_distribuido_total').textContent = formatMoney(currentAdministrativeBase);
+        document.getElementById('admin_distribuido_total').textContent = formatMoney(montoFiltro);
+        const tablaTotal = document.getElementById('admin_tabla_total');
+        if (tablaTotal) {
+            tablaTotal.textContent = formatMoney(totalDistribuido);
+        }
+        const catG1 = document.getElementById('admin_cat_g1');
+        if (catG1) {
+            catG1.textContent = `${toNumber(puestoPctConfig.g1).toFixed(2)}% | ${formatMoney(montoG1)}`;
+        }
+        const catG2 = document.getElementById('admin_cat_g2');
+        if (catG2) {
+            catG2.textContent = `${toNumber(puestoPctConfig.g2).toFixed(2)}% | ${formatMoney(montoG2)}`;
+        }
+        const catG45 = document.getElementById('admin_cat_g45');
+        if (catG45) {
+            catG45.textContent = `${toNumber(puestoPctConfig.g45).toFixed(2)}% | ${formatMoney(montoG45)}`;
+        }
         const totalCol = document.getElementById('admin_col_total');
         if (totalCol) {
             totalCol.textContent = formatMoney(totalDistribuido);
@@ -1166,23 +1352,19 @@
         document.getElementById('coord_distribuido_total').textContent = formatMoney(totalDistribuido);
     }
 
-    function updateOperatorSummary() {
-        const totalDistribuido = operatorRows.reduce((sum, row) => sum + getOperatorAmount(row), 0);
-
-        document.getElementById('op_base_total').textContent = formatMoney(currentAdministrativePoolBase);
-        document.getElementById('op_distribuido_total').textContent = formatMoney(currentOperatorBase);
-        const totalCol = document.getElementById('op_col_total');
-        if (totalCol) {
-            totalCol.textContent = formatMoney(totalDistribuido);
-        }
-    }
-
     function updateAdministrativeAmounts() {
-        administrativeRows.forEach((row, idx) => {
-            const cell = document.querySelector(`.admin-monto[data-idx="${idx}"]`);
-            if (cell) {
-                cell.textContent = formatMoney(getAdministrativeAmount(row));
+        document.querySelectorAll('.admin-display-monto').forEach((cell) => {
+            const idx = parseInt(cell.dataset.idx, 10);
+            const tipo = cell.dataset.tipo;
+            if (Number.isNaN(idx)) {
+                return;
             }
+
+            const amount = tipo === 'operador'
+                ? getOperatorAmount(operatorRows[idx] || {})
+                : getAdministrativeAmount(administrativeRows[idx] || {});
+
+            cell.textContent = formatMoney(amount);
         });
         updateAdministrativeSummary();
     }
@@ -1203,69 +1385,48 @@
     }
 
     function updateOperatorAmounts() {
-        operatorRows.forEach((row, idx) => {
-            const cell = document.querySelector(`.op-monto[data-idx="${idx}"]`);
-            if (cell) {
-                cell.textContent = formatMoney(getOperatorAmount(row));
-            }
-        });
-        updateOperatorSummary();
+        updateAdministrativeAmounts();
     }
 
     function updateAdministrativeAndOperatorAmounts() {
         recalculateAdministrativeOperatorBases();
         updateAdministrativeAmounts();
-        updateOperatorAmounts();
     }
 
-    function renderAdministrativeTable() {
+    function renderAdministrativeCategoryTable() {
         const tbody = document.getElementById('tbodyAdministrativos');
         tbody.innerHTML = '';
+        updateAdministrativeFilterButtons();
 
-        administrativeRows.forEach((row, idx) => {
-            row.grupo = normalizeAdministrativeGroup(row.grupo);
+        const rows = getAdministrativeDisplayRows();
+
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay datos para este filtro.</td></tr>';
+            updateAdministrativeSummary();
+            return;
+        }
+
+        rows.forEach((row) => {
+            const inputClass = row.__tipo === 'operador' ? 'op-input op-pct-input' : 'admin-input admin-pct-input';
+            const amount = getAdministrativeDisplayAmount(row);
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><input type="text" class="form-control form-control-sm admin-input" data-field="grupo" data-idx="${idx}" value="${escapeHtml(row.grupo)}"></td>
-                <td><input type="text" class="form-control form-control-sm admin-input" data-field="nombre" data-idx="${idx}" value="${escapeHtml(row.nombre)}"></td>
-                <td><input type="text" class="form-control form-control-sm admin-input" data-field="empresa" data-idx="${idx}" value="${escapeHtml(row.empresa)}"></td>
+                <td><input type="text" class="form-control form-control-sm ${row.__tipo === 'operador' ? 'op-input' : 'admin-input'}" data-field="grupo" data-idx="${row.__idx}" value="${escapeHtml(row.grupo)}"></td>
+                <td><input type="text" class="form-control form-control-sm ${row.__tipo === 'operador' ? 'op-input' : 'admin-input'}" data-field="nombre" data-idx="${row.__idx}" value="${escapeHtml(row.nombre)}"></td>
+                <td><input type="text" class="form-control form-control-sm ${row.__tipo === 'operador' ? 'op-input' : 'admin-input'}" data-field="empresa" data-idx="${row.__idx}" value="${escapeHtml(row.empresa)}"></td>
                 <td>
                     <div class="input-group input-group-sm">
-                        <input type="number" class="form-control admin-input admin-pct-input" data-field="pct" data-idx="${idx}" min="0" step="0.01" value="${formatAdministrativePct(row.pct)}">
+                        <input type="number" class="form-control ${inputClass}" data-field="pct" data-idx="${row.__idx}" min="0" step="0.01" value="${formatAdministrativePct(row.pct)}">
                         <span class="input-group-text">%</span>
                     </div>
                 </td>
-                <td class="text-end fw-semibold admin-monto" data-idx="${idx}">${formatMoney(getAdministrativeAmount(row))}</td>
+                <td class="text-end fw-semibold admin-display-monto" data-tipo="${row.__tipo}" data-idx="${row.__idx}">${formatMoney(amount)}</td>
             `;
             tbody.appendChild(tr);
         });
 
         updateAdministrativeSummary();
-    }
-
-    function renderOperatorTable() {
-        const tbody = document.getElementById('tbodyOperadores');
-        tbody.innerHTML = '';
-
-        operatorRows.forEach((row, idx) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><input type="text" class="form-control form-control-sm op-input" data-field="grupo" data-idx="${idx}" value="${escapeHtml(row.grupo)}"></td>
-                <td><input type="text" class="form-control form-control-sm op-input" data-field="nombre" data-idx="${idx}" value="${escapeHtml(row.nombre)}"></td>
-                <td><input type="text" class="form-control form-control-sm op-input" data-field="empresa" data-idx="${idx}" value="${escapeHtml(row.empresa)}"></td>
-                <td>
-                    <div class="input-group input-group-sm">
-                        <input type="number" class="form-control op-input op-pct-input" data-field="pct" data-idx="${idx}" min="0" step="0.01" value="${formatAdministrativePct(row.pct)}">
-                        <span class="input-group-text">%</span>
-                    </div>
-                </td>
-                <td class="text-end fw-semibold op-monto" data-idx="${idx}">${formatMoney(getOperatorAmount(row))}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        updateOperatorSummary();
     }
 
     function renderCoordinatorTable() {
@@ -1420,6 +1581,7 @@
             `Total a Pagar Final: ${totalConAdmin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         updateAdministrativeAndOperatorAmounts();
         updateCoordinatorAmounts();
+        updatePuestoPctSummaryCard();
     }
 
     function renderTableFromData(data) {
@@ -1521,10 +1683,16 @@
 
         document.getElementById('ni_fecha_fin').value = `${yyyy}-${mm}-${dd}`;
         document.getElementById('ni_fecha_ini').value = `${yyyy}-${mm}-01`;
+        updatePuestoPctSummaryCard();
 
         document.querySelector('#btnConfigPct').addEventListener('click', function() {
             renderRangesTable();
             const modal = new bootstrap.Modal(document.getElementById('modalConfigPct'));
+            modal.show();
+        });
+        document.querySelector('#btnConfigPuestoPct').addEventListener('click', function() {
+            renderPuestoPctInputs();
+            const modal = new bootstrap.Modal(document.getElementById('modalConfigPuestoPct'));
             modal.show();
         });
         document.querySelector('#btnConfigAdminPct').addEventListener('click', function() {
@@ -1534,21 +1702,29 @@
         });
 
         document.querySelector('#btnConfigAdministrativos').addEventListener('click', function() {
-            document.getElementById('adminGrupoCalculo').value = administrativeGroupFilter;
-            renderAdministrativeTable();
+            renderAdministrativeCategoryTable();
             const modal = new bootstrap.Modal(document.getElementById('modalAdministrativos'));
             modal.show();
         });
 
-        document.querySelector('#btnConfigOperadores').addEventListener('click', function() {
-            renderOperatorTable();
-            const modal = new bootstrap.Modal(document.getElementById('modalOperadores'));
-            modal.show();
+        document.querySelector('#btnAdminFiltroTodos').addEventListener('click', function() {
+            administrativeGroupFilter = 'todos';
+            renderAdministrativeCategoryTable();
         });
 
-        document.querySelector('#adminGrupoCalculo').addEventListener('change', function() {
-            administrativeGroupFilter = this.value;
-            updateAdministrativeAmounts();
+        document.querySelector('#btnAdminFiltroG1').addEventListener('click', function() {
+            administrativeGroupFilter = '1. Gtes. Y Encarg.';
+            renderAdministrativeCategoryTable();
+        });
+
+        document.querySelector('#btnAdminFiltroG2').addEventListener('click', function() {
+            administrativeGroupFilter = '2. Monitoreo';
+            renderAdministrativeCategoryTable();
+        });
+
+        document.querySelector('#btnAdminFiltroG45').addEventListener('click', function() {
+            administrativeGroupFilter = '4_5';
+            renderAdministrativeCategoryTable();
         });
 
         document.querySelector('#btnConfigCoordinadores').addEventListener('click', function() {
@@ -1583,67 +1759,40 @@
 
         document.querySelector('#tbodyAdministrativos').addEventListener('input', function(event) {
             const input = event.target;
-            if (!input.classList.contains('admin-input')) {
-                return;
-            }
-
             const idx = parseInt(input.dataset.idx, 10);
             const field = input.dataset.field;
-            if (!administrativeRows[idx] || !field) {
+            if (!field || Number.isNaN(idx)) return;
+
+            if (input.classList.contains('admin-input')) {
+                if (!administrativeRows[idx]) return;
+                administrativeRows[idx][field] = field === 'pct'
+                    ? (Math.max(0, parseFloat(input.value || 0) || 0) / 100)
+                    : input.value;
+                updateAdministrativeAndOperatorAmounts();
                 return;
             }
 
-            administrativeRows[idx][field] = field === 'pct'
-                ? (Math.max(0, parseFloat(input.value || 0) || 0) / 100)
-                : input.value;
-
-            updateAdministrativeAndOperatorAmounts();
+            if (input.classList.contains('op-input')) {
+                if (!operatorRows[idx]) return;
+                operatorRows[idx][field] = field === 'pct'
+                    ? (Math.max(0, parseFloat(input.value || 0) || 0) / 100)
+                    : input.value;
+                updateAdministrativeAndOperatorAmounts();
+            }
         });
 
         document.querySelector('#tbodyAdministrativos').addEventListener('change', function(event) {
             const input = event.target;
-            if (input.classList.contains('admin-pct-input')) {
+            if (input.classList.contains('admin-pct-input') || input.classList.contains('op-pct-input')) {
                 input.value = (parseFloat(input.value || 0) || 0).toFixed(2);
             }
         });
 
         document.querySelector('#btnRestaurarAdministrativos').addEventListener('click', function() {
             administrativeRows = getDefaultAdministrativeRows().filter((row) => normalizeAdministrativeGroup(row.grupo) !== '4. Operadores');
-            administrativeGroupFilter = 'todos';
-            document.getElementById('adminGrupoCalculo').value = administrativeGroupFilter;
-            renderAdministrativeTable();
-            updateAdministrativeAndOperatorAmounts();
-        });
-
-        document.querySelector('#tbodyOperadores').addEventListener('input', function(event) {
-            const input = event.target;
-            if (!input.classList.contains('op-input')) {
-                return;
-            }
-
-            const idx = parseInt(input.dataset.idx, 10);
-            const field = input.dataset.field;
-            if (!operatorRows[idx] || !field) {
-                return;
-            }
-
-            operatorRows[idx][field] = field === 'pct'
-                ? (Math.max(0, parseFloat(input.value || 0) || 0) / 100)
-                : input.value;
-
-            updateAdministrativeAndOperatorAmounts();
-        });
-
-        document.querySelector('#tbodyOperadores').addEventListener('change', function(event) {
-            const input = event.target;
-            if (input.classList.contains('op-pct-input')) {
-                input.value = (parseFloat(input.value || 0) || 0).toFixed(2);
-            }
-        });
-
-        document.querySelector('#btnRestaurarOperadores').addEventListener('click', function() {
             operatorRows = getDefaultOperatorRows();
-            renderOperatorTable();
+            administrativeGroupFilter = 'todos';
+            renderAdministrativeCategoryTable();
             updateAdministrativeAndOperatorAmounts();
         });
 
@@ -1681,10 +1830,6 @@
 
         document.querySelector('#btnExportAdministrativosExcel').addEventListener('click', function() {
             exportAdministrativosExcel();
-        });
-
-        document.querySelector('#btnExportOperadoresExcel').addEventListener('click', function() {
-            exportOperadoresExcel();
         });
 
         document.querySelector('#btnExportCoordinadoresExcel').addEventListener('click', function() {
@@ -1729,11 +1874,25 @@
                 document.getElementById('ni_total_con_admin').textContent = 'Total a Pagar Final: 0.00';
                 updateAdministrativeAndOperatorAmounts();
                 updateCoordinatorAmounts();
+                updatePuestoPctSummaryCard();
             }
 
             Swal.fire({
                 title: 'Configuración guardada',
                 text: 'El % administrativo se aplica sobre el Total Incentivo a Pagar.',
+                icon: 'success'
+            });
+        });
+
+        document.querySelector('#btnGuardarPuestoPct').addEventListener('click', function() {
+            readPuestoPctInputs();
+            updatePuestoPctSummaryCard();
+            updateAdministrativeAndOperatorAmounts();
+            bootstrap.Modal.getInstance(document.getElementById('modalConfigPuestoPct'))?.hide();
+
+            Swal.fire({
+                title: 'Configuración guardada',
+                text: '% por categoria guardado correctamente.',
                 icon: 'success'
             });
         });
@@ -1772,7 +1931,7 @@
             rangos_pago: JSON.stringify(payoutRangesByType[tipoPago]),
         });
 
-        fetch('/incentivos/reporte-nuevo-incentivo-v3?' + params.toString())
+        fetch('/incentivos/reporte-nuevo-incentivo-v4?' + params.toString())
             .then(response => response.json())
             .then(resp => {
                 if ('message' in resp) {

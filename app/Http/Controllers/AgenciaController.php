@@ -7,8 +7,10 @@ use App\Models\Agencia;
 use App\Models\CoordinadorOperador;
 use App\Models\OperadorRuta;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
@@ -455,7 +457,20 @@ class AgenciaController extends Controller
             ->values()
             ->all();
 
-        $registro = $this->registrarTerminalesBase($terminales);
+        try {
+            $registro = $this->registrarTerminalesBase($terminales);
+        } catch (\Throwable $e) {
+            Log::error('Error al registrar terminales no registradas de forma masiva.', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se pudieron registrar las terminales por un error de datos. Verifique la estructura de la tabla agencias e intente de nuevo.',
+            ], 500);
+        }
 
         return response()->json([
             'ok' => true,
@@ -475,7 +490,21 @@ class AgenciaController extends Controller
             'terminal' => ['required', 'string', 'max:25'],
         ]);
 
-        $registro = $this->registrarTerminalesBase([$validated['terminal']]);
+        try {
+            $registro = $this->registrarTerminalesBase([$validated['terminal']]);
+        } catch (\Throwable $e) {
+            Log::error('Error al registrar terminal no registrada.', [
+                'terminal' => $validated['terminal'] ?? null,
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se pudo registrar la terminal por un error de datos. Verifique la estructura de la tabla agencias e intente de nuevo.',
+            ], 500);
+        }
 
         return response()->json([
             'ok' => true,
@@ -638,13 +667,7 @@ class AgenciaController extends Controller
                 continue;
             }
 
-            $agencia = Agencia::create([
-                'agencia' => null,
-                'terminal' => substr($terminalOriginal, 0, 25),
-                'nombre_agencia' => null,
-                'estatus' => 1,
-                'aplica_incentivo' => 1,
-            ]);
+            $agencia = $this->crearAgenciaNoRegistrada($terminalOriginal);
 
             $terminalesExistentes->put($terminalKey, true);
             $registradas[] = [
@@ -660,6 +683,52 @@ class AgenciaController extends Controller
             'omitidas' => $omitidas,
             'agencias' => $registradas,
         ];
+    }
+
+    private function crearAgenciaNoRegistrada(string $terminalOriginal): Agencia
+    {
+        $payloadBase = [
+            'agencia' => null,
+            'terminal' => substr(trim($terminalOriginal), 0, 25),
+            'nombre_agencia' => null,
+            'estatus' => 1,
+            'aplica_incentivo' => 1,
+        ];
+
+        try {
+            return Agencia::create($payloadBase);
+        } catch (QueryException $e) {
+            if (!$this->esErrorPorNuloNoPermitido($e)) {
+                throw $e;
+            }
+        }
+
+        // Compatibilidad con esquemas legacy donde algunos campos string son NOT NULL.
+        return Agencia::create([
+            'agencia' => '',
+            'terminal' => $payloadBase['terminal'],
+            'nombre_agencia' => 'Terminal no registrada',
+            'horario_am' => '',
+            'horario_pm' => '',
+            'sistema' => '',
+            'empresa' => '',
+            'ciudad' => '',
+            'ruta' => '',
+            'operador' => '',
+            'coordinador' => '',
+            'estatus' => 1,
+            'aplica_incentivo' => 1,
+        ]);
+    }
+
+    private function esErrorPorNuloNoPermitido(QueryException $e): bool
+    {
+        $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
+        $driverCode = (string) ($e->errorInfo[1] ?? '');
+        $mensaje = strtolower($e->getMessage());
+
+        return ($sqlState === '23000' || $driverCode === '1048')
+            && str_contains($mensaje, 'cannot be null');
     }
 
     private function obtenerAgenciasSinVentaTreintaDias(): array
