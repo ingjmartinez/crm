@@ -465,536 +465,41 @@
         };
     }
 
-    function getDefaultAdministrativeRows() {
-        return [
-            ["1. Gtes. Y Encarg.", "Aramis Morel Arroyo", "Cjoselito", 0.0849724584486235],
-            ["1. Gtes. Y Encarg.", "Yulaine Echevarria", "Cjoselito", 0.05],
-            ["1. Gtes. Y Encarg.", "Johanset Batista", "Cjoselito", 0.0445551328578509],
-            ["1. Gtes. Y Encarg.", "Ciprian Rafael Beard Almonte", "Cjoselito", 0.043],
-            ["1. Gtes. Y Encarg.", "Renzo Figueroa", "Cjoselito", 0.04],
-            ["2. Monitoreo", "Geldhis Paola Acosta Carrion", "Cjoselito", 0.016],
-            ["2. Monitoreo", "Joselania Olivo García", "Cjoselito", 0.016],
-            ["2. Monitoreo", "Kengripher Junior De Oleo Belen", "Cjoselito", 0.016],
-            ["2. Monitoreo", "María Liriano", "Cjoselito", 0.016],
-            ["2. Monitoreo", "Stefanny Onasi Webster", "Cjoselito", 0.016],
-            ["2. Monitoreo", "Reidy Reynoso Melendez", "Cjoselito", 0.016],
-            ["4. Operadores", "LUIS JAVIER MARTINEZ", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Richard Guzman Herrera", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Armandalis Baez Cuevas", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Erick Payano", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Pedro Minier", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Valentin Mieses", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Feliz Alexander Mateo", "Cjoselito", 0],
-            ["4. Operadores", "Jonathan Peralta", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Gabriel Martinez De Jesus (2 meses)", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Juan Luis Montaño", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Wilmer Jose Corporán\nColon", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Santo Tibrey Rosario (1 mes)", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Hector Manuel Medina", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Jose Luis Rodriguez", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Juan Geronimo Garcia", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Alexander Cepeda", "Cjoselito", 0.0173540487874658],
-            ["4. Operadores", "Juan Francisco Mejía", "Cjoselito", 0.0194685692013614],
-            ["4. Operadores", "Victor Manuel de la Cruz", "Cjoselito", 0.0194685692013614],
-            ["4. Operadores", "Sterling Miguel Bello Bello", "Cjoselito", 0.0194685692013614],
-            ["4. Operadores", "Starlin Arredondo Martinez", "Cjoselito", 0.0194685692013614],
-            ["4. Operadores", "Santico Julian Willian Fenelon", "Cjoselito", 0.0194685692013614],
-            ["4. Operadores", "Wilkin Cabral", "Cjoselito", 0.0194685692013614],
-            ["4. Operadores", "Rosmery Celeste Nú ñ ez naranjo", "Cjoselito", 0.0194685692013614],
-            ["4. Operadores", "Osvaldo Antonio Moreno Perez", "Cjoselito", 0.0194685692013614],
-            ["5. Servs. Tecnicos", "Bryan Jose Rodriguez de Jesus", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Juan Francisco De La Cruz Aracena", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Brian Oriel Robles Tolentino", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Daniel Matos Gomez", "Cjoselito", 0.0150275415513765],
-            ["1. Servs. Tecnicos", "Harlin Cerda Cerda", "Cjoselito", 0.0300550831027529],
-            ["5. Servs. Tecnicos", "Dymitri Joseph", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Isidro Valdez Pascual", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Rudys Bernardo Cabrera", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Socrates Osiris Morban Piña", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Jose Antonio De Peña De La Cruz", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Juan Perez Desena", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Jose Antonio Polanco Vasquez", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Josué Johan Martinez Mancebo", "Cjoselito", 0.0150275415513765],
-            ["5. Servs. Tecnicos", "Pedro Hector Santana Mateo", "Cjoselito", 0.0150275415513765],
-            ["1. Gtes. Y Encarg.", "Erick junior Velasquez gomez", "Negosur", 0.124049587695015],
-            ["1. Gtes. Y Encarg.", "Yukaine Echavarria", "Negosur", 0.035],
-            ["1. Gtes. Y Encarg.", "Aramis \nMorel Arroyo", "Negosur", 0.045],
-            ["1. Gtes. Y Encarg.", "Johanset Batista", "Negosur", 0.03],
-            ["2. Monitoreo", "Altagracia karina Vallejo Bueno", "Negosur", 0.04],
-            ["2. Monitoreo", "Leyshi Y. Beras", "Negosur", 0.03],
-            ["2. Monitoreo", "Geldis Acosto", "Negosur", 0.01],
-            ["2. Monitoreo", "Joselanea Reynoso", "Negosur", 0.01],
-            ["2. Monitoreo", "Junior de Oleo", "Negosur", 0.01],
-            ["2. Monitoreo", "María Liriano", "Negosur", 0.01],
-            ["2. Monitoreo", "Reidy Reynoso", "Negosur", 0.01],
-            ["2. Monitoreo", "yolaidi Arias", "Negosur", 0.03],
-            ["4. Operadores", "Hector De Regla Mariñez Diaz", "Negosur", 0.03],
-            ["4. Operadores", "Sherlyn Lexander Perdomo valdez", "Negosur", 0.03],
-            ["4. Operadores", "Sayi Virginia Marmolejos", "Negosur", 0.00893353511893479],
-            ["4. Operadores", "Leydi Guerrero", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Alba Yris Tapia Morillo", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Yenifer Estefani Baez Cordero", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Yudekis Tejeda Tejeda", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Hector Guerrero Tejeda", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Sandra Diomare Arias Garcia", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Yaniris Reynoso", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "jerry alejandro anziani arias", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Victor Baez", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Carla yasmel Barias baez", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "Estafani Espinosa", "Negosur", 0.0183070385116862],
-            ["4. Operadores", "FElix Rosario", "Negosur", 0.0140923312152275],
-            ["4. Operadores", "Rosabel Arias de Lara", "Negosur", 0.0140923312152275],
-            ["4. Operadores", "Alex Yadir Figuereo Abreu", "Negosur", 0.0140923312152275],
-            ["4. Operadores", "Rafaela Brito", "Negosur", 0.0140923312152275],
-            ["4. Operadores", "Samir Ferrera", "Negosur", 0.0127621930270497],
-            ["4. Operadores", "Martin alejandro fernandez bello", "Negosur", 0.00719861317352419],
-            ["4. Operadores", "Victor julio Galvan montero", "Negosur", 0.00719861317352419],
-            ["4. Operadores", "Raulin Matos", "Negosur", 0.00780783001427268],
-            ["4. Operadores", "Nestor Antonio Terrero", "Negosur", 0.00780783001427268],
-            ["4. Operadores", "Leivin Pina Feliz", "Negosur", 0.00780783001427268],
-            ["4. Operadores", "Jeison Manuel Feliz Feliz", "Negosur", 0.00780783001427268],
-            ["4. Operadores", "José vega", "Negosur", 0.00780783001427268],
-            ["4. Operadores", "Georges gabriel reyes cuevas", "Negosur", 0.00780783001427268],
-            ["4. Operadores", "yeandrys dileissy Ortiz perez", "Negosur", 0.00780783001427268],
-            ["4. Operadores", "Silvia patricia batista diaz", "Negosur", 0.00780783001427268],
-            ["4. Operadores", "Fermin brito De leon", "Negosur", 0.00808769747562137],
-            ["4. Operadores", "Manuel Emilio Pérez", "Negosur", 0.00808769747562137],
-            ["4. Operadores", "Manuel Emilio Rivas", "Negosur", 0.00808769747562137],
-            ["4. Operadores", "Marco daniel Méndez gonzalez", "Negosur", 0.00808769747562137],
-            ["4. Operadores", "waner omar diaz sena", "Negosur", 0.00808769747562137],
-            ["4. Operadores", "Zenaldo gregorio volquez perez", "Negosur", 0.006],
-            ["4. Operadores", "Wilton feliz Alcantara pienda", "Negosur", 0.0127621930270497],
-            ["4. Operadores", "Deibi Garcia Made", "Negosur", 0.0127621930270497],
-            ["4. Operadores", "Pedro Suero", "Negosur", 0.0045266991406722],
-            ["4. Operadores", "Martires Suero Flores", "Negosur", 0.0045266991406722],
-            ["4. Operadores", "Melvin Moreno", "Negosur", 0.0045266991406722],
-            ["4. Operadores", "Pedro Suero Rosario", "Negosur", 0.004],
-            ["4. Operadores", "Martires Suero Flores", "Negosur", 0.004],
-            ["4. Operadores", "Melvin Francisco Moreno Suero", "Negosur", 0.004],
-            ["5. Servs. Tecnicos", "Julio Inocencio Dominguez Perez", "Negosur", 0.0173444076495108],
-            ["5. Servs. Tecnicos", "Raulin Guerrero", "Negosur", 0.02809917539003],
-            ["5. Servs. Tecnicos", "Comas Abreu Marcos", "Negosur", 0.00867220382475538],
-            ["5. Servs. Tecnicos", "Wendi Reyes", "Negosur", 0.0094685238738982],
-            ["5. Servs. Tecnicos", "Henry Matos", "Negosur", 0.0094685238738982],
-            ["5. Servs. Tecnicos", "Ignacio Nivar Victoriano", "Negosur", 0.006],
-            ["5. Servs. Tecnicos", "LUIS ENRIQUE MERAN MORA", "Negosur", 0.0234159794916916],
-        ].map(function (row) {
+        function getAdministrativeRowsFromConfig() {
+        const baseRows = @json($administrativosConfig ?? []);
+
+        return (Array.isArray(baseRows) ? baseRows : []).map(function (row) {
             return {
-                grupo: row[0],
-                nombre: row[1],
-                empresa: row[2],
-                pct: row[3],
+                grupo: String(row?.grupo ?? '').trim(),
+                nombre: String(row?.nombre ?? '').trim(),
+                empresa: String(row?.empresa ?? '').trim(),
+                pct: Math.max(0, toNumber(row?.pct) / 100),
             };
         });
+    }
+
+    function splitAdministrativeRowsByGroup(rows) {
+        const allRows = Array.isArray(rows) ? rows : [];
+
+        return {
+            administrativos: allRows.filter((row) => normalizeAdministrativeGroup(row.grupo) !== '4. Operadores'),
+            operadores: allRows.filter((row) => normalizeAdministrativeGroup(row.grupo) === '4. Operadores'),
+        };
+    }
+
+    function getDefaultAdministrativeRows() {
+        return splitAdministrativeRowsByGroup(getAdministrativeRowsFromConfig()).administrativos;
+    }
+
+    function getDefaultOperatorRows() {
+        return splitAdministrativeRowsByGroup(getAdministrativeRowsFromConfig()).operadores;
     }
 
     function getDefaultCoordinatorRows() {
         return @json($coordinadores ?? []);
     }
-
-    function getDefaultOperatorRows() {
-        return [
-    {
-        "grupo": "4. Operadores",
-        "nombre": "LUIS JAVIER MARTINEZ",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Richard Guzman Herrera",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Armandalis Baez Cuevas",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Erick Payano",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Pedro Minier",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Valentin Mieses",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Jonathan Peralta",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Gabriel Martinez De Jesus (2 meses)",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Juan Luis Montaño",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Wilmer Jose Corporán Colon",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Santo Tibrey Rosario (1 mes)",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Hector Manuel Medina",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Jose Luis Rodriguez",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Juan Geronimo Garcia",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Alexander Cepeda",
-        "empresa": "Cjoselito",
-        "pct": 0.017354048787466
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Juan Francisco Mejía",
-        "empresa": "Cjoselito",
-        "pct": 0.019468569201361
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Victor Manuel de la Cruz",
-        "empresa": "Cjoselito",
-        "pct": 0.019468569201361
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Sterling Miguel Bello Bello",
-        "empresa": "Cjoselito",
-        "pct": 0.019468569201361
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Starlin Arredondo Martinez",
-        "empresa": "Cjoselito",
-        "pct": 0.019468569201361
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Santico Julian Willian Fenelon",
-        "empresa": "Cjoselito",
-        "pct": 0.019468569201361
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Wilkin Cabral",
-        "empresa": "Cjoselito",
-        "pct": 0.019468569201361
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Rosmery Celeste Nú ñ ez naranjo",
-        "empresa": "Cjoselito",
-        "pct": 0.019468569201361
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Osvaldo Antonio Moreno Perez",
-        "empresa": "Cjoselito",
-        "pct": 0.019468569201361
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Hector De Regla",
-        "empresa": "Negosur",
-        "pct": 0.03
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Sherlyn Lexander",
-        "empresa": "Negosur",
-        "pct": 0.03
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Sayi Virginia",
-        "empresa": "Negosur",
-        "pct": 0.0089335351189348
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Leydi",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Alba Yris",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Yenifer Estefani",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Yudekis Tejeda",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Hector",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Sandra Diomare",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Yaniris",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "jerry alejandro",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Victor",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Carla yasmel",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Estafani",
-        "empresa": "Negosur",
-        "pct": 0.018307038511686
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "FElix",
-        "empresa": "Negosur",
-        "pct": 0.014092331215227
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Rosabel",
-        "empresa": "Negosur",
-        "pct": 0.014092331215227
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Alex Yadir",
-        "empresa": "Negosur",
-        "pct": 0.014092331215227
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Rafaela",
-        "empresa": "Negosur",
-        "pct": 0.014092331215227
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Samir",
-        "empresa": "Negosur",
-        "pct": 0.01276219302705
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Martin alejandro",
-        "empresa": "Negosur",
-        "pct": 0.0071986131735242
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Victor julio",
-        "empresa": "Negosur",
-        "pct": 0.0071986131735242
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Raulin",
-        "empresa": "Negosur",
-        "pct": 0.0078078300142727
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Nestor Antonio",
-        "empresa": "Negosur",
-        "pct": 0.0078078300142727
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Leivin",
-        "empresa": "Negosur",
-        "pct": 0.0078078300142727
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Jeison Manuel",
-        "empresa": "Negosur",
-        "pct": 0.0078078300142727
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "José",
-        "empresa": "Negosur",
-        "pct": 0.0078078300142727
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Georges gabriel",
-        "empresa": "Negosur",
-        "pct": 0.0078078300142727
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "yeandrys dileissy",
-        "empresa": "Negosur",
-        "pct": 0.0078078300142727
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Silvia patricia",
-        "empresa": "Negosur",
-        "pct": 0.0078078300142727
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Fermin brito",
-        "empresa": "Negosur",
-        "pct": 0.0080876974756214
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Manuel Emilio",
-        "empresa": "Negosur",
-        "pct": 0.0080876974756214
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Manuel Emilio ",
-        "empresa": "Negosur",
-        "pct": 0.0080876974756214
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Marco daniel",
-        "empresa": "Negosur",
-        "pct": 0.0080876974756214
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "waner omar",
-        "empresa": "Negosur",
-        "pct": 0.0080876974756214
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Zenaldo gregorio",
-        "empresa": "Negosur",
-        "pct": 0.006
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Wilton feliz",
-        "empresa": "Negosur",
-        "pct": 0.01276219302705
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Deibi Garcia",
-        "empresa": "Negosur",
-        "pct": 0.01276219302705
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Pedro",
-        "empresa": "Negosur",
-        "pct": 0.0045266991406722
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Martires",
-        "empresa": "Negosur",
-        "pct": 0.0045266991406722
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Melvin",
-        "empresa": "Negosur",
-        "pct": 0.0045266991406722
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Pedro",
-        "empresa": "Negosur",
-        "pct": 0.004
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Martires",
-        "empresa": "Negosur",
-        "pct": 0.004
-    },
-    {
-        "grupo": "4. Operadores",
-        "nombre": "Melvin Francisco",
-        "empresa": "Negosur",
-        "pct": 0.004
-    }
-];
-    }
-
     let payoutRangesByType = getDefaultRanges();
-    let administrativeRows = getDefaultAdministrativeRows().filter((row) => normalizeAdministrativeGroup(row.grupo) !== '4. Operadores');
+    let administrativeRows = getDefaultAdministrativeRows();
     let operatorRows = getDefaultOperatorRows();
     let coordinatorRows = getDefaultCoordinatorRows();
     let cachedRows = [];
@@ -1789,7 +1294,7 @@
         });
 
         document.querySelector('#btnRestaurarAdministrativos').addEventListener('click', function() {
-            administrativeRows = getDefaultAdministrativeRows().filter((row) => normalizeAdministrativeGroup(row.grupo) !== '4. Operadores');
+            administrativeRows = getDefaultAdministrativeRows();
             operatorRows = getDefaultOperatorRows();
             administrativeGroupFilter = 'todos';
             renderAdministrativeCategoryTable();
@@ -1967,6 +1472,8 @@
     });
 </script>
 @endsection
+
+
 
 
 

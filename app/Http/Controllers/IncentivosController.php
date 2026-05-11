@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CoordinadorOperador;
+use App\Models\IncentivoAdministrativo;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1451,7 +1452,22 @@ class IncentivosController extends Controller
             })
             ->values();
 
-        return view('incentivos.reporte-nuevo-incentivo-v4', compact('coordinadores'));
+        $administrativosConfig = IncentivoAdministrativo::query()
+            ->orderBy('grupo')
+            ->orderBy('empresa')
+            ->orderBy('nombre')
+            ->get(['grupo', 'nombre', 'empresa', 'pct_total'])
+            ->map(function ($row) {
+                return [
+                    'grupo' => (string) ($row->grupo ?? ''),
+                    'nombre' => (string) ($row->nombre ?? ''),
+                    'empresa' => (string) ($row->empresa ?? ''),
+                    'pct' => (float) ($row->pct_total ?? 0),
+                ];
+            })
+            ->values();
+
+        return view('incentivos.reporte-nuevo-incentivo-v4', compact('coordinadores', 'administrativosConfig'));
     }
 
     public function reporteNuevoIncentivoV4(Request $request)
