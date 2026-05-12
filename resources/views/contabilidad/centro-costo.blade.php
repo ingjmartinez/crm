@@ -51,9 +51,9 @@
                                     </div>
                                 </div>
 
-                                <div class="table-responsive">
+                                <div>
                                     <table id="tableCentrosCosto"
-                                        class="table table-bordered dt-responsive nowrap table-striped align-middle"
+                                        class="table table-bordered nowrap table-striped align-middle w-100"
                                         style="width:100%">
                                         <thead>
                                             <tr>
@@ -150,6 +150,8 @@
         let centrosCostoData = [];
         let mostrarSoloOcultosConfig = false;
         let progresoSincronizacionTimer = null;
+        let resizeCentrosCostoTimer = null;
+        let resizeCentrosCostoBound = false;
 
         async function parsearRespuestaJson(response, contextoError) {
             const contentType = (response.headers.get('content-type') || '').toLowerCase();
@@ -187,6 +189,16 @@
         document.getElementById('btnVerOcultosCentros').addEventListener('click', alternarOcultosConfig);
         document.getElementById('btnSincronizarCentros').addEventListener('click', sincronizarCentros);
         document.getElementById('filtroEstadoCentroCosto').addEventListener('change', aplicarFiltroEstadoCentroCosto);
+        document.getElementById('tablaConfigCentrosCosto').addEventListener('change', manejarCambioOcultarCentro);
+
+        function esOculto(valor) {
+            if (valor === true || valor === 1) return true;
+            if (typeof valor === 'string') {
+                const normalizado = valor.trim().toLowerCase();
+                return normalizado === '1' || normalizado === 'true' || normalizado === 'si' || normalizado === 'yes' || normalizado === 'on';
+            }
+            return false;
+        }
 
         function cargarCentrosCosto(mostrarAlerta = true) {
             const boton = document.getElementById('btnConsultarCentros');
@@ -210,7 +222,7 @@
 
                     centrosCostoData = Array.isArray(data) ? data : [];
                     const dataFiltrada = centrosCostoData.filter(item => {
-                        return String(item.IdViejo ?? '').trim() !== '' && !Boolean(item.Ocultar);
+                        return String(item.IdViejo ?? '').trim() !== '' && !esOculto(item.Ocultar);
                     });
 
                     dataFiltrada.forEach(item => {
@@ -244,13 +256,21 @@
                     }
 
                     centrosCostoTable = $('#tableCentrosCosto').DataTable({
-                        responsive: true,
+                        responsive: false,
                         scrollX: true,
+                        scrollCollapse: true,
+                        autoWidth: false,
+                        deferRender: true,
                         pageLength: 25,
                         dom: 'Bfrtip',
-                        buttons: ['copy', 'csv', 'excel', 'pdf', 'print']
+                        buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+                        columnDefs: [
+                            { targets: '_all', className: 'text-nowrap align-middle' }
+                        ]
                     });
 
+                    enlazarEventosTablaCentrosCosto();
+                    ajustarLayoutTablaCentrosCosto();
                     aplicarFiltroEstadoCentroCosto();
 
                     if (mostrarAlerta) {
@@ -273,6 +293,34 @@
             const estado = document.getElementById('filtroEstadoCentroCosto').value;
             const busqueda = estado === 'activo' ? '^Activo$' : (estado === 'inactivo' ? '^Inactivo$' : '');
             centrosCostoTable.column(4).search(busqueda, true, false).draw();
+            ajustarLayoutTablaCentrosCosto();
+        }
+
+        function ajustarLayoutTablaCentrosCosto() {
+            if (!centrosCostoTable) return;
+
+            centrosCostoTable.columns.adjust();
+        }
+
+        function enlazarEventosTablaCentrosCosto() {
+            const $tabla = $('#tableCentrosCosto');
+
+            $tabla.off('draw.dt.centroCosto').on('draw.dt.centroCosto', function () {
+                ajustarLayoutTablaCentrosCosto();
+            });
+
+            if (!resizeCentrosCostoBound) {
+                window.addEventListener('resize', function () {
+                    if (resizeCentrosCostoTimer) {
+                        clearTimeout(resizeCentrosCostoTimer);
+                    }
+
+                    resizeCentrosCostoTimer = setTimeout(() => {
+                        ajustarLayoutTablaCentrosCosto();
+                    }, 120);
+                });
+                resizeCentrosCostoBound = true;
+            }
         }
 
         async function abrirConfiguracionCentros() {
@@ -293,7 +341,7 @@
             const registros = centrosCostoData.filter(item => {
                 const idViejo = String(item.IdViejo ?? '').trim();
                 if (idViejo === '') return false;
-                if (mostrarSoloOcultosConfig && !Boolean(item.Ocultar)) return false;
+                if (mostrarSoloOcultosConfig && !esOculto(item.Ocultar)) return false;
                 return busqueda === '' || idViejo.toLowerCase().includes(busqueda);
             }).sort((a, b) => compararIdViejo(a.IdViejo, b.IdViejo));
 
@@ -311,7 +359,7 @@
                         <td>${estadoBadge}</td>
                         <td class="text-center">
                             <input type="checkbox" class="form-check-input centro-ocultar-check"
-                                data-id="${item.id}" ${Boolean(item.Ocultar) ? 'checked' : ''}>
+                                data-id="${item.id}" ${esOculto(item.Ocultar) ? 'checked' : ''}>
                         </td>
                     </tr>
                 `;
@@ -346,11 +394,26 @@
             return valorA.localeCompare(valorB, 'es', { numeric: true, sensitivity: 'base' });
         }
 
+        function manejarCambioOcultarCentro(event) {
+            const check = event.target.closest('.centro-ocultar-check');
+            if (!check) return;
+
+            const id = Number(check.dataset.id || 0);
+            if (id <= 0) return;
+
+            const centro = centrosCostoData.find(item => Number(item.id || 0) === id);
+            if (!centro) return;
+
+            centro.Ocultar = check.checked ? 1 : 0;
+        }
+
         function guardarConfiguracionCentros() {
-            const items = Array.from(document.querySelectorAll('.centro-ocultar-check')).map(check => ({
-                id: Number(check.dataset.id || 0),
-                ocultar: check.checked
-            })).filter(item => item.id > 0);
+            const items = centrosCostoData
+                .map(item => ({
+                    id: Number(item.id || 0),
+                    ocultar: esOculto(item.Ocultar)
+                }))
+                .filter(item => item.id > 0);
 
             mostrarAlertaCarga('Guardando configuracion', 'Actualizando visibilidad de centros de costo...');
 

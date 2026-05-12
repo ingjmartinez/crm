@@ -1153,14 +1153,87 @@ class IncentivosController extends Controller
         $ultimoMesByCedula = $rowsUltimoMes->keyBy('cedula');
         $mesActualByCedula = $rowsMesActual->keyBy('cedula');
         $cedulas = $ultimoMesByCedula->keys()->merge($mesActualByCedula->keys())->unique()->values();
+        $empresaByCedula = [];
 
-        $rawData = $cedulas->map(function ($cedula) use ($ultimoMesByCedula, $mesActualByCedula, $minDiasVenta, $rangosPago, $tramoActivo) {
+        if ($cedulas->isNotEmpty()) {
+            $buildAgencyTerminalQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada) {
+                return DB::table($tabla)
+                    ->selectRaw('cedula, TRIM(CAST(agencia_id AS CHAR)) AS terminal, COUNT(*) AS total')
+                    ->whereBetween('fecha', [$fechaIniSeleccionada, $fechaFinSeleccionada])
+                    ->whereNotNull('cedula')
+                    ->where('cedula', '<>', '')
+                    ->whereNotNull('agencia_id')
+                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''")
+                    ->groupBy('cedula', DB::raw('TRIM(CAST(agencia_id AS CHAR))'));
+            };
+
+            if ($sistema === 'Lotobet') {
+                $terminalSourceQuery = $buildAgencyTerminalQuery('vt_usuarios_bet');
+            } elseif ($sistema === 'Lotonet') {
+                $terminalSourceQuery = $buildAgencyTerminalQuery('vt_usuarios_net');
+            } else {
+                $terminalSourceQuery = $buildAgencyTerminalQuery('vt_usuarios_bet')
+                    ->unionAll($buildAgencyTerminalQuery('vt_usuarios_net'));
+            }
+
+            $terminalRows = DB::query()
+                ->fromSub($terminalSourceQuery, 'terminales_usuario')
+                ->selectRaw('cedula, terminal, SUM(total) AS total')
+                ->groupBy('cedula', 'terminal')
+                ->orderBy('cedula')
+                ->orderByDesc('total')
+                ->get();
+
+            $terminales = $terminalRows
+                ->pluck('terminal')
+                ->map(function ($terminal) {
+                    return trim((string) $terminal);
+                })
+                ->filter(function ($terminal) {
+                    return $terminal !== '';
+                })
+                ->unique()
+                ->values();
+
+            $empresaByTerminal = [];
+            foreach ($terminales->chunk(1000) as $terminalChunk) {
+                DB::table('agencias')
+                    ->whereIn(DB::raw('TRIM(CAST(terminal AS CHAR))'), $terminalChunk->all())
+                    ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal, COALESCE(NULLIF(TRIM(empresa), ''), 'Sin empresa') AS empresa")
+                    ->orderBy('terminal')
+                    ->get()
+                    ->each(function ($row) use (&$empresaByTerminal) {
+                        $empresaByTerminal[(string) $row->terminal] = (string) $row->empresa;
+                    });
+            }
+
+            $empresaCounterByCedula = [];
+            foreach ($terminalRows as $row) {
+                $cedulaKey = (string) $row->cedula;
+                $terminal = trim((string) $row->terminal);
+                $empresa = $empresaByTerminal[$terminal] ?? 'Sin empresa';
+
+                if (!isset($empresaCounterByCedula[$cedulaKey])) {
+                    $empresaCounterByCedula[$cedulaKey] = [];
+                }
+
+                $empresaCounterByCedula[$cedulaKey][$empresa] = ($empresaCounterByCedula[$cedulaKey][$empresa] ?? 0) + (int) $row->total;
+            }
+
+            foreach ($empresaCounterByCedula as $cedulaKey => $empresas) {
+                arsort($empresas);
+                $empresaByCedula[$cedulaKey] = (string) array_key_first($empresas);
+            }
+        }
+
+        $rawData = $cedulas->map(function ($cedula) use ($ultimoMesByCedula, $mesActualByCedula, $minDiasVenta, $rangosPago, $tramoActivo, $empresaByCedula) {
             $rowUltimoMes = $ultimoMesByCedula->get($cedula);
             $rowMesActual = $mesActualByCedula->get($cedula);
 
             $ventas = $rowUltimoMes ? (float) $rowUltimoMes->ventas_ultimo_mes : 0;
             $ventasMesActual = $rowMesActual ? (float) $rowMesActual->ventas_mes_actual : 0;
             $diasMesActual = $rowMesActual ? (int) $rowMesActual->dias_ventas_mes_actual : 0;
+            $empresa = (string) ($empresaByCedula[(string) $cedula] ?? 'Sin empresa');
 
             $cumple = $diasMesActual >= $minDiasVenta;
             $pagoEscala = 0.00;
@@ -1192,6 +1265,7 @@ class IncentivosController extends Controller
 
             return [
                 'cedula' => $cedula,
+                'empresa' => $empresa,
                 'ventas_num' => $ventas,
                 'ventas_mes_actual_num' => $ventasMesActual,
                 'dias_ventas_mes_actual' => $diasMesActual,
@@ -1213,6 +1287,7 @@ class IncentivosController extends Controller
         $data = $rawData->map(function ($row) {
             return [
                 'cedula' => $row['cedula'],
+                'empresa' => $row['empresa'] ?? 'Sin empresa',
                 'ventas_ultimo_mes' => number_format($row['ventas_num'], 2, '.', ','),
                 'ventas_mes_actual' => number_format($row['ventas_mes_actual_num'], 2, '.', ','),
                 'dias_ventas_mes_actual' => $row['dias_ventas_mes_actual'],
@@ -1333,13 +1408,20 @@ class IncentivosController extends Controller
             $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
             $sistema = $request->input('sistema', 'Todos');
 
-            $buildAgencyQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada, $qualifiedCedulas) {
+            $qualifiedCedulaSet = $qualifiedCedulas
+                ->mapWithKeys(function ($cedula) {
+                    return [(string) $cedula => true];
+                });
+
+            $buildAgencyQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada) {
                 return DB::table($tabla)
-                    ->selectRaw('cedula, TRIM(CAST(agencia_id AS CHAR)) AS terminal')
+                    ->selectRaw('cedula, TRIM(CAST(agencia_id AS CHAR)) AS terminal, COUNT(*) AS total')
                     ->whereBetween('fecha', [$fechaIniSeleccionada, $fechaFinSeleccionada])
-                    ->whereIn('cedula', $qualifiedCedulas->all())
+                    ->whereNotNull('cedula')
+                    ->where('cedula', '<>', '')
                     ->whereNotNull('agencia_id')
-                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''");
+                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''")
+                    ->groupBy('cedula', DB::raw('TRIM(CAST(agencia_id AS CHAR))'));
             };
 
             if ($sistema === 'Lotobet') {
@@ -1351,17 +1433,20 @@ class IncentivosController extends Controller
                     ->unionAll($buildAgencyQuery('vt_usuarios_net'));
             }
 
-            $validTerminals = DB::query()
-                ->fromSub($validTerminalQuery, 'valid_agencies')
-                ->select('terminal')
-                ->distinct()
-                ->pluck('terminal');
-
             $validCedulaTerminals = DB::query()
                 ->fromSub($validTerminalQuery, 'valid_agencies')
                 ->select('cedula', 'terminal')
-                ->distinct()
-                ->get();
+                ->groupBy('cedula', 'terminal')
+                ->get()
+                ->filter(function ($row) use ($qualifiedCedulaSet) {
+                    return isset($qualifiedCedulaSet[(string) $row->cedula]);
+                })
+                ->values();
+
+            $validTerminals = $validCedulaTerminals
+                ->pluck('terminal')
+                ->unique()
+                ->values();
 
             if ($validTerminals->isNotEmpty()) {
                 $coordinatorAgencyRows = DB::table('coordinador_operador_agencia as coa')

@@ -116,6 +116,12 @@
                                             <option value="no_cumplidos">No cumplidos</option>
                                         </select>
                                     </div>
+                                    <div>
+                                        <label class="mb-0" for="ni_filtro_empresa">Empresa</label>
+                                        <select id="ni_filtro_empresa" class="form-select">
+                                            <option value="todos">Todas</option>
+                                        </select>
+                                    </div>
                                     <button type="button" class="btn btn-info" id="btnFiltrarCumplimiento">Filtrar</button>
                                     <div>
                                         <label class="mb-0" for="ni_fecha_ini">Fecha inicio</label>
@@ -126,7 +132,7 @@
                                         <input type="date" id="ni_fecha_fin" class="form-control">
                                     </div>
                                     <div>
-                                        <label class="mb-0" for="ni_min_dias">Mín. días venta</label>
+                                        <label class="mb-0" for="ni_min_dias">Min. dias venta</label>
                                         <input type="number" id="ni_min_dias" class="form-control" value="1" min="1" step="1">
                                     </div>
                                     <div>
@@ -150,13 +156,13 @@
                                 <table id="tableNuevoIncentivo" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                                     <thead>
                                         <tr>
-                                            <th>Cédula</th>
-                                            <th>Ventas Último Mes</th>
+                                            <th>Cedula</th>
+                                            <th>Empresa</th>
+                                            <th>Ventas Ultimo Mes</th>
                                             <th>Ventas Mes Actual</th>
-                                            <th>Días Ventas Mes Actual</th>
+                                            <th>Dias Ventas Mes Actual</th>
                                             <th>Cumple Regla</th>
-                                            <th>Pago Escala</th>
-                                            <th>Nuevo Incentivo</th>
+                                            <th>Total a Pagar</th>
                                         </tr>
                                     </thead>
                                     <tbody></tbody>
@@ -392,7 +398,7 @@
                                 <tr>
                                     <th style="min-width: 280px;">Nombre</th>
                                     <th style="min-width: 100px;">Agencias</th>
-                                    <th style="min-width: 100px;">Válidas</th>
+                                    <th style="min-width: 100px;">Validas</th>
                                     <th style="min-width: 160px;">Monto</th>
                                     <th style="min-width: 120px;">Detalle</th>
                                     <th style="min-width: 120px;">% Total</th>
@@ -519,10 +525,40 @@
     let currentOperatorBase = 0;
     let currentCoordinatorBase = 0;
     let coordinatorUserDetailsByCoordinator = {};
+    const META_MINIMA_VENTA = 100001;
 
     function toNumber(value) {
         if (value === null || value === undefined) return 0;
         return parseFloat(String(value).replace(/,/g, '')) || 0;
+    }
+
+    async function parseResponseAsJson(response, contexto) {
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        const bodyText = await response.text();
+        let payload = null;
+
+        if (bodyText !== '') {
+            try {
+                payload = JSON.parse(bodyText);
+            } catch (_parseError) {
+                payload = null;
+            }
+        }
+
+        if (!response.ok) {
+            const serverMessage = payload?.message || payload?.error || '';
+            const nonJsonHint = !contentType.includes('application/json')
+                ? 'El servidor devolvio una respuesta no JSON.'
+                : '';
+            const detail = [serverMessage, nonJsonHint].filter(Boolean).join(' | ');
+            throw new Error(`${contexto} (HTTP ${response.status})${detail ? ': ' + detail : ''}`);
+        }
+
+        if (!payload) {
+            throw new Error(`${contexto}: Respuesta vacia o JSON invalido.`);
+        }
+
+        return payload;
     }
 
     function formatPercentDisplay(value) {
@@ -533,6 +569,82 @@
 
     function formatMoney(value) {
         return toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function evaluateMetaMinima(row) {
+        const ventasMesActual = toNumber(row?.ventas_mes_actual);
+        const cumplio = ventasMesActual >= META_MINIMA_VENTA;
+        const faltante = cumplio ? 0 : (META_MINIMA_VENTA - ventasMesActual);
+        const faltantePct = META_MINIMA_VENTA > 0
+            ? Math.max((faltante / META_MINIMA_VENTA) * 100, 0)
+            : 0;
+
+        return {
+            cumplio,
+            ventasMesActual,
+            faltante,
+            faltantePct,
+        };
+    }
+
+    function normalizeEmpresaValue(value) {
+        const text = String(value ?? '').trim().toLowerCase();
+        return text === '' ? 'sin empresa' : text;
+    }
+
+    function normalizeEmpresaLabel(value) {
+        const text = String(value ?? '').trim();
+        return text === '' ? 'Sin empresa' : text;
+    }
+
+    function normalizeAdministrativeEmpresaKey(value) {
+        const text = String(value ?? '').trim().toLowerCase();
+        if (text === '') return 'sin empresa';
+        if (text.includes('joselito') || text.includes('cjoselito')) return 'consorcio joselito';
+        if (text.includes('negosur')) return 'negosur';
+        return text;
+    }
+
+    function normalizeAdministrativeEmpresaLabel(value) {
+        const key = normalizeAdministrativeEmpresaKey(value);
+        if (key === 'consorcio joselito') return 'Consorcio Joselito';
+        if (key === 'negosur') return 'Negosur';
+        if (key === 'sin empresa') return 'Sin empresa';
+        return String(value ?? '').trim();
+    }
+
+    function getAdministrativeEmpresaFilterKey() {
+        const selected = document.getElementById('ni_filtro_empresa')?.value || 'todos';
+        if (selected === 'todos') return 'todos';
+        if (selected.includes('joselito')) return 'consorcio joselito';
+        if (selected.includes('negosur')) return 'negosur';
+        if (selected === 'sin empresa') return 'sin empresa';
+        return selected;
+    }
+
+    function populateEmpresaFilterOptions(rows) {
+        const select = document.getElementById('ni_filtro_empresa');
+        if (!select) return;
+
+        const currentValue = select.value || 'todos';
+        const optionsByKey = new Map();
+
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const label = normalizeEmpresaLabel(row?.empresa);
+            const key = normalizeEmpresaValue(label);
+            if (!optionsByKey.has(key)) {
+                optionsByKey.set(key, label);
+            }
+        });
+
+        const options = Array.from(optionsByKey.entries())
+            .sort((a, b) => a[1].localeCompare(b[1], 'es', { sensitivity: 'base' }));
+
+        select.innerHTML = '<option value="todos">Todas</option>' + options
+            .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+            .join('');
+
+        select.value = optionsByKey.has(currentValue) ? currentValue : 'todos';
     }
 
     function updatePuestoPctSummaryCard() {
@@ -731,6 +843,8 @@
         const adminItems = administrativeRows.map((row, idx) => ({
             ...row,
             grupo: normalizeAdministrativeGroup(row.grupo),
+            empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
+            __empresaKey: normalizeAdministrativeEmpresaKey(row.empresa),
             __tipo: 'admin',
             __idx: idx,
         }));
@@ -738,21 +852,27 @@
         const operatorItems = operatorRows.map((row, idx) => ({
             ...row,
             grupo: normalizeAdministrativeGroup(row.grupo),
+            empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
+            __empresaKey: normalizeAdministrativeEmpresaKey(row.empresa),
             __tipo: 'operador',
             __idx: idx,
         }));
 
         const allRows = [...adminItems, ...operatorItems];
-
-        if (administrativeGroupFilter === 'todos') {
-            return allRows;
-        }
+        const empresaFilterKey = getAdministrativeEmpresaFilterKey();
+        let filteredRows = allRows;
 
         if (administrativeGroupFilter === '4_5') {
-            return allRows.filter((row) => row.grupo === '4. Operadores' || row.grupo === '5. Servs. Tecnicos');
+            filteredRows = filteredRows.filter((row) => row.grupo === '4. Operadores' || row.grupo === '5. Servs. Tecnicos');
+        } else if (administrativeGroupFilter !== 'todos') {
+            filteredRows = filteredRows.filter((row) => row.grupo === administrativeGroupFilter);
         }
 
-        return allRows.filter((row) => row.grupo === administrativeGroupFilter);
+        if (empresaFilterKey !== 'todos') {
+            filteredRows = filteredRows.filter((row) => row.__empresaKey === empresaFilterKey);
+        }
+
+        return filteredRows;
     }
 
     function getAdministrativeDisplayAmount(row) {
@@ -824,7 +944,7 @@
         const montoG1 = getPuestoCategoryBudget('g1');
         const montoG2 = getPuestoCategoryBudget('g2');
         const montoG45 = getPuestoCategoryBudget('g45');
-        const montoFiltro = getAdministrativeFilteredBudget();
+        const montoFiltro = totalDistribuido;
 
         document.getElementById('admin_base_total').textContent = formatMoney(currentAdministrativePoolBase);
         document.getElementById('admin_distribuido_total').textContent = formatMoney(montoFiltro);
@@ -1060,8 +1180,8 @@
     }
 
     function updateCardsFromData(data) {
-        const totalCumplen = data.filter(item => item.cumple_minimo === 'SI').length;
-        const totalNoCumplen = data.filter(item => item.cumple_minimo !== 'SI').length;
+        const totalCumplen = data.filter(item => evaluateMetaMinima(item).cumplio).length;
+        const totalNoCumplen = data.length - totalCumplen;
         const totalVendido = data.reduce((sum, item) => sum + toNumber(item.ventas_mes_actual), 0);
         const totalIncentivo = data.reduce((sum, item) => sum + toNumber(item.nuevo_incentivo), 0);
         const adminValor = totalIncentivo * (adminPctBruto / 100);
@@ -1098,18 +1218,19 @@
         tableBody.innerHTML = '';
 
         data.forEach(item => {
-            const cumpleBadge = item.cumple_minimo === 'SI'
-                ? '<span class="badge bg-success">CUMPLIÓ</span>'
-                : '<span class="badge bg-danger">NO CUMPLE</span>';
+            const meta = evaluateMetaMinima(item);
+            const cumpleBadge = meta.cumplio
+                ? '<span class="badge bg-success">CUMPLIO</span>'
+                : `<span class="badge bg-danger">NO CUMPLE | Faltan ${formatMoney(meta.faltante)} (${meta.faltantePct.toFixed(2)}%)</span>`;
 
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${item.cedula}</td>
+                <td>${escapeHtml(normalizeEmpresaLabel(item.empresa))}</td>
                 <td>${formatMoney(item.ventas_ultimo_mes)}</td>
                 <td>${formatMoney(item.ventas_mes_actual)}</td>
                 <td>${item.dias_ventas_mes_actual ?? 0}</td>
                 <td>${cumpleBadge}</td>
-                <td>${formatMoney(item.pago_escala)}</td>
                 <td>${formatMoney(item.nuevo_incentivo)}</td>
             `;
             tableBody.appendChild(row);
@@ -1119,19 +1240,19 @@
             responsive: true,
             dom: 'Bfrtip',
             buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
-            order: [[1, 'desc']],
+            order: [[2, 'desc']],
             pageLength: 10000,
             scrollY: '500px',
             scrollCollapse: true,
             language: {
-                lengthMenu: 'Mostrar _MENU_ registros por página',
+                lengthMenu: 'Mostrar _MENU_ registros por pagina',
                 info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
                 infoEmpty: 'No hay registros disponibles',
                 infoFiltered: '(filtrado de _MAX_ registros totales)',
                 search: 'Buscar:',
                 paginate: {
                     first: 'Primero',
-                    last: 'Último',
+                    last: 'Ultimo',
                     next: 'Siguiente',
                     previous: 'Anterior'
                 }
@@ -1141,12 +1262,13 @@
 
     function applyLocalFilters(showFilterAlert = false) {
         if (!cachedRows.length) {
-            Swal.fire({ title: 'Información', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
             return;
         }
 
         const sistema = document.getElementById('ni_sistema').value;
         const filtroCumplimiento = document.getElementById('ni_filtro_cumplimiento').value;
+        const filtroEmpresa = document.getElementById('ni_filtro_empresa').value;
         const tipoPago = document.getElementById('ni_tipo_pago').value;
 
         if (cachedSistema !== sistema || cachedTipoPago !== tipoPago) {
@@ -1156,13 +1278,21 @@
 
         let filtered = [...cachedRows];
         if (filtroCumplimiento === 'cumplidos') {
-            filtered = filtered.filter(item => item.cumple_minimo === 'SI');
+            filtered = filtered.filter(item => evaluateMetaMinima(item).cumplio);
         } else if (filtroCumplimiento === 'no_cumplidos') {
-            filtered = filtered.filter(item => item.cumple_minimo !== 'SI');
+            filtered = filtered.filter(item => !evaluateMetaMinima(item).cumplio);
+        }
+
+        if (filtroEmpresa !== 'todos') {
+            filtered = filtered.filter(item => normalizeEmpresaValue(item?.empresa) === filtroEmpresa);
         }
 
         renderTableFromData(filtered);
         updateCardsFromData(filtered);
+        const modalAdministrativos = document.getElementById('modalAdministrativos');
+        if (modalAdministrativos && modalAdministrativos.classList.contains('show')) {
+            renderAdministrativeCategoryTable();
+        }
 
         document.getElementById('ni_rango_evaluado').textContent =
             `Mes evaluado: ${cachedMeta.eval_ini || ''} al ${cachedMeta.eval_fin || ''}`;
@@ -1189,6 +1319,7 @@
         document.getElementById('ni_fecha_fin').value = `${yyyy}-${mm}-${dd}`;
         document.getElementById('ni_fecha_ini').value = `${yyyy}-${mm}-01`;
         updatePuestoPctSummaryCard();
+        populateEmpresaFilterOptions([]);
 
         document.querySelector('#btnConfigPct').addEventListener('click', function() {
             renderRangesTable();
@@ -1352,12 +1483,12 @@
                 const tipoPago = document.getElementById('ni_tipo_pago').value;
                 payoutRangesByType[tipoPago] = readRangesFromTable();
             } catch (e) {
-                Swal.fire({ title: 'Validación', text: e.message, icon: 'warning' });
+                Swal.fire({ title: 'Validacion', text: e.message, icon: 'warning' });
                 return;
             }
 
             bootstrap.Modal.getInstance(document.getElementById('modalConfigPct'))?.hide();
-            Swal.fire({ title: 'Configuración guardada', text: 'Los tramos se aplicarán al generar el reporte.', icon: 'success' });
+            Swal.fire({ title: 'Configuracion guardada', text: 'Los tramos se aplicaran al generar el reporte.', icon: 'success' });
         });
 
         document.querySelector('#btnGuardarAdminPct').addEventListener('click', function() {
@@ -1383,7 +1514,7 @@
             }
 
             Swal.fire({
-                title: 'Configuración guardada',
+                title: 'Configuracion guardada',
                 text: 'El % administrativo se aplica sobre el Total Incentivo a Pagar.',
                 icon: 'success'
             });
@@ -1396,7 +1527,7 @@
             bootstrap.Modal.getInstance(document.getElementById('modalConfigPuestoPct'))?.hide();
 
             Swal.fire({
-                title: 'Configuración guardada',
+                title: 'Configuracion guardada',
                 text: '% por categoria guardado correctamente.',
                 icon: 'success'
             });
@@ -1411,12 +1542,12 @@
         const tipoPago = document.getElementById('ni_tipo_pago').value;
 
         if (!fechaIni || !fechaFin) {
-            Swal.fire({ title: 'Información', text: 'Debe seleccionar fecha inicio y fecha fin.', icon: 'warning' });
+            Swal.fire({ title: 'Informacion', text: 'Debe seleccionar fecha inicio y fecha fin.', icon: 'warning' });
             return;
         }
 
         Swal.fire({
-            title: 'Procesando Información ...',
+            title: 'Procesando Informacion ...',
             icon: 'info',
             allowOutsideClick: false,
             showConfirmButton: false,
@@ -1436,11 +1567,16 @@
             rangos_pago: JSON.stringify(payoutRangesByType[tipoPago]),
         });
 
-        fetch('/incentivos/reporte-nuevo-incentivo-v4?' + params.toString())
-            .then(response => response.json())
+        fetch('/incentivos/reporte-nuevo-incentivo-v4?' + params.toString(), {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then(response => parseResponseAsJson(response, 'Error consultando reporte nuevo incentivo V4'))
             .then(resp => {
                 if ('message' in resp) {
-                    Swal.fire({ title: 'Información', text: resp.message, icon: 'warning' });
+                    Swal.fire({ title: 'Informacion', text: resp.message, icon: 'warning' });
                     return;
                 }
 
@@ -1450,12 +1586,13 @@
                 updateCoordinatorValidAgencies(cachedMeta);
                 cachedSistema = sistema;
                 cachedTipoPago = tipoPago;
+                populateEmpresaFilterOptions(cachedRows);
 
                 Swal.close();
                 applyLocalFilters(showFilterAlert);
             })
             .catch(error => {
-                Swal.fire({ title: 'Error', text: error, icon: 'warning' });
+                Swal.fire({ title: 'Error', text: error?.message || String(error), icon: 'warning' });
             });
     }
 
