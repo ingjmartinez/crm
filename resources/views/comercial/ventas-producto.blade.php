@@ -1089,10 +1089,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const getApiError = (data) => {
         if (data?.error) return data.error;
+        if (data?.message && !data?.success && !data?.ventas) return data.message;
         if (data?.code !== undefined && !isSuccessCode(data.code)) {
             return data?.message || `Código inesperado: ${data.code}`;
         }
         return null;
+    };
+
+    const fetchJson = async (url, options = {}) => {
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(options.headers || {}),
+            },
+            ...options,
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            const raw = await response.text();
+            const titleMatch = raw.match(/<title>(.*?)<\/title>/i);
+            const title = titleMatch?.[1]?.trim();
+            throw new Error(title || `El servidor devolvió una respuesta no JSON (HTTP ${response.status}).`);
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data?.error || data?.message || `Solicitud fallida (HTTP ${response.status}).`);
+        }
+
+        return data;
     };
 
     // --- Generar Token ---
@@ -1104,8 +1131,7 @@ document.addEventListener('DOMContentLoaded', function () {
             allowEscapeKey: false,
             didOpen: () => Swal.showLoading(),
         });
-        fetch('/generar-token')
-            .then(r => r.json())
+        fetchJson('/generar-token')
             .then(data => {
                 Swal.fire({ title: 'Listo', text: data.success ?? 'Token generado.', icon: 'success' });
             })
@@ -1133,8 +1159,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         destroyTables();
 
-        fetch(`/ventas-producto-lotobet?fecha=${fecha}`)
-            .then(r => r.json())
+        fetchJson(`/ventas-producto-lotobet?fecha=${encodeURIComponent(fecha)}`)
             .then(data => {
                 Swal.close();
                 document.getElementById('btnGenerarData').disabled = false;
@@ -1201,8 +1226,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         destroyTables();
 
-        fetch(`/ventas-producto-lotobet?fecha=${fecha}`)
-            .then(r => r.json())
+        fetchJson(`/ventas-producto-lotobet?fecha=${encodeURIComponent(fecha)}`)
             .then(data => {
                 Swal.close();
                 btnConsultar.disabled = false;
