@@ -9,7 +9,7 @@ services:
       DB_CONNECTION: mysql
       DB_HOST: db
       DB_PORT: 3306
-      DB_DATABASE: crm
+      DB_DATABASE: crm_v3
       DB_USERNAME: crm_user
       DB_PASSWORD: wSyEP6ZZEUxBUiwj5ZeR
       QUEUE_CONNECTION: redis
@@ -38,7 +38,7 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: crm
+      MYSQL_DATABASE: crm_v3
       MYSQL_USER: crm_user
       MYSQL_PASSWORD: wSyEP6ZZEUxBUiwj5ZeR
       MYSQL_ROOT_PASSWORD: wSyEP6ZZEUxBUiwj5ZeR
@@ -70,7 +70,7 @@ services:
       DB_CONNECTION: mysql
       DB_HOST: db
       DB_PORT: 3306
-      DB_DATABASE: crm
+      DB_DATABASE: crm_v3
       DB_USERNAME: crm_user
       DB_PASSWORD: wSyEP6ZZEUxBUiwj5ZeR
       QUEUE_CONNECTION: redis
@@ -92,7 +92,7 @@ services:
       DB_CONNECTION: mysql
       DB_HOST: db
       DB_PORT: 3306
-      DB_DATABASE: crm
+      DB_DATABASE: crm_v3
       DB_USERNAME: crm_user
       DB_PASSWORD: wSyEP6ZZEUxBUiwj5ZeR
       REDIS_HOST: redis

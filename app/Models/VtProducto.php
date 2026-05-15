@@ -7,19 +7,14 @@ use Illuminate\Database\Eloquent\Model;
 class VtProducto extends Model
 {
     protected $table = 'ventas_producto_bet';
-    public $timestamps = false;
-    protected $primaryKey = 'venta_id';
+    public $timestamps = true;
+    protected $primaryKey = 'id';
     protected $fillable = [
-        'consorcio_id',
         'agencia_id',
         'producto_id',
-        'tipo',
-        'descripcion',
         'monto',
         'fecha',
-        'comision',
-        'comision_supervisor',
-        'numero_sorteo',
-        'fecha_sorteo'
+        'sorteo_id',
+        'source_hash',
     ];
 }

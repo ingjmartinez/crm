@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Agencia;
-use App\Models\Token;
 use App\Models\VtProducto;
 use App\Models\VtProductoNet;
+use App\Services\Etl\LotobetVentasProductoEtlService;
+use App\Services\Lotobet\LotobetSessionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class VentasProductosController extends Controller
 {
@@ -16,59 +18,23 @@ class VentasProductosController extends Controller
         ini_set('memory_limit', '512M');
         ini_set('max_execution_time', 300);
         set_time_limit(300);
-        header('Content-Type: application/json');
-
-        $curl = curl_init();
 
         $fecha = $request->query('fecha');
+        $validator = Validator::make(['fecha' => $fecha], [
+            'fecha' => ['required', 'date_format:Y-m-d'],
+        ]);
 
-        $token = Token::find(1);
-
-        if (!$token) {
-            return response()->json(['error' => 'Genere un token'], 404);
-        }
-
-        $fechaActual = now();
-        if ($fechaActual->greaterThan($token->fecha)) {
-            return response()->json(['error' => 'El token ha expirado, genere uno nuevo'], 401);
-        }
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => "https://ltkadapi.lotobet.bet/api/V1/kotFQlCe5XVFoJcjEz/{$token->token}/{$fecha}/05",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_HTTPHEADER => array(
-                'AhfCC: yB0tt5KW3wVVCYYtCpen',
-                'AhfVB: xSzdgtOKbGRhUhtv1ois'
-            ),
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ));
-
-        $response = curl_exec($curl);
-
-        curl_close($curl);
-
-        $ventas = json_decode($response, true);
-
-        if (!is_array($ventas)) {
+        if ($validator->fails()) {
             return response()->json([
-                'ventas' => [],
-                'resumen_agencias' => [
-                    'activas' => 0,
-                    'con_ventas' => 0,
-                    'sin_ventas' => 0,
-                    'agencias_sin_ventas' => [],
-                    'terminales_no_registradas_count' => 0,
-                    'terminales_no_registradas' => [],
-                ],
-                'code' => null,
-                'message' => 'Respuesta inválida de API externa',
+                'error' => 'Fecha invalida. Use el formato YYYY-MM-DD.',
+            ], 422);
+        }
+
+        try {
+            $ventas = app(LotobetSessionService::class)->getVentasProducto($fecha);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
             ], 502);
         }
 
@@ -88,8 +54,23 @@ class VentasProductosController extends Controller
         };
 
         $agencias = Agencia::query()
-            ->select(['agencia', 'nombre_agencia', 'terminal', 'ciudad', 'ruta', 'operador', 'coordinador', 'estatus'])
-            ->whereNotNull('terminal')
+            ->leftJoin('ciudades as c', 'c.id', '=', 'agencias.ciudad_id')
+            ->leftJoin('ruta_agencia as ra', 'ra.agencia_id', '=', 'agencias.id')
+            ->leftJoin('rutas as r', 'r.id', '=', 'ra.ruta_id')
+            ->leftJoin('coordinador_operador_agencia as coa', 'coa.agencia_id', '=', 'agencias.id')
+            ->leftJoin('coordinadores_operador as co', 'co.id', '=', 'coa.coordinador_operador_id')
+            ->select([
+                'agencias.codigo as agencia',
+                'agencias.nombre as nombre_agencia',
+                'agencias.terminal',
+                'agencias.estatus',
+                DB::raw('MAX(c.nombre) as ciudad'),
+                DB::raw('MAX(COALESCE(r.nombre, r.serial)) as ruta'),
+                DB::raw('NULL as operador'),
+                DB::raw('MAX(co.nombre) as coordinador'),
+            ])
+            ->whereNotNull('agencias.terminal')
+            ->groupBy('agencias.id', 'agencias.codigo', 'agencias.nombre', 'agencias.terminal', 'agencias.estatus')
             ->get();
 
         $agenciasByTerminal = [];
@@ -213,81 +194,37 @@ class VentasProductosController extends Controller
 
     public function saveVentasProductosLotobet(Request $request)
     {
-        ini_set('memory_limit', '1G'); // Aumentar el límite de memoria a 512MB
-        ini_set('max_execution_time', 300); // 300 segundos = 5 minutos
-        set_time_limit(300);                // alternativa equivalente
-        header('Content-Type: application/json');
-
-        $curl = curl_init();
+        ini_set('memory_limit', '1G');
+        ini_set('max_execution_time', 900);
+        set_time_limit(900);
 
         $fecha = $request->query('fecha');
-
-        $token = Token::find(1);
-
-        if (!$token) {
-            return response()->json(['error' => 'Genere un token'], 404);
-        }
-
-        $fechaActual = now();
-        if ($fechaActual->greaterThan($token->fecha)) {
-            return response()->json(['error' => 'El token ha expirado, genere uno nuevo'], 401);
-        }
-
-        $existe = VtProducto::whereDate('fecha', $fecha)->exists();
-
-        if ($existe) {
-            return response()->json(['message' => 'Ya hay data guardada en la fecha: ' . $fecha]);
-        }
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => "https://ltkadapi.lotobet.bet/api/V1/kotFQlCe5XVFoJcjEz/{$token->token}/{$fecha}/05",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_HTTPHEADER => array(
-                'AhfCC: yB0tt5KW3wVVCYYtCpen',
-                'AhfVB: xSzdgtOKbGRhUhtv1ois'
-            ),
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ));
-
-        $response = curl_exec($curl);
-
-        curl_close($curl);
-
-        $ventas = json_decode($response, true);
-
-        $data = [];
-
-        foreach ($ventas['Content'] as $v) {
-            $data[] = [
-                'consorcio_id'  => $v['consorcio_id'] ?? null,
-                'agencia_id'    => $v['agencia_id'] ?? null,
-                'producto_id'   => $v['producto_id'] ?? null,
-                'descripcion'   => $v['descripcion'] ?? null,
-                'monto'         => $v['monto'] ?? 0,
-                'fecha'         => $fecha,
-                'comision'      => $v['comision'] ?? null,
-                'numero_sorteo' => $v['numero_sorteo'] ?? null,
-                'comision_supervisor' => $v['comision_supervisor'] ?? null,
-            ];
-        }
-
-        if (!empty($data)) {
-            foreach (array_chunk($data, 5000) as $chunk) {
-                DB::table('ventas_producto_bet')->insert($chunk);
-            }
-        }
-
-        return response()->json([
-            'message' => 'Datos guardados correctamente. Total insertados: ' . count($data),
-            'total' => count($data)
+        $validator = Validator::make(['fecha' => $fecha], [
+            'fecha' => ['required', 'date_format:Y-m-d'],
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Fecha invalida. Use el formato YYYY-MM-DD.',
+            ], 422);
+        }
+
+        try {
+            $result = app(LotobetVentasProductoEtlService::class)->run($fecha);
+
+            return response()->json([
+                'message' => 'ETL ventas producto Lotobet completado.',
+                'run_id' => $result['run_id'],
+                'total' => $result['inserted'],
+                'expected' => $result['expected'],
+                'skipped' => $result['skipped'],
+                'failed' => $result['failed'],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+            ], 502);
+        }
     }
 
     public function deleteVentasProductosLotobet(Request $request)
@@ -315,6 +252,8 @@ class VentasProductosController extends Controller
 
         curl_setopt_array($curl, array(
             CURLOPT_URL => "http://contable.apploteka.com//api/finan/ventas_loteria/{$fecha}/5",
+            CURLOPT_PROXY => '',
+            CURLOPT_NOPROXY => '*',
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
             CURLOPT_MAXREDIRS => 10,
@@ -365,6 +304,8 @@ class VentasProductosController extends Controller
 
         curl_setopt_array($curl, array(
             CURLOPT_URL => "http://contable.apploteka.com//api/finan/ventas_loteria/{$fecha}/5",
+            CURLOPT_PROXY => '',
+            CURLOPT_NOPROXY => '*',
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
             CURLOPT_MAXREDIRS => 10,
