@@ -253,6 +253,8 @@ Route::get('/recursos-humanos/novedades-horario', [NovedadHorarioController::cla
     ->name('recursos-humanos.novedades-horario.index');
 Route::get('/recursos-humanos/novedades-horario/list', [NovedadHorarioController::class, 'list'])
     ->name('recursos-humanos.novedades-horario.list');
+Route::get('/recursos-humanos/novedades-horario/detalle', [NovedadHorarioController::class, 'detalle'])
+    ->name('recursos-humanos.novedades-horario.detalle');
 
 Route::prefix('entrevistas-online')->name('entrevistas-online.')->group(function () {
     Route::get('/', [EntrevistaOnlineController::class, 'index'])->name('index');

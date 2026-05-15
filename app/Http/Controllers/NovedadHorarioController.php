@@ -19,6 +19,8 @@ class NovedadHorarioController extends Controller
             'sistema' => ['required', 'in:todos,lotobet,lotonet'],
             'fecha_inicio' => ['required', 'date'],
             'fecha_fin' => ['required', 'date', 'after_or_equal:fecha_inicio'],
+            'horas_requeridas' => ['required', 'integer', 'min:1'],
+            'detalle' => ['nullable', 'in:todos,cumple,tiene_falta'],
         ]);
 
         $uniones = [];
@@ -46,6 +48,7 @@ class NovedadHorarioController extends Controller
         if (in_array($validated['sistema'], ['todos', 'lotobet'], true)) {
             $uniones[] = "
                 SELECT
+                    'lotobet' AS empresa,
                     TRIM(CAST(ab.agencia_id AS CHAR)) AS terminal,
                     COALESCE(a.nombre_agencia, ab.agencia_id) AS nombre_agencia,
                     COALESCE(a.ruta, '') AS ruta,
@@ -78,6 +81,7 @@ class NovedadHorarioController extends Controller
         if (in_array($validated['sistema'], ['todos', 'lotonet'], true)) {
             $uniones[] = "
                 SELECT
+                    'lotonet' AS empresa,
                     TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)) AS terminal,
                     COALESCE(a.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
                     COALESCE(a.ruta, '') AS ruta,
@@ -109,6 +113,7 @@ class NovedadHorarioController extends Controller
 
         $baseSql = "
             SELECT
+                empresa,
                 terminal,
                 nombre_agencia,
                 ruta,
@@ -123,20 +128,31 @@ class NovedadHorarioController extends Controller
             ) novedades
         ";
         $search = trim((string) $request->input('search.value', ''));
-        $whereSql = '';
+        $detalle = $validated['detalle'] ?? 'todos';
+        $whereConditions = [];
         $whereBindings = [];
 
         if ($search !== '') {
-            $whereSql = "
-                WHERE terminal LIKE ?
-                   OR nombre_agencia LIKE ?
-                   OR ruta LIKE ?
-                   OR nombre_empleado LIKE ?
-                   OR cedula LIKE ?
-            ";
+            $whereConditions[] = "(terminal LIKE ?
+                OR nombre_agencia LIKE ?
+                OR ruta LIKE ?
+                OR nombre_empleado LIKE ?
+                OR cedula LIKE ?)";
             $searchValue = '%' . $search . '%';
             $whereBindings = array_fill(0, 5, $searchValue);
         }
+
+        if ($detalle === 'cumple') {
+            $whereConditions[] = 'horas_acumuladas >= ?';
+            $whereBindings[] = (int) $validated['horas_requeridas'];
+        }
+
+        if ($detalle === 'tiene_falta') {
+            $whereConditions[] = 'horas_acumuladas < ?';
+            $whereBindings[] = (int) $validated['horas_requeridas'];
+        }
+
+        $whereSql = $whereConditions ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
 
         $recordsTotal = (int) DB::selectOne("SELECT COUNT(*) AS total FROM ({$baseSql}) base", $bindings)->total;
         $recordsFiltered = (int) DB::selectOne(
@@ -158,7 +174,8 @@ class NovedadHorarioController extends Controller
 
         $start = max((int) $request->input('start', 0), 0);
         $length = (int) $request->input('length', 25);
-        $length = $length > 0 ? min($length, 200) : 25;
+        $maxLength = $request->boolean('export') ? 100000 : 200;
+        $length = $length > 0 ? min($length, $maxLength) : 25;
         $dataSql = "
             SELECT *
             FROM ({$baseSql}) base
@@ -188,6 +205,179 @@ class NovedadHorarioController extends Controller
                 'agencias' => (int) ($resumen->agencias ?? 0),
                 'horas_acumuladas' => round((float) ($resumen->horas_acumuladas ?? 0), 2),
             ],
+        ]);
+    }
+
+    public function detalle(Request $request)
+    {
+        $validated = $request->validate([
+            'sistema' => ['required', 'in:todos,lotobet,lotonet'],
+            'fecha_inicio' => ['required', 'date'],
+            'fecha_fin' => ['required', 'date', 'after_or_equal:fecha_inicio'],
+            'horas_requeridas' => ['required', 'integer', 'min:1'],
+            'valor_hora' => ['required', 'numeric', 'min:0.01'],
+            'cedula' => ['required', 'string'],
+            'terminal' => ['required', 'string'],
+            'empresa' => ['nullable', 'in:lotobet,lotonet'],
+        ]);
+
+        $uniones = [];
+        $bindings = [];
+        $agenciasSql = "
+            SELECT
+                TRIM(CAST(terminal AS CHAR)) AS terminal,
+                MAX(nombre_agencia) AS nombre_agencia,
+                MAX(ruta) AS ruta
+            FROM agencias
+            WHERE terminal IS NOT NULL
+              AND TRIM(CAST(terminal AS CHAR)) <> ''
+            GROUP BY TRIM(CAST(terminal AS CHAR))
+        ";
+        $empleadosSql = "
+            SELECT
+                TRIM(cedula) AS cedula,
+                MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre_empleado
+            FROM empleados
+            WHERE cedula IS NOT NULL
+              AND TRIM(cedula) <> ''
+            GROUP BY TRIM(cedula)
+        ";
+
+        if (in_array($validated['sistema'], ['todos', 'lotobet'], true)) {
+            $uniones[] = "
+                SELECT
+                    'lotobet' AS empresa,
+                    TRIM(CAST(ab.agencia_id AS CHAR)) AS terminal,
+                    COALESCE(a.nombre_agencia, ab.agencia_id) AS nombre_agencia,
+                    COALESCE(a.ruta, '') AS ruta,
+                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')) AS nombre_empleado,
+                    ab.cedula AS cedula,
+                    DATE(ab.fecha) AS fecha,
+                    MIN(ab.primer_login) AS primer_login,
+                    MAX(ab.ultimo_login) AS ultimo_login,
+                    ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(ab.primer_login), MAX(ab.ultimo_login)), 0) / 3600, 2) AS horas_acumuladas
+                FROM asistencias_bet ab
+                LEFT JOIN ({$agenciasSql}) a
+                    ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(ab.agencia_id AS CHAR))
+                LEFT JOIN ({$empleadosSql}) e
+                    ON TRIM(e.cedula) = TRIM(ab.cedula)
+                WHERE ab.fecha >= ? AND ab.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+                  AND ab.primer_login IS NOT NULL
+                  AND ab.ultimo_login IS NOT NULL
+                GROUP BY
+                    TRIM(CAST(ab.agencia_id AS CHAR)),
+                    COALESCE(a.nombre_agencia, ab.agencia_id),
+                    COALESCE(a.ruta, ''),
+                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')),
+                    ab.cedula,
+                    DATE(ab.fecha)
+            ";
+            $bindings[] = $validated['fecha_inicio'];
+            $bindings[] = $validated['fecha_fin'];
+        }
+
+        if (in_array($validated['sistema'], ['todos', 'lotonet'], true)) {
+            $uniones[] = "
+                SELECT
+                    'lotonet' AS empresa,
+                    TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)) AS terminal,
+                    COALESCE(a.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
+                    COALESCE(a.ruta, '') AS ruta,
+                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')) AS nombre_empleado,
+                    an.identificacion AS cedula,
+                    DATE(an.entrada) AS fecha,
+                    MIN(an.entrada) AS primer_login,
+                    MAX(COALESCE(an.salida, an.salida_inactividad)) AS ultimo_login,
+                    ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(an.entrada), MAX(COALESCE(an.salida, an.salida_inactividad))), 0) / 3600, 2) AS horas_acumuladas
+                FROM asistencias_net an
+                LEFT JOIN ({$agenciasSql}) a
+                    ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))
+                LEFT JOIN ({$empleadosSql}) e
+                    ON TRIM(e.cedula) = TRIM(an.identificacion)
+                WHERE an.entrada >= ? AND an.entrada < DATE_ADD(?, INTERVAL 1 DAY)
+                  AND an.entrada IS NOT NULL
+                  AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
+                GROUP BY
+                    TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)),
+                    COALESCE(a.nombre_agencia, an.banca, an.agencia),
+                    COALESCE(a.ruta, ''),
+                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')),
+                    an.identificacion,
+                    DATE(an.entrada)
+            ";
+            $bindings[] = $validated['fecha_inicio'];
+            $bindings[] = $validated['fecha_fin'];
+        }
+
+        $baseSql = "
+            SELECT
+                empresa,
+                terminal,
+                nombre_agencia,
+                ruta,
+                nombre_empleado,
+                cedula,
+                fecha,
+                primer_login,
+                ultimo_login,
+                horas_acumuladas
+            FROM (
+                " . implode(' UNION ALL ', $uniones) . "
+            ) novedades
+        ";
+
+        $whereConditions = [
+            'TRIM(CAST(cedula AS CHAR)) = ?',
+            'TRIM(CAST(terminal AS CHAR)) = ?',
+        ];
+        $whereBindings = [
+            trim((string) $validated['cedula']),
+            trim((string) $validated['terminal']),
+        ];
+
+        if (!empty($validated['empresa'])) {
+            $whereConditions[] = 'empresa = ?';
+            $whereBindings[] = $validated['empresa'];
+        }
+
+        $rows = collect(DB::select(
+            "
+                SELECT *
+                FROM ({$baseSql}) base
+                WHERE " . implode(' AND ', $whereConditions) . "
+                ORDER BY fecha ASC
+            ",
+            array_merge($bindings, $whereBindings)
+        ));
+
+        $horasRequeridas = (float) $validated['horas_requeridas'];
+        $valorHora = (float) $validated['valor_hora'];
+        $detalle = $rows
+            ->map(function ($row) use ($horasRequeridas, $valorHora) {
+                $horasAcumuladas = round((float) $row->horas_acumuladas, 2);
+                $horasFaltantes = round(max($horasRequeridas - $horasAcumuladas, 0), 2);
+                $montoDia = round($horasFaltantes * $valorHora, 2);
+
+                return [
+                    'fecha' => $row->fecha ? Carbon::parse($row->fecha)->format('Y-m-d') : null,
+                    'horas_acumuladas' => $horasAcumuladas,
+                    'horas_faltantes' => $horasFaltantes,
+                    'monto_dia' => $montoDia,
+                ];
+            })
+            ->filter(fn ($row) => $row['horas_faltantes'] > 0)
+            ->values();
+
+        $primerRegistro = $rows->first();
+
+        return response()->json([
+            'nombre' => $primerRegistro->nombre_empleado ?? 'Sin especificar',
+            'cedula' => $validated['cedula'],
+            'agencia' => $primerRegistro->nombre_agencia ?? $validated['terminal'],
+            'terminal' => $validated['terminal'],
+            'total_faltantes' => round($detalle->sum('horas_faltantes'), 2),
+            'monto_total' => round($detalle->sum('monto_dia'), 2),
+            'detalle' => $detalle,
         ]);
     }
 }
