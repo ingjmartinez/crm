@@ -216,9 +216,9 @@
         function formatearHorasMinutos(valor) {
             const numero = Number(valor || 0);
             const signo = numero < 0 ? '-' : '';
-            const valorAbsoluto = Math.abs(numero);
-            const horas = Math.floor(valorAbsoluto);
-            const minutos = Math.round((valorAbsoluto - horas) * 100);
+            const minutosTotales = Math.round(Math.abs(numero) * 60);
+            const horas = Math.floor(minutosTotales / 60);
+            const minutos = minutosTotales % 60;
             const partes = [];
 
             if (horas > 0) {
