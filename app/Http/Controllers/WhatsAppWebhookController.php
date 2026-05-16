@@ -19,6 +19,8 @@ class WhatsAppWebhookController extends Controller
     {
         $payload = $request->all();
 
+        Log::warning('WhatsApp webhook', ['payload' => $payload]);
+
         if (!$this->validToken($payload)) {
             Log::warning('WhatsApp webhook token invalido', [
                 'ip' => $request->ip(),
@@ -32,17 +34,57 @@ class WhatsAppWebhookController extends Controller
         $message = trim((string) ($data['message'] ?? $data['text'] ?? $data['body'] ?? ''));
         $account = (string) ($data['wid'] ?? $data['account'] ?? $data['unique'] ?? '');
 
+        Log::debug('WhatsApp webhook datos extraidos', [
+            'phone' => $phone,
+            'account' => $account,
+            'message_preview' => $this->preview($message),
+            'message_length' => strlen($message),
+            'data_keys' => array_keys((array) $data),
+        ]);
+
         if ($phone === '' || $message === '') {
+            Log::warning('WhatsApp webhook datos incompletos', [
+                'phone_empty' => $phone === '',
+                'message_empty' => $message === '',
+                'data_keys' => array_keys((array) $data),
+            ]);
+
             return response()->json(['status' => 'missing_data'], 422);
         }
 
         try {
+            Log::debug('WhatsApp webhook iniciando chatbot', [
+                'phone' => $phone,
+                'account' => $account,
+            ]);
+
             $result = $this->chatbotService->handleIncoming($phone, $message);
             $reply = (string) ($result['reply'] ?? '');
+            $session = $result['session'] ?? null;
+
+            Log::debug('WhatsApp webhook chatbot respondio', [
+                'phone' => $phone,
+                'session_id' => $session?->id,
+                'step' => $session?->step,
+                'reply_empty' => $reply === '',
+                'reply_preview' => $this->preview($reply),
+            ]);
 
             if ($reply === '') {
+                Log::warning('WhatsApp webhook chatbot devolvio respuesta vacia', [
+                    'phone' => $phone,
+                    'session_id' => $session?->id,
+                    'step' => $session?->step,
+                ]);
+
                 return response()->json(['status' => 'no_reply']);
             }
+
+            Log::debug('WhatsApp webhook enviando respuesta', [
+                'phone' => $phone,
+                'account' => $account,
+                'reply_preview' => $this->preview($reply),
+            ]);
 
             $sendResult = $this->whatsAppService->sendText($phone, $reply, $account);
 
@@ -50,6 +92,12 @@ class WhatsAppWebhookController extends Controller
                 Log::warning('WhatsApp webhook no pudo enviar respuesta', [
                     'phone' => $phone,
                     'send_result' => $sendResult,
+                ]);
+            } else {
+                Log::debug('WhatsApp webhook respuesta enviada', [
+                    'phone' => $phone,
+                    'status' => $sendResult['status'] ?? null,
+                    'provider_response' => $sendResult['provider_response'] ?? null,
                 ]);
             }
 
@@ -61,6 +109,7 @@ class WhatsAppWebhookController extends Controller
             Log::error('WhatsApp webhook error', [
                 'phone' => $phone,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json(['status' => 'error'], 500);
@@ -91,5 +140,14 @@ class WhatsAppWebhookController extends Controller
         $provided = (string) ($payload['token'] ?? $payload['secret'] ?? '');
 
         return $provided !== '' && hash_equals($expected, $provided);
+    }
+
+    private function preview(string $value, int $limit = 160): string
+    {
+        if (strlen($value) <= $limit) {
+            return $value;
+        }
+
+        return substr($value, 0, $limit) . '...';
     }
 }

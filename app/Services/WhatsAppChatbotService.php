@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ChatbotSession;
+use Illuminate\Support\Facades\Log;
 
 class WhatsAppChatbotService
 {
@@ -12,21 +13,67 @@ class WhatsAppChatbotService
     {
         $normalizedPhone = $this->normalizePhone($phone);
         $message = trim($message);
+
+        Log::debug('WhatsApp chatbot: mensaje recibido', [
+            'phone_original' => $phone,
+            'phone_normalized' => $normalizedPhone,
+            'message_preview' => $this->preview($message),
+            'message_length' => strlen($message),
+        ]);
+
         $session = $this->getOrCreateSession($normalizedPhone);
+        $wasRecentlyCreated = $session->wasRecentlyCreated;
+
+        Log::debug('WhatsApp chatbot: sesion cargada', [
+            'phone' => $normalizedPhone,
+            'session_id' => $session->id,
+            'created_now' => $wasRecentlyCreated,
+            'step' => $session->step,
+            'message_count' => $session->message_count,
+            'last_interaction_at' => optional($session->last_interaction_at)->toDateTimeString(),
+        ]);
 
         if ($this->sessionExpired($session)) {
+            Log::debug('WhatsApp chatbot: sesion expirada, reiniciando', [
+                'phone' => $normalizedPhone,
+                'session_id' => $session->id,
+                'previous_step' => $session->step,
+                'last_interaction_at' => optional($session->last_interaction_at)->toDateTimeString(),
+            ]);
+
             $session->step = 'inicio';
             $session->context = null;
             $session->message_count = 0;
         }
 
+        $previousStep = $session->step;
+        $previousMessageCount = $session->message_count;
+
         $session->last_message = $message;
         $session->last_interaction_at = now();
         $session->message_count = $session->message_count + 1;
 
+        Log::debug('WhatsApp chatbot: procesando paso', [
+            'phone' => $normalizedPhone,
+            'session_id' => $session->id,
+            'step_before' => $previousStep,
+            'message_count_before' => $previousMessageCount,
+            'message_count_after' => $session->message_count,
+        ]);
+
         $reply = $this->processStep($session, $message);
 
         $session->save();
+
+        Log::debug('WhatsApp chatbot: respuesta generada y sesion guardada', [
+            'phone' => $normalizedPhone,
+            'session_id' => $session->id,
+            'step_before' => $previousStep,
+            'step_after' => $session->step,
+            'reply_empty' => $reply === '',
+            'reply_preview' => $this->preview($reply),
+            'context' => $session->context,
+        ]);
 
         return [
             'session' => $session,
@@ -36,6 +83,12 @@ class WhatsAppChatbotService
 
     private function processStep(ChatbotSession $session, string $message): string
     {
+        Log::debug('WhatsApp chatbot: entrando a processStep', [
+            'session_id' => $session->id,
+            'phone' => $session->phone,
+            'step' => $session->step,
+        ]);
+
         return match ($session->step) {
             'inicio' => $this->handleInicio($session, $message),
             default => $this->resetToInicio($session),
@@ -45,6 +98,13 @@ class WhatsAppChatbotService
     private function handleInicio(ChatbotSession $session, string $message): string
     {
         $context = is_array($session->context) ? $session->context : [];
+
+        Log::debug('WhatsApp chatbot: handleInicio', [
+            'session_id' => $session->id,
+            'phone' => $session->phone,
+            'previous_context' => $context,
+            'message_preview' => $this->preview($message),
+        ]);
 
         $session->step = 'inicio';
         $session->context = [
@@ -60,6 +120,13 @@ class WhatsAppChatbotService
 
     private function resetToInicio(ChatbotSession $session): string
     {
+        Log::warning('WhatsApp chatbot: paso desconocido, reiniciando a inicio', [
+            'session_id' => $session->id,
+            'phone' => $session->phone,
+            'unknown_step' => $session->step,
+            'last_message_preview' => $this->preview((string) $session->last_message),
+        ]);
+
         $session->step = 'inicio';
         $session->context = null;
 
@@ -90,5 +157,14 @@ class WhatsAppChatbotService
         $digits = preg_replace('/\D+/', '', $phone) ?? '';
 
         return $digits !== '' ? $digits : trim($phone);
+    }
+
+    private function preview(string $value, int $limit = 160): string
+    {
+        if (strlen($value) <= $limit) {
+            return $value;
+        }
+
+        return substr($value, 0, $limit) . '...';
     }
 }
