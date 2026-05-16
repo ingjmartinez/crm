@@ -12,7 +12,7 @@ class WhatsAppService
         $endpoint = config('services.whatsapp.send_endpoint');
         $secret = config('services.whatsapp.api_key');
         $timeout = (int) config('services.whatsapp.timeout', 30);
-        $account = $account ?: config('services.whatsapp.default_account');
+        $account = config('services.whatsapp.default_account');
 
         if (empty($endpoint) || empty($secret)) {
             return [
