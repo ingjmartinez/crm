@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('ventas_producto_bet', function (Blueprint $table) {
             if (!Schema::hasColumn('ventas_producto_bet', 'source_hash')) {
-                $table->char('source_hash', 64)->nullable()->after('sorteo_id');
+                $table->char('source_hash', 64)->nullable()->after('numero_sorteo');
                 $table->unique('source_hash', 'ventas_producto_bet_source_hash_unique');
             }
         });

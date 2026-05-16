@@ -219,6 +219,7 @@ class VentasProductosController extends Controller
                 'expected' => $result['expected'],
                 'skipped' => $result['skipped'],
                 'failed' => $result['failed'],
+                'deleted' => $result['deleted'],
             ]);
         } catch (\Throwable $e) {
             return response()->json([

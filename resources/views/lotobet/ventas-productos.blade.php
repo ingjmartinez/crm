@@ -211,6 +211,33 @@
         });
 
         const btnGuardarData = document.getElementById('btnGuardarData');
+        const formatResultadoGuardado = (data, date = null) => {
+            const partes = [];
+            if (date) {
+                partes.push(`Fecha: ${date}`);
+            }
+
+            partes.push(`Filas insertadas: ${Number(data?.total ?? 0).toLocaleString('es-DO')}`);
+
+            if (data?.expected !== undefined) {
+                partes.push(`Extraidas: ${Number(data.expected ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            if (data?.skipped !== undefined) {
+                partes.push(`Omitidas: ${Number(data.skipped ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            if (data?.failed !== undefined) {
+                partes.push(`Conflictos: ${Number(data.failed ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            if (data?.deleted !== undefined) {
+                partes.push(`Reemplazadas: ${Number(data.deleted ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            return partes.join(' | ');
+        };
+
         btnGuardarData.addEventListener('click', () => {
             const fecha = document.getElementById('inputFecha').value;
             if (!fecha) {
@@ -235,7 +262,7 @@
                 .then(data => {
                     Swal.fire({
                         title: "Listo",
-                        text: data.message,
+                        text: formatResultadoGuardado(data, fecha),
                         icon: "success"
                     });
                 })
@@ -340,11 +367,7 @@
                         throw new Error(data.message || `Error guardando fecha ${date}`);
                     }
 
-                    if (!data.total) {
-                        responses.push(data.message);
-                    } else {
-                        responses.push('Fecha: ' + date + ' Total: ' + data.total);
-                    }
+                    responses.push(formatResultadoGuardado(data, date));
                     // Opcional: puedes hacer una pequeña pausa si tu API lo requiere
                     // await new Promise(r => setTimeout(r, 200));
                 }

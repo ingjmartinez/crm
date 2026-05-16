@@ -189,6 +189,43 @@
 
         const logContainer = document.getElementById('logContainer');
 
+        function formatJsonMessage(json) {
+            if (!json) return '';
+
+            const partes = [];
+            if (json.message) {
+                const message = String(json.message)
+                    .replace(/\s*\|?\s*Filas insertadas:\s*[\d,.]+\.?/i, '')
+                    .trim();
+
+                if (message) {
+                    partes.push(message);
+                }
+            }
+
+            if (json.total !== undefined) {
+                partes.push(`Filas insertadas: ${Number(json.total ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            if (json.expected !== undefined) {
+                partes.push(`Extraidas: ${Number(json.expected ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            if (json.skipped !== undefined) {
+                partes.push(`Omitidas: ${Number(json.skipped ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            if (json.failed !== undefined) {
+                partes.push(`Conflictos: ${Number(json.failed ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            if (json.deleted !== undefined) {
+                partes.push(`Reemplazadas: ${Number(json.deleted ?? 0).toLocaleString('es-DO')}`);
+            }
+
+            return partes.length ? partes.join(' | ') : JSON.stringify(json);
+        }
+
         // Render initial status table rows
         const statusTableBody = document.querySelector('#statusTable tbody');
         function initStatusTable() {
@@ -318,9 +355,8 @@
                         continue;
                     }
 
-                    // Si viene JSON con message o total, mostrarlo
                     if (json) {
-                        const msg = json.message || (json.total ? `Total: ${json.total}` : JSON.stringify(json));
+                        const msg = formatJsonMessage(json);
                         addLog(`OK ${mod.name}: ${msg}`);
                         setStatus(mod.name, 'OK', msg);
                         results.push({ module: mod.name, ok: true, data: json });
@@ -392,7 +428,7 @@
                     }
 
                     if (json) {
-                        const msg = json.message || (json.total ? `Total: ${json.total}` : JSON.stringify(json));
+                        const msg = formatJsonMessage(json);
                         addLog(`OK Eliminar ${mod.name}: ${msg}`);
                         setStatus(mod.name, 'OK', msg);
                         results.push({ module: mod.name, ok: true, data: json });
