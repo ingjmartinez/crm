@@ -32,7 +32,7 @@ class WhatsAppWebhookController extends Controller
         $data = $payload['data'] ?? $payload;
         $phone = (string) ($data['phone'] ?? $data['from'] ?? $data['sender'] ?? '');
         $message = trim((string) ($data['message'] ?? $data['text'] ?? $data['body'] ?? ''));
-        $account = (string) ($data['wid'] ?? $data['account'] ?? $data['unique'] ?? '');
+        $account = (string) ($data['account'] ?? $data['unique'] ?? '');
 
         Log::debug('WhatsApp webhook datos extraidos', [
             'phone' => $phone,

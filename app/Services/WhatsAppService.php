@@ -12,9 +12,16 @@ class WhatsAppService
         $endpoint = config('services.whatsapp.send_endpoint');
         $secret = config('services.whatsapp.api_key');
         $timeout = (int) config('services.whatsapp.timeout', 30);
-        $account = config('services.whatsapp.default_account');
+        $account = $account ?: config('services.whatsapp.default_account');
+        $verifySsl = (bool) config('services.whatsapp.verify_ssl', true);
 
         if (empty($endpoint) || empty($secret)) {
+            Log::warning('WhatsAppService::sendText configuracion incompleta', [
+                'endpoint_empty' => empty($endpoint),
+                'secret_empty' => empty($secret),
+                'account_empty' => empty($account),
+            ]);
+
             return [
                 'success' => false,
                 'message' => 'Falta configurar WA_API_URL_SINGLE o WA_API_KEY.',
@@ -35,10 +42,29 @@ class WhatsAppService
         }
 
         try {
+            Log::debug('WhatsAppService::sendText enviando request', [
+                'endpoint' => $endpoint,
+                'recipient' => $recipient,
+                'account' => $payload['account'] ?? null,
+                'type' => $payload['type'],
+                'message_length' => strlen($message),
+                'body_format' => 'multipart',
+                'verify_ssl' => $verifySsl,
+            ]);
+
             $response = Http::timeout($timeout)
                 ->acceptJson()
-                ->asForm()
+                ->asMultipart()
+                ->withOptions(['verify' => $verifySsl])
                 ->post($endpoint, $payload);
+
+            Log::debug('WhatsAppService::sendText respuesta proveedor', [
+                'recipient' => $recipient,
+                'account' => $payload['account'] ?? null,
+                'successful' => $response->successful(),
+                'status' => $response->status(),
+                'body' => $this->responseBody($response->body()),
+            ]);
 
             return [
                 'success' => $response->successful(),

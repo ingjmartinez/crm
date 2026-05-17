@@ -91,6 +91,7 @@ class WhatsAppChatbotService
 
         return match ($session->step) {
             'inicio' => $this->handleInicio($session, $message),
+            'consulta_hora_menu' => $this->handleConsultaHoraMenu($session, $message),
             default => $this->resetToInicio($session),
         };
     }
@@ -106,16 +107,51 @@ class WhatsAppChatbotService
             'message_preview' => $this->preview($message),
         ]);
 
-        $session->step = 'inicio';
+        $session->step = 'consulta_hora_menu';
         $session->context = [
             'first_message' => $context['first_message'] ?? $message,
             'last_message' => $message,
+            'menu' => 'principal',
         ];
 
-        return (string) config(
-            'services.whatsapp.chatbot_welcome_message',
-            'Hola, soy el asistente virtual. Hemos recibido tu mensaje.'
-        );
+        return $this->consultaHoraMenuMessage();
+    }
+
+    private function handleConsultaHoraMenu(ChatbotSession $session, string $message): string
+    {
+        $option = trim($message);
+
+        Log::debug('WhatsApp chatbot: handleConsultaHoraMenu', [
+            'session_id' => $session->id,
+            'phone' => $session->phone,
+            'option' => $option,
+        ]);
+
+        if ($option === '1') {
+            $session->step = 'inicio';
+            $session->context = null;
+
+            return '7:00 am a 9:00 pm';
+        }
+
+        if ($option === '2') {
+            $session->step = 'inicio';
+            $session->context = null;
+
+            return 'desarrollo de software';
+        }
+
+        $session->step = 'consulta_hora_menu';
+
+        return $this->consultaHoraMenuMessage();
+    }
+
+    private function consultaHoraMenuMessage(): string
+    {
+        return "Hola como estas soy el chat bot y estoy para servirte.\n\n"
+            . "Por favor responde solo numericamente:\n\n"
+            . "1- consultar el horario de servicio\n"
+            . "2- consultar los servicios";
     }
 
     private function resetToInicio(ChatbotSession $session): string

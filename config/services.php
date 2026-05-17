@@ -46,6 +46,7 @@ return [
         'default_account' => env('WA_DEFAULT_ACCOUNT'),
         'webhook_token' => env('WA_WEBHOOK_TOKEN'),
         'timeout' => env('WA_API_TIMEOUT', 30),
+        'verify_ssl' => env('WA_API_VERIFY_SSL', true),
         'chatbot_welcome_message' => env(
             'WA_CHATBOT_WELCOME_MESSAGE',
             'Hola, soy el asistente virtual. Hemos recibido tu mensaje.'
