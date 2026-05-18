@@ -1,3 +1,5 @@
 MODULO TIKECT POR WhatsApp
 - 
 
+
+- consultar cedula: conculta el incentivo que es el resultado de esta vista, especificamente el total a pagar

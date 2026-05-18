@@ -13,23 +13,26 @@ class WhatsAppChatbotService
 {
     private const SESSION_TIMEOUT_MINUTES = 30;
 
-    public function handleIncoming(string $phone, string $message): array
+    public function handleIncoming(string $phone, string $message, ?string $account = null): array
     {
         $normalizedPhone = $this->normalizePhone($phone);
+        $normalizedAccount = $this->normalizeAccount($account);
         $message = trim($message);
 
         Log::debug('WhatsApp chatbot: mensaje recibido', [
             'phone_original' => $phone,
             'phone_normalized' => $normalizedPhone,
+            'account' => $normalizedAccount,
             'message_preview' => $this->preview($message),
             'message_length' => strlen($message),
         ]);
 
-        $session = $this->getOrCreateSession($normalizedPhone);
+        $session = $this->getOrCreateSession($normalizedPhone, $normalizedAccount);
         $wasRecentlyCreated = $session->wasRecentlyCreated;
 
         Log::debug('WhatsApp chatbot: sesion cargada', [
             'phone' => $normalizedPhone,
+            'account' => $normalizedAccount,
             'session_id' => $session->id,
             'created_now' => $wasRecentlyCreated,
             'step' => $session->step,
@@ -352,10 +355,13 @@ class WhatsAppChatbotService
         return $this->handleInicio($session, (string) $session->last_message);
     }
 
-    private function getOrCreateSession(string $phone): ChatbotSession
+    private function getOrCreateSession(string $phone, string $account): ChatbotSession
     {
         return ChatbotSession::firstOrCreate(
-            ['phone' => $phone],
+            [
+                'account' => $account,
+                'phone' => $phone,
+            ],
             [
                 'step' => 'inicio',
                 'context' => null,
@@ -376,6 +382,13 @@ class WhatsAppChatbotService
         $digits = preg_replace('/\D+/', '', $phone) ?? '';
 
         return $digits !== '' ? $digits : trim($phone);
+    }
+
+    private function normalizeAccount(?string $account): string
+    {
+        $account = trim((string) $account);
+
+        return $account !== '' ? $account : 'default';
     }
 
     private function normalizeCedula(string $cedula): string

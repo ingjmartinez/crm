@@ -15,7 +15,7 @@ class WhatsAppWebhookController extends Controller
         private WhatsAppService $whatsAppService
     ) {}
 
-    public function handle(Request $request): JsonResponse
+    public function handle(Request $request, ?string $routeAccount = null): JsonResponse
     {
         $payload = $request->all();
 
@@ -32,11 +32,16 @@ class WhatsAppWebhookController extends Controller
         $data = $payload['data'] ?? $payload;
         $phone = (string) ($data['phone'] ?? $data['from'] ?? $data['sender'] ?? '');
         $message = trim((string) ($data['message'] ?? $data['text'] ?? $data['body'] ?? ''));
-        $account = (string) ($data['account'] ?? $data['unique'] ?? '');
+        $inboundAccount = $this->extractInboundAccount($payload, (array) $data);
+        $sendAccount = $this->extractSendAccount($payload, (array) $data, $routeAccount);
+        $sessionAccount = $inboundAccount !== '' ? $inboundAccount : $sendAccount;
 
         Log::debug('WhatsApp webhook datos extraidos', [
             'phone' => $phone,
-            'account' => $account,
+            'inbound_account' => $inboundAccount,
+            'send_account' => $sendAccount,
+            'session_account' => $sessionAccount,
+            'route_account' => $routeAccount,
             'message_preview' => $this->preview($message),
             'message_length' => strlen($message),
             'data_keys' => array_keys((array) $data),
@@ -55,10 +60,33 @@ class WhatsAppWebhookController extends Controller
         try {
             Log::debug('WhatsApp webhook iniciando chatbot', [
                 'phone' => $phone,
-                'account' => $account,
+                'inbound_account' => $inboundAccount,
+                'send_account' => $sendAccount,
             ]);
 
-            $result = $this->chatbotService->handleIncoming($phone, $message);
+            if ($sessionAccount === '') {
+                Log::warning('WhatsApp webhook sin cuenta identificada', [
+                    'phone' => $phone,
+                    'route_account' => $routeAccount,
+                    'data_keys' => array_keys((array) $data),
+                ]);
+
+                return response()->json(['status' => 'missing_account'], 422);
+            }
+
+            if (!$this->accountAllowed($inboundAccount)) {
+                Log::warning('WhatsApp webhook cuenta no permitida para este sistema', [
+                    'phone' => $phone,
+                    'inbound_account' => $inboundAccount,
+                    'send_account' => $sendAccount,
+                    'route_account' => $routeAccount,
+                    'allowed_accounts' => config('services.whatsapp.allowed_accounts', []),
+                ]);
+
+                return response()->json(['status' => 'ignored_account']);
+            }
+
+            $result = $this->chatbotService->handleIncoming($phone, $message, $sessionAccount);
             $reply = (string) ($result['reply'] ?? '');
             $session = $result['session'] ?? null;
 
@@ -82,11 +110,12 @@ class WhatsAppWebhookController extends Controller
 
             Log::debug('WhatsApp webhook enviando respuesta', [
                 'phone' => $phone,
-                'account' => $account,
+                'inbound_account' => $inboundAccount,
+                'send_account' => $sendAccount,
                 'reply_preview' => $this->preview($reply),
             ]);
 
-            $sendResult = $this->whatsAppService->sendText($phone, $reply, $account);
+            $sendResult = $this->whatsAppService->sendText($phone, $reply, $sendAccount);
 
             if (empty($sendResult['success'])) {
                 Log::warning('WhatsApp webhook no pudo enviar respuesta', [
@@ -116,7 +145,7 @@ class WhatsAppWebhookController extends Controller
         }
     }
 
-    public function verify(Request $request): JsonResponse
+    public function verify(Request $request, ?string $routeAccount = null): JsonResponse
     {
         $challenge = $request->input('challenge')
             ?? $request->input('hub_challenge')
@@ -126,7 +155,67 @@ class WhatsAppWebhookController extends Controller
         return response()->json([
             'status' => 'ok',
             'challenge' => $challenge,
+            'account' => $routeAccount,
         ]);
+    }
+
+    private function extractInboundAccount(array $payload, array $data): string
+    {
+        $account = $data['wid']
+            ?? $data['account']
+            ?? $data['unique']
+            ?? $data['account_unique']
+            ?? $data['wa_account']
+            ?? $payload['wid']
+            ?? $payload['account']
+            ?? $payload['unique']
+            ?? '';
+
+        if (is_array($account)) {
+            $account = $account['unique']
+                ?? $account['id']
+                ?? $account['account']
+                ?? '';
+        }
+
+        return trim((string) $account);
+    }
+
+    private function extractSendAccount(array $payload, array $data, ?string $routeAccount): string
+    {
+        $account = $data['account']
+            ?? $data['unique']
+            ?? $data['account_unique']
+            ?? $data['wa_account']
+            ?? $payload['account']
+            ?? $payload['unique']
+            ?? $routeAccount
+            ?? config('services.whatsapp.default_account')
+            ?? '';
+
+        if (is_array($account)) {
+            $account = $account['unique']
+                ?? $account['id']
+                ?? $account['account']
+                ?? '';
+        }
+
+        return trim((string) $account);
+    }
+
+    private function accountAllowed(string $inboundAccount): bool
+    {
+        $allowedAccounts = config('services.whatsapp.allowed_accounts', []);
+
+        if (empty($allowedAccounts)) {
+            return true;
+        }
+
+        if ($inboundAccount === '') {
+            return false;
+        }
+
+        return in_array($inboundAccount, $allowedAccounts, true);
     }
 
     private function validToken(array $payload): bool
