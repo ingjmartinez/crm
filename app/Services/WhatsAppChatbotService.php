@@ -2,7 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Agencia;
 use App\Models\ChatbotSession;
+use App\Models\Token;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class WhatsAppChatbotService
@@ -92,6 +96,9 @@ class WhatsAppChatbotService
         return match ($session->step) {
             'inicio' => $this->handleInicio($session, $message),
             'consulta_hora_menu' => $this->handleConsultaHoraMenu($session, $message),
+            'consulta_horario_cedula' => $this->handleConsultaHorarioCedula($session, $message),
+            'consulta_horario_terminal' => $this->handleConsultaHorarioTerminal($session, $message),
+            'consulta_horario_fecha' => $this->handleConsultaHorarioFecha($session, $message),
             default => $this->resetToInicio($session),
         };
     }
@@ -128,10 +135,12 @@ class WhatsAppChatbotService
         ]);
 
         if ($option === '1') {
-            $session->step = 'inicio';
-            $session->context = null;
+            $session->step = 'consulta_horario_cedula';
+            $session->context = [
+                'intent' => 'consultar_horario',
+            ];
 
-            return '7:00 am a 9:00 pm';
+            return 'Por favor indica la cedula del usuario.';
         }
 
         if ($option === '2') {
@@ -144,6 +153,180 @@ class WhatsAppChatbotService
         $session->step = 'consulta_hora_menu';
 
         return $this->consultaHoraMenuMessage();
+    }
+
+    private function handleConsultaHorarioCedula(ChatbotSession $session, string $message): string
+    {
+        $cedula = $this->normalizeCedula($message);
+
+        if ($cedula === '') {
+            return 'No pude leer la cedula. Por favor envia solo los numeros de la cedula.';
+        }
+
+        $context = is_array($session->context) ? $session->context : [];
+        $context['cedula'] = $cedula;
+
+        $session->step = 'consulta_horario_terminal';
+        $session->context = $context;
+
+        return 'Ahora indica la terminal/agencia.';
+    }
+
+    private function handleConsultaHorarioTerminal(ChatbotSession $session, string $message): string
+    {
+        $terminal = $this->normalizeTerminal($message);
+
+        if ($terminal === '') {
+            return 'No pude leer la terminal. Por favor envia el numero de terminal/agencia.';
+        }
+
+        $context = is_array($session->context) ? $session->context : [];
+        $context['terminal'] = $terminal;
+
+        $session->step = 'consulta_horario_fecha';
+        $session->context = $context;
+
+        return 'Por ultimo indica la fecha a consultar en formato AAAA-MM-DD. Ejemplo: 2026-05-18';
+    }
+
+    private function handleConsultaHorarioFecha(ChatbotSession $session, string $message): string
+    {
+        $fecha = $this->parseFecha($message);
+
+        if (!$fecha) {
+            return 'No pude leer la fecha. Envia la fecha en formato AAAA-MM-DD. Ejemplo: 2026-05-18';
+        }
+
+        $context = is_array($session->context) ? $session->context : [];
+        $cedula = (string) ($context['cedula'] ?? '');
+        $terminal = (string) ($context['terminal'] ?? '');
+
+        if ($cedula === '' || $terminal === '') {
+            return $this->resetToInicio($session);
+        }
+
+        $reply = $this->consultarHorario($cedula, $terminal, $fecha);
+
+        $session->step = 'inicio';
+        $session->context = null;
+
+        return $reply;
+    }
+
+    private function consultarHorario(string $cedula, string $terminal, string $fecha): string
+    {
+        $token = Token::find(1);
+
+        if (!$token) {
+            return 'No pude consultar la asistencia porque no hay un token generado.';
+        }
+
+        if (now()->greaterThan($token->fecha)) {
+            return 'No pude consultar la asistencia porque el token de Lotobet ha expirado.';
+        }
+
+        try {
+            $response = Http::timeout(45)
+                ->acceptJson()
+                ->withHeaders([
+                    'AhfCC' => 'yB0tt5KW3wVVCYYtCpen',
+                    'AhfVB' => 'xSzdgtOKbGRhUhtv1ois',
+                ])
+                ->withOptions(['verify' => false])
+                ->get("https://ltkadapi.lotobet.bet/api/V1/var4XZ3ojQiPZq5BpI/{$token->token}/{$fecha}/05");
+        } catch (\Throwable $e) {
+            Log::error('WhatsApp chatbot: error consultando asistencias Lotobet', [
+                'cedula' => $cedula,
+                'terminal' => $terminal,
+                'fecha' => $fecha,
+                'error' => $e->getMessage(),
+            ]);
+
+            return 'No pude consultar la asistencia en este momento. Intentalo nuevamente mas tarde.';
+        }
+
+        if (!$response->successful()) {
+            Log::warning('WhatsApp chatbot: respuesta no exitosa de asistencias Lotobet', [
+                'status' => $response->status(),
+                'fecha' => $fecha,
+                'body' => $this->preview($response->body()),
+            ]);
+
+            return 'No pude consultar la asistencia en Lotobet para esa fecha.';
+        }
+
+        $payload = $response->json();
+        $asistencias = is_array($payload['Content'] ?? null) ? $payload['Content'] : [];
+        $asistencia = $this->findAsistencia($asistencias, $cedula, $terminal);
+        $agencia = $this->findAgenciaByTerminal($terminal);
+
+        if (!$asistencia) {
+            $mensaje = "No encontre asistencia para la cedula {$cedula}, terminal {$terminal}, fecha {$fecha}.";
+
+            if ($agencia) {
+                $mensaje .= "\n\nHorario registrado para la terminal:\n" . $this->formatAgenciaHorario($agencia);
+            }
+
+            return $mensaje;
+        }
+
+        $nombreUsuario = $asistencia['usuario'] ?? $asistencia['nombre'] ?? $asistencia['nombre_usuario'] ?? 'No disponible';
+        $cedulaApi = $asistencia['cedula'] ?? $cedula;
+        $terminalApi = $asistencia['agencia'] ?? $asistencia['terminal'] ?? $terminal;
+        $primerLogin = $asistencia['primer_login'] ?? $asistencia['entrada'] ?? 'No disponible';
+        $ultimoLogin = $asistencia['ultimo_logout'] ?? $asistencia['ultimo_login'] ?? $asistencia['salida'] ?? 'No disponible';
+
+        $mensaje = "Consulta de horario Lotobet\n\n"
+            . "Usuario: {$nombreUsuario}\n"
+            . "Cedula: {$cedulaApi}\n"
+            . "Terminal: {$terminalApi}\n"
+            . "Fecha: {$fecha}\n"
+            . "Primer login: {$primerLogin}\n"
+            . "Ultimo login: {$ultimoLogin}";
+
+        $mensaje .= "\n\n" . ($agencia
+            ? $this->formatAgenciaHorario($agencia)
+            : "No encontre esa terminal en el modulo de agencias.");
+
+        return $mensaje;
+    }
+
+    private function findAsistencia(array $asistencias, string $cedula, string $terminal): ?array
+    {
+        foreach ($asistencias as $asistencia) {
+            if (!is_array($asistencia)) {
+                continue;
+            }
+
+            $cedulaApi = $this->normalizeCedula((string) ($asistencia['cedula'] ?? ''));
+            $terminalApi = $this->normalizeTerminal((string) ($asistencia['agencia'] ?? $asistencia['terminal'] ?? ''));
+
+            if ($cedulaApi === $cedula && $terminalApi === $terminal) {
+                return $asistencia;
+            }
+        }
+
+        return null;
+    }
+
+    private function findAgenciaByTerminal(string $terminal): ?Agencia
+    {
+        return Agencia::query()
+            ->whereRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM terminal), ''), '0') = ?", [$terminal])
+            ->first();
+    }
+
+    private function formatAgenciaHorario(Agencia $agencia): string
+    {
+        $nombre = $agencia->nombre_agencia ?: $agencia->agencia ?: 'No disponible';
+        $terminal = $agencia->terminal ?: 'No disponible';
+        $horarioAm = $agencia->horario_am ?: 'No registrado';
+        $horarioPm = $agencia->horario_pm ?: 'No registrado';
+
+        return "Agencia: {$nombre}\n"
+            . "Terminal registrada: {$terminal}\n"
+            . "Horario AM: {$horarioAm}\n"
+            . "Horario PM: {$horarioPm}";
     }
 
     private function consultaHoraMenuMessage(): string
@@ -193,6 +376,39 @@ class WhatsAppChatbotService
         $digits = preg_replace('/\D+/', '', $phone) ?? '';
 
         return $digits !== '' ? $digits : trim($phone);
+    }
+
+    private function normalizeCedula(string $cedula): string
+    {
+        return preg_replace('/\D+/', '', $cedula) ?? '';
+    }
+
+    private function normalizeTerminal(string $terminal): string
+    {
+        $digits = preg_replace('/\D+/', '', $terminal) ?? '';
+        $normalized = ltrim($digits, '0');
+
+        return $normalized !== '' ? $normalized : $digits;
+    }
+
+    private function parseFecha(string $fecha): ?string
+    {
+        $fecha = trim($fecha);
+        $formats = ['Y-m-d', 'd/m/Y', 'd-m-Y'];
+
+        foreach ($formats as $format) {
+            try {
+                $parsed = Carbon::createFromFormat($format, $fecha);
+
+                if ($parsed && $parsed->format($format) === $fecha) {
+                    return $parsed->format('Y-m-d');
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return null;
     }
 
     private function preview(string $value, int $limit = 160): string
