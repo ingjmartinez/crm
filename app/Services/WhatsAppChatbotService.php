@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsAppChatbotService
 {
-    private const SESSION_TIMEOUT_MINUTES = 30;
+    private const SESSION_TIMEOUT_SECONDS = 60;
 
     public function handleIncoming(string $phone, string $message, ?string $account = null): array
     {
@@ -443,7 +443,7 @@ class WhatsAppChatbotService
     private function sessionExpired(ChatbotSession $session): bool
     {
         return $session->last_interaction_at
-            && $session->last_interaction_at->diffInMinutes(now()) > self::SESSION_TIMEOUT_MINUTES;
+            && $session->last_interaction_at->diffInSeconds(now()) >= self::SESSION_TIMEOUT_SECONDS;
     }
 
     private function normalizePhone(string $phone): string
