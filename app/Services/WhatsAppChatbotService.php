@@ -276,15 +276,16 @@ class WhatsAppChatbotService
         $nombreUsuario = $asistencia['usuario'] ?? $asistencia['nombre'] ?? $asistencia['nombre_usuario'] ?? 'No disponible';
         $cedulaApi = $asistencia['cedula'] ?? $cedula;
         $terminalApi = $asistencia['agencia'] ?? $asistencia['terminal'] ?? $terminal;
-        $primerLogin = $asistencia['primer_login'] ?? $asistencia['entrada'] ?? 'No disponible';
+        $primerLogin = $asistencia['primer_login'] ?? $asistencia['entrada'] ?? null;
         $ultimoLogin = $asistencia['ultimo_logout'] ?? $asistencia['ultimo_login'] ?? $asistencia['salida'] ?? 'No disponible';
+        $puntualidad = $this->formatPuntualidadLlegada($primerLogin, $agencia, $fecha);
 
         $mensaje = "Consulta de horario Lotobet\n\n"
             . "Usuario: {$nombreUsuario}\n"
             . "Cedula: {$cedulaApi}\n"
             . "Terminal: {$terminalApi}\n"
             . "Fecha: {$fecha}\n"
-            . "Primer login: {$primerLogin}\n"
+            . "{$puntualidad}\n"
             . "Ultimo login: {$ultimoLogin}";
 
         $mensaje .= "\n\n" . ($agencia
@@ -330,6 +331,74 @@ class WhatsAppChatbotService
             . "Terminal registrada: {$terminal}\n"
             . "Horario AM: {$horarioAm}\n"
             . "Horario PM: {$horarioPm}";
+    }
+
+    private function formatPuntualidadLlegada(?string $primerLogin, ?Agencia $agencia, string $fecha): string
+    {
+        if (!$primerLogin || !$agencia) {
+            return "Minutos adelantado: No disponible\nMinutos atrasado: No disponible";
+        }
+
+        try {
+            $llegada = Carbon::parse($primerLogin);
+        } catch (\Throwable) {
+            return "Minutos adelantado: No disponible\nMinutos atrasado: No disponible";
+        }
+
+        $horarios = array_filter([
+            $this->parseInicioHorario($agencia->horario_am, $fecha, 'AM'),
+            $this->parseInicioHorario($agencia->horario_pm, $fecha, 'PM'),
+        ]);
+
+        if ($horarios === []) {
+            return "Minutos adelantado: No disponible\nMinutos atrasado: No disponible";
+        }
+
+        $horario = collect($horarios)
+            ->sortBy(fn (array $item) => abs($llegada->diffInSeconds($item['inicio'], false)))
+            ->first();
+
+        $diffSeconds = $llegada->diffInSeconds($horario['inicio'], false);
+        $diffMinutes = (int) floor(abs($diffSeconds) / 60);
+        $minutosAdelantado = $diffSeconds > 0 ? $diffMinutes : 0;
+        $minutosAtrasado = $diffSeconds < 0 ? $diffMinutes : 0;
+        $horaReferencia = $horario['inicio']->format('g:i A');
+
+        return "Turno evaluado: {$horario['turno']} {$horaReferencia}\n"
+            . "Minutos adelantado: {$minutosAdelantado}\n"
+            . "Minutos atrasado: {$minutosAtrasado}";
+    }
+
+    private function parseInicioHorario(?string $horario, string $fecha, string $turno): ?array
+    {
+        $horario = trim((string) $horario);
+
+        if ($horario === '') {
+            return null;
+        }
+
+        $inicio = trim(explode('/', $horario)[0] ?? '');
+
+        if ($inicio === '') {
+            return null;
+        }
+
+        foreach (['g:i A', 'h:i A', 'G:i', 'H:i'] as $format) {
+            try {
+                $parsed = Carbon::createFromFormat("Y-m-d {$format}", "{$fecha} {$inicio}");
+
+                if ($parsed) {
+                    return [
+                        'turno' => $turno,
+                        'inicio' => $parsed,
+                    ];
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return null;
     }
 
     private function consultaHoraMenuMessage(): string
