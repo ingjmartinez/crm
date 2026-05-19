@@ -146,13 +146,6 @@ class WhatsAppChatbotService
             return 'Por favor indica la cedula del usuario.';
         }
 
-        if ($option === '2') {
-            $session->step = 'inicio';
-            $session->context = null;
-
-            return 'desarrollo de software';
-        }
-
         $session->step = 'consulta_hora_menu';
 
         return $this->consultaHoraMenuMessage();
@@ -405,8 +398,7 @@ class WhatsAppChatbotService
     {
         return "Hola como estas soy el chat bot y estoy para servirte.\n\n"
             . "Por favor responde solo numericamente:\n\n"
-            . "1- consultar el horario de servicio\n"
-            . "2- consultar los servicios";
+            . "1- consultar el horario de servicio";
     }
 
     private function resetToInicio(ChatbotSession $session): string
