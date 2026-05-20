@@ -9,6 +9,7 @@ use App\Services\Etl\LotobetVentasProductoEtlService;
 use App\Services\Lotobet\LotobetSessionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class VentasProductosController extends Controller
@@ -53,25 +54,46 @@ class VentasProductosController extends Controller
             return $sinCeros === '' ? '0' : $sinCeros;
         };
 
-        $agencias = Agencia::query()
-            ->leftJoin('ciudades as c', 'c.id', '=', 'agencias.ciudad_id')
-            ->leftJoin('ruta_agencia as ra', 'ra.agencia_id', '=', 'agencias.id')
-            ->leftJoin('rutas as r', 'r.id', '=', 'ra.ruta_id')
-            ->leftJoin('coordinador_operador_agencia as coa', 'coa.agencia_id', '=', 'agencias.id')
-            ->leftJoin('coordinadores_operador as co', 'co.id', '=', 'coa.coordinador_operador_id')
-            ->select([
-                'agencias.codigo as agencia',
-                'agencias.nombre as nombre_agencia',
-                'agencias.terminal',
-                'agencias.estatus',
-                DB::raw('MAX(c.nombre) as ciudad'),
-                DB::raw('MAX(COALESCE(r.nombre, r.serial)) as ruta'),
-                DB::raw('NULL as operador'),
-                DB::raw('MAX(co.nombre) as coordinador'),
-            ])
-            ->whereNotNull('agencias.terminal')
-            ->groupBy('agencias.id', 'agencias.codigo', 'agencias.nombre', 'agencias.terminal', 'agencias.estatus')
-            ->get();
+        $usaEsquemaNuevo = Schema::hasTable('ciudades')
+            && Schema::hasColumn('agencias', 'codigo')
+            && Schema::hasColumn('agencias', 'nombre')
+            && Schema::hasColumn('agencias', 'ciudad_id');
+
+        if ($usaEsquemaNuevo) {
+            $agencias = Agencia::query()
+                ->leftJoin('ciudades as c', 'c.id', '=', 'agencias.ciudad_id')
+                ->leftJoin('ruta_agencia as ra', 'ra.agencia_id', '=', 'agencias.id')
+                ->leftJoin('rutas as r', 'r.id', '=', 'ra.ruta_id')
+                ->leftJoin('coordinador_operador_agencia as coa', 'coa.agencia_id', '=', 'agencias.id')
+                ->leftJoin('coordinadores_operador as co', 'co.id', '=', 'coa.coordinador_operador_id')
+                ->select([
+                    'agencias.codigo as agencia',
+                    'agencias.nombre as nombre_agencia',
+                    'agencias.terminal',
+                    'agencias.estatus',
+                    DB::raw('MAX(c.nombre) as ciudad'),
+                    DB::raw('MAX(COALESCE(r.nombre, r.serial)) as ruta'),
+                    DB::raw('NULL as operador'),
+                    DB::raw('MAX(co.nombre) as coordinador'),
+                ])
+                ->whereNotNull('agencias.terminal')
+                ->groupBy('agencias.id', 'agencias.codigo', 'agencias.nombre', 'agencias.terminal', 'agencias.estatus')
+                ->get();
+        } else {
+            $agencias = Agencia::query()
+                ->select([
+                    'agencias.agencia as agencia',
+                    'agencias.nombre_agencia as nombre_agencia',
+                    'agencias.terminal',
+                    'agencias.estatus',
+                    DB::raw('agencias.ciudad as ciudad'),
+                    DB::raw('agencias.ruta as ruta'),
+                    DB::raw('agencias.operador as operador'),
+                    DB::raw('agencias.coordinador as coordinador'),
+                ])
+                ->whereNotNull('agencias.terminal')
+                ->get();
+        }
 
         $agenciasByTerminal = [];
         $agenciasActivasByTerminal = [];
