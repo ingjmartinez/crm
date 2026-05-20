@@ -273,6 +273,7 @@ class WhatsAppChatbotService
         $ultimoLogin = $asistencia['ultimo_logout'] ?? $asistencia['ultimo_login'] ?? $asistencia['salida'] ?? 'No disponible';
         $primerLoginHora = $this->formatHoraSinFecha($primerLogin);
         $ultimoLoginHora = $this->formatHoraSinFecha($ultimoLogin);
+        $puntualidad = $this->formatPuntualidadLlegada($primerLogin, $agencia, $fecha);
 
         $mensaje = "Consulta de horario Lotobet\n\n"
             . "Usuario: {$nombreUsuario}\n"
@@ -280,7 +281,8 @@ class WhatsAppChatbotService
             . "Terminal: {$terminalApi}\n"
             . "Fecha: {$fecha}\n"
             . "Primer login: {$primerLoginHora}\n"
-            . "Ultimo login: {$ultimoLoginHora}";
+            . "Ultimo login: {$ultimoLoginHora}\n"
+            . "{$puntualidad}";
 
         $mensaje .= "\n\n" . ($agencia
             ? $this->formatAgenciaHorario($agencia)
@@ -330,13 +332,13 @@ class WhatsAppChatbotService
     private function formatPuntualidadLlegada(?string $primerLogin, ?Agencia $agencia, string $fecha): string
     {
         if (!$primerLogin || !$agencia) {
-            return "Minutos adelantado: No disponible\nMinutos atrasado: No disponible";
+            return "Minutos adelantados: No disponible\nMinutos atrasados: No disponible";
         }
 
         try {
             $llegada = Carbon::parse($primerLogin);
         } catch (\Throwable) {
-            return "Minutos adelantado: No disponible\nMinutos atrasado: No disponible";
+            return "Minutos adelantados: No disponible\nMinutos atrasados: No disponible";
         }
 
         $horarios = array_filter([
@@ -345,7 +347,7 @@ class WhatsAppChatbotService
         ]);
 
         if ($horarios === []) {
-            return "Minutos adelantado: No disponible\nMinutos atrasado: No disponible";
+            return "Minutos adelantados: No disponible\nMinutos atrasados: No disponible";
         }
 
         $horario = collect($horarios)
@@ -356,11 +358,8 @@ class WhatsAppChatbotService
         $diffMinutes = (int) floor(abs($diffSeconds) / 60);
         $minutosAdelantado = $diffSeconds > 0 ? $diffMinutes : 0;
         $minutosAtrasado = $diffSeconds < 0 ? $diffMinutes : 0;
-        $horaReferencia = $horario['inicio']->format('g:i A');
-
-        return "Turno evaluado: {$horario['turno']} {$horaReferencia}\n"
-            . "Minutos adelantado: {$minutosAdelantado}\n"
-            . "Minutos atrasado: {$minutosAtrasado}";
+        return "Minutos adelantados: {$minutosAdelantado}\n"
+            . "Minutos atrasados: {$minutosAtrasado}";
     }
 
     private function formatHoraSinFecha(?string $value): string
