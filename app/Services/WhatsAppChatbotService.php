@@ -271,15 +271,16 @@ class WhatsAppChatbotService
         $terminalApi = $asistencia['agencia'] ?? $asistencia['terminal'] ?? $terminal;
         $primerLogin = $asistencia['primer_login'] ?? $asistencia['entrada'] ?? null;
         $ultimoLogin = $asistencia['ultimo_logout'] ?? $asistencia['ultimo_login'] ?? $asistencia['salida'] ?? 'No disponible';
-        $puntualidad = $this->formatPuntualidadLlegada($primerLogin, $agencia, $fecha);
+        $primerLoginHora = $this->formatHoraSinFecha($primerLogin);
+        $ultimoLoginHora = $this->formatHoraSinFecha($ultimoLogin);
 
         $mensaje = "Consulta de horario Lotobet\n\n"
             . "Usuario: {$nombreUsuario}\n"
             . "Cedula: {$cedulaApi}\n"
             . "Terminal: {$terminalApi}\n"
             . "Fecha: {$fecha}\n"
-            . "{$puntualidad}\n"
-            . "Ultimo login: {$ultimoLogin}";
+            . "Primer login: {$primerLoginHora}\n"
+            . "Ultimo login: {$ultimoLoginHora}";
 
         $mensaje .= "\n\n" . ($agencia
             ? $this->formatAgenciaHorario($agencia)
@@ -360,6 +361,21 @@ class WhatsAppChatbotService
         return "Turno evaluado: {$horario['turno']} {$horaReferencia}\n"
             . "Minutos adelantado: {$minutosAdelantado}\n"
             . "Minutos atrasado: {$minutosAtrasado}";
+    }
+
+    private function formatHoraSinFecha(?string $value): string
+    {
+        $value = trim((string) $value);
+
+        if ($value === '' || strcasecmp($value, 'No disponible') === 0) {
+            return 'No disponible';
+        }
+
+        try {
+            return Carbon::parse($value)->format('g:i A');
+        } catch (\Throwable) {
+            return $value;
+        }
     }
 
     private function parseInicioHorario(?string $horario, string $fecha, string $turno): ?array
