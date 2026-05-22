@@ -15,6 +15,7 @@ class ContabilidadElectricidadSeguimientoDia extends Model
         'fecha_solicitud',
         'distribuidora',
         'nic',
+        'medidor',
         'agencia',
         'ruta',
         'estatus',

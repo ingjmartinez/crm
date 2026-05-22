@@ -16,6 +16,7 @@ class ContabilidadElectricidadAveriaDia extends Model
         'reporte',
         'distribuidora',
         'nic',
+        'medidor',
         'agencia',
         'ruta',
         'coordinadores',

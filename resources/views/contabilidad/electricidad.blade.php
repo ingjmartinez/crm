@@ -249,6 +249,7 @@
                                                 <th>Fecha de solicitud</th>
                                                 <th>Distribuidoras</th>
                                                 <th>NIC</th>
+                                                <th>Medidor</th>
                                                 <th>Agencia</th>
                                                 <th>Ruta</th>
                                                 <th>Estatus</th>
@@ -292,6 +293,7 @@
                                                 <th>Reporte</th>
                                                 <th>Distribuidoras</th>
                                                 <th>NIC</th>
+                                                <th>Medidor</th>
                                                 <th>Agencia</th>
                                                 <th>Ruta</th>
                                                 <th>Coordinadores</th>
@@ -333,6 +335,10 @@
                             <div class="col-md-4">
                                 <label class="form-label">NIC *</label>
                                 <input type="text" class="form-control" id="segNic" maxlength="80" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Medidor</label>
+                                <input type="text" class="form-control" id="segMedidor" maxlength="20">
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Agencia *</label>
@@ -391,6 +397,10 @@
                             <div class="col-md-3">
                                 <label class="form-label">NIC *</label>
                                 <input type="text" class="form-control" id="aveNic" maxlength="80" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Medidor</label>
+                                <input type="text" class="form-control" id="aveMedidor" maxlength="20">
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Agencia *</label>
@@ -497,6 +507,15 @@
                 document.getElementById('stat-resueltas').textContent = resueltas;
             }
 
+            function escapeHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
             function estatusLabel(estatus) {
                 const labels = {
                     pendiente: 'Pendiente',
@@ -534,6 +553,26 @@
                         title="Haz clic para cambiar estatus"
                     >
                         ${estatusBadge(current)}
+                    </button>
+                `;
+            }
+
+            function observacionesEditableCell(tipo, id, observaciones) {
+                const current = String(observaciones || '');
+                const preview = current.trim() !== ''
+                    ? escapeHtml(current).replace(/\n/g, '<br>')
+                    : '<span class="text-muted">Agregar observacion</span>';
+
+                return `
+                    <button
+                        type="button"
+                        class="btn btn-link p-0 border-0 text-start text-decoration-none js-editar-observaciones"
+                        data-tipo="${tipo}"
+                        data-id="${id}"
+                        data-observaciones="${encodeURIComponent(current)}"
+                        title="Haz clic para editar observaciones"
+                    >
+                        ${preview}
                     </button>
                 `;
             }
@@ -595,6 +634,66 @@
                 Swal.fire({
                     icon: 'success',
                     title: 'Estatus actualizado',
+                    timer: 1100,
+                    showConfirmButton: false,
+                });
+            }
+
+            async function actualizarObservacionesOrden(tipo, id, observaciones) {
+                const endpoint = tipo === 'seguimiento'
+                    ? `/contabilidad/electricidad/seguimiento-dia/${id}/observaciones`
+                    : `/contabilidad/electricidad/averias-dia/${id}/observaciones`;
+
+                const response = await fetch(endpoint, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({ observaciones }),
+                });
+
+                const json = await response.json().catch(function () { return {}; });
+
+                if (!response.ok) {
+                    const firstValidation = json?.errors ? Object.values(json.errors)[0]?.[0] : '';
+                    throw new Error(firstValidation || json.message || 'No se pudo actualizar las observaciones.');
+                }
+
+                return json;
+            }
+
+            async function seleccionarYActualizarObservaciones(tipo, id, observacionesActuales) {
+                const selected = await Swal.fire({
+                    title: 'Editar observaciones',
+                    input: 'textarea',
+                    inputValue: observacionesActuales || '',
+                    inputAttributes: {
+                        maxlength: 1000,
+                    },
+                    showCancelButton: true,
+                    confirmButtonText: 'Guardar',
+                    cancelButtonText: 'Cancelar',
+                });
+
+                if (!selected.isConfirmed) {
+                    return;
+                }
+
+                const observaciones = (selected.value || '').trim();
+                await actualizarObservacionesOrden(tipo, id, observaciones);
+
+                if (tipo === 'seguimiento') {
+                    await cargarSeguimientoDia();
+                } else {
+                    await cargarAveriasDia();
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Observaciones actualizadas',
                     timer: 1100,
                     showConfirmButton: false,
                 });
@@ -679,10 +778,11 @@
                         <td>${item.fecha_solicitud || ''}</td>
                         <td>${item.distribuidora || ''}</td>
                         <td>${item.nic || ''}</td>
+                        <td>${item.medidor || ''}</td>
                         <td>${item.agencia || ''}</td>
                         <td>${item.ruta || ''}</td>
                         <td>${estatusEditableCell('seguimiento', item.id, item.estatus)}</td>
-                        <td>${item.observaciones || ''}</td>
+                        <td>${observacionesEditableCell('seguimiento', item.id, item.observaciones)}</td>
                     `;
 
                     tablaSeguimientoBody.appendChild(row);
@@ -692,7 +792,7 @@
                 updateStatusCards();
 
                 const termino = (buscarSegAgencia?.value || '').trim();
-                dtSeguimiento.column(3).search(termino).draw();
+                dtSeguimiento.column(4).search(termino).draw();
             }
 
             async function cargarAveriasDia() {
@@ -721,13 +821,14 @@
                         <td>${item.reporte || ''}</td>
                         <td>${item.distribuidora || ''}</td>
                         <td>${item.nic || ''}</td>
+                        <td>${item.medidor || ''}</td>
                         <td>${item.agencia || ''}</td>
                         <td>${item.ruta || ''}</td>
                         <td>${item.coordinadores || ''}</td>
                         <td>${item.agente_venta_am || ''}</td>
                         <td>${item.agente_venta_pm || ''}</td>
                         <td>${estatusEditableCell('averia', item.id, item.estatus)}</td>
-                        <td>${item.observaciones || ''}</td>
+                        <td>${observacionesEditableCell('averia', item.id, item.observaciones)}</td>
                     `;
 
                     tablaAveriasBody.appendChild(row);
@@ -737,7 +838,7 @@
                 updateStatusCards();
 
                 const termino = (buscarAveAgencia?.value || '').trim();
-                dtAverias.column(4).search(termino).draw();
+                dtAverias.column(5).search(termino).draw();
             }
 
             formSeguimiento?.addEventListener('submit', async function (event) {
@@ -747,6 +848,7 @@
                     fecha_solicitud: document.getElementById('segFechaSolicitud').value,
                     distribuidora: document.getElementById('segDistribuidora').value.trim(),
                     nic: document.getElementById('segNic').value.trim(),
+                    medidor: document.getElementById('segMedidor').value.trim(),
                     agencia: document.getElementById('segAgencia').value.trim(),
                     ruta: document.getElementById('segRuta').value.trim(),
                     estatus: document.getElementById('segEstatus').value,
@@ -788,6 +890,7 @@
                     reporte: document.getElementById('aveReporte').value.trim(),
                     distribuidora: document.getElementById('aveDistribuidora').value.trim(),
                     nic: document.getElementById('aveNic').value.trim(),
+                    medidor: document.getElementById('aveMedidor').value.trim(),
                     agencia: document.getElementById('aveAgencia').value.trim(),
                     ruta: document.getElementById('aveRuta').value.trim(),
                     coordinadores: document.getElementById('aveCoordinadores').value.trim(),
@@ -841,7 +944,7 @@
                     return;
                 }
 
-                dtSeguimiento.column(3).search((this.value || '').trim()).draw();
+                dtSeguimiento.column(4).search((this.value || '').trim()).draw();
             });
 
             buscarAveAgencia?.addEventListener('input', function () {
@@ -849,7 +952,7 @@
                     return;
                 }
 
-                dtAverias.column(4).search((this.value || '').trim()).draw();
+                dtAverias.column(5).search((this.value || '').trim()).draw();
             });
 
             document.addEventListener('click', function (event) {
@@ -871,6 +974,29 @@
                         icon: 'error',
                         title: 'Error',
                         text: error.message || 'No fue posible actualizar el estatus.',
+                    });
+                });
+            });
+
+            document.addEventListener('click', function (event) {
+                const btn = event.target.closest('.js-editar-observaciones');
+                if (!btn) {
+                    return;
+                }
+
+                const tipo = btn.getAttribute('data-tipo');
+                const id = btn.getAttribute('data-id');
+                const observaciones = decodeURIComponent(btn.getAttribute('data-observaciones') || '');
+
+                if (!tipo || !id) {
+                    return;
+                }
+
+                seleccionarYActualizarObservaciones(tipo, id, observaciones).catch(function (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: error.message || 'No fue posible actualizar las observaciones.',
                     });
                 });
             });

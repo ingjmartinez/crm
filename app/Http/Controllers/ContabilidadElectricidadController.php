@@ -188,6 +188,7 @@ class ContabilidadElectricidadController extends Controller
                     'fecha_solicitud' => optional($item->fecha_solicitud)->format('Y-m-d'),
                     'distribuidora' => (string) $item->distribuidora,
                     'nic' => (string) $item->nic,
+                    'medidor' => (string) ($item->medidor ?? ''),
                     'agencia' => (string) $item->agencia,
                     'ruta' => (string) $item->ruta,
                     'estatus' => (string) ($item->estatus ?? 'pendiente'),
@@ -209,6 +210,7 @@ class ContabilidadElectricidadController extends Controller
             'fecha_solicitud' => ['required', 'date_format:Y-m-d'],
             'distribuidora' => ['required', 'string', 'max:120'],
             'nic' => ['required', 'string', 'max:80'],
+            'medidor' => ['nullable', 'string', 'max:20'],
             'agencia' => ['required', 'string', 'max:150'],
             'ruta' => ['required', 'string', 'max:150'],
             'estatus' => ['required', 'in:pendiente,en_gestion,resuelta,cancelada'],
@@ -249,6 +251,23 @@ class ContabilidadElectricidadController extends Controller
         ]);
     }
 
+    public function updateSeguimientoDiaObservaciones(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'observaciones' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $registro = ContabilidadElectricidadSeguimientoDia::query()->findOrFail($id);
+        $registro->update([
+            'observaciones' => $validated['observaciones'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Observaciones de seguimiento actualizadas correctamente.',
+            'observaciones' => (string) ($registro->observaciones ?? ''),
+        ]);
+    }
+
     public function averiasDiaData(Request $request)
     {
         $validated = $request->validate([
@@ -277,6 +296,7 @@ class ContabilidadElectricidadController extends Controller
                     'reporte' => (string) $item->reporte,
                     'distribuidora' => (string) $item->distribuidora,
                     'nic' => (string) $item->nic,
+                    'medidor' => (string) ($item->medidor ?? ''),
                     'agencia' => (string) $item->agencia,
                     'ruta' => (string) $item->ruta,
                     'coordinadores' => (string) ($item->coordinadores ?? ''),
@@ -302,6 +322,7 @@ class ContabilidadElectricidadController extends Controller
             'reporte' => ['required', 'string', 'max:120'],
             'distribuidora' => ['required', 'string', 'max:120'],
             'nic' => ['required', 'string', 'max:80'],
+            'medidor' => ['nullable', 'string', 'max:20'],
             'agencia' => ['required', 'string', 'max:150'],
             'ruta' => ['required', 'string', 'max:150'],
             'coordinadores' => ['nullable', 'string', 'max:180'],
@@ -342,6 +363,23 @@ class ContabilidadElectricidadController extends Controller
         return response()->json([
             'message' => 'Estatus de averia actualizado correctamente.',
             'estatus' => $registro->estatus,
+        ]);
+    }
+
+    public function updateAveriasDiaObservaciones(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'observaciones' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $registro = ContabilidadElectricidadAveriaDia::query()->findOrFail($id);
+        $registro->update([
+            'observaciones' => $validated['observaciones'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Observaciones de averia actualizadas correctamente.',
+            'observaciones' => (string) ($registro->observaciones ?? ''),
         ]);
     }
 

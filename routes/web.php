@@ -100,10 +100,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/electricidad/seguimiento-dia/data', [ContabilidadElectricidadController::class, 'seguimientoDiaData'])->name('electricidad.seguimiento-dia.data');
         Route::post('/electricidad/seguimiento-dia', [ContabilidadElectricidadController::class, 'storeSeguimientoDia'])->name('electricidad.seguimiento-dia.store');
         Route::put('/electricidad/seguimiento-dia/{id}/estatus', [ContabilidadElectricidadController::class, 'updateSeguimientoDiaStatus'])->name('electricidad.seguimiento-dia.update-status');
+        Route::put('/electricidad/seguimiento-dia/{id}/observaciones', [ContabilidadElectricidadController::class, 'updateSeguimientoDiaObservaciones'])->name('electricidad.seguimiento-dia.update-observaciones');
         Route::delete('/electricidad/seguimiento-dia/{id}', [ContabilidadElectricidadController::class, 'destroySeguimientoDia'])->name('electricidad.seguimiento-dia.destroy');
         Route::get('/electricidad/averias-dia/data', [ContabilidadElectricidadController::class, 'averiasDiaData'])->name('electricidad.averias-dia.data');
         Route::post('/electricidad/averias-dia', [ContabilidadElectricidadController::class, 'storeAveriasDia'])->name('electricidad.averias-dia.store');
         Route::put('/electricidad/averias-dia/{id}/estatus', [ContabilidadElectricidadController::class, 'updateAveriasDiaStatus'])->name('electricidad.averias-dia.update-status');
+        Route::put('/electricidad/averias-dia/{id}/observaciones', [ContabilidadElectricidadController::class, 'updateAveriasDiaObservaciones'])->name('electricidad.averias-dia.update-observaciones');
         Route::delete('/electricidad/averias-dia/{id}', [ContabilidadElectricidadController::class, 'destroyAveriasDia'])->name('electricidad.averias-dia.destroy');
         Route::view('/centro-costo', 'contabilidad.centro-costo')->name('centro-costo');
         Route::view('/reportes/comisiones', 'contabilidad.reportes.comisiones')->name('reportes.comisiones');
