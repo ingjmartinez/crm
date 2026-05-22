@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class CentroDeCosto extends Model
 {
+    public const EMPRESAS_VALIDAS = ['168', '169'];
+
     protected $table = 'centros_de_costo';
 
     protected $fillable = [
@@ -52,5 +55,21 @@ class CentroDeCosto extends Model
     public function getActivoAttribute(): bool
     {
         return ! $this->inactivo;
+    }
+
+    public function scopeEmpresa(Builder $query, ?string $empresa): Builder
+    {
+        $empresa = trim((string) $empresa);
+
+        if ($empresa === '' || $empresa === 'todas') {
+            return $query;
+        }
+
+        if (!in_array($empresa, self::EMPRESAS_VALIDAS, true)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        // Soporta valores historicos como "168-Consorcio..." y valor limpio "168".
+        return $query->whereRaw("LEFT(TRIM(COALESCE(company_id, '')), 3) = ?", [$empresa]);
     }
 }

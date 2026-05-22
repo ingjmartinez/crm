@@ -451,13 +451,12 @@
 <script>
     function buildRanges(percent, pagos) {
         return [
-            { desde: 100001, hasta: 150000, pago: pagos[0], tipo: 'fijo' },
-            { desde: 150001, hasta: 250000, pago: pagos[1], tipo: 'fijo' },
-            { desde: 250001, hasta: 400000, pago: pagos[2], tipo: 'fijo' },
-            { desde: 400001, hasta: 550000, pago: pagos[3], tipo: 'fijo' },
-            { desde: 550001, hasta: 700000, pago: pagos[4], tipo: 'fijo' },
-            { desde: 700001, hasta: 850000, pago: pagos[5], tipo: 'fijo' },
-            { desde: 850001, hasta: 1000000, pago: pagos[6], tipo: 'fijo' },
+            { desde: 100001, hasta: 250000, pago: pagos[0], tipo: 'fijo' },
+            { desde: 250001, hasta: 400000, pago: pagos[1], tipo: 'fijo' },
+            { desde: 400001, hasta: 550000, pago: pagos[2], tipo: 'fijo' },
+            { desde: 550001, hasta: 700000, pago: pagos[3], tipo: 'fijo' },
+            { desde: 700001, hasta: 850000, pago: pagos[4], tipo: 'fijo' },
+            { desde: 850001, hasta: 1000000, pago: pagos[5], tipo: 'fijo' },
             { desde: 1000001, hasta: 5000000, pago: percent, tipo: 'porcentaje' },
             { desde: 5000001, hasta: null, pago: percent, tipo: 'porcentaje' },
         ];
@@ -465,9 +464,9 @@
 
     function getDefaultRanges() {
         return {
-            tramos_60: buildRanges(1, [500, 1000, 2000, 4000, 6000, 8000, 9000]),
-            tramos_70: buildRanges(0.75, [375, 750, 1500, 3000, 4500, 6000, 6750]),
-            tramos_80: buildRanges(0.5, [250, 500, 1000, 2000, 3000, 4000, 4500]),
+            tramos_60: buildRanges(1, [1000, 2000, 4000, 6000, 8000, 9000]),
+            tramos_70: buildRanges(0.75, [750, 1500, 3000, 4500, 6000, 6750]),
+            tramos_80: buildRanges(0.5, [500, 1000, 2000, 3000, 4000, 4500]),
         };
     }
 

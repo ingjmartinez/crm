@@ -126,9 +126,13 @@ class Api extends Controller
     }
 
 
-    public function getCentrosCosto()
+    public function getCentrosCosto(Request $request)
     {
+        $empresa = $this->normalizeEmpresaCentroCosto($request->query('empresa', '168'));
+
         $centros = CentroDeCosto::query()
+            ->empresa($empresa)
+            ->orderBy('company_id')
             ->orderBy('id_centro_costo')
             ->get()
             ->map(function (CentroDeCosto $c) {
@@ -151,10 +155,15 @@ class Api extends Controller
                     'VariosLocales' => $c->varios_locales,
                     'AplicaParaPonderar' => $c->aplica_para_ponderar,
                     'ValorPonderar' => $c->valor_ponderar,
-                    'CreadoPor' => $c->creado_por,
+                    'Atrib75' => $this->getAtributo($c->atributos, 'Atr75'),
                     'FechaGrabado' => optional($c->fecha_grabado)->toDateTimeString(),
                     'ModificadoPor' => $c->modificado_por,
                     'FechaModificado' => optional($c->fecha_modificado)->toDateTimeString(),
+                    'Empresa' => match ($this->extractCompanyId($c->company_id)) {
+                        '168' => 'Grupo Joselito',
+                        '169' => 'Negosur',
+                        default => (string) ($c->company_id ?? ''),
+                    },
                 ];
             });
 
@@ -194,9 +203,19 @@ class Api extends Controller
         ]);
     }
 
-    public function syncCentrosCosto()
+    public function syncCentrosCosto(Request $request)
     {
-        $result = $this->syncCentrosCostoFromExternal();
+        $empresa = $this->normalizeEmpresaCentroCosto(
+            $request->input('empresa', $request->query('empresa', '168'))
+        );
+
+        if ($empresa === 'todas') {
+            return response()->json([
+                'message' => 'Para sincronizar debes seleccionar una empresa especifica (168 o 169).',
+            ], 422);
+        }
+
+        $result = $this->syncCentrosCostoFromExternal($empresa);
 
         if (! $result['ok']) {
             return response()->json([
@@ -208,6 +227,7 @@ class Api extends Controller
 
         return response()->json([
             'message' => 'Sincronización de centros de costo completada.',
+            'empresa' => $empresa,
             'total_recibidos' => $result['total_recibidos'],
             'creados' => $result['creados'],
             'actualizados' => $result['actualizados'],
@@ -291,6 +311,36 @@ class Api extends Controller
                 'omitidos' => $syncResult['omitidos'],
             ],
         ]);
+    }
+
+    private function normalizeEmpresaCentroCosto(mixed $empresa): string
+    {
+        $empresa = trim((string) $empresa);
+
+        if ($empresa === '') {
+            return '168';
+        }
+
+        if ($empresa === 'todas') {
+            return 'todas';
+        }
+
+        return in_array($empresa, CentroDeCosto::EMPRESAS_VALIDAS, true) ? $empresa : '168';
+    }
+
+    private function extractCompanyId(mixed $value): ?string
+    {
+        $raw = trim((string) $value);
+
+        if ($raw === '') {
+            return null;
+        }
+
+        if (preg_match('/^(168|169)(?:\\D|$)/', $raw, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return $raw;
     }
 
     private function normalizeKeys($array)
@@ -441,9 +491,9 @@ class Api extends Controller
         ];
     }
 
-    private function syncCentrosCostoFromExternal(): array
+    private function syncCentrosCostoFromExternal(string $empresa): array
     {
-        $url = 'https://apisj.azurewebsites.net/fe/ApiSJ/api/ConsultaCentroCostos?strToken=87eb2d56-25f3-4d46-9cb0-73c07a550bd2&intIdEmpresa=168';
+        $url = 'https://apisj.azurewebsites.net/fe/ApiSJ/api/ConsultaCentroCostos?strToken=87eb2d56-25f3-4d46-9cb0-73c07a550bd2&intIdEmpresa=' . urlencode($empresa);
 
         $curl = curl_init();
         curl_setopt_array($curl, [
@@ -515,10 +565,19 @@ class Api extends Controller
 
             $atributos = $this->extractAtributos($item);
 
+            $companyId = $this->extractCompanyId($item['CompanyID'] ?? null);
+            if ($companyId === null) {
+                $skipped++;
+                continue;
+            }
+
             $registro = CentroDeCosto::updateOrCreate(
-                ['id_centro_costo' => $idCentroCosto],
                 [
-                    'company_id' => $this->nullableString($item['CompanyID'] ?? null),
+                    'id_centro_costo' => $idCentroCosto,
+                    'company_id' => $companyId,
+                ],
+                [
+                    'company_id' => $companyId,
                     'descripcion' => (string) ($item['Descripcion'] ?? ''),
                     'cuenta' => $this->nullableString($item['Cuenta'] ?? null),
                     'inactivo' => (bool) ($item['Inactivo'] ?? false),
@@ -582,13 +641,43 @@ class Api extends Controller
     private function extractAtributos(array $item): array
     {
         $atributos = [];
-        for ($i = 1; $i <= 73; $i++) {
-            $key = 'Atr' . $i;
-            if (array_key_exists($key, $item) && $item[$key] !== null && $item[$key] !== '') {
-                $atributos[$key] = $item[$key];
+        $itemLower = [];
+        foreach ($item as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+            $itemLower[strtolower($key)] = $value;
+        }
+
+        for ($i = 1; $i <= 75; $i++) {
+            $canonKey = 'Atr' . $i;
+            $lookupKey = strtolower($canonKey);
+
+            if (array_key_exists($lookupKey, $itemLower) && $itemLower[$lookupKey] !== null && $itemLower[$lookupKey] !== '') {
+                $atributos[$canonKey] = $itemLower[$lookupKey];
             }
         }
         return $atributos;
+    }
+
+    private function getAtributo(mixed $atributos, string $key): string
+    {
+        if (!is_array($atributos)) {
+            return '';
+        }
+
+        if (array_key_exists($key, $atributos)) {
+            return (string) $atributos[$key];
+        }
+
+        $lookup = strtolower($key);
+        foreach ($atributos as $k => $v) {
+            if (is_string($k) && strtolower($k) === $lookup) {
+                return (string) $v;
+            }
+        }
+
+        return '';
     }
 
     private function parseDateTime(?string $value): ?string

@@ -25,10 +25,10 @@
                         <div class="card">
                             <div class="card-header">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <h5 class="card-title mb-0">Centros de Costo (Empresa 168)</h5>
+                                    <h5 class="card-title mb-0">Centros de Costo</h5>
                                     <div class="d-flex gap-2">
                                         <button type="button" class="btn btn-primary" id="btnConsultarCentros">
-                                            Consultar data
+                                            Consultar data (168)
                                         </button>
                                         <button type="button" class="btn btn-soft-secondary" id="btnConfigurarCentros">
                                             Configurar
@@ -41,6 +41,14 @@
                             </div>
                             <div class="card-body">
                                 <div class="row g-2 align-items-end mb-3">
+                                    <div class="col-12 col-md-4 col-lg-3">
+                                        <label class="form-label">Empresa</label>
+                                        <select id="filtroEmpresaCentroCosto" class="form-select form-select-sm">
+                                            <option value="168" selected>168 - Grupo Joselito</option>
+                                            <option value="169">169 - Negosur</option>
+                                            <option value="todas">Todas</option>
+                                        </select>
+                                    </div>
                                     <div class="col-12 col-md-4 col-lg-3">
                                         <label class="form-label">Estado</label>
                                         <select id="filtroEstadoCentroCosto" class="form-select form-select-sm">
@@ -66,7 +74,7 @@
                                                 <th>Id SubGrupo</th>
                                                 <th>Ciudad</th>
                                                 <th>Empresa</th>
-                                                <th>Creado por</th>
+                                                <th>Atrib 75</th>
                                                 <th>Fecha Grabado</th>
                                                 <th>Modificado por</th>
                                                 <th>Fecha Modificado</th>
@@ -152,6 +160,7 @@
         let progresoSincronizacionTimer = null;
         let resizeCentrosCostoTimer = null;
         let resizeCentrosCostoBound = false;
+        const filtroEmpresaCentroCostoEl = document.getElementById('filtroEmpresaCentroCosto');
 
         async function parsearRespuestaJson(response, contextoError) {
             const contentType = (response.headers.get('content-type') || '').toLowerCase();
@@ -189,7 +198,9 @@
         document.getElementById('btnVerOcultosCentros').addEventListener('click', alternarOcultosConfig);
         document.getElementById('btnSincronizarCentros').addEventListener('click', sincronizarCentros);
         document.getElementById('filtroEstadoCentroCosto').addEventListener('change', aplicarFiltroEstadoCentroCosto);
+        document.getElementById('filtroEmpresaCentroCosto').addEventListener('change', actualizarEtiquetaConsultar);
         document.getElementById('tablaConfigCentrosCosto').addEventListener('change', manejarCambioOcultarCentro);
+        actualizarEtiquetaConsultar();
 
         function esOculto(valor) {
             if (valor === true || valor === 1) return true;
@@ -203,6 +214,7 @@
         function cargarCentrosCosto(mostrarAlerta = true) {
             const boton = document.getElementById('btnConsultarCentros');
             const textoOriginal = boton.innerText;
+            const empresa = getEmpresaCentroCostoSeleccionada();
             boton.disabled = true;
             boton.innerText = 'Consultando...';
 
@@ -210,7 +222,7 @@
                 mostrarAlertaCarga('Consultando data', 'Leyendo centros de costo desde la base de datos local...');
             }
 
-            return fetch('/api-centros-costo', {
+            return fetch('/api-centros-costo?empresa=' + encodeURIComponent(empresa), {
                 headers: {
                     'Accept': 'application/json',
                 },
@@ -243,7 +255,7 @@
                             <td>${item.IdSubGrupo ?? ''}</td>
                             <td>${item.IdDivision ?? ''}</td>
                             <td>${item.IdSociedad ?? ''}</td>
-                            <td>${item.CreadoPor ?? ''}</td>
+                            <td>${item.Atrib75 ?? ''}</td>
                             <td>${item.FechaGrabado ?? ''}</td>
                             <td>${item.ModificadoPor ?? ''}</td>
                             <td>${item.FechaModificado ?? ''}</td>
@@ -437,6 +449,12 @@
         }
 
         async function sincronizarCentros() {
+            const empresa = getEmpresaCentroCostoSeleccionada();
+            if (empresa === 'todas') {
+                mostrarAlertaError('Para sincronizar debes elegir una empresa especifica (168 o 169).');
+                return;
+            }
+
             const confirmado = await confirmarSincronizacion();
             if (!confirmado) return;
 
@@ -453,6 +471,7 @@
                     'X-CSRF-TOKEN': csrfToken,
                     'Accept': 'application/json',
                 },
+                body: JSON.stringify({ empresa }),
             })
                 .then(response => parsearRespuestaJson(response, 'Error durante la sincronizacion de centros de costo'))
                 .then(data => {
@@ -486,6 +505,18 @@
                 allowEscapeKey: false,
                 didOpen: () => Swal.showLoading()
             });
+        }
+
+        function getEmpresaCentroCostoSeleccionada() {
+            const valor = String(filtroEmpresaCentroCostoEl?.value || '168').trim();
+            return valor === '' ? '168' : valor;
+        }
+
+        function actualizarEtiquetaConsultar() {
+            const boton = document.getElementById('btnConsultarCentros');
+            const empresa = getEmpresaCentroCostoSeleccionada();
+            const etiqueta = empresa === 'todas' ? 'Todas' : empresa;
+            boton.innerText = `Consultar data (${etiqueta})`;
         }
 
         function mostrarAlertaExito(titulo, html) {
