@@ -36,6 +36,9 @@
                                         <button type="button" class="btn btn-info" id="btnSincronizarCentros">
                                             Sincronizar
                                         </button>
+                                        <button type="button" class="btn btn-danger" id="btnEliminarCentrosEmpresa">
+                                            Eliminar data empresa
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -75,6 +78,7 @@
                                                 <th>Ciudad</th>
                                                 <th>Empresa</th>
                                                 <th>Atrib 75</th>
+                                                <th>Atrib 103</th>
                                                 <th>Fecha Grabado</th>
                                                 <th>Modificado por</th>
                                                 <th>Fecha Modificado</th>
@@ -197,6 +201,7 @@
         document.getElementById('buscarConfigIdViejo').addEventListener('input', renderConfigCentros);
         document.getElementById('btnVerOcultosCentros').addEventListener('click', alternarOcultosConfig);
         document.getElementById('btnSincronizarCentros').addEventListener('click', sincronizarCentros);
+        document.getElementById('btnEliminarCentrosEmpresa').addEventListener('click', eliminarDataCentrosPorEmpresa);
         document.getElementById('filtroEstadoCentroCosto').addEventListener('change', aplicarFiltroEstadoCentroCosto);
         document.getElementById('filtroEmpresaCentroCosto').addEventListener('change', actualizarEtiquetaConsultar);
         document.getElementById('tablaConfigCentrosCosto').addEventListener('change', manejarCambioOcultarCentro);
@@ -217,6 +222,8 @@
             const empresa = getEmpresaCentroCostoSeleccionada();
             boton.disabled = true;
             boton.innerText = 'Consultando...';
+            destruirTablaCentrosCosto();
+            centrosCostoData = [];
 
             if (mostrarAlerta) {
                 mostrarAlertaCarga('Consultando data', 'Leyendo centros de costo desde la base de datos local...');
@@ -256,6 +263,7 @@
                             <td>${item.IdDivision ?? ''}</td>
                             <td>${item.IdSociedad ?? ''}</td>
                             <td>${item.Atrib75 ?? ''}</td>
+                            <td>${item.Atrib103 ?? ''}</td>
                             <td>${item.FechaGrabado ?? ''}</td>
                             <td>${item.ModificadoPor ?? ''}</td>
                             <td>${item.FechaModificado ?? ''}</td>
@@ -273,7 +281,7 @@
                         scrollCollapse: true,
                         autoWidth: false,
                         deferRender: true,
-                        pageLength: 25,
+                        pageLength: 10,
                         dom: 'Bfrtip',
                         buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
                         columnDefs: [
@@ -306,6 +314,18 @@
             const busqueda = estado === 'activo' ? '^Activo$' : (estado === 'inactivo' ? '^Inactivo$' : '');
             centrosCostoTable.column(4).search(busqueda, true, false).draw();
             ajustarLayoutTablaCentrosCosto();
+        }
+
+        function destruirTablaCentrosCosto() {
+            if ($.fn.DataTable.isDataTable('#tableCentrosCosto')) {
+                $('#tableCentrosCosto').DataTable().clear().destroy();
+            }
+
+            centrosCostoTable = null;
+            const tableBody = document.querySelector('#tableCentrosCosto tbody');
+            if (tableBody) {
+                tableBody.innerHTML = '';
+            }
         }
 
         function ajustarLayoutTablaCentrosCosto() {
@@ -495,6 +515,49 @@
                 });
         }
 
+        async function eliminarDataCentrosPorEmpresa() {
+            const empresa = getEmpresaCentroCostoSeleccionada();
+            if (empresa === 'todas') {
+                mostrarAlertaError('Para eliminar data debes elegir una empresa especifica (168 o 169).');
+                return;
+            }
+
+            const confirmado = await confirmarEliminacionEmpresa(empresa);
+            if (!confirmado) return;
+
+            const boton = document.getElementById('btnEliminarCentrosEmpresa');
+            const textoOriginal = boton.innerText;
+            boton.disabled = true;
+            boton.innerText = 'Eliminando...';
+            mostrarAlertaCarga('Eliminando data', `Eliminando centros de costo de la empresa ${empresa}...`);
+
+            fetch('/api-centros-costo/empresa', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ empresa }),
+            })
+                .then(response => parsearRespuestaJson(response, 'Error eliminando data de centros de costo'))
+                .then(async data => {
+                    mostrarAlertaExito(
+                        'Eliminacion completada',
+                        `Empresa: ${data.empresa ?? empresa}<br>Eliminados: ${(data.eliminados ?? 0).toLocaleString('es-DO')}`
+                    );
+
+                    await cargarCentrosCosto(false);
+                })
+                .catch(error => {
+                    mostrarAlertaError(error.message || 'No se pudo eliminar la data de centros de costo.');
+                })
+                .finally(() => {
+                    boton.disabled = false;
+                    boton.innerText = textoOriginal;
+                });
+        }
+
         function mostrarAlertaCarga(titulo, texto) {
             if (typeof Swal === 'undefined') return;
 
@@ -559,6 +622,25 @@
                 showCancelButton: true,
                 confirmButtonText: 'Sincronizar',
                 cancelButtonText: 'Cancelar'
+            });
+
+            return result.isConfirmed;
+        }
+
+        async function confirmarEliminacionEmpresa(empresa) {
+            if (typeof Swal === 'undefined') {
+                return confirm(`Esta accion eliminara toda la data de la empresa ${empresa}. Deseas continuar?`);
+            }
+
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: 'Eliminar data por empresa',
+                html: `Se eliminara toda la data de centros de costo de la empresa <strong>${empresa}</strong>.`,
+                text: 'Esta accion no se puede deshacer.',
+                showCancelButton: true,
+                confirmButtonText: 'Si, eliminar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#dc3545',
             });
 
             return result.isConfirmed;

@@ -126,6 +126,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/api-centros-costo', [Api::class, 'getCentrosCosto']);
     Route::post('/api-centros-costo/visibilidad', [Api::class, 'updateCentrosCostoVisibilidad']);
     Route::post('/api-centros-costo/sync', [Api::class, 'syncCentrosCosto']);
+    Route::delete('/api-centros-costo/empresa', [Api::class, 'deleteCentrosCostoByEmpresa']);
 
     Route::get('/generar-token', [TokenController::class, 'generateToken']);
     Route::get('/iniciar-session', [TokenController::class, 'iniciarSession']);
@@ -317,6 +318,7 @@ Route::middleware('auth')->group(function () {
     Route::post('agencias-import', [AgenciaController::class, 'import'])->name('agencias.import');
     Route::post('agencias-mass-update', [AgenciaController::class, 'massUpdate'])->name('agencias.mass-update');
     Route::post('agencias-mass-update-preview', [AgenciaController::class, 'massUpdatePreview'])->name('agencias.mass-update-preview');
+    Route::post('agencias-actualizar-desde-cc', [AgenciaController::class, 'actualizarDesdeCentroCosto'])->name('agencias.actualizar-desde-cc');
     Route::get('agencias-no-registradas-venta-fija-semana', [AgenciaController::class, 'noRegistradasVentaFijaSemana'])->name('agencias.no-registradas-venta-fija-semana');
     Route::post('agencias-no-registradas-registrar', [AgenciaController::class, 'registrarNoRegistradasVentaFija'])->name('agencias.no-registradas.registrar');
     Route::post('agencias-no-registradas-registrar-terminal', [AgenciaController::class, 'registrarTerminalNoRegistrada'])->name('agencias.no-registradas.registrar-terminal');

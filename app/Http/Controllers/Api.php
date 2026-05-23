@@ -156,6 +156,7 @@ class Api extends Controller
                     'AplicaParaPonderar' => $c->aplica_para_ponderar,
                     'ValorPonderar' => $c->valor_ponderar,
                     'Atrib75' => $this->getAtributo($c->atributos, 'Atr75'),
+                    'Atrib103' => $this->getAtributo($c->atributos, 'Atr103'),
                     'FechaGrabado' => optional($c->fecha_grabado)->toDateTimeString(),
                     'ModificadoPor' => $c->modificado_por,
                     'FechaModificado' => optional($c->fecha_modificado)->toDateTimeString(),
@@ -232,6 +233,38 @@ class Api extends Controller
             'creados' => $result['creados'],
             'actualizados' => $result['actualizados'],
             'omitidos' => $result['omitidos'],
+        ]);
+    }
+
+    public function deleteCentrosCostoByEmpresa(Request $request)
+    {
+        $empresa = $this->normalizeEmpresaCentroCosto(
+            $request->input('empresa', $request->query('empresa', ''))
+        );
+
+        if (!in_array($empresa, CentroDeCosto::EMPRESAS_VALIDAS, true)) {
+            return response()->json([
+                'message' => 'Debes enviar una empresa valida (168 o 169).',
+            ], 422);
+        }
+
+        $query = CentroDeCosto::query()->empresa($empresa);
+        $total = (clone $query)->count();
+
+        if ($total === 0) {
+            return response()->json([
+                'message' => 'No hay registros para eliminar en la empresa seleccionada.',
+                'empresa' => $empresa,
+                'eliminados' => 0,
+            ]);
+        }
+
+        $eliminados = $query->delete();
+
+        return response()->json([
+            'message' => 'Data eliminada correctamente.',
+            'empresa' => $empresa,
+            'eliminados' => $eliminados,
         ]);
     }
 
@@ -507,6 +540,8 @@ class Api extends Controller
             CURLOPT_HTTPHEADER => [
                 'Accept: application/json',
             ],
+            CURLOPT_PROXY => '',
+            CURLOPT_NOPROXY => '*',
             CURLOPT_SSL_VERIFYHOST => 0,
             CURLOPT_SSL_VERIFYPEER => 0,
         ]);
@@ -515,6 +550,7 @@ class Api extends Controller
 
         if ($response === false) {
             $error = curl_error($curl);
+            curl_close($curl);
 
             return [
                 'ok' => false,
@@ -525,6 +561,7 @@ class Api extends Controller
         }
 
         $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
 
         if ($httpCode < 200 || $httpCode >= 300) {
             return [
@@ -556,7 +593,7 @@ class Api extends Controller
                 continue;
             }
 
-            $idCentroCosto = isset($item['IdCentroCosto']) ? (int) $item['IdCentroCosto'] : null;
+            $idCentroCosto = (int) ($this->getFieldInsensitive($item, 'IdCentroCosto') ?? 0);
 
             if (! $idCentroCosto) {
                 $skipped++;
@@ -565,7 +602,10 @@ class Api extends Controller
 
             $atributos = $this->extractAtributos($item);
 
-            $companyId = $this->extractCompanyId($item['CompanyID'] ?? null);
+            $companyId = $this->extractCompanyId($this->getFieldInsensitive($item, 'CompanyID'));
+            if ($companyId === null) {
+                $companyId = $empresa;
+            }
             if ($companyId === null) {
                 $skipped++;
                 continue;
@@ -578,24 +618,24 @@ class Api extends Controller
                 ],
                 [
                     'company_id' => $companyId,
-                    'descripcion' => (string) ($item['Descripcion'] ?? ''),
-                    'cuenta' => $this->nullableString($item['Cuenta'] ?? null),
-                    'inactivo' => (bool) ($item['Inactivo'] ?? false),
-                    'id_grupo' => $this->nullableString($item['IdGrupo'] ?? null),
-                    'id_sub_grupo' => $this->nullableString($item['IdSubGrupo'] ?? null),
-                    'id_division' => $this->nullableString($item['IdDivision'] ?? null),
-                    'id_sociedad' => $this->nullableString($item['IdSociedad'] ?? null),
-                    'id_viejo' => $this->nullableString($item['IdViejo'] ?? null),
-                    'id_centro_costo_resumir_en' => $this->nullableString($item['IdCentroCostoResumirEn'] ?? null),
-                    'com_recarga' => (bool) ($item['ComRecarga'] ?? false),
-                    'gasto_vta_tradicional' => (bool) ($item['GastoVtaTradicional'] ?? false),
-                    'varios_locales' => (bool) ($item['VariosLocales'] ?? false),
-                    'aplica_para_ponderar' => (bool) ($item['AplicaParaPonderar'] ?? false),
-                    'valor_ponderar' => $this->parseDecimal($item['ValorPonderar'] ?? 0) ?? 0,
-                    'creado_por' => $this->nullableString($item['CreadoPor'] ?? null),
-                    'fecha_grabado' => $this->parseDateTime($item['FechaGrabado'] ?? null),
-                    'modificado_por' => $this->nullableString($item['ModificadoPor'] ?? null),
-                    'fecha_modificado' => $this->parseDateTime($item['FechaModificado'] ?? null),
+                    'descripcion' => (string) ($this->getFieldInsensitive($item, 'Descripcion') ?? ''),
+                    'cuenta' => $this->nullableString($this->getFieldInsensitive($item, 'Cuenta')),
+                    'inactivo' => (bool) ($this->getFieldInsensitive($item, 'Inactivo') ?? false),
+                    'id_grupo' => $this->nullableString($this->getFieldInsensitive($item, 'IdGrupo')),
+                    'id_sub_grupo' => $this->nullableString($this->getFieldInsensitive($item, 'IdSubGrupo')),
+                    'id_division' => $this->nullableString($this->getFieldInsensitive($item, 'IdDivision')),
+                    'id_sociedad' => $this->nullableString($this->getFieldInsensitive($item, 'IdSociedad')),
+                    'id_viejo' => $this->nullableString($this->getFieldInsensitive($item, 'IdViejo')),
+                    'id_centro_costo_resumir_en' => $this->nullableString($this->getFieldInsensitive($item, 'IdCentroCostoResumirEn')),
+                    'com_recarga' => (bool) ($this->getFieldInsensitive($item, 'ComRecarga') ?? false),
+                    'gasto_vta_tradicional' => (bool) ($this->getFieldInsensitive($item, 'GastoVtaTradicional') ?? false),
+                    'varios_locales' => (bool) ($this->getFieldInsensitive($item, 'VariosLocales') ?? false),
+                    'aplica_para_ponderar' => (bool) ($this->getFieldInsensitive($item, 'AplicaParaPonderar') ?? false),
+                    'valor_ponderar' => $this->parseDecimal($this->getFieldInsensitive($item, 'ValorPonderar') ?? 0) ?? 0,
+                    'creado_por' => $this->nullableString($this->getFieldInsensitive($item, 'CreadoPor')),
+                    'fecha_grabado' => $this->parseDateTime($this->getFieldInsensitive($item, 'FechaGrabado')),
+                    'modificado_por' => $this->nullableString($this->getFieldInsensitive($item, 'ModificadoPor')),
+                    'fecha_modificado' => $this->parseDateTime($this->getFieldInsensitive($item, 'FechaModificado')),
                     'atributos' => empty($atributos) ? null : $atributos,
                 ]
             );
@@ -638,6 +678,22 @@ class Api extends Controller
         return [];
     }
 
+    private function getFieldInsensitive(array $item, string $field): mixed
+    {
+        if (array_key_exists($field, $item)) {
+            return $item[$field];
+        }
+
+        $target = strtolower($field);
+        foreach ($item as $key => $value) {
+            if (is_string($key) && strtolower($key) === $target) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
     private function extractAtributos(array $item): array
     {
         $atributos = [];
@@ -649,7 +705,7 @@ class Api extends Controller
             $itemLower[strtolower($key)] = $value;
         }
 
-        for ($i = 1; $i <= 75; $i++) {
+        for ($i = 1; $i <= 103; $i++) {
             $canonKey = 'Atr' . $i;
             $lookupKey = strtolower($canonKey);
 

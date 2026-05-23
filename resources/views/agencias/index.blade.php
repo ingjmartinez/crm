@@ -49,6 +49,11 @@
                                                 </button>
                                             </div>
                                             <div class="col-6 col-md-3 d-grid">
+                                                <button type="button" class="btn btn-dark btn-sm" id="btnActualizarDesdeCc">
+                                                    <i class="ri-database-2-line align-bottom me-1"></i><span class="d-none d-md-inline">Actualizar desde cc</span><span class="d-md-none">CC</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6 col-md-3 d-grid">
                                                 <a href="{{ route('agencias.export') }}" class="btn btn-info btn-sm">
                                                     <i class="ri-download-2-line align-bottom me-1"></i><span class="d-none d-md-inline">Exportar</span><span class="d-md-none">Exp.</span>
                                                 </a>
@@ -1042,6 +1047,75 @@
             });
         }
 
+        function actualizarAgenciasDesdeCc() {
+            Swal.fire({
+                icon: 'question',
+                title: 'Actualizar desde cc',
+                html: 'Se actualizaran Nombre, Empresa, Ciudad y Ruta usando centros de costo activos con <strong>Atrib 75 = 5</strong> o <strong>Atrib 103 = 6</strong>.',
+                showCancelButton: true,
+                confirmButtonText: 'Actualizar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#405189'
+            }).then(function(result) {
+                if (!result.isConfirmed) {
+                    return;
+                }
+
+                var btn = $('#btnActualizarDesdeCc');
+                btn.prop('disabled', true);
+
+                Swal.fire({
+                    title: 'Actualizando agencias',
+                    text: 'Cruzando terminales con centros de costo...',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: function() {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: '{{ route('agencias.actualizar-desde-cc') }}',
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}'
+                    },
+                    success: function(response) {
+                        table.ajax.reload(null, false);
+                        paraActualizarStats = null;
+                        cargarAgenciasParaActualizar(false);
+
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Actualizacion completada',
+                            html: `
+                                <div class="text-start">
+                                    <p class="mb-2">${escapeHtml(response.message || 'Proceso completado.')}</p>
+                                    <ul class="mb-0 ps-3">
+                                        <li>Centros filtrados: <strong>${Number(response.centros_filtrados || 0).toLocaleString('es-DO')}</strong></li>
+                                        <li>Coincidencias por terminal: <strong>${Number(response.coincidencias || 0).toLocaleString('es-DO')}</strong></li>
+                                        <li>Agencias actualizadas: <strong>${Number(response.actualizadas || 0).toLocaleString('es-DO')}</strong></li>
+                                        <li>Sin cambios: <strong>${Number(response.sin_cambios || 0).toLocaleString('es-DO')}</strong></li>
+                                    </ul>
+                                </div>
+                            `,
+                            confirmButtonText: 'Entendido'
+                        });
+                    },
+                    error: function(xhr) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'No se pudo actualizar',
+                            text: xhr.responseJSON?.message || 'Ocurrio un error actualizando desde centros de costo.'
+                        });
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false);
+                    }
+                });
+            });
+        }
+
         function registrarNoRegistradasMasivo() {
             var total = Number(noRegistradasStats && noRegistradasStats.total ? noRegistradasStats.total : 0);
 
@@ -1360,6 +1434,10 @@
 
         btnDesactivarInactivasMasivo.on('click', function() {
             desactivarAgenciasSinVentaMasivo();
+        });
+
+        $('#btnActualizarDesdeCc').on('click', function() {
+            actualizarAgenciasDesdeCc();
         });
 
         tablaInactivasBody.on('click', '.btn-actualizar-estatus-agencia', function() {

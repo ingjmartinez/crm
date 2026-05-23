@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\IncumplimientoHorarioReportMail;
 use App\Models\Agencia;
+use App\Models\CentroDeCosto;
 use App\Models\CoordinadorOperador;
 use App\Models\OperadorRuta;
 use Carbon\Carbon;
@@ -401,6 +402,134 @@ class AgenciaController extends Controller
             'total' => $agencias->count(),
             'agencias' => $agencias,
         ]);
+    }
+
+    public function actualizarDesdeCentroCosto(Request $request)
+    {
+        $centros = CentroDeCosto::query()
+            ->where('inactivo', false)
+            ->whereNotNull('id_viejo')
+            ->whereRaw("TRIM(COALESCE(id_viejo, '')) <> ''")
+            ->get(['id_viejo', 'descripcion', 'id_grupo', 'id_division', 'id_sociedad', 'atributos'])
+            ->filter(function (CentroDeCosto $centro) {
+                $atr75 = trim((string) $this->getAtributoCentroCosto($centro->atributos, 'Atr75'));
+                $atr103 = trim((string) $this->getAtributoCentroCosto($centro->atributos, 'Atr103'));
+
+                return $atr75 === '5' || $atr103 === '6';
+            })
+            ->keyBy(fn (CentroDeCosto $centro) => trim((string) $centro->id_viejo));
+
+        if ($centros->isEmpty()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'No hay centros de costo activos con Atrib 75 = 5 o Atrib 103 = 6.',
+                'centros_filtrados' => 0,
+                'coincidencias' => 0,
+                'actualizadas' => 0,
+                'sin_cambios' => 0,
+            ]);
+        }
+
+        $agencias = Agencia::query()
+            ->whereNotNull('terminal')
+            ->whereRaw("TRIM(COALESCE(terminal, '')) <> ''")
+            ->whereIn('terminal', $centros->keys()->all())
+            ->get();
+
+        $actualizadas = 0;
+        $sinCambios = 0;
+
+        foreach ($agencias as $agencia) {
+            $terminal = trim((string) $agencia->terminal);
+            $centro = $centros->get($terminal);
+
+            if (!$centro) {
+                continue;
+            }
+
+            $payload = [
+                'nombre_agencia' => $this->nullableTrim($centro->descripcion),
+                'empresa' => $this->normalizarEmpresaCentroCosto($centro->id_sociedad),
+                'ciudad' => $this->nullableTrim($centro->id_division),
+                'ruta' => $this->nullableTrim($centro->id_grupo),
+            ];
+
+            $cambios = [];
+            foreach ($payload as $campo => $valor) {
+                if ((string) ($agencia->{$campo} ?? '') !== (string) ($valor ?? '')) {
+                    $cambios[$campo] = $valor;
+                }
+            }
+
+            if (empty($cambios)) {
+                $sinCambios++;
+                continue;
+            }
+
+            $agencia->update($cambios);
+            $actualizadas++;
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Actualizacion desde centros de costo completada.',
+            'centros_filtrados' => $centros->count(),
+            'coincidencias' => $agencias->count(),
+            'actualizadas' => $actualizadas,
+            'sin_cambios' => $sinCambios,
+        ]);
+    }
+
+    private function getAtributoCentroCosto(mixed $atributos, string $key): string
+    {
+        if (!is_array($atributos)) {
+            return '';
+        }
+
+        if (array_key_exists($key, $atributos)) {
+            return (string) $atributos[$key];
+        }
+
+        $lookup = strtolower($key);
+        foreach ($atributos as $attrKey => $value) {
+            if (is_string($attrKey) && strtolower($attrKey) === $lookup) {
+                return (string) $value;
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizarEmpresaCentroCosto(mixed $value): ?string
+    {
+        $empresa = $this->nullableTrim($value);
+
+        if ($empresa === null) {
+            return null;
+        }
+
+        $normalizada = strtolower($empresa);
+
+        if (str_contains($normalizada, 'joselito')) {
+            return 'Grupo Joselito';
+        }
+
+        if (str_contains($normalizada, 'negosur')) {
+            return 'Negosur';
+        }
+
+        return $empresa;
+    }
+
+    private function nullableTrim(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function camposRevisionAgencia(): array
