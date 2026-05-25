@@ -59,6 +59,7 @@ class ReporteController extends Controller
 
         $uniones[] = "
                 SELECT
+                    DATE(fecha) AS fecha,
                     TRIM(CAST(agencia_id AS CHAR)) AS agencia_id,
                     CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
                     CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
@@ -74,6 +75,7 @@ class ReporteController extends Controller
 
         $uniones[] = "
                 SELECT
+                    DATE(fecha) AS fecha,
                     TRIM(CAST(agencia_id AS CHAR)) AS agencia_id,
                     CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
                     CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
@@ -89,6 +91,7 @@ class ReporteController extends Controller
 
         $uniones[] = "
                 SELECT
+                    DATE(fecha) AS fecha,
                     TRIM(CAST(agencia_id AS CHAR)) AS agencia_id,
                     CAST(NULLIF(TRIM(pagado_a_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
                     CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
@@ -104,6 +107,7 @@ class ReporteController extends Controller
 
         $uniones[] = "
                 SELECT
+                    DATE(fecha) AS fecha,
                     TRIM(CAST(agencia_id AS CHAR)) AS agencia_id,
                     CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
                     CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
@@ -123,6 +127,16 @@ class ReporteController extends Controller
                 CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
                 TRIM(UPPER(tipo)) AS tipo
             FROM catalogo_juegos
+        ";
+        $agenciasEmpresaSql = "
+            SELECT
+                TRIM(CAST(terminal AS CHAR)) AS terminal,
+                MAX(empresa) AS empresa,
+                MAX(ruta) AS ruta
+            FROM agencias
+            WHERE terminal IS NOT NULL
+              AND TRIM(CAST(terminal AS CHAR)) <> ''
+            GROUP BY TRIM(CAST(terminal AS CHAR))
         ";
         $empresaWhereSql = '';
         $empresaBindings = [];
@@ -162,7 +176,7 @@ class ReporteController extends Controller
                     ON p.producto_id = cj.producto_id
                     AND cj.tipo = 'TRADICIONAL'
                 INNER JOIN consorcios co ON p.consorcio_id = co.id
-                LEFT JOIN agencias a
+                LEFT JOIN ({$agenciasEmpresaSql}) a
                     ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(p.agencia_id AS CHAR))
                 WHERE p.consorcio_id IS NOT NULL
                   AND p.consorcio_id <> 0
@@ -185,7 +199,7 @@ class ReporteController extends Controller
                 INNER JOIN ({$catalogoTradicionalSql}) cj
                     ON p.producto_id = cj.producto_id
                     AND cj.tipo = 'TRADICIONAL'
-                LEFT JOIN agencias a
+                LEFT JOIN ({$agenciasEmpresaSql}) a
                     ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(p.agencia_id AS CHAR))
                 WHERE 1 = 1
                   {$empresaWhereSql}
@@ -194,6 +208,67 @@ class ReporteController extends Controller
         ";
 
         $data = DB::select($sql, array_merge($bindings, $empresaBindings, $bindings, $empresaBindings));
+        $diarioSql = "
+            SELECT
+                p.fecha,
+                COALESCE(SUM(p.aotra_bet + p.aotra_net), 0) AS pao,
+                COALESCE(SUM(p.porotra_bet + p.porotra_net), 0) AS ppo
+            FROM (
+                {$movimientosSql}
+            ) p
+            INNER JOIN ({$catalogoTradicionalSql}) cj
+                ON p.producto_id = cj.producto_id
+                AND cj.tipo = 'TRADICIONAL'
+            LEFT JOIN ({$agenciasEmpresaSql}) a
+                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(p.agencia_id AS CHAR))
+            WHERE 1 = 1
+              {$empresaWhereSql}
+            GROUP BY p.fecha
+            ORDER BY p.fecha
+        ";
+        $diario = DB::select($diarioSql, array_merge($bindings, $empresaBindings));
+        $diarioConsorcioSql = "
+            SELECT
+                co.consorcios,
+                COALESCE(SUM(p.aotra_bet + p.aotra_net), 0) AS pao,
+                COALESCE(SUM(p.porotra_bet + p.porotra_net), 0) AS ppo
+            FROM (
+                {$movimientosSql}
+            ) p
+            INNER JOIN ({$catalogoTradicionalSql}) cj
+                ON p.producto_id = cj.producto_id
+                AND cj.tipo = 'TRADICIONAL'
+            INNER JOIN consorcios co ON p.consorcio_id = co.id
+            LEFT JOIN ({$agenciasEmpresaSql}) a
+                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(p.agencia_id AS CHAR))
+            WHERE p.consorcio_id IS NOT NULL
+              AND p.consorcio_id <> 0
+              {$empresaWhereSql}
+            GROUP BY co.consorcios
+            ORDER BY (COALESCE(SUM(p.aotra_bet + p.aotra_net), 0) + COALESCE(SUM(p.porotra_bet + p.porotra_net), 0)) DESC, co.consorcios
+        ";
+        $diarioConsorcio = DB::select($diarioConsorcioSql, array_merge($bindings, $empresaBindings));
+        $topRutasSql = "
+            SELECT
+                COALESCE(NULLIF(TRIM(a.ruta), ''), 'Sin ruta') AS ruta,
+                COALESCE(SUM(p.aotra_bet + p.aotra_net), 0) AS pao,
+                COALESCE(SUM(p.porotra_bet + p.porotra_net), 0) AS ppo
+            FROM (
+                {$movimientosSql}
+            ) p
+            INNER JOIN ({$catalogoTradicionalSql}) cj
+                ON p.producto_id = cj.producto_id
+                AND cj.tipo = 'TRADICIONAL'
+            LEFT JOIN ({$agenciasEmpresaSql}) a
+                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(p.agencia_id AS CHAR))
+            WHERE 1 = 1
+              {$empresaWhereSql}
+            GROUP BY COALESCE(NULLIF(TRIM(a.ruta), ''), 'Sin ruta')
+            ORDER BY (COALESCE(SUM(p.aotra_bet + p.aotra_net), 0) + COALESCE(SUM(p.porotra_bet + p.porotra_net), 0)) DESC,
+                     COALESCE(NULLIF(TRIM(a.ruta), ''), 'Sin ruta')
+            LIMIT 10
+        ";
+        $topRutas = DB::select($topRutasSql, array_merge($bindings, $empresaBindings));
         $totalRow = collect($data)->firstWhere('consorcios', 'TOTAL');
 
         $totalAotraBet = (float) ($totalRow->aotra_bet ?? 0);
@@ -201,7 +276,6 @@ class ReporteController extends Controller
         $totalPorotraBet = (float) ($totalRow->porotra_bet ?? 0);
         $totalPorotraNet = (float) ($totalRow->porotra_net ?? 0);
         $totalGeneral = $totalAotraBet + $totalAotraNet + $totalPorotraBet + $totalPorotraNet;
-
         return response()->json([
             'resumen' => [
                 'empresa' => match ($validated['empresa']) {
@@ -217,6 +291,23 @@ class ReporteController extends Controller
                 'total_lotonet' => round($totalAotraNet + $totalPorotraNet, 2),
                 'total_general' => round($totalGeneral, 2),
                 'registros' => count($data),
+            ],
+            'visual' => [
+                'diario' => collect($diario)->map(fn ($row) => [
+                    'fecha' => (string) $row->fecha,
+                    'pao' => round((float) $row->pao, 2),
+                    'ppo' => round((float) $row->ppo, 2),
+                ])->values(),
+                'diario_consorcio' => collect($diarioConsorcio)->map(fn ($row) => [
+                    'consorcios' => (string) $row->consorcios,
+                    'pao' => round((float) $row->pao, 2),
+                    'ppo' => round((float) $row->ppo, 2),
+                ])->values(),
+                'top_rutas' => collect($topRutas)->map(fn ($row) => [
+                    'ruta' => (string) $row->ruta,
+                    'pao' => round((float) $row->pao, 2),
+                    'ppo' => round((float) $row->ppo, 2),
+                ])->values(),
             ],
             'data' => $data,
         ]);

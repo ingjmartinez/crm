@@ -27,6 +27,95 @@
             font-size: 1.35rem;
             line-height: 1;
         }
+
+        .compensacion-dia-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, .08);
+            overflow: hidden;
+        }
+
+        .compensacion-dia-header {
+            align-items: center;
+            background: linear-gradient(135deg, #f8fafc 0%, #ffffff 52%, #eef6ff 100%);
+            border-bottom: 1px solid #edf2f7;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: space-between;
+            padding: 18px 20px;
+        }
+
+        .compensacion-dia-title {
+            color: #172033;
+            font-size: 1.05rem;
+            font-weight: 800;
+            letter-spacing: .4px;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .compensacion-dia-subtitle {
+            color: #64748b;
+            font-size: .84rem;
+            margin: 4px 0 0;
+        }
+
+        .compensacion-dia-legend {
+            display: flex;
+            gap: 14px;
+            color: #475569;
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+        .compensacion-dia-legend i {
+            border-radius: 999px;
+            display: inline-block;
+            height: 10px;
+            margin-right: 5px;
+            width: 10px;
+        }
+
+        .compensacion-dia-body {
+            padding: 18px 20px 20px;
+        }
+
+        .compensacion-dia-bars {
+            display: grid;
+            gap: 5px;
+            min-width: 170px;
+        }
+
+        .compensacion-dia-track {
+            background: #eef2f7;
+            border-radius: 999px;
+            height: 11px;
+            overflow: hidden;
+        }
+
+        .compensacion-dia-fill {
+            border-radius: inherit;
+            display: block;
+            height: 100%;
+            min-width: 2px;
+        }
+
+        .compensacion-color-pao {
+            background: linear-gradient(90deg, #60a5fa, #2563eb);
+        }
+
+        .compensacion-color-ppo {
+            background: linear-gradient(90deg, #fb923c, #ea580c);
+        }
+
+        .compensacion-dia-empty {
+            color: #64748b;
+            font-weight: 700;
+            padding: 36px 12px;
+            text-align: center;
+        }
     </style>
 
     <div class="main-content">
@@ -178,6 +267,125 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="row mt-3">
+                    <div class="col-lg-12">
+                        <div class="compensacion-dia-card">
+                            <div class="compensacion-dia-header">
+                                <div>
+                                    <h5 class="compensacion-dia-title">Compensacion por dia</h5>
+                                    <p class="compensacion-dia-subtitle mb-0">Primera fase del resumen visual debajo del reporte tradicional.</p>
+                                </div>
+                                <div class="compensacion-dia-legend">
+                                    <span><i class="compensacion-color-pao"></i>Pagos a Consorcios</span>
+                                    <span><i class="compensacion-color-ppo"></i>Pagos de Consorcios</span>
+                                </div>
+                            </div>
+                            <div class="compensacion-dia-body">
+                                <div class="table-responsive">
+                                    <table id="tableCompensacionDia" class="table table-bordered table-hover align-middle mb-0" style="width: 100%;">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th class="text-end">Pagos a Consorcios</th>
+                                                <th class="text-end">Pagos de Consorcios</th>
+                                                <th class="text-end">Resultado</th>
+                                                <th class="text-end">Resultado + 2%</th>
+                                                <th>Visual</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="6">
+                                                    <div class="compensacion-dia-empty">Consulta el reporte para generar la data por dia.</div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-lg-12">
+                        <div class="compensacion-dia-card">
+                            <div class="compensacion-dia-header">
+                                <div>
+                                    <h5 class="compensacion-dia-title">Compensacion por consorcio</h5>
+                                    <p class="compensacion-dia-subtitle mb-0">Muestra visual comparando PAO y PPO por consorcio dentro del rango seleccionado.</p>
+                                </div>
+                                <div class="compensacion-dia-legend">
+                                    <span><i class="compensacion-color-pao"></i>Pagos a Consorcios</span>
+                                    <span><i class="compensacion-color-ppo"></i>Pagos de Consorcios</span>
+                                </div>
+                            </div>
+                            <div class="compensacion-dia-body">
+                                <div class="table-responsive">
+                                    <table id="tableCompensacionDiaConsorcio" class="table table-bordered table-hover align-middle mb-0" style="width: 100%;">
+                                        <thead>
+                                            <tr>
+                                                <th>Consorcio</th>
+                                                <th class="text-end">PAO</th>
+                                                <th class="text-end">PPO</th>
+                                                <th class="text-end">Resultado</th>
+                                                <th>Grafico</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="5">
+                                                    <div class="compensacion-dia-empty">Consulta el reporte para generar la data por consorcio.</div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-lg-12">
+                        <div class="compensacion-dia-card">
+                            <div class="compensacion-dia-header">
+                                <div>
+                                    <h5 class="compensacion-dia-title">Top 10 rutas por compensacion</h5>
+                                    <p class="compensacion-dia-subtitle mb-0">Rutas mas relevantes por volumen total PAO + PPO dentro del rango seleccionado.</p>
+                                </div>
+                                <div class="compensacion-dia-legend">
+                                    <span><i class="compensacion-color-pao"></i>Pagos a Consorcios</span>
+                                    <span><i class="compensacion-color-ppo"></i>Pagos de Consorcios</span>
+                                </div>
+                            </div>
+                            <div class="compensacion-dia-body">
+                                <div class="table-responsive">
+                                    <table id="tableCompensacionTopRutas" class="table table-bordered table-hover align-middle mb-0" style="width: 100%;">
+                                        <thead>
+                                            <tr>
+                                                <th>Ruta</th>
+                                                <th class="text-end">PAO</th>
+                                                <th class="text-end">PPO</th>
+                                                <th class="text-end">Total</th>
+                                                <th class="text-end">Resultado</th>
+                                                <th>Grafico</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="6">
+                                                    <div class="compensacion-dia-empty">Consulta el reporte para generar el top 10 de rutas.</div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -186,6 +394,9 @@
 @section('script')
     <script>
         let tableCompensacion;
+        let tableCompensacionDia;
+        let tableCompensacionDiaConsorcio;
+        let tableCompensacionTopRutas;
 
         function formatearNumero(valor) {
             return parseFloat(valor || 0).toLocaleString('en-US', {
@@ -204,6 +415,236 @@
             document.getElementById('totalPagosDeConsorcios').textContent = formatearNumero(pagosDeConsorcios);
             document.getElementById('totalResta').textContent = formatearNumero(resta);
             document.getElementById('totalBeneficio').textContent = formatearNumero(beneficio);
+        }
+
+        function renderTablaCompensacionDia(diario) {
+            const data = Array.isArray(diario) ? diario : [];
+            const maxValor = Math.max(
+                1,
+                ...data.map(item => Math.max(Number(item.pao || 0), Number(item.ppo || 0)))
+            );
+
+            if (tableCompensacionDia) {
+                tableCompensacionDia.destroy();
+                $('#tableCompensacionDia tbody').empty();
+            }
+
+            tableCompensacionDia = $('#tableCompensacionDia').DataTable({
+                data: data,
+                columns: [
+                    { data: 'fecha' },
+                    {
+                        data: 'pao',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const valor = Number(data || 0);
+                            return type === 'display' ? formatearNumero(valor) : valor;
+                        }
+                    },
+                    {
+                        data: 'ppo',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const valor = Number(data || 0);
+                            return type === 'display' ? formatearNumero(valor) : valor;
+                        }
+                    },
+                    {
+                        data: null,
+                        className: 'text-end',
+                        render: function (data, type, row) {
+                            const resultado = Number(row.pao || 0) - Number(row.ppo || 0);
+                            return type === 'display' ? formatearNumero(resultado) : resultado;
+                        }
+                    },
+                    {
+                        data: null,
+                        className: 'text-end',
+                        render: function (data, type, row) {
+                            const beneficio = (Number(row.pao || 0) - Number(row.ppo || 0)) * 1.02;
+                            return type === 'display' ? formatearNumero(beneficio) : beneficio;
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        render: function (data, type, row) {
+                            if (type !== 'display') {
+                                return '';
+                            }
+
+                            const paoWidth = Math.max((Number(row.pao || 0) / maxValor) * 100, Number(row.pao || 0) > 0 ? 2 : 0);
+                            const ppoWidth = Math.max((Number(row.ppo || 0) / maxValor) * 100, Number(row.ppo || 0) > 0 ? 2 : 0);
+
+                            return `
+                                <div class="compensacion-dia-bars">
+                                    <div class="compensacion-dia-track">
+                                        <span class="compensacion-dia-fill compensacion-color-pao" style="width:${paoWidth}%"></span>
+                                    </div>
+                                    <div class="compensacion-dia-track">
+                                        <span class="compensacion-dia-fill compensacion-color-ppo" style="width:${ppoWidth}%"></span>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                ],
+                autoWidth: false,
+                dom: 'frtip',
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
+                },
+                order: [[0, 'asc']],
+                pageLength: 10,
+                lengthMenu: [10, 25, 50]
+            });
+        }
+
+        function renderGraficoPaoPpo(row, maxValor) {
+            const pao = Number(row.pao || 0);
+            const ppo = Number(row.ppo || 0);
+            const paoWidth = Math.max((pao / maxValor) * 100, pao > 0 ? 2 : 0);
+            const ppoWidth = Math.max((ppo / maxValor) * 100, ppo > 0 ? 2 : 0);
+
+            return `
+                <div class="compensacion-dia-bars">
+                    <div class="compensacion-dia-track">
+                        <span class="compensacion-dia-fill compensacion-color-pao" style="width:${paoWidth}%"></span>
+                    </div>
+                    <div class="compensacion-dia-track">
+                        <span class="compensacion-dia-fill compensacion-color-ppo" style="width:${ppoWidth}%"></span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTablaCompensacionDiaConsorcio(diarioConsorcio) {
+            const data = Array.isArray(diarioConsorcio) ? diarioConsorcio : [];
+            const maxValor = Math.max(
+                1,
+                ...data.map(item => Math.max(Number(item.pao || 0), Number(item.ppo || 0)))
+            );
+
+            if (tableCompensacionDiaConsorcio) {
+                tableCompensacionDiaConsorcio.destroy();
+                $('#tableCompensacionDiaConsorcio tbody').empty();
+            }
+
+            tableCompensacionDiaConsorcio = $('#tableCompensacionDiaConsorcio').DataTable({
+                data: data,
+                columns: [
+                    { data: 'consorcios' },
+                    {
+                        data: 'pao',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const valor = Number(data || 0);
+                            return type === 'display' ? formatearNumero(valor) : valor;
+                        }
+                    },
+                    {
+                        data: 'ppo',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const valor = Number(data || 0);
+                            return type === 'display' ? formatearNumero(valor) : valor;
+                        }
+                    },
+                    {
+                        data: null,
+                        className: 'text-end',
+                        render: function (data, type, row) {
+                            const resultado = Number(row.pao || 0) - Number(row.ppo || 0);
+                            return type === 'display' ? formatearNumero(resultado) : resultado;
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        render: function (data, type, row) {
+                            return type === 'display' ? renderGraficoPaoPpo(row, maxValor) : '';
+                        }
+                    }
+                ],
+                autoWidth: false,
+                dom: 'frtip',
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
+                },
+                order: [[1, 'desc']],
+                pageLength: 10,
+                lengthMenu: [10, 25, 50]
+            });
+        }
+
+        function renderTablaTopRutas(topRutas) {
+            const data = Array.isArray(topRutas) ? topRutas : [];
+            const maxValor = Math.max(
+                1,
+                ...data.map(item => Math.max(Number(item.pao || 0), Number(item.ppo || 0)))
+            );
+
+            if (tableCompensacionTopRutas) {
+                tableCompensacionTopRutas.destroy();
+                $('#tableCompensacionTopRutas tbody').empty();
+            }
+
+            tableCompensacionTopRutas = $('#tableCompensacionTopRutas').DataTable({
+                data: data,
+                columns: [
+                    { data: 'ruta' },
+                    {
+                        data: 'pao',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const valor = Number(data || 0);
+                            return type === 'display' ? formatearNumero(valor) : valor;
+                        }
+                    },
+                    {
+                        data: 'ppo',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const valor = Number(data || 0);
+                            return type === 'display' ? formatearNumero(valor) : valor;
+                        }
+                    },
+                    {
+                        data: null,
+                        className: 'text-end',
+                        render: function (data, type, row) {
+                            const total = Number(row.pao || 0) + Number(row.ppo || 0);
+                            return type === 'display' ? formatearNumero(total) : total;
+                        }
+                    },
+                    {
+                        data: null,
+                        className: 'text-end',
+                        render: function (data, type, row) {
+                            const resultado = Number(row.pao || 0) - Number(row.ppo || 0);
+                            return type === 'display' ? formatearNumero(resultado) : resultado;
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        render: function (data, type, row) {
+                            return type === 'display' ? renderGraficoPaoPpo(row, maxValor) : '';
+                        }
+                    }
+                ],
+                autoWidth: false,
+                dom: 'frtip',
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
+                },
+                order: [[3, 'desc']],
+                pageLength: 10,
+                lengthMenu: [10]
+            });
         }
 
         function cargarCompensacion() {
@@ -242,6 +683,9 @@
                     },
                     dataSrc: function (json) {
                         actualizarResumen(json.resumen || {});
+                        renderTablaCompensacionDia(json.visual?.diario || []);
+                        renderTablaCompensacionDiaConsorcio(json.visual?.diario_consorcio || []);
+                        renderTablaTopRutas(json.visual?.top_rutas || []);
                         return json.data || [];
                     },
                     complete: function () {
