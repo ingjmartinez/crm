@@ -1283,20 +1283,90 @@ class IncentivosController extends Controller
 
         $totalVendido = (float) $rawData->sum('ventas_mes_actual_num');
         $totalIncentivo = (float) $rawData->sum('nuevo_incentivo_num');
+        $cedulasNormalizadas = $rawData->pluck('cedula')
+            ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
+            ->filter()
+            ->unique()
+            ->values();
         $nombresPorCedula = DB::table('empleados')
-            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $rawData->pluck('cedula')->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))->filter()->unique()->values()->all())
+            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasNormalizadas->all())
             ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
             ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
             ->groupByRaw('CAST(cedula AS UNSIGNED)')
             ->pluck('nombre', 'cedula');
 
-        $data = $rawData->map(function ($row) use ($nombresPorCedula) {
+        $ultimaVentaPorCedula = [];
+        if ($cedulasNormalizadas->isNotEmpty()) {
+            $buildUltimaVentaQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada) {
+                return DB::table($tabla)
+                    ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula, TRIM(CAST(agencia_id AS CHAR)) AS terminal, MAX(DATE(fecha)) AS ultimo_dia_venta')
+                    ->whereBetween('fecha', [$fechaIniSeleccionada, $fechaFinSeleccionada])
+                    ->whereNotNull('cedula')
+                    ->where('cedula', '<>', '')
+                    ->whereNotNull('agencia_id')
+                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''")
+                    ->groupByRaw('CAST(cedula AS UNSIGNED), TRIM(CAST(agencia_id AS CHAR))');
+            };
+
+            if ($sistema === 'Lotobet') {
+                $ultimaVentaQuery = $buildUltimaVentaQuery('vt_usuarios_bet');
+            } elseif ($sistema === 'Lotonet') {
+                $ultimaVentaQuery = $buildUltimaVentaQuery('vt_usuarios_net');
+            } else {
+                $ultimaVentaQuery = $buildUltimaVentaQuery('vt_usuarios_bet')
+                    ->unionAll($buildUltimaVentaQuery('vt_usuarios_net'));
+            }
+
+            $ultimaVentaRows = DB::query()
+                ->fromSub($ultimaVentaQuery, 'uv')
+                ->whereIn('uv.cedula', $cedulasNormalizadas->all())
+                ->selectRaw('uv.cedula, uv.terminal, uv.ultimo_dia_venta')
+                ->orderBy('uv.cedula')
+                ->orderByDesc('uv.ultimo_dia_venta')
+                ->get();
+
+            $terminalesUltimaVenta = $ultimaVentaRows
+                ->pluck('terminal')
+                ->filter()
+                ->unique()
+                ->values();
+            $agenciasPorTerminal = collect();
+
+            if ($terminalesUltimaVenta->isNotEmpty()) {
+                $agenciasPorTerminal = DB::table('agencias')
+                    ->whereIn(DB::raw('TRIM(CAST(terminal AS CHAR))'), $terminalesUltimaVenta->all())
+                    ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal, COALESCE(NULLIF(TRIM(nombre_agencia), ''), NULLIF(TRIM(agencia), ''), 'SIN AGENCIA') AS nombre_agencia")
+                    ->get()
+                    ->keyBy('terminal');
+            }
+
+            foreach ($ultimaVentaRows as $venta) {
+                $cedulaKey = (string) $venta->cedula;
+                if (isset($ultimaVentaPorCedula[$cedulaKey])) {
+                    continue;
+                }
+
+                $terminal = trim((string) $venta->terminal);
+                $agencia = $agenciasPorTerminal->get($terminal);
+                $ultimaVentaPorCedula[$cedulaKey] = [
+                    'terminal' => $terminal,
+                    'nombre_agencia' => (string) ($agencia->nombre_agencia ?? 'SIN AGENCIA'),
+                    'ultimo_dia_venta' => (string) $venta->ultimo_dia_venta,
+                ];
+            }
+        }
+
+        $data = $rawData->map(function ($row) use ($nombresPorCedula, $ultimaVentaPorCedula) {
             $cedulaKey = preg_replace('/\D+/', '', (string) ($row['cedula'] ?? ''));
             $nombre = trim((string) ($nombresPorCedula[$cedulaKey] ?? ''));
+            $ultimaVenta = $ultimaVentaPorCedula[$cedulaKey] ?? [];
 
             return [
                 'cedula' => $row['cedula'],
                 'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
+                'ultima_terminal' => $ultimaVenta['terminal'] ?? '',
+                'ultima_agencia_nombre' => $ultimaVenta['nombre_agencia'] ?? 'SIN AGENCIA',
+                'ultimo_dia_venta' => $ultimaVenta['ultimo_dia_venta'] ?? '',
                 'empresa' => $row['empresa'] ?? 'Sin empresa',
                 'ventas_ultimo_mes' => number_format($row['ventas_num'], 2, '.', ','),
                 'ventas_mes_actual' => number_format($row['ventas_mes_actual_num'], 2, '.', ','),

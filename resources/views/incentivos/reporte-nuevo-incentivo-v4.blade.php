@@ -56,6 +56,29 @@
             white-space: normal;
             min-width: 190px;
         }
+
+        .ni-count-action {
+            cursor: pointer;
+            transition: transform .15s ease, color .15s ease;
+        }
+
+        .ni-count-action:hover {
+            color: #d97706 !important;
+            transform: translateY(-1px);
+        }
+
+        .agencia-formato-comparativa .agencia-nombre {
+            color: #172033;
+            font-weight: 600;
+            line-height: 1.15;
+        }
+
+        .agencia-formato-comparativa .agencia-terminal {
+            color: #64748b;
+            display: block;
+            font-size: .78rem;
+            margin-top: .15rem;
+        }
     </style>
 
     <div class="main-content">
@@ -85,7 +108,7 @@
                             </div>
                         </div>
                         <div class="card card-animate mt-3">
-                            <div class="card-body d-flex justify-content-between align-items-center">
+                            <div class="card-body d-flex justify-content-between align-items-center gap-3 flex-wrap">
                                 <div>
                                     <p class="text-uppercase fw-medium text-muted mb-1">Usuarios que Cumplieron</p>
                                     <h4 class="mb-0 text-success" id="ni_count_cumplen">0</h4>
@@ -93,6 +116,10 @@
                                 <div>
                                     <p class="text-uppercase fw-medium text-muted mb-1">Usuarios que No Cumplieron</p>
                                     <h4 class="mb-0 text-danger" id="ni_count_no_cumplen">0</h4>
+                                </div>
+                                <div>
+                                    <p class="text-uppercase fw-medium text-muted mb-1">Usuarios por Actualizar</p>
+                                    <h4 class="mb-0 text-warning ni-count-action" id="ni_count_por_actualizar" title="Ver cedulas por actualizar">0</h4>
                                 </div>
                             </div>
                         </div>
@@ -564,6 +591,38 @@
             </div>
         </div>
     </div>
+
+    <div id="modalUsuariosActualizar" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Usuarios por actualizar en maestro de empleados</h5>
+                        <small class="text-muted">Cedulas con ventas en el rango seleccionado que no tienen nombre asociado.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table id="tableUsuariosActualizar" class="table table-bordered table-striped align-middle" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>Cedula</th>
+                                    <th>Nombre</th>
+                                    <th>Nombre agencia</th>
+                                    <th>Ultimo dia con venta</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -632,6 +691,7 @@
     let cachedSistema = null;
     let cachedTipoPago = null;
     let tableFaltantesIncentivo = null;
+    let tableUsuariosActualizar = null;
     let lastFaltantesCedulas = new Set();
     let excludedFaltantesCedulas = new Set();
     let adminPctBruto = 0;
@@ -816,6 +876,29 @@
         }
 
         return escapeHtml(nombre);
+    }
+
+    function esNombrePendiente(row) {
+        return String(row?.nombre || '').trim() === 'Actualizar en maestro de empleados';
+    }
+
+    function formatDateDisplay(value) {
+        const text = String(value || '').trim();
+        if (!text) return '-';
+        const parts = text.split('-');
+        return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : text;
+    }
+
+    function renderAgenciaFormato(row) {
+        const nombreAgencia = String(row?.ultima_agencia_nombre || 'SIN AGENCIA').trim() || 'SIN AGENCIA';
+        const terminal = String(row?.ultima_terminal || '-').trim() || '-';
+
+        return `
+            <div class="agencia-formato-comparativa">
+                <div class="agencia-nombre">${escapeHtml(nombreAgencia)}</div>
+                <small class="agencia-terminal">Terminal: ${escapeHtml(terminal)}</small>
+            </div>
+        `;
     }
 
     function toCsvValue(value) {
@@ -1314,6 +1397,7 @@
     function updateCardsFromData(data) {
         const totalCumplen = data.filter(item => evaluateMetaMinima(item).cumplio).length;
         const totalNoCumplen = data.length - totalCumplen;
+        const totalPorActualizar = data.filter(item => esNombrePendiente(item)).length;
         const totalVendido = data.reduce((sum, item) => sum + toNumber(item.ventas_mes_actual), 0);
         const totalIncentivo = data.reduce((sum, item) => sum + toNumber(item.nuevo_incentivo), 0);
         const adminValor = totalIncentivo * (adminPctBruto / 100);
@@ -1326,6 +1410,7 @@
 
         document.getElementById('ni_count_cumplen').textContent = totalCumplen;
         document.getElementById('ni_count_no_cumplen').textContent = totalNoCumplen;
+        document.getElementById('ni_count_por_actualizar').textContent = totalPorActualizar;
         document.getElementById('ni_total_vendido').textContent = totalVendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('ni_total_incentivo').textContent = totalIncentivo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('ni_admin_resumen').textContent =
@@ -1460,6 +1545,76 @@
         });
     }
 
+    function renderUsuariosActualizarTable(rows) {
+        const data = Array.isArray(rows) ? rows : [];
+
+        if (tableUsuariosActualizar) {
+            tableUsuariosActualizar.destroy();
+            $('#tableUsuariosActualizar tbody').empty();
+        }
+
+        tableUsuariosActualizar = $('#tableUsuariosActualizar').DataTable({
+            data: data,
+            columns: [
+                { data: 'cedula' },
+                {
+                    data: 'nombre',
+                    render: function(data, type) {
+                        return type === 'display' ? renderNombreEmpleado(data) : data;
+                    }
+                },
+                {
+                    data: null,
+                    render: function(data, type, row) {
+                        return type === 'display' ? renderAgenciaFormato(row) : `${row?.ultima_agencia_nombre || ''} ${row?.ultima_terminal || ''}`;
+                    }
+                },
+                {
+                    data: 'ultimo_dia_venta',
+                    render: function(data, type) {
+                        return type === 'display' ? formatDateDisplay(data) : data;
+                    }
+                }
+            ],
+            autoWidth: false,
+            responsive: true,
+            pageLength: 10,
+            lengthMenu: [10, 25, 50],
+            order: [[3, 'desc']],
+            language: {
+                lengthMenu: 'Mostrar _MENU_ registros por pagina',
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                infoEmpty: 'No hay registros disponibles',
+                infoFiltered: '(filtrado de _MAX_ registros totales)',
+                search: 'Buscar:',
+                zeroRecords: 'No hay cedulas pendientes por actualizar',
+                paginate: {
+                    first: 'Primero',
+                    last: 'Ultimo',
+                    next: 'Siguiente',
+                    previous: 'Anterior'
+                }
+            }
+        });
+    }
+
+    function abrirUsuariosActualizarModal() {
+        const pendientes = currentFilteredRows.filter(item => esNombrePendiente(item));
+
+        if (!pendientes.length) {
+            Swal.fire({
+                title: 'Sin pendientes',
+                text: 'No hay cedulas por actualizar en el maestro de empleados.',
+                icon: 'info'
+            });
+            return;
+        }
+
+        renderUsuariosActualizarTable(pendientes);
+        const modal = new bootstrap.Modal(document.getElementById('modalUsuariosActualizar'));
+        modal.show();
+    }
+
     function getCedulasReporteActual() {
         const sourceRows = currentFilteredRows;
 
@@ -1486,15 +1641,26 @@
             return;
         }
 
-        excludedFaltantesCedulas = new Set([...excludedFaltantesCedulas, ...lastFaltantesCedulas]);
-        applyLocalFilters(false);
-        bootstrap.Modal.getInstance(document.getElementById('modalFaltantesIncentivo'))?.hide();
-
         Swal.fire({
-            title: 'Faltantes aplicados',
-            text: `${lastFaltantesCedulas.size} cedulas fueron ocultadas del reporte principal.`,
-            icon: 'success'
+            title: 'Aplicando faltantes...',
+            text: 'Estamos ocultando las cedulas con faltantes y recalculando el reporte.',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
         });
+
+        setTimeout(() => {
+            excludedFaltantesCedulas = new Set([...excludedFaltantesCedulas, ...lastFaltantesCedulas]);
+            applyLocalFilters(false);
+            bootstrap.Modal.getInstance(document.getElementById('modalFaltantesIncentivo'))?.hide();
+
+            Swal.fire({
+                title: 'Faltantes aplicados',
+                text: `${lastFaltantesCedulas.size} cedulas fueron ocultadas del reporte principal.`,
+                icon: 'success'
+            });
+        }, 120);
     }
 
     function consultarFaltantesIncentivo() {
@@ -1685,9 +1851,19 @@
             aplicarFaltantesIncentivo();
         });
 
+        document.querySelector('#ni_count_por_actualizar').addEventListener('click', function() {
+            abrirUsuariosActualizarModal();
+        });
+
         document.getElementById('modalFaltantesIncentivo').addEventListener('shown.bs.modal', function() {
             if (tableFaltantesIncentivo) {
                 tableFaltantesIncentivo.columns.adjust().responsive.recalc();
+            }
+        });
+
+        document.getElementById('modalUsuariosActualizar').addEventListener('shown.bs.modal', function() {
+            if (tableUsuariosActualizar) {
+                tableUsuariosActualizar.columns.adjust().responsive.recalc();
             }
         });
 
