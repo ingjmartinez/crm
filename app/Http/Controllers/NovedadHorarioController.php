@@ -16,7 +16,7 @@ class NovedadHorarioController extends Controller
     public function list(Request $request)
     {
         $validated = $request->validate([
-            'sistema' => ['required', 'in:todos,lotobet,lotonet'],
+            'empresa' => ['required', 'in:todos,grupo_joselito,negosur'],
             'fecha_inicio' => ['required', 'date'],
             'fecha_fin' => ['required', 'date', 'after_or_equal:fecha_inicio'],
             'horas_requeridas' => ['required', 'integer', 'min:1'],
@@ -29,7 +29,8 @@ class NovedadHorarioController extends Controller
             SELECT
                 TRIM(CAST(terminal AS CHAR)) AS terminal,
                 MAX(nombre_agencia) AS nombre_agencia,
-                MAX(ruta) AS ruta
+                MAX(ruta) AS ruta,
+                MAX(empresa) AS empresa
             FROM agencias
             WHERE terminal IS NOT NULL
               AND TRIM(CAST(terminal AS CHAR)) <> ''
@@ -45,10 +46,9 @@ class NovedadHorarioController extends Controller
             GROUP BY TRIM(cedula)
         ";
 
-        if (in_array($validated['sistema'], ['todos', 'lotobet'], true)) {
-            $uniones[] = "
+        $uniones[] = "
                 SELECT
-                    'lotobet' AS empresa,
+                    COALESCE(a.empresa, '') AS empresa,
                     TRIM(CAST(ab.agencia_id AS CHAR)) AS terminal,
                     COALESCE(a.nombre_agencia, ab.agencia_id) AS nombre_agencia,
                     COALESCE(a.ruta, '') AS ruta,
@@ -67,21 +67,20 @@ class NovedadHorarioController extends Controller
                   AND ab.primer_login IS NOT NULL
                   AND ab.ultimo_login IS NOT NULL
                 GROUP BY
+                    COALESCE(a.empresa, ''),
                     TRIM(CAST(ab.agencia_id AS CHAR)),
                     COALESCE(a.nombre_agencia, ab.agencia_id),
                     COALESCE(a.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')),
                     ab.cedula,
                     DATE(ab.fecha)
-            ";
-            $bindings[] = $validated['fecha_inicio'];
-            $bindings[] = $validated['fecha_fin'];
-        }
+        ";
+        $bindings[] = $validated['fecha_inicio'];
+        $bindings[] = $validated['fecha_fin'];
 
-        if (in_array($validated['sistema'], ['todos', 'lotonet'], true)) {
-            $uniones[] = "
+        $uniones[] = "
                 SELECT
-                    'lotonet' AS empresa,
+                    COALESCE(a.empresa, '') AS empresa,
                     TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)) AS terminal,
                     COALESCE(a.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
                     COALESCE(a.ruta, '') AS ruta,
@@ -100,16 +99,16 @@ class NovedadHorarioController extends Controller
                   AND an.entrada IS NOT NULL
                   AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
                 GROUP BY
+                    COALESCE(a.empresa, ''),
                     TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)),
                     COALESCE(a.nombre_agencia, an.banca, an.agencia),
                     COALESCE(a.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')),
                     an.identificacion,
                     DATE(an.entrada)
-            ";
-            $bindings[] = $validated['fecha_inicio'];
-            $bindings[] = $validated['fecha_fin'];
-        }
+        ";
+        $bindings[] = $validated['fecha_inicio'];
+        $bindings[] = $validated['fecha_fin'];
 
         $baseSql = "
             SELECT
@@ -136,10 +135,21 @@ class NovedadHorarioController extends Controller
             $whereConditions[] = "(terminal LIKE ?
                 OR nombre_agencia LIKE ?
                 OR ruta LIKE ?
+                OR empresa LIKE ?
                 OR nombre_empleado LIKE ?
                 OR cedula LIKE ?)";
             $searchValue = '%' . $search . '%';
-            $whereBindings = array_fill(0, 5, $searchValue);
+            $whereBindings = array_fill(0, 6, $searchValue);
+        }
+
+        if ($validated['empresa'] === 'grupo_joselito') {
+            $whereConditions[] = 'LOWER(COALESCE(empresa, "")) LIKE ?';
+            $whereBindings[] = '%joselito%';
+        }
+
+        if ($validated['empresa'] === 'negosur') {
+            $whereConditions[] = 'LOWER(COALESCE(empresa, "")) LIKE ?';
+            $whereBindings[] = '%negosur%';
         }
 
         if ($detalle === 'cumple') {
@@ -211,14 +221,13 @@ class NovedadHorarioController extends Controller
     public function detalle(Request $request)
     {
         $validated = $request->validate([
-            'sistema' => ['required', 'in:todos,lotobet,lotonet'],
             'fecha_inicio' => ['required', 'date'],
             'fecha_fin' => ['required', 'date', 'after_or_equal:fecha_inicio'],
             'horas_requeridas' => ['required', 'integer', 'min:1'],
             'valor_hora' => ['required', 'numeric', 'min:0.01'],
             'cedula' => ['required', 'string'],
             'terminal' => ['required', 'string'],
-            'empresa' => ['nullable', 'in:lotobet,lotonet'],
+            'empresa' => ['nullable', 'string', 'max:60'],
         ]);
 
         $uniones = [];
@@ -227,7 +236,8 @@ class NovedadHorarioController extends Controller
             SELECT
                 TRIM(CAST(terminal AS CHAR)) AS terminal,
                 MAX(nombre_agencia) AS nombre_agencia,
-                MAX(ruta) AS ruta
+                MAX(ruta) AS ruta,
+                MAX(empresa) AS empresa
             FROM agencias
             WHERE terminal IS NOT NULL
               AND TRIM(CAST(terminal AS CHAR)) <> ''
@@ -243,10 +253,9 @@ class NovedadHorarioController extends Controller
             GROUP BY TRIM(cedula)
         ";
 
-        if (in_array($validated['sistema'], ['todos', 'lotobet'], true)) {
-            $uniones[] = "
+        $uniones[] = "
                 SELECT
-                    'lotobet' AS empresa,
+                    COALESCE(a.empresa, '') AS empresa,
                     TRIM(CAST(ab.agencia_id AS CHAR)) AS terminal,
                     COALESCE(a.nombre_agencia, ab.agencia_id) AS nombre_agencia,
                     COALESCE(a.ruta, '') AS ruta,
@@ -265,21 +274,20 @@ class NovedadHorarioController extends Controller
                   AND ab.primer_login IS NOT NULL
                   AND ab.ultimo_login IS NOT NULL
                 GROUP BY
+                    COALESCE(a.empresa, ''),
                     TRIM(CAST(ab.agencia_id AS CHAR)),
                     COALESCE(a.nombre_agencia, ab.agencia_id),
                     COALESCE(a.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')),
                     ab.cedula,
                     DATE(ab.fecha)
-            ";
-            $bindings[] = $validated['fecha_inicio'];
-            $bindings[] = $validated['fecha_fin'];
-        }
+        ";
+        $bindings[] = $validated['fecha_inicio'];
+        $bindings[] = $validated['fecha_fin'];
 
-        if (in_array($validated['sistema'], ['todos', 'lotonet'], true)) {
-            $uniones[] = "
+        $uniones[] = "
                 SELECT
-                    'lotonet' AS empresa,
+                    COALESCE(a.empresa, '') AS empresa,
                     TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)) AS terminal,
                     COALESCE(a.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
                     COALESCE(a.ruta, '') AS ruta,
@@ -298,16 +306,16 @@ class NovedadHorarioController extends Controller
                   AND an.entrada IS NOT NULL
                   AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
                 GROUP BY
+                    COALESCE(a.empresa, ''),
                     TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)),
                     COALESCE(a.nombre_agencia, an.banca, an.agencia),
                     COALESCE(a.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')),
                     an.identificacion,
                     DATE(an.entrada)
-            ";
-            $bindings[] = $validated['fecha_inicio'];
-            $bindings[] = $validated['fecha_fin'];
-        }
+        ";
+        $bindings[] = $validated['fecha_inicio'];
+        $bindings[] = $validated['fecha_fin'];
 
         $baseSql = "
             SELECT

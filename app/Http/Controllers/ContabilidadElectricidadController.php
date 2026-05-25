@@ -251,6 +251,23 @@ class ContabilidadElectricidadController extends Controller
         ]);
     }
 
+    public function updateSeguimientoDiaMedidor(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'medidor' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $registro = ContabilidadElectricidadSeguimientoDia::query()->findOrFail($id);
+        $registro->update([
+            'medidor' => $validated['medidor'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Medidor de seguimiento actualizado correctamente.',
+            'medidor' => (string) ($registro->medidor ?? ''),
+        ]);
+    }
+
     public function updateSeguimientoDiaObservaciones(Request $request, int $id)
     {
         $validated = $request->validate([
@@ -363,6 +380,23 @@ class ContabilidadElectricidadController extends Controller
         return response()->json([
             'message' => 'Estatus de averia actualizado correctamente.',
             'estatus' => $registro->estatus,
+        ]);
+    }
+
+    public function updateAveriasDiaMedidor(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'medidor' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $registro = ContabilidadElectricidadAveriaDia::query()->findOrFail($id);
+        $registro->update([
+            'medidor' => $validated['medidor'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Medidor de averia actualizado correctamente.',
+            'medidor' => (string) ($registro->medidor ?? ''),
         ]);
     }
 

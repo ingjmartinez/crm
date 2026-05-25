@@ -271,6 +271,7 @@ class AgenciaController extends Controller
      */
     public function list(Request $request)
     {
+        try {
         $query = Agencia::query();
         $estatusFilter = $request->input('estatus_filter', 'todos');
         $empresaFilter = $request->input('empresa_filter', 'todas');
@@ -335,6 +336,39 @@ class AgenciaController extends Controller
             'total_joselito' => $totalJoselito,
             'total_negosur' => $totalNegosur,
         ]);
+        } catch (\Throwable $e) {
+            $errorId = (string) \Illuminate\Support\Str::uuid();
+
+            Log::error('Error cargando listado de agencias.', [
+                'error_id' => $errorId,
+                'message' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+            ]);
+
+            $payload = [
+                'draw' => (int) $request->input('draw', 0),
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+                'total_activas' => 0,
+                'total_inactivas' => 0,
+                'total_joselito' => 0,
+                'total_negosur' => 0,
+                'error_id' => $errorId,
+                'message' => 'No se pudo cargar el listado de agencias. Codigo: ' . $errorId,
+            ];
+
+            if (!app()->environment('production')) {
+                $payload['debug'] = [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ];
+            }
+
+            return response()->json($payload, 500);
+        }
     }
 
     /**

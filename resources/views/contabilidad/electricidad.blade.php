@@ -557,6 +557,26 @@
                 `;
             }
 
+            function medidorEditableCell(tipo, id, medidor) {
+                const current = String(medidor || '');
+                const preview = current.trim() !== ''
+                    ? escapeHtml(current)
+                    : '<span class="text-muted">Agregar medidor</span>';
+
+                return `
+                    <button
+                        type="button"
+                        class="btn btn-link p-0 border-0 text-start text-decoration-none js-editar-medidor"
+                        data-tipo="${tipo}"
+                        data-id="${id}"
+                        data-medidor="${encodeURIComponent(current)}"
+                        title="Haz clic para editar medidor"
+                    >
+                        ${preview}
+                    </button>
+                `;
+            }
+
             function observacionesEditableCell(tipo, id, observaciones) {
                 const current = String(observaciones || '');
                 const preview = current.trim() !== ''
@@ -634,6 +654,66 @@
                 Swal.fire({
                     icon: 'success',
                     title: 'Estatus actualizado',
+                    timer: 1100,
+                    showConfirmButton: false,
+                });
+            }
+
+            async function actualizarMedidorOrden(tipo, id, medidor) {
+                const endpoint = tipo === 'seguimiento'
+                    ? `/contabilidad/electricidad/seguimiento-dia/${id}/medidor`
+                    : `/contabilidad/electricidad/averias-dia/${id}/medidor`;
+
+                const response = await fetch(endpoint, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({ medidor }),
+                });
+
+                const json = await response.json().catch(function () { return {}; });
+
+                if (!response.ok) {
+                    const firstValidation = json?.errors ? Object.values(json.errors)[0]?.[0] : '';
+                    throw new Error(firstValidation || json.message || 'No se pudo actualizar el medidor.');
+                }
+
+                return json;
+            }
+
+            async function seleccionarYActualizarMedidor(tipo, id, medidorActual) {
+                const selected = await Swal.fire({
+                    title: 'Editar medidor',
+                    input: 'text',
+                    inputValue: medidorActual || '',
+                    inputAttributes: {
+                        maxlength: 20,
+                    },
+                    showCancelButton: true,
+                    confirmButtonText: 'Guardar',
+                    cancelButtonText: 'Cancelar',
+                });
+
+                if (!selected.isConfirmed) {
+                    return;
+                }
+
+                const medidor = (selected.value || '').trim();
+                await actualizarMedidorOrden(tipo, id, medidor);
+
+                if (tipo === 'seguimiento') {
+                    await cargarSeguimientoDia();
+                } else {
+                    await cargarAveriasDia();
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Medidor actualizado',
                     timer: 1100,
                     showConfirmButton: false,
                 });
@@ -778,7 +858,7 @@
                         <td>${item.fecha_solicitud || ''}</td>
                         <td>${item.distribuidora || ''}</td>
                         <td>${item.nic || ''}</td>
-                        <td>${item.medidor || ''}</td>
+                        <td>${medidorEditableCell('seguimiento', item.id, item.medidor)}</td>
                         <td>${item.agencia || ''}</td>
                         <td>${item.ruta || ''}</td>
                         <td>${estatusEditableCell('seguimiento', item.id, item.estatus)}</td>
@@ -821,7 +901,7 @@
                         <td>${item.reporte || ''}</td>
                         <td>${item.distribuidora || ''}</td>
                         <td>${item.nic || ''}</td>
-                        <td>${item.medidor || ''}</td>
+                        <td>${medidorEditableCell('averia', item.id, item.medidor)}</td>
                         <td>${item.agencia || ''}</td>
                         <td>${item.ruta || ''}</td>
                         <td>${item.coordinadores || ''}</td>
@@ -997,6 +1077,29 @@
                         icon: 'error',
                         title: 'Error',
                         text: error.message || 'No fue posible actualizar las observaciones.',
+                    });
+                });
+            });
+
+            document.addEventListener('click', function (event) {
+                const btn = event.target.closest('.js-editar-medidor');
+                if (!btn) {
+                    return;
+                }
+
+                const tipo = btn.getAttribute('data-tipo');
+                const id = btn.getAttribute('data-id');
+                const medidor = decodeURIComponent(btn.getAttribute('data-medidor') || '');
+
+                if (!tipo || !id) {
+                    return;
+                }
+
+                seleccionarYActualizarMedidor(tipo, id, medidor).catch(function (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: error.message || 'No fue posible actualizar el medidor.',
                     });
                 });
             });

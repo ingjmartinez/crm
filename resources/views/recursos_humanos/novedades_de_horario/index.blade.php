@@ -28,11 +28,11 @@
                             <div class="card-body">
                                 <div class="row g-3 align-items-end">
                                     <div class="col-md-2">
-                                        <label for="sistema" class="form-label">Empresa</label>
-                                        <select id="sistema" class="form-control">
-                                            <option value="todos">Todos</option>
-                                            <option value="lotobet">Lotobet</option>
-                                            <option value="lotonet">Lotonet</option>
+                                        <label for="empresa" class="form-label">Empresa</label>
+                                        <select id="empresa" class="form-control">
+                                            <option value="todos">Todas</option>
+                                            <option value="grupo_joselito">Grupo Joselito</option>
+                                            <option value="negosur">Negosur</option>
                                         </select>
                                     </div>
                                     <div class="col-md-2">
@@ -360,7 +360,6 @@
 
         function verDetalleHorario(row) {
             const params = new URLSearchParams({
-                sistema: document.getElementById('sistema').value,
                 fecha_inicio: document.getElementById('fecha_inicio').value,
                 fecha_fin: document.getElementById('fecha_fin').value,
                 horas_requeridas: horasRequeridasReporte,
@@ -399,7 +398,7 @@
 
         function obtenerParametrosReporte(extra = {}) {
             return new URLSearchParams({
-                sistema: document.getElementById('sistema').value,
+                empresa: document.getElementById('empresa').value,
                 fecha_inicio: document.getElementById('fecha_inicio').value,
                 fecha_fin: document.getElementById('fecha_fin').value,
                 horas_requeridas: horasRequeridasReporte,
@@ -493,7 +492,7 @@
         }
 
         function cargarNovedadesHorario() {
-            const sistema = document.getElementById('sistema').value;
+            const empresa = document.getElementById('empresa').value;
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
             const detalleFiltro = document.getElementById('detalle_filtro').value;
@@ -535,7 +534,7 @@
                     url: '/recursos-humanos/novedades-horario/list',
                     type: 'GET',
                     data: {
-                        sistema: sistema,
+                        empresa: empresa,
                         fecha_inicio: fechaInicio,
                         fecha_fin: fechaFin,
                         horas_requeridas: horasRequeridasReporte,

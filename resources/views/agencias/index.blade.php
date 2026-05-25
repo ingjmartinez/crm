@@ -422,6 +422,8 @@
 @section('script')
 <script>
     $(document).ready(function() {
+        $.fn.dataTable.ext.errMode = 'none';
+
         var estadoFiltro = 'todos';
         var empresaFiltro = 'todas';
         var countAgenciasActivas = $('#countAgenciasActivas');
@@ -468,9 +470,45 @@
         var cargandoInactivas = false;
         var paraActualizarStats = null;
         var paraActualizarCargadas = false;
+        var mostrandoErrorCargaAgencias = false;
 
         function escapeHtml(value) {
             return $('<div>').text(value ?? '').html();
+        }
+
+        function mostrarErrorCargaAgencias(xhr) {
+            if (mostrandoErrorCargaAgencias) {
+                return;
+            }
+
+            mostrandoErrorCargaAgencias = true;
+            var errorId = xhr?.responseJSON?.error_id || '';
+            var mensaje = xhr?.responseJSON?.message
+                || 'No se pudo cargar el listado de agencias. Intenta nuevamente en unos segundos.';
+            var detalle = xhr?.responseJSON?.debug?.message || '';
+
+            countAgenciasActivas.text('0');
+            countAgenciasInactivas.text('0');
+            countAgenciasJoselito.text('0');
+            countAgenciasNegosur.text('0');
+
+            Swal.fire({
+                icon: 'error',
+                title: 'Error cargando agencias',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-2">${escapeHtml(mensaje)}</p>
+                        ${errorId ? `<div class="small text-muted">Codigo: ${escapeHtml(errorId)}</div>` : ''}
+                        ${detalle ? `<div class="small text-muted mt-2">${escapeHtml(detalle)}</div>` : ''}
+                    </div>
+                `,
+                confirmButtonText: 'Reintentar'
+            }).then(function(result) {
+                mostrandoErrorCargaAgencias = false;
+                if (result.isConfirmed && table) {
+                    table.ajax.reload();
+                }
+            });
         }
 
         function renderNoRegistradasModal() {
@@ -1299,16 +1337,24 @@
             serverSide: true,
             ajax: {
                 url: '{{ route('agencias.list') }}',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
                 data: function(d) {
                     d.estatus_filter = estadoFiltro;
                     d.empresa_filter = empresaFiltro;
                 },
                 dataSrc: function(json) {
+                    mostrandoErrorCargaAgencias = false;
                     countAgenciasActivas.text((json.total_activas || 0).toLocaleString('es-DO'));
                     countAgenciasInactivas.text((json.total_inactivas || 0).toLocaleString('es-DO'));
                     countAgenciasJoselito.text((json.total_joselito || 0).toLocaleString('es-DO'));
                     countAgenciasNegosur.text((json.total_negosur || 0).toLocaleString('es-DO'));
                     return json.data || [];
+                },
+                error: function(xhr) {
+                    mostrarErrorCargaAgencias(xhr);
                 }
             },
             responsive: true,
@@ -1384,6 +1430,11 @@
                     }, 220);
                 }
             }
+        });
+
+        $('#tableAgencias').on('error.dt', function(e, settings, techNote, message) {
+            console.error('DataTables agencias:', message);
+            mostrarErrorCargaAgencias();
         });
 
         aplicarEstadoBotones();

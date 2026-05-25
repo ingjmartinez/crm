@@ -56,11 +56,11 @@
                             <div class="card-body">
                                 <div class="row g-3 align-items-end">
                                     <div class="col-md-3">
-                                        <label for="sistema" class="form-label">Empresa</label>
-                                        <select id="sistema" class="form-control">
+                                        <label for="empresa" class="form-label">Empresa</label>
+                                        <select id="empresa" class="form-control">
                                             <option value="todos">Todas</option>
-                                            <option value="lotobet">Lotobet</option>
-                                            <option value="lotonet">Lotonet</option>
+                                            <option value="grupo_joselito">Grupo Joselito</option>
+                                            <option value="negosur">Negosur</option>
                                         </select>
                                     </div>
                                     <div class="col-md-3">
@@ -207,7 +207,7 @@
         }
 
         function cargarCompensacion() {
-            const sistema = document.getElementById('sistema').value;
+            const empresa = document.getElementById('empresa').value;
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
 
@@ -236,7 +236,7 @@
                     url: '/reportes-compensacion/list',
                     type: 'GET',
                     data: {
-                        sistema: sistema,
+                        empresa: empresa,
                         fecha_inicio: fechaInicio,
                         fecha_fin: fechaFin
                     },

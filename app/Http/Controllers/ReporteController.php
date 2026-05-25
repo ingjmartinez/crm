@@ -47,7 +47,7 @@ class ReporteController extends Controller
     public function listCompensacion(Request $request)
     {
         $validated = $request->validate([
-            'sistema' => 'required|in:todos,lotobet,lotonet',
+            'empresa' => 'required|in:todos,grupo_joselito,negosur',
             'fecha_inicio' => 'required|date',
             'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
         ]);
@@ -57,9 +57,9 @@ class ReporteController extends Controller
         $uniones = [];
         $bindings = [];
 
-        if (in_array($validated['sistema'], ['todos', 'lotobet'], true)) {
-            $uniones[] = "
+        $uniones[] = "
                 SELECT
+                    TRIM(CAST(agencia_id AS CHAR)) AS agencia_id,
                     CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
                     CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
                     COALESCE(monto, 0) AS aotra_bet,
@@ -68,12 +68,13 @@ class ReporteController extends Controller
                     0 AS porotra_net
                 FROM pagos_aotra_empresa_bet
                 WHERE fecha >= ? AND fecha < DATE_ADD(?, INTERVAL 1 DAY)
-            ";
-            $bindings[] = $fechaInicio;
-            $bindings[] = $fechaFin;
+        ";
+        $bindings[] = $fechaInicio;
+        $bindings[] = $fechaFin;
 
-            $uniones[] = "
+        $uniones[] = "
                 SELECT
+                    TRIM(CAST(agencia_id AS CHAR)) AS agencia_id,
                     CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
                     CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
                     0 AS aotra_bet,
@@ -82,14 +83,13 @@ class ReporteController extends Controller
                     0 AS porotra_net
                 FROM pagos_porotra_empresa_bet
                 WHERE fecha >= ? AND fecha < DATE_ADD(?, INTERVAL 1 DAY)
-            ";
-            $bindings[] = $fechaInicio;
-            $bindings[] = $fechaFin;
-        }
+        ";
+        $bindings[] = $fechaInicio;
+        $bindings[] = $fechaFin;
 
-        if (in_array($validated['sistema'], ['todos', 'lotonet'], true)) {
-            $uniones[] = "
+        $uniones[] = "
                 SELECT
+                    TRIM(CAST(agencia_id AS CHAR)) AS agencia_id,
                     CAST(NULLIF(TRIM(pagado_a_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
                     CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
                     0 AS aotra_bet,
@@ -98,12 +98,13 @@ class ReporteController extends Controller
                     0 AS porotra_net
                 FROM pagos_aotra_empresa_net
                 WHERE fecha >= ? AND fecha < DATE_ADD(?, INTERVAL 1 DAY)
-            ";
-            $bindings[] = $fechaInicio;
-            $bindings[] = $fechaFin;
+        ";
+        $bindings[] = $fechaInicio;
+        $bindings[] = $fechaFin;
 
-            $uniones[] = "
+        $uniones[] = "
                 SELECT
+                    TRIM(CAST(agencia_id AS CHAR)) AS agencia_id,
                     CAST(NULLIF(TRIM(pagado_consorcio_id), '') AS UNSIGNED) AS consorcio_id,
                     CAST(NULLIF(TRIM(producto_id), '') AS UNSIGNED) AS producto_id,
                     0 AS aotra_bet,
@@ -112,10 +113,9 @@ class ReporteController extends Controller
                     COALESCE(monto, 0) AS porotra_net
                 FROM pagos_porotra_empresa_net
                 WHERE fecha >= ? AND fecha < DATE_ADD(?, INTERVAL 1 DAY)
-            ";
-            $bindings[] = $fechaInicio;
-            $bindings[] = $fechaFin;
-        }
+        ";
+        $bindings[] = $fechaInicio;
+        $bindings[] = $fechaFin;
 
         $movimientosSql = implode(' UNION ALL ', $uniones);
         $catalogoTradicionalSql = "
@@ -124,6 +124,19 @@ class ReporteController extends Controller
                 TRIM(UPPER(tipo)) AS tipo
             FROM catalogo_juegos
         ";
+        $empresaWhereSql = '';
+        $empresaBindings = [];
+
+        if ($validated['empresa'] === 'grupo_joselito') {
+            $empresaWhereSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $empresaBindings[] = '%joselito%';
+        }
+
+        if ($validated['empresa'] === 'negosur') {
+            $empresaWhereSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $empresaBindings[] = '%negosur%';
+        }
+
         $sql = "
             SELECT
                 x.consorcios,
@@ -149,8 +162,11 @@ class ReporteController extends Controller
                     ON p.producto_id = cj.producto_id
                     AND cj.tipo = 'TRADICIONAL'
                 INNER JOIN consorcios co ON p.consorcio_id = co.id
+                LEFT JOIN agencias a
+                    ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(p.agencia_id AS CHAR))
                 WHERE p.consorcio_id IS NOT NULL
                   AND p.consorcio_id <> 0
+                  {$empresaWhereSql}
                 GROUP BY co.consorcios
 
                 UNION ALL
@@ -169,11 +185,15 @@ class ReporteController extends Controller
                 INNER JOIN ({$catalogoTradicionalSql}) cj
                     ON p.producto_id = cj.producto_id
                     AND cj.tipo = 'TRADICIONAL'
+                LEFT JOIN agencias a
+                    ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(p.agencia_id AS CHAR))
+                WHERE 1 = 1
+                  {$empresaWhereSql}
             ) x
             ORDER BY x.orden, x.total_general DESC, x.consorcios
         ";
 
-        $data = DB::select($sql, array_merge($bindings, $bindings));
+        $data = DB::select($sql, array_merge($bindings, $empresaBindings, $bindings, $empresaBindings));
         $totalRow = collect($data)->firstWhere('consorcios', 'TOTAL');
 
         $totalAotraBet = (float) ($totalRow->aotra_bet ?? 0);
@@ -184,9 +204,9 @@ class ReporteController extends Controller
 
         return response()->json([
             'resumen' => [
-                'sistema' => match ($validated['sistema']) {
-                    'lotobet' => 'Lotobet',
-                    'lotonet' => 'Lotonet',
+                'empresa' => match ($validated['empresa']) {
+                    'grupo_joselito' => 'Grupo Joselito',
+                    'negosur' => 'Negosur',
                     default => 'Todas',
                 },
                 'aotra_bet' => round($totalAotraBet, 2),
