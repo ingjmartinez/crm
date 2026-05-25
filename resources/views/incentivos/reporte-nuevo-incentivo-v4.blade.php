@@ -1,6 +1,63 @@
 @extends('app')
 
 @section('content')
+    <style>
+        .empleado-maestro-pendiente {
+            background: #fff7df;
+            border: 1px solid #fde8ae;
+            border-radius: 999px;
+            color: #9a6a12;
+            display: inline-block;
+            font-size: .78rem;
+            font-weight: 600;
+            padding: .22rem .55rem;
+        }
+
+        #tableNuevoIncentivo th,
+        #tableNuevoIncentivo td {
+            vertical-align: middle;
+        }
+
+        #tableNuevoIncentivo thead th {
+            font-size: .78rem;
+            line-height: 1.2;
+            white-space: nowrap !important;
+        }
+
+        #tableNuevoIncentivo td {
+            white-space: nowrap;
+        }
+
+        #tableNuevoIncentivo .col-cedula {
+            min-width: 105px;
+        }
+
+        #tableNuevoIncentivo .col-nombre {
+            min-width: 190px;
+        }
+
+        #tableNuevoIncentivo .col-empresa {
+            min-width: 120px;
+        }
+
+        #tableNuevoIncentivo .col-monto {
+            min-width: 118px;
+        }
+
+        #tableNuevoIncentivo .col-dias {
+            min-width: 68px;
+        }
+
+        #tableNuevoIncentivo .col-regla {
+            min-width: 145px;
+        }
+
+        #tableNuevoIncentivo .cell-nombre {
+            white-space: normal;
+            min-width: 190px;
+        }
+    </style>
+
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -149,6 +206,7 @@
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
+                                    <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -156,13 +214,14 @@
                                 <table id="tableNuevoIncentivo" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                                     <thead>
                                         <tr>
-                                            <th>Cedula</th>
-                                            <th>Empresa</th>
-                                            <th>Ventas Ultimo Mes</th>
-                                            <th>Ventas Mes Actual</th>
-                                            <th>Dias Ventas Mes Actual</th>
-                                            <th>Cumple Regla</th>
-                                            <th>Total a Pagar</th>
+                                            <th class="col-cedula">Cedula</th>
+                                            <th class="col-nombre">Nombre</th>
+                                            <th class="col-empresa">Empresa</th>
+                                            <th class="col-monto text-end">Ventas Ult. Mes</th>
+                                            <th class="col-monto text-end">Ventas Mes Actual</th>
+                                            <th class="col-dias text-center">Dias</th>
+                                            <th class="col-regla">Cumple Regla</th>
+                                            <th class="col-monto text-end">Total a Pagar</th>
                                         </tr>
                                     </thead>
                                     <tbody></tbody>
@@ -445,6 +504,66 @@
             </div>
         </div>
     </div>
+
+    <div id="modalFaltantesIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Faltantes de usuarios generados</h5>
+                        <small class="text-muted" id="faltantesIncentivoRango">Consulta basada en las cedulas del reporte actual.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Total monto faltantes</small>
+                                <strong class="fs-4 text-danger" id="faltantesIncentivoTotalMonto">0.00</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Cantidad de faltantes</small>
+                                <strong class="fs-4" id="faltantesIncentivoTotalCantidad">0</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Cedulas consultadas</small>
+                                <strong class="fs-4" id="faltantesIncentivoTotalCedulas">0</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Monto incentivos con faltantes</small>
+                                <strong class="fs-4 text-warning" id="faltantesIncentivoMontoIncentivos">0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="tableFaltantesIncentivo" class="table table-bordered table-striped align-middle" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>Cedula</th>
+                                    <th>Nombre</th>
+                                    <th class="text-center">Cantidad de faltantes</th>
+                                    <th class="text-end">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-warning" id="btnAplicarFaltantesIncentivo">Aplicar</button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -508,9 +627,13 @@
     let operatorRows = getDefaultOperatorRows();
     let coordinatorRows = getDefaultCoordinatorRows();
     let cachedRows = [];
+    let currentFilteredRows = [];
     let cachedMeta = {};
     let cachedSistema = null;
     let cachedTipoPago = null;
+    let tableFaltantesIncentivo = null;
+    let lastFaltantesCedulas = new Set();
+    let excludedFaltantesCedulas = new Set();
     let adminPctBruto = 0;
     let administrativeGroupFilter = 'todos';
     let puestoPctConfig = {
@@ -683,6 +806,16 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function renderNombreEmpleado(value) {
+        const nombre = String(value || '').trim() || 'Actualizar en maestro de empleados';
+
+        if (nombre === 'Actualizar en maestro de empleados') {
+            return `<span class="empleado-maestro-pendiente">${escapeHtml(nombre)}</span>`;
+        }
+
+        return escapeHtml(nombre);
     }
 
     function toCsvValue(value) {
@@ -1225,12 +1358,13 @@
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${item.cedula}</td>
+                <td class="cell-nombre">${renderNombreEmpleado(item.nombre)}</td>
                 <td>${escapeHtml(normalizeEmpresaLabel(item.empresa))}</td>
-                <td>${formatMoney(item.ventas_ultimo_mes)}</td>
-                <td>${formatMoney(item.ventas_mes_actual)}</td>
-                <td>${item.dias_ventas_mes_actual ?? 0}</td>
+                <td class="text-end">${formatMoney(item.ventas_ultimo_mes)}</td>
+                <td class="text-end">${formatMoney(item.ventas_mes_actual)}</td>
+                <td class="text-center">${item.dias_ventas_mes_actual ?? 0}</td>
                 <td>${cumpleBadge}</td>
-                <td>${formatMoney(item.nuevo_incentivo)}</td>
+                <td class="text-end">${formatMoney(item.nuevo_incentivo)}</td>
             `;
             tableBody.appendChild(row);
         });
@@ -1239,9 +1373,19 @@
             responsive: true,
             dom: 'Bfrtip',
             buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
-            order: [[2, 'desc']],
+            order: [[3, 'desc']],
+            autoWidth: true,
+            columnDefs: [
+                { targets: 0, width: '7rem' },
+                { targets: 1, width: '13rem' },
+                { targets: 2, width: '8rem' },
+                { targets: [3, 4, 7], width: '8.4rem', className: 'text-end' },
+                { targets: 5, width: '4.4rem', className: 'text-center' },
+                { targets: 6, width: '9rem' },
+            ],
             pageLength: 10000,
             scrollY: '500px',
+            scrollX: true,
             scrollCollapse: true,
             language: {
                 lengthMenu: 'Mostrar _MENU_ registros por pagina',
@@ -1257,6 +1401,166 @@
                 }
             }
         });
+    }
+
+    function renderFaltantesIncentivoTable(rows) {
+        const data = Array.isArray(rows) ? rows : [];
+
+        if (tableFaltantesIncentivo) {
+            tableFaltantesIncentivo.destroy();
+            $('#tableFaltantesIncentivo tbody').empty();
+        }
+
+        tableFaltantesIncentivo = $('#tableFaltantesIncentivo').DataTable({
+            data: data,
+            columns: [
+                { data: 'cedula' },
+                {
+                    data: 'nombre',
+                    render: function(data, type) {
+                        return type === 'display' ? renderNombreEmpleado(data) : data;
+                    }
+                },
+                {
+                    data: 'cantidad_faltantes',
+                    className: 'text-center',
+                    render: function(data, type) {
+                        const value = Number(data || 0);
+                        return type === 'display' ? value.toLocaleString('en-US') : value;
+                    }
+                },
+                {
+                    data: 'monto',
+                    className: 'text-end',
+                    render: function(data, type) {
+                        const value = Number(data || 0);
+                        return type === 'display' ? formatMoney(value) : value;
+                    }
+                }
+            ],
+            autoWidth: false,
+            responsive: true,
+            pageLength: 10,
+            lengthMenu: [10, 25, 50],
+            order: [[3, 'desc']],
+            language: {
+                lengthMenu: 'Mostrar _MENU_ registros por pagina',
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                infoEmpty: 'No hay registros disponibles',
+                infoFiltered: '(filtrado de _MAX_ registros totales)',
+                search: 'Buscar:',
+                zeroRecords: 'No hay faltantes para las cedulas consultadas',
+                paginate: {
+                    first: 'Primero',
+                    last: 'Ultimo',
+                    next: 'Siguiente',
+                    previous: 'Anterior'
+                }
+            }
+        });
+    }
+
+    function getCedulasReporteActual() {
+        const sourceRows = currentFilteredRows;
+
+        return [...new Set(sourceRows
+            .filter(row => toNumber(row?.ventas_mes_actual) > 0)
+            .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
+            .filter(Boolean)
+        )];
+    }
+
+    function calcularMontoIncentivosPorCedulas(cedulas) {
+        const cedulasSet = new Set((Array.isArray(cedulas) ? cedulas : [...cedulas])
+            .map(cedula => String(cedula ?? '').replace(/\D+/g, ''))
+            .filter(Boolean));
+
+        return currentFilteredRows
+            .filter(row => cedulasSet.has(String(row?.cedula ?? '').replace(/\D+/g, '')))
+            .reduce((sum, row) => sum + toNumber(row?.nuevo_incentivo), 0);
+    }
+
+    function aplicarFaltantesIncentivo() {
+        if (!lastFaltantesCedulas.size) {
+            Swal.fire({ title: 'Sin faltantes', text: 'No hay cedulas con faltantes para aplicar.', icon: 'info' });
+            return;
+        }
+
+        excludedFaltantesCedulas = new Set([...excludedFaltantesCedulas, ...lastFaltantesCedulas]);
+        applyLocalFilters(false);
+        bootstrap.Modal.getInstance(document.getElementById('modalFaltantesIncentivo'))?.hide();
+
+        Swal.fire({
+            title: 'Faltantes aplicados',
+            text: `${lastFaltantesCedulas.size} cedulas fueron ocultadas del reporte principal.`,
+            icon: 'success'
+        });
+    }
+
+    function consultarFaltantesIncentivo() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        const fechaIni = document.getElementById('ni_fecha_ini').value;
+        const fechaFin = document.getElementById('ni_fecha_fin').value;
+        const cedulas = getCedulasReporteActual();
+
+        if (!fechaIni || !fechaFin) {
+            Swal.fire({ title: 'Informacion', text: 'Debe seleccionar fecha inicio y fecha fin.', icon: 'warning' });
+            return;
+        }
+
+        if (!cedulas.length) {
+            Swal.fire({ title: 'Sin cedulas', text: 'No hay cedulas disponibles en el reporte actual.', icon: 'warning' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Consultando faltantes...',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        fetch('/incentivos/reporte-nuevo-incentivo-v4/faltantes', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            },
+            body: JSON.stringify({
+                cedulas: cedulas,
+                fecha_ini: fechaIni,
+                fecha_fin: fechaFin,
+            }),
+        })
+            .then(response => parseResponseAsJson(response, 'Error consultando faltantes del incentivo'))
+            .then(resp => {
+                Swal.close();
+                const faltantesRows = Array.isArray(resp.data) ? resp.data : [];
+                lastFaltantesCedulas = new Set(faltantesRows
+                    .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
+                    .filter(Boolean));
+                const montoIncentivosConFaltantes = calcularMontoIncentivosPorCedulas([...lastFaltantesCedulas]);
+
+                document.getElementById('faltantesIncentivoTotalMonto').textContent = formatMoney(resp.total_monto || 0);
+                document.getElementById('faltantesIncentivoTotalCantidad').textContent = Number(resp.total_faltantes || 0).toLocaleString('en-US');
+                document.getElementById('faltantesIncentivoTotalCedulas').textContent = cedulas.length.toLocaleString('en-US');
+                document.getElementById('faltantesIncentivoMontoIncentivos').textContent = formatMoney(montoIncentivosConFaltantes);
+                document.getElementById('faltantesIncentivoRango').textContent = `Rango consultado: ${fechaIni} al ${fechaFin}`;
+                renderFaltantesIncentivoTable(faltantesRows);
+
+                const modal = new bootstrap.Modal(document.getElementById('modalFaltantesIncentivo'));
+                modal.show();
+            })
+            .catch(error => {
+                Swal.fire({ title: 'Error', text: error?.message || String(error), icon: 'warning' });
+            });
     }
 
     function applyLocalFilters(showFilterAlert = false) {
@@ -1275,7 +1579,7 @@
             return;
         }
 
-        let filtered = [...cachedRows];
+        let filtered = cachedRows.filter(item => toNumber(item?.ventas_mes_actual) > 0);
         if (filtroCumplimiento === 'cumplidos') {
             filtered = filtered.filter(item => evaluateMetaMinima(item).cumplio);
         } else if (filtroCumplimiento === 'no_cumplidos') {
@@ -1286,6 +1590,11 @@
             filtered = filtered.filter(item => normalizeEmpresaValue(item?.empresa) === filtroEmpresa);
         }
 
+        if (excludedFaltantesCedulas.size) {
+            filtered = filtered.filter(item => !excludedFaltantesCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
+        }
+
+        currentFilteredRows = filtered;
         renderTableFromData(filtered);
         updateCardsFromData(filtered);
         const modalAdministrativos = document.getElementById('modalAdministrativos');
@@ -1366,6 +1675,20 @@
             renderCoordinatorTable();
             const modal = new bootstrap.Modal(document.getElementById('modalCoordinadores'));
             modal.show();
+        });
+
+        document.querySelector('#btnConsultarFaltantes').addEventListener('click', function() {
+            consultarFaltantesIncentivo();
+        });
+
+        document.querySelector('#btnAplicarFaltantesIncentivo').addEventListener('click', function() {
+            aplicarFaltantesIncentivo();
+        });
+
+        document.getElementById('modalFaltantesIncentivo').addEventListener('shown.bs.modal', function() {
+            if (tableFaltantesIncentivo) {
+                tableFaltantesIncentivo.columns.adjust().responsive.recalc();
+            }
         });
 
         document.querySelector('#tbodyCoordinadores').addEventListener('click', function(event) {
@@ -1555,6 +1878,9 @@
         });
 
         $('#tableNuevoIncentivo tbody').empty();
+        currentFilteredRows = [];
+        lastFaltantesCedulas = new Set();
+        excludedFaltantesCedulas = new Set();
 
         const params = new URLSearchParams({
             sistema: sistema,

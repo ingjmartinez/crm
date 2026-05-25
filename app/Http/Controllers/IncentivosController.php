@@ -1283,10 +1283,20 @@ class IncentivosController extends Controller
 
         $totalVendido = (float) $rawData->sum('ventas_mes_actual_num');
         $totalIncentivo = (float) $rawData->sum('nuevo_incentivo_num');
+        $nombresPorCedula = DB::table('empleados')
+            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $rawData->pluck('cedula')->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))->filter()->unique()->values()->all())
+            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
+            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->pluck('nombre', 'cedula');
 
-        $data = $rawData->map(function ($row) {
+        $data = $rawData->map(function ($row) use ($nombresPorCedula) {
+            $cedulaKey = preg_replace('/\D+/', '', (string) ($row['cedula'] ?? ''));
+            $nombre = trim((string) ($nombresPorCedula[$cedulaKey] ?? ''));
+
             return [
                 'cedula' => $row['cedula'],
+                'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
                 'empresa' => $row['empresa'] ?? 'Sin empresa',
                 'ventas_ultimo_mes' => number_format($row['ventas_num'], 2, '.', ','),
                 'ventas_mes_actual' => number_format($row['ventas_mes_actual_num'], 2, '.', ','),
@@ -1565,6 +1575,69 @@ class IncentivosController extends Controller
         }
 
         return response()->json($payload, $response->status());
+    }
+
+    public function faltantesReporteNuevoIncentivoV4(Request $request)
+    {
+        $validated = $request->validate([
+            'cedulas' => 'required|array|min:1',
+            'cedulas.*' => 'nullable|string|max:50',
+            'fecha_ini' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_ini',
+        ]);
+
+        $cedulas = collect($validated['cedulas'])
+            ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($cedulas->isEmpty()) {
+            return response()->json([
+                'total_monto' => 0,
+                'total_faltantes' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $faltantesBet = DB::table('faltantes_bet')
+            ->select('identificacion', 'faltante_id', 'monto', 'fecha');
+
+        $faltantesNet = DB::table('faltantes_net')
+            ->select('identificacion', 'faltante_id', 'monto', 'fecha');
+
+        $rows = DB::query()
+            ->fromSub($faltantesBet->unionAll($faltantesNet), 'faltantes')
+            ->whereBetween('fecha', [$validated['fecha_ini'], $validated['fecha_fin']])
+            ->whereIn(DB::raw('CAST(identificacion AS UNSIGNED)'), $cedulas->all())
+            ->selectRaw('CAST(identificacion AS UNSIGNED) AS cedula')
+            ->selectRaw('COUNT(faltante_id) AS cantidad_faltantes')
+            ->selectRaw('ROUND(SUM(COALESCE(monto, 0)), 2) AS monto')
+            ->groupByRaw('CAST(identificacion AS UNSIGNED)')
+            ->orderByDesc('monto')
+            ->get();
+
+        $nombresPorCedula = DB::table('empleados')
+            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $rows->pluck('cedula')->all())
+            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
+            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->pluck('nombre', 'cedula');
+
+        return response()->json([
+            'total_monto' => round((float) $rows->sum('monto'), 2),
+            'total_faltantes' => (int) $rows->sum('cantidad_faltantes'),
+            'data' => $rows->map(function ($row) use ($nombresPorCedula) {
+                $nombre = trim((string) ($nombresPorCedula[$row->cedula] ?? ''));
+
+                return [
+                    'cedula' => (string) $row->cedula,
+                    'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
+                    'cantidad_faltantes' => (int) $row->cantidad_faltantes,
+                    'monto' => round((float) $row->monto, 2),
+                ];
+            })->values(),
+        ]);
     }
 
     public function reportePagoIncentivos(Request $request)

@@ -313,6 +313,37 @@ class ReporteController extends Controller
         ]);
     }
 
+    public function pdfCompensacionGrupoJoselito(Request $request)
+    {
+        $validated = $request->validate([
+            'fecha_inicio' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
+        ]);
+
+        $consulta = Request::create('/reportes-compensacion/list', 'GET', [
+            'empresa' => 'grupo_joselito',
+            'fecha_inicio' => $validated['fecha_inicio'],
+            'fecha_fin' => $validated['fecha_fin'],
+        ]);
+
+        $payload = $this->listCompensacion($consulta)->getData(true);
+        $fileName = 'compensacion_grupo_joselito_' .
+            str_replace('-', '', $validated['fecha_inicio']) . '_' .
+            str_replace('-', '', $validated['fecha_fin']) . '.pdf';
+
+        $pdf = Pdf::loadView('reportes.compensacion-grupo-joselito-pdf', [
+            'fechaInicio' => $validated['fecha_inicio'],
+            'fechaFin' => $validated['fecha_fin'],
+            'resumen' => $payload['resumen'] ?? [],
+            'tradicional' => $payload['data'] ?? [],
+            'diario' => $payload['visual']['diario'] ?? [],
+            'consorcios' => $payload['visual']['diario_consorcio'] ?? [],
+            'rutas' => $payload['visual']['top_rutas'] ?? [],
+        ])->setPaper('letter', 'landscape');
+
+        return $pdf->download($fileName);
+    }
+
     public function listVentasUsuarioBet(Request $request)
     {
         header('Content-Type: application/json');

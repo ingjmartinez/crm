@@ -307,6 +307,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/reportes-compensacion', [ReporteController::class, 'compensacion']);
     Route::get('/reportes-compensacion/list', [ReporteController::class, 'listCompensacion']);
+    Route::get('/reportes-compensacion/pdf-grupo-joselito', [ReporteController::class, 'pdfCompensacionGrupoJoselito']);
 
     Route::get('/reportes-verificador-usuarios', [ReporteController::class, 'verificadorUsuarios']);
     Route::get('/reportes-verificador-usuarios/list', [ReporteController::class, 'listVerificadorUsuarios']);
@@ -435,6 +436,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/incentivos/reporte-nuevo-incentivo-v3', [IncentivosController::class, 'reporteNuevoIncentivoV3']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v4-view', [IncentivosController::class, 'reporteNuevoIncentivoV4View']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v4', [IncentivosController::class, 'reporteNuevoIncentivoV4']);
+    Route::post('/incentivos/reporte-nuevo-incentivo-v4/faltantes', [IncentivosController::class, 'faltantesReporteNuevoIncentivoV4']);
     Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
     Route::get('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoIndex'])->name('incentivos.incentivo-administrativo.index');
     Route::post('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoStore'])->name('incentivos.incentivo-administrativo.store');

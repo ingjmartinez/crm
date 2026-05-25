@@ -161,9 +161,14 @@
                                         <input type="date" id="fecha_fin" class="form-control" value="{{ date('Y-m-d') }}">
                                     </div>
                                     <div class="col-md-3">
-                                        <button type="button" class="btn btn-primary w-100" id="btnBuscar">
-                                            <i class="ri-search-line"></i> Consultar
-                                        </button>
+                                        <div class="d-grid gap-2">
+                                            <button type="button" class="btn btn-primary" id="btnBuscar">
+                                                <i class="ri-search-line"></i> Consultar
+                                            </button>
+                                            <button type="button" class="btn btn-danger" id="btnPdfGrupoJoselito">
+                                                <i class="ri-file-pdf-2-line"></i> Generar PDF
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -752,6 +757,29 @@
             });
         }
 
+        function generarPdfGrupoJoselito() {
+            const fechaInicio = document.getElementById('fecha_inicio').value;
+            const fechaFin = document.getElementById('fecha_fin').value;
+
+            if (!fechaInicio || !fechaFin) {
+                Swal.fire('Error', 'Seleccione la fecha de inicio y fin.', 'error');
+                return;
+            }
+
+            if (fechaInicio > fechaFin) {
+                Swal.fire('Error', 'La fecha de inicio no puede ser mayor que la fecha fin.', 'error');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                fecha_inicio: fechaInicio,
+                fecha_fin: fechaFin
+            });
+
+            window.open(`/reportes-compensacion/pdf-grupo-joselito?${params.toString()}`, '_blank');
+        }
+
         document.getElementById('btnBuscar').addEventListener('click', cargarCompensacion);
+        document.getElementById('btnPdfGrupoJoselito').addEventListener('click', generarPdfGrupoJoselito);
     </script>
 @endsection
