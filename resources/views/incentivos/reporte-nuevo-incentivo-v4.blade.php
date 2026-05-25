@@ -618,6 +618,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-success" id="btnExportUsuariosActualizarExcel">Excel</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -907,6 +908,27 @@
             return `"${text.replace(/"/g, '""')}"`;
         }
         return text;
+    }
+
+    function exportRowsToCsv(rows, headers, mapper, filename) {
+        if (!Array.isArray(rows) || !rows.length) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay registros para exportar.', icon: 'warning' });
+            return;
+        }
+
+        const csvRows = [
+            headers.map(toCsvValue).join(','),
+            ...rows.map(row => mapper(row).map(toCsvValue).join(','))
+        ];
+        const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     function exportRowsToExcelCsv(filename, headers, rows) {
@@ -1615,6 +1637,23 @@
         modal.show();
     }
 
+    function exportUsuariosActualizarExcel() {
+        const pendientes = currentFilteredRows.filter(item => esNombrePendiente(item));
+
+        exportRowsToCsv(
+            pendientes,
+            ['Cedula', 'Nombre', 'Nombre agencia', 'Terminal', 'Ultimo dia con venta'],
+            row => [
+                row.cedula || '',
+                row.nombre || 'Actualizar en maestro de empleados',
+                row.ultima_agencia_nombre || 'SIN AGENCIA',
+                row.ultima_terminal || '',
+                formatDateDisplay(row.ultimo_dia_venta),
+            ],
+            'usuarios_por_actualizar.csv'
+        );
+    }
+
     function getCedulasReporteActual() {
         const sourceRows = currentFilteredRows;
 
@@ -1865,6 +1904,10 @@
             if (tableUsuariosActualizar) {
                 tableUsuariosActualizar.columns.adjust().responsive.recalc();
             }
+        });
+
+        document.querySelector('#btnExportUsuariosActualizarExcel').addEventListener('click', function() {
+            exportUsuariosActualizarExcel();
         });
 
         document.querySelector('#tbodyCoordinadores').addEventListener('click', function(event) {

@@ -45,6 +45,14 @@
                                         </select>
                                     </div>
                                     <div class="col-md-2">
+                                        <label for="empresa" class="form-label">Empresa</label>
+                                        <select id="empresa" class="form-control">
+                                            <option value="todos">Todas</option>
+                                            <option value="grupo_joselito">Grupo Joselito</option>
+                                            <option value="negosur">Negosur</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
                                         <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
                                         <input type="date" id="fecha_inicio" class="form-control" value="{{ date('Y-m-01') }}">
                                     </div>
@@ -219,6 +227,7 @@
 
         function cargarDetalleFechasSinCedula(agenciaId) {
             const sistema = document.getElementById('sistema').value;
+            const empresa = document.getElementById('empresa').value;
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
 
@@ -232,6 +241,7 @@
                 type: 'GET',
                 data: {
                     sistema: sistema,
+                    empresa: empresa,
                     fecha_inicio: fechaInicio,
                     fecha_fin: fechaFin,
                     agencia_id: agenciaId
@@ -273,6 +283,7 @@
         function cargarDatos() {
             const sistema = document.getElementById('sistema').value;
             const estatus = document.getElementById('estatus').value;
+            const empresa = document.getElementById('empresa').value;
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
 
@@ -311,6 +322,7 @@
                     data: {
                         sistema: sistema,
                         estatus: estatus,
+                        empresa: empresa,
                         fecha_inicio: fechaInicio,
                         fecha_fin: fechaFin
                     },

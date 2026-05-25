@@ -809,6 +809,7 @@ class ReporteController extends Controller
     {
         $sistema = $request->input('sistema', 'Lotobet');
         $estatus = $request->input('estatus');
+        $empresa = $request->input('empresa', 'todos');
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
 
@@ -818,6 +819,16 @@ class ReporteController extends Controller
 
         // Determinar la tabla según el sistema
         $tabla = $sistema === 'Lotobet' ? 'vt_usuarios_bet' : 'vt_usuarios_net';
+        $empresaWhereSql = '';
+        $empresaBindings = [];
+
+        if ($empresa === 'grupo_joselito') {
+            $empresaWhereSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $empresaBindings[] = '%joselito%';
+        } elseif ($empresa === 'negosur') {
+            $empresaWhereSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $empresaBindings[] = '%negosur%';
+        }
 
         // Deshabilitar temporalmente strict mode para esta consulta
         DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'STRICT_TRANS_TABLES',''))");
@@ -862,6 +873,8 @@ class ReporteController extends Controller
                 DATE(MAX(v.fecha)) AS Ultima_Fecha_Venta
 
             FROM {$tabla} v
+            LEFT JOIN agencias a
+                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(v.agencia_id AS CHAR))
             LEFT JOIN empleados e
                 ON REPLACE(REPLACE(v.cedula,'-',''),' ','')
                  = REPLACE(REPLACE(e.cedula,'-',''),' ','')
@@ -870,6 +883,7 @@ class ReporteController extends Controller
               AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
                             AND NULLIF(REPLACE(REPLACE(v.cedula,'-',''),' ',''), '') IS NOT NULL
                             AND REPLACE(REPLACE(v.cedula,'-',''),' ','') <> '00000000000'
+              {$empresaWhereSql}
 
             GROUP BY
                 CAST(REPLACE(REPLACE(v.cedula,'-',''),' ','') AS CHAR(11))
@@ -877,22 +891,25 @@ class ReporteController extends Controller
             ORDER BY
                 Ultima_Fecha_Venta DESC,
                 Identificacion
-        ", [$fechaInicio, $fechaFin]);
+        ", array_merge([$fechaInicio, $fechaFin], $empresaBindings));
 
         $agenciasSinCedula = DB::select("
             SELECT
                 v.agencia_id AS Agencia,
                 COUNT(DISTINCT DATE(v.fecha)) AS Dias_Sin_Cedula_Con_Ventas
             FROM {$tabla} v
+            LEFT JOIN agencias a
+                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(v.agencia_id AS CHAR))
             WHERE v.fecha >= ?
               AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
               AND (
                     NULLIF(REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ',''), '') IS NULL
                     OR REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ','') = '00000000000'
                   )
+              {$empresaWhereSql}
             GROUP BY v.agencia_id
             ORDER BY Dias_Sin_Cedula_Con_Ventas DESC, v.agencia_id
-        ", [$fechaInicio, $fechaFin]);
+        ", array_merge([$fechaInicio, $fechaFin], $empresaBindings));
         
         // Restaurar el strict mode
         DB::statement("SET SESSION sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
@@ -921,6 +938,7 @@ class ReporteController extends Controller
     public function listCruceUsuariosSinCedulaFechas(Request $request)
     {
         $sistema = $request->input('sistema', 'Lotobet');
+        $empresa = $request->input('empresa', 'todos');
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
         $agenciaId = $request->input('agencia_id');
@@ -933,12 +951,24 @@ class ReporteController extends Controller
         }
 
         $tabla = $sistema === 'Lotobet' ? 'vt_usuarios_bet' : 'vt_usuarios_net';
+        $empresaWhereSql = '';
+        $bindings = [$fechaInicio, $fechaFin, $agenciaId];
+
+        if ($empresa === 'grupo_joselito') {
+            $empresaWhereSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $bindings[] = '%joselito%';
+        } elseif ($empresa === 'negosur') {
+            $empresaWhereSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $bindings[] = '%negosur%';
+        }
 
         $fechas = DB::select(" 
             SELECT
                 DATE(v.fecha) AS Fecha,
                 COUNT(*) AS Cantidad_Ventas
             FROM {$tabla} v
+            LEFT JOIN agencias a
+                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(v.agencia_id AS CHAR))
             WHERE v.fecha >= ?
               AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
               AND v.agencia_id = ?
@@ -946,9 +976,10 @@ class ReporteController extends Controller
                     NULLIF(REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ',''), '') IS NULL
                     OR REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ','') = '00000000000'
                   )
+              {$empresaWhereSql}
             GROUP BY DATE(v.fecha)
             ORDER BY Fecha DESC
-        ", [$fechaInicio, $fechaFin, $agenciaId]);
+        ", $bindings);
 
         return response()->json([
             'agencia' => $agenciaId,
