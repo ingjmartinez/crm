@@ -1710,6 +1710,97 @@ class IncentivosController extends Controller
         ]);
     }
 
+    public function recargasPaqueticosReporteNuevoIncentivoV4(Request $request)
+    {
+        $validated = $request->validate([
+            'cedulas' => 'required|array|min:1',
+            'cedulas.*' => 'nullable|string|max:50',
+            'fecha_ini' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_ini',
+            'sistema' => 'nullable|string|in:Todos,Lotobet,Lotonet',
+        ]);
+
+        $cedulas = collect($validated['cedulas'])
+            ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($cedulas->isEmpty()) {
+            return response()->json([
+                'total_ventas' => 0,
+                'total_recargas' => 0,
+                'total_paqueticos' => 0,
+                'cantidad_ventas' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $buildVentasQuery = function (string $tabla, string $sistema) use ($validated) {
+            return DB::table($tabla)
+                ->selectRaw(
+                    "cedula, monto, fecha, producto_id, tipo, ? AS sistema",
+                    [$sistema]
+                )
+                ->whereBetween('fecha', [$validated['fecha_ini'], $validated['fecha_fin']])
+                ->where(function ($query) {
+                    $query->whereIn(DB::raw('CAST(producto_id AS SIGNED)'), [-1, -2])
+                        ->orWhereIn(DB::raw('LOWER(TRIM(tipo))'), ['recarga', 'recargas', 'paquetico', 'paqueticos']);
+                });
+        };
+
+        $sistema = $validated['sistema'] ?? 'Todos';
+
+        if ($sistema === 'Lotobet') {
+            $ventasQuery = $buildVentasQuery('vt_usuarios_bet', 'Lotobet');
+        } elseif ($sistema === 'Lotonet') {
+            $ventasQuery = $buildVentasQuery('vt_usuarios_net', 'Lotonet');
+        } else {
+            $ventasQuery = $buildVentasQuery('vt_usuarios_bet', 'Lotobet')
+                ->unionAll($buildVentasQuery('vt_usuarios_net', 'Lotonet'));
+        }
+
+        $rows = DB::query()
+            ->fromSub($ventasQuery, 'ventas')
+            ->whereNotNull('cedula')
+            ->where('cedula', '<>', '')
+            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulas->all())
+            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw('COUNT(*) AS cantidad_ventas')
+            ->selectRaw("ROUND(SUM(CASE WHEN CAST(producto_id AS SIGNED) = -1 OR LOWER(TRIM(tipo)) IN ('recarga', 'recargas') THEN COALESCE(monto, 0) ELSE 0 END), 2) AS total_recargas")
+            ->selectRaw("ROUND(SUM(CASE WHEN CAST(producto_id AS SIGNED) = -2 OR LOWER(TRIM(tipo)) IN ('paquetico', 'paqueticos') THEN COALESCE(monto, 0) ELSE 0 END), 2) AS total_paqueticos")
+            ->selectRaw('ROUND(SUM(COALESCE(monto, 0)), 2) AS total_ventas')
+            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->orderByDesc('total_ventas')
+            ->get();
+
+        $nombresPorCedula = DB::table('empleados')
+            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $rows->pluck('cedula')->all())
+            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
+            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->pluck('nombre', 'cedula');
+
+        return response()->json([
+            'total_ventas' => round((float) $rows->sum('total_ventas'), 2),
+            'total_recargas' => round((float) $rows->sum('total_recargas'), 2),
+            'total_paqueticos' => round((float) $rows->sum('total_paqueticos'), 2),
+            'cantidad_ventas' => (int) $rows->sum('cantidad_ventas'),
+            'data' => $rows->map(function ($row) use ($nombresPorCedula) {
+                $nombre = trim((string) ($nombresPorCedula[$row->cedula] ?? ''));
+
+                return [
+                    'cedula' => (string) $row->cedula,
+                    'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
+                    'cantidad_ventas' => (int) $row->cantidad_ventas,
+                    'total_recargas' => round((float) $row->total_recargas, 2),
+                    'total_paqueticos' => round((float) $row->total_paqueticos, 2),
+                    'total_ventas' => round((float) $row->total_ventas, 2),
+                ];
+            })->values(),
+        ]);
+    }
+
     public function reportePagoIncentivos(Request $request)
     {
         ini_set('max_execution_time', 600); // 10 minutes

@@ -468,14 +468,17 @@ class ReporteController extends Controller
 
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
+        $empresa = $request->input('empresa', 'todos');
         $config = $this->getFaltantesConfig($request->input('tipo'));
         $tabla = $config['tabla'];
 
         $query = $this->faltantesBaseQuery($config['tipo'])
             ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
+            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(agencias.terminal AS CHAR))"))
             ->select(
                 $tabla . '.agencia_id',
                 $tabla . '.identificacion',
+                DB::raw("COALESCE(NULLIF(TRIM(agencias.empresa), ''), 'Sin empresa') as empresa"),
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
                 DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
                 DB::raw("SUM($tabla.monto) as total_monto"),
@@ -489,8 +492,14 @@ class ReporteController extends Controller
             $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
         }
 
+        if ($empresa === 'grupo_joselito') {
+            $query->whereRaw('LOWER(COALESCE(agencias.empresa, "")) LIKE ?', ['%joselito%']);
+        } elseif ($empresa === 'negosur') {
+            $query->whereRaw('LOWER(COALESCE(agencias.empresa, "")) LIKE ?', ['%negosur%']);
+        }
+
         $registros = $query
-            ->groupBy($tabla . '.agencia_id', $tabla . '.identificacion', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla . '.agencia_id', $tabla . '.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->paginate(10);
 
@@ -504,13 +513,16 @@ class ReporteController extends Controller
 
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
+        $empresa = $request->input('empresa', 'todos');
         $config = $this->getFaltantesConfig($request->input('tipo'));
         $tabla = $config['tabla'];
 
         $query = $this->faltantesBaseQuery($config['tipo'])
             ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
+            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(agencias.terminal AS CHAR))"))
             ->select(
                 $tabla . '.identificacion',
+                DB::raw("COALESCE(NULLIF(TRIM(agencias.empresa), ''), 'Sin empresa') as empresa"),
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
                 DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
                 DB::raw("SUM($tabla.monto) as total_monto"),
@@ -523,8 +535,14 @@ class ReporteController extends Controller
             $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
         }
 
+        if ($empresa === 'grupo_joselito') {
+            $query->whereRaw('LOWER(COALESCE(agencias.empresa, "")) LIKE ?', ['%joselito%']);
+        } elseif ($empresa === 'negosur') {
+            $query->whereRaw('LOWER(COALESCE(agencias.empresa, "")) LIKE ?', ['%negosur%']);
+        }
+
         $registros = $query
-            ->groupBy($tabla . '.identificacion', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla . '.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->get();
 
@@ -539,13 +557,16 @@ class ReporteController extends Controller
 
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
+        $empresa = $request->input('empresa', 'todos');
         $config = $this->getFaltantesConfig($request->input('tipo'));
         $tabla = $config['tabla'];
 
         $query = $this->faltantesBaseQuery($config['tipo'])
             ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
+            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(agencias.terminal AS CHAR))"))
             ->select(
                 $tabla . '.identificacion',
+                DB::raw("COALESCE(NULLIF(TRIM(agencias.empresa), ''), 'Sin empresa') as empresa"),
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
                 DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
                 DB::raw("SUM($tabla.monto) as total_monto"),
@@ -558,8 +579,14 @@ class ReporteController extends Controller
             $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
         }
 
+        if ($empresa === 'grupo_joselito') {
+            $query->whereRaw('LOWER(COALESCE(agencias.empresa, "")) LIKE ?', ['%joselito%']);
+        } elseif ($empresa === 'negosur') {
+            $query->whereRaw('LOWER(COALESCE(agencias.empresa, "")) LIKE ?', ['%negosur%']);
+        }
+
         $registros = $query
-            ->groupBy($tabla . '.identificacion', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla . '.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->get();
 

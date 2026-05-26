@@ -437,6 +437,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/incentivos/reporte-nuevo-incentivo-v4-view', [IncentivosController::class, 'reporteNuevoIncentivoV4View']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v4', [IncentivosController::class, 'reporteNuevoIncentivoV4']);
     Route::post('/incentivos/reporte-nuevo-incentivo-v4/faltantes', [IncentivosController::class, 'faltantesReporteNuevoIncentivoV4']);
+    Route::post('/incentivos/reporte-nuevo-incentivo-v4/recargas-paqueticos', [IncentivosController::class, 'recargasPaqueticosReporteNuevoIncentivoV4']);
     Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
     Route::get('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoIndex'])->name('incentivos.incentivo-administrativo.index');
     Route::post('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoStore'])->name('incentivos.incentivo-administrativo.store');

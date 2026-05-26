@@ -234,6 +234,7 @@
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
                                     <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
+                                    <button type="button" class="btn btn-success" id="btnConsultarRecargasPaqueticos">Recargas/Paqueticos</button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -592,6 +593,83 @@
         </div>
     </div>
 
+    <div id="modalRecargasPaqueticosIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Ventas por recargas y paqueticos</h5>
+                        <small class="text-muted" id="recargasPaqueticosIncentivoRango">Consulta basada en las cedulas del reporte actual.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Total ventas</small>
+                                <strong class="fs-4 text-success" id="recargasPaqueticosTotalVentas">0.00</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Recargas</small>
+                                <strong class="fs-4" id="recargasPaqueticosTotalRecargas">0.00</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Paqueticos</small>
+                                <strong class="fs-4" id="recargasPaqueticosTotalPaqueticos">0.00</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Monto incentivos con ventas</small>
+                                <strong class="fs-4 text-warning" id="recargasPaqueticosMontoIncentivos">0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Cantidad de ventas</small>
+                                <strong class="fs-5" id="recargasPaqueticosCantidadVentas">0</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Cedulas consultadas</small>
+                                <strong class="fs-5" id="recargasPaqueticosTotalCedulas">0</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="tableRecargasPaqueticosIncentivo" class="table table-bordered table-striped align-middle" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>Cedula</th>
+                                    <th>Nombre</th>
+                                    <th class="text-end">Recargas</th>
+                                    <th class="text-end">Paqueticos</th>
+                                    <th class="text-end">Total ventas</th>
+                                    <th class="text-center">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-warning" id="btnAplicarRecargasPaqueticosIncentivo">Aplicar</button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="modalUsuariosActualizar" class="modal fade" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
@@ -609,6 +687,7 @@
                                 <tr>
                                     <th>Cedula</th>
                                     <th>Nombre</th>
+                                    <th>Empresa</th>
                                     <th>Nombre agencia</th>
                                     <th>Ultimo dia con venta</th>
                                 </tr>
@@ -692,9 +771,12 @@
     let cachedSistema = null;
     let cachedTipoPago = null;
     let tableFaltantesIncentivo = null;
+    let tableRecargasPaqueticosIncentivo = null;
     let tableUsuariosActualizar = null;
     let lastFaltantesCedulas = new Set();
     let excludedFaltantesCedulas = new Set();
+    let lastRecargasPaqueticosCedulas = new Set();
+    let recargasPaqueticosDescuentos = new Map();
     let adminPctBruto = 0;
     let administrativeGroupFilter = 'todos';
     let puestoPctConfig = {
@@ -767,6 +849,57 @@
             ventasMesActual,
             faltante,
             faltantePct,
+        };
+    }
+
+    function calcularIncentivoPorVenta(ventasMesActual, diasVentas) {
+        const minDias = toNumber(document.getElementById('ni_min_dias')?.value || 1);
+        const tipoPago = document.getElementById('ni_tipo_pago')?.value || cachedTipoPago || 'tramos_60';
+        const rangosPago = payoutRangesByType[tipoPago] || [];
+        const ventas = Math.max(0, toNumber(ventasMesActual));
+
+        if (toNumber(diasVentas) < minDias) {
+            return 0;
+        }
+
+        for (const rango of rangosPago) {
+            const desde = toNumber(rango.desde);
+            const hasta = rango.hasta === null || rango.hasta === undefined ? null : toNumber(rango.hasta);
+            if (ventas >= desde && (hasta === null || ventas <= hasta)) {
+                return rango.tipo === 'porcentaje'
+                    ? ventas * (toNumber(rango.pago) / 100)
+                    : toNumber(rango.pago);
+            }
+        }
+
+        const ultimoRango = rangosPago[rangosPago.length - 1];
+        if (ultimoRango && ventas >= toNumber(ultimoRango.desde)) {
+            return ultimoRango.tipo === 'porcentaje'
+                ? ventas * (toNumber(ultimoRango.pago) / 100)
+                : toNumber(ultimoRango.pago);
+        }
+
+        return 0;
+    }
+
+    function aplicarDescuentoRecargasPaqueticos(row) {
+        const cedula = String(row?.cedula ?? '').replace(/\D+/g, '');
+        const descuento = toNumber(recargasPaqueticosDescuentos.get(cedula) || 0);
+
+        if (!descuento) {
+            return row;
+        }
+
+        const ventasAjustadas = Math.max(0, toNumber(row?.ventas_mes_actual) - descuento);
+        const incentivoAjustado = calcularIncentivoPorVenta(ventasAjustadas, row?.dias_ventas_mes_actual);
+
+        return {
+            ...row,
+            ventas_mes_actual_original: row?.ventas_mes_actual_original ?? row?.ventas_mes_actual,
+            nuevo_incentivo_original: row?.nuevo_incentivo_original ?? row?.nuevo_incentivo,
+            descuento_recargas_paqueticos: descuento,
+            ventas_mes_actual: ventasAjustadas,
+            nuevo_incentivo: incentivoAjustado,
         };
     }
 
@@ -1567,6 +1700,79 @@
         });
     }
 
+    function renderRecargasPaqueticosIncentivoTable(rows) {
+        const data = Array.isArray(rows) ? rows : [];
+
+        if (tableRecargasPaqueticosIncentivo) {
+            tableRecargasPaqueticosIncentivo.destroy();
+            $('#tableRecargasPaqueticosIncentivo tbody').empty();
+        }
+
+        tableRecargasPaqueticosIncentivo = $('#tableRecargasPaqueticosIncentivo').DataTable({
+            data: data,
+            columns: [
+                { data: 'cedula' },
+                {
+                    data: 'nombre',
+                    render: function(data, type) {
+                        return type === 'display' ? renderNombreEmpleado(data) : data;
+                    }
+                },
+                {
+                    data: 'total_recargas',
+                    className: 'text-end',
+                    render: function(data, type) {
+                        const value = Number(data || 0);
+                        return type === 'display' ? formatMoney(value) : value;
+                    }
+                },
+                {
+                    data: 'total_paqueticos',
+                    className: 'text-end',
+                    render: function(data, type) {
+                        const value = Number(data || 0);
+                        return type === 'display' ? formatMoney(value) : value;
+                    }
+                },
+                {
+                    data: 'total_ventas',
+                    className: 'text-end',
+                    render: function(data, type) {
+                        const value = Number(data || 0);
+                        return type === 'display' ? formatMoney(value) : value;
+                    }
+                },
+                {
+                    data: 'cantidad_ventas',
+                    className: 'text-center',
+                    render: function(data, type) {
+                        const value = Number(data || 0);
+                        return type === 'display' ? value.toLocaleString('en-US') : value;
+                    }
+                }
+            ],
+            autoWidth: false,
+            responsive: true,
+            pageLength: 10,
+            lengthMenu: [10, 25, 50],
+            order: [[4, 'desc']],
+            language: {
+                lengthMenu: 'Mostrar _MENU_ registros por pagina',
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                infoEmpty: 'No hay registros disponibles',
+                infoFiltered: '(filtrado de _MAX_ registros totales)',
+                search: 'Buscar:',
+                zeroRecords: 'No hay ventas de recargas o paqueticos para las cedulas consultadas',
+                paginate: {
+                    first: 'Primero',
+                    last: 'Ultimo',
+                    next: 'Siguiente',
+                    previous: 'Anterior'
+                }
+            }
+        });
+    }
+
     function renderUsuariosActualizarTable(rows) {
         const data = Array.isArray(rows) ? rows : [];
 
@@ -1583,6 +1789,12 @@
                     data: 'nombre',
                     render: function(data, type) {
                         return type === 'display' ? renderNombreEmpleado(data) : data;
+                    }
+                },
+                {
+                    data: 'empresa',
+                    render: function(data, type) {
+                        return type === 'display' ? escapeHtml(normalizeEmpresaLabel(data)) : data;
                     }
                 },
                 {
@@ -1642,16 +1854,35 @@
 
         exportRowsToCsv(
             pendientes,
-            ['Cedula', 'Nombre', 'Nombre agencia', 'Terminal', 'Ultimo dia con venta'],
+            ['Cedula', 'Nombre', 'Empresa', 'Nombre agencia', 'Terminal', 'Ultimo dia con venta'],
             row => [
                 row.cedula || '',
                 row.nombre || 'Actualizar en maestro de empleados',
+                normalizeEmpresaLabel(row.empresa),
                 row.ultima_agencia_nombre || 'SIN AGENCIA',
                 row.ultima_terminal || '',
                 formatDateDisplay(row.ultimo_dia_venta),
             ],
             'usuarios_por_actualizar.csv'
         );
+    }
+
+    function getBaseFilteredRows() {
+        const filtroCumplimiento = document.getElementById('ni_filtro_cumplimiento').value;
+        const filtroEmpresa = document.getElementById('ni_filtro_empresa').value;
+
+        let filtered = cachedRows.filter(item => toNumber(item?.ventas_mes_actual) > 0);
+        if (filtroCumplimiento === 'cumplidos') {
+            filtered = filtered.filter(item => evaluateMetaMinima(item).cumplio);
+        } else if (filtroCumplimiento === 'no_cumplidos') {
+            filtered = filtered.filter(item => !evaluateMetaMinima(item).cumplio);
+        }
+
+        if (filtroEmpresa !== 'todos') {
+            filtered = filtered.filter(item => normalizeEmpresaValue(item?.empresa) === filtroEmpresa);
+        }
+
+        return filtered;
     }
 
     function getCedulasReporteActual() {
@@ -1768,6 +1999,111 @@
             });
     }
 
+    function aplicarRecargasPaqueticosIncentivo() {
+        if (!lastRecargasPaqueticosCedulas.size) {
+            Swal.fire({ title: 'Sin ventas', text: 'No hay cedulas con ventas de recargas o paqueticos para aplicar.', icon: 'info' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Aplicando recargas y paqueticos...',
+            text: 'Estamos ocultando las cedulas con esas ventas y recalculando el reporte.',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        setTimeout(() => {
+            const rows = tableRecargasPaqueticosIncentivo?.rows?.().data?.().toArray?.() || [];
+            rows.forEach(row => {
+                const cedula = String(row?.cedula ?? '').replace(/\D+/g, '');
+                const monto = toNumber(row?.total_ventas);
+                if (cedula && monto > 0) {
+                    recargasPaqueticosDescuentos.set(cedula, monto);
+                }
+            });
+            applyLocalFilters(false);
+            bootstrap.Modal.getInstance(document.getElementById('modalRecargasPaqueticosIncentivo'))?.hide();
+
+            Swal.fire({
+                title: 'Recargas y paqueticos aplicados',
+                text: `Se desconto el monto de recargas y paqueticos a ${lastRecargasPaqueticosCedulas.size} cedulas sin ocultarlas.`,
+                icon: 'success'
+            });
+        }, 120);
+    }
+
+    function consultarRecargasPaqueticosIncentivo() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        const fechaIni = document.getElementById('ni_fecha_ini').value;
+        const fechaFin = document.getElementById('ni_fecha_fin').value;
+        const sistema = document.getElementById('ni_sistema').value;
+        const cedulas = getCedulasReporteActual();
+
+        if (!fechaIni || !fechaFin) {
+            Swal.fire({ title: 'Informacion', text: 'Debe seleccionar fecha inicio y fecha fin.', icon: 'warning' });
+            return;
+        }
+
+        if (!cedulas.length) {
+            Swal.fire({ title: 'Sin cedulas', text: 'No hay cedulas disponibles en el reporte actual.', icon: 'warning' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Consultando recargas y paqueticos...',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        fetch('/incentivos/reporte-nuevo-incentivo-v4/recargas-paqueticos', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            },
+            body: JSON.stringify({
+                cedulas: cedulas,
+                fecha_ini: fechaIni,
+                fecha_fin: fechaFin,
+                sistema: sistema,
+            }),
+        })
+            .then(response => parseResponseAsJson(response, 'Error consultando recargas y paqueticos del incentivo'))
+            .then(resp => {
+                Swal.close();
+                const rows = Array.isArray(resp.data) ? resp.data : [];
+                lastRecargasPaqueticosCedulas = new Set(rows
+                    .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
+                    .filter(Boolean));
+                const montoIncentivosConVentas = calcularMontoIncentivosPorCedulas([...lastRecargasPaqueticosCedulas]);
+
+                document.getElementById('recargasPaqueticosTotalVentas').textContent = formatMoney(resp.total_ventas || 0);
+                document.getElementById('recargasPaqueticosTotalRecargas').textContent = formatMoney(resp.total_recargas || 0);
+                document.getElementById('recargasPaqueticosTotalPaqueticos').textContent = formatMoney(resp.total_paqueticos || 0);
+                document.getElementById('recargasPaqueticosCantidadVentas').textContent = Number(resp.cantidad_ventas || 0).toLocaleString('en-US');
+                document.getElementById('recargasPaqueticosTotalCedulas').textContent = cedulas.length.toLocaleString('en-US');
+                document.getElementById('recargasPaqueticosMontoIncentivos').textContent = formatMoney(montoIncentivosConVentas);
+                document.getElementById('recargasPaqueticosIncentivoRango').textContent = `Rango consultado: ${fechaIni} al ${fechaFin}`;
+                renderRecargasPaqueticosIncentivoTable(rows);
+
+                const modal = new bootstrap.Modal(document.getElementById('modalRecargasPaqueticosIncentivo'));
+                modal.show();
+            })
+            .catch(error => {
+                Swal.fire({ title: 'Error', text: error?.message || String(error), icon: 'warning' });
+            });
+    }
+
     function applyLocalFilters(showFilterAlert = false) {
         if (!cachedRows.length) {
             Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
@@ -1775,8 +2111,6 @@
         }
 
         const sistema = document.getElementById('ni_sistema').value;
-        const filtroCumplimiento = document.getElementById('ni_filtro_cumplimiento').value;
-        const filtroEmpresa = document.getElementById('ni_filtro_empresa').value;
         const tipoPago = document.getElementById('ni_tipo_pago').value;
 
         if (cachedSistema !== sistema || cachedTipoPago !== tipoPago) {
@@ -1784,19 +2118,14 @@
             return;
         }
 
-        let filtered = cachedRows.filter(item => toNumber(item?.ventas_mes_actual) > 0);
-        if (filtroCumplimiento === 'cumplidos') {
-            filtered = filtered.filter(item => evaluateMetaMinima(item).cumplio);
-        } else if (filtroCumplimiento === 'no_cumplidos') {
-            filtered = filtered.filter(item => !evaluateMetaMinima(item).cumplio);
-        }
-
-        if (filtroEmpresa !== 'todos') {
-            filtered = filtered.filter(item => normalizeEmpresaValue(item?.empresa) === filtroEmpresa);
-        }
+        let filtered = getBaseFilteredRows();
 
         if (excludedFaltantesCedulas.size) {
             filtered = filtered.filter(item => !excludedFaltantesCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
+        }
+
+        if (recargasPaqueticosDescuentos.size) {
+            filtered = filtered.map(item => aplicarDescuentoRecargasPaqueticos(item));
         }
 
         currentFilteredRows = filtered;
@@ -1886,8 +2215,16 @@
             consultarFaltantesIncentivo();
         });
 
+        document.querySelector('#btnConsultarRecargasPaqueticos').addEventListener('click', function() {
+            consultarRecargasPaqueticosIncentivo();
+        });
+
         document.querySelector('#btnAplicarFaltantesIncentivo').addEventListener('click', function() {
             aplicarFaltantesIncentivo();
+        });
+
+        document.querySelector('#btnAplicarRecargasPaqueticosIncentivo').addEventListener('click', function() {
+            aplicarRecargasPaqueticosIncentivo();
         });
 
         document.querySelector('#ni_count_por_actualizar').addEventListener('click', function() {
@@ -1897,6 +2234,12 @@
         document.getElementById('modalFaltantesIncentivo').addEventListener('shown.bs.modal', function() {
             if (tableFaltantesIncentivo) {
                 tableFaltantesIncentivo.columns.adjust().responsive.recalc();
+            }
+        });
+
+        document.getElementById('modalRecargasPaqueticosIncentivo').addEventListener('shown.bs.modal', function() {
+            if (tableRecargasPaqueticosIncentivo) {
+                tableRecargasPaqueticosIncentivo.columns.adjust().responsive.recalc();
             }
         });
 
@@ -2100,6 +2443,8 @@
         currentFilteredRows = [];
         lastFaltantesCedulas = new Set();
         excludedFaltantesCedulas = new Set();
+        lastRecargasPaqueticosCedulas = new Set();
+        recargasPaqueticosDescuentos = new Map();
 
         const params = new URLSearchParams({
             sistema: sistema,

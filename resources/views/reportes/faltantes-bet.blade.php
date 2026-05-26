@@ -41,6 +41,15 @@
                                     </div>
 
                                     <div>
+                                        <label class="mb-0" for="empresa">Empresa</label>
+                                        <select class="form-select" id="empresa">
+                                            <option value="todos" selected>Todas</option>
+                                            <option value="grupo_joselito">Grupo Joselito</option>
+                                            <option value="negosur">Negosur</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
                                         <label class="mb-0" for="fecha_inicio">Desde</label>
                                         <input type="date" class="form-control" id="fecha_inicio">
                                     </div>
@@ -134,6 +143,10 @@
                             <div class="fw-semibold" id="detalleNombre">Sin especificar</div>
                         </div>
                         <div class="col-md-3">
+                            <label class="form-label text-muted mb-1">Empresa</label>
+                            <div class="fw-semibold" id="detalleEmpresa">-</div>
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label text-muted mb-1">Cedula</label>
                             <div class="fw-semibold" id="detalleCedula">-</div>
                         </div>
@@ -187,6 +200,10 @@
             return document.getElementById('tipo_faltante').value || 'all';
         }
 
+        function obtenerEmpresa() {
+            return document.getElementById('empresa').value || 'todos';
+        }
+
         function actualizarTitulos() {
             const sistema = nombresSistema[obtenerTipoFaltante()] || 'Todos los sistemas';
             document.getElementById('pageTitle').textContent = `Informe de Faltantes ${sistema}`;
@@ -233,9 +250,11 @@
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
             const tipo = obtenerTipoFaltante();
+            const empresa = obtenerEmpresa();
 
             const params = new URLSearchParams({
                 tipo: tipo,
+                empresa: empresa,
                 fecha_inicio: fechaInicio,
                 fecha_fin: fechaFin,
                 page: page
@@ -267,6 +286,7 @@
                 const row = document.createElement('tr');
                 const nombreEmpleado = registro.nombre_empleado || 'Sin especificar';
                 const agenciaId = registro.agencia_id ?? '';
+                const empresa = registro.empresa || 'Sin empresa';
                 const detallesFaltantes = registro.detalles_faltantes || '';
                 const totalMonto = parseFloat(registro.total_monto || 0);
 
@@ -280,6 +300,7 @@
                         <button type="button"
                             class="btn btn-sm btn-info"
                             data-nombre="${escapeAttribute(nombreEmpleado)}"
+                            data-empresa="${escapeAttribute(empresa)}"
                             data-cedula="${escapeAttribute(registro.identificacion)}"
                             data-agencia="${escapeAttribute(agenciaId)}"
                             data-total="${escapeAttribute(registro.cantidad_faltantes)}"
@@ -324,6 +345,7 @@
             const fechasBody = document.getElementById('detalleFechasFaltantes');
 
             document.getElementById('detalleNombre').textContent = button.dataset.nombre || 'Sin especificar';
+            document.getElementById('detalleEmpresa').textContent = button.dataset.empresa || '-';
             document.getElementById('detalleCedula').textContent = button.dataset.cedula || '-';
             document.getElementById('detalleAgencia').textContent = button.dataset.agencia || '-';
             document.getElementById('detalleTotalFaltantes').textContent = button.dataset.total || '0';
@@ -391,9 +413,11 @@
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
             const tipo = obtenerTipoFaltante();
+            const empresa = obtenerEmpresa();
 
             const params = new URLSearchParams({
                 tipo: tipo,
+                empresa: empresa,
                 fecha_inicio: fechaInicio,
                 fecha_fin: fechaFin
             });
@@ -405,9 +429,11 @@
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
             const tipo = obtenerTipoFaltante();
+            const empresa = obtenerEmpresa();
 
             const params = new URLSearchParams({
                 tipo: tipo,
+                empresa: empresa,
                 fecha_inicio: fechaInicio,
                 fecha_fin: fechaFin
             });
