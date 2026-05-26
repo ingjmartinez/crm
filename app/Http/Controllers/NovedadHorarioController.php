@@ -125,27 +125,39 @@ class NovedadHorarioController extends Controller
         $bindings = [];
         $agenciasPorTerminalSql = "
             SELECT
-                COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') AS terminal_key,
-                MAX(TRIM(CAST(terminal AS CHAR))) AS terminal,
-                MAX(nombre_agencia) AS nombre_agencia,
-                MAX(ruta) AS ruta,
-                MAX(empresa) AS empresa
-            FROM agencias
-            WHERE terminal IS NOT NULL
-              AND TRIM(CAST(terminal AS CHAR)) <> ''
-            GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0')
+                selected.terminal_key,
+                TRIM(CAST(a.terminal AS CHAR)) AS terminal,
+                a.nombre_agencia AS nombre_agencia,
+                a.ruta AS ruta,
+                a.empresa AS empresa
+            FROM agencias a
+            INNER JOIN (
+                SELECT
+                    COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') AS terminal_key,
+                    MAX(id) AS id
+                FROM agencias
+                WHERE terminal IS NOT NULL
+                  AND TRIM(CAST(terminal AS CHAR)) <> ''
+                GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0')
+            ) selected ON selected.id = a.id
         ";
         $agenciasPorCodigoSql = "
             SELECT
-                COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0') AS agencia_key,
-                MAX(TRIM(CAST(terminal AS CHAR))) AS terminal,
-                MAX(nombre_agencia) AS nombre_agencia,
-                MAX(ruta) AS ruta,
-                MAX(empresa) AS empresa
-            FROM agencias
-            WHERE agencia IS NOT NULL
-              AND TRIM(CAST(agencia AS CHAR)) <> ''
-            GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0')
+                selected.agencia_key,
+                TRIM(CAST(a.terminal AS CHAR)) AS terminal,
+                a.nombre_agencia AS nombre_agencia,
+                a.ruta AS ruta,
+                a.empresa AS empresa
+            FROM agencias a
+            INNER JOIN (
+                SELECT
+                    COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0') AS agencia_key,
+                    MAX(id) AS id
+                FROM agencias
+                WHERE agencia IS NOT NULL
+                  AND TRIM(CAST(agencia AS CHAR)) <> ''
+                GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0')
+            ) selected ON selected.id = a.id
         ";
         $empleadosSql = "
             SELECT
@@ -161,9 +173,9 @@ class NovedadHorarioController extends Controller
                 SELECT
                     COALESCE(at.empresa, aa.empresa, '') AS empresa,
                     COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))) AS terminal,
-                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ab.agencia_id) AS nombre_agencia,
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, '') AS nombre_agencia,
                     COALESCE(at.ruta, aa.ruta, '') AS ruta,
-                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')) AS nombre_empleado,
+                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), NULLIF(CASE WHEN TRIM(COALESCE(ab.usuario, '')) REGEXP '^[0-9-]+$' THEN '' ELSE ab.usuario END, ''), '')) AS nombre_empleado,
                     ab.cedula AS cedula,
                     DATE(ab.fecha) AS fecha,
                     MIN(ab.primer_login) AS primer_login,
@@ -179,12 +191,13 @@ class NovedadHorarioController extends Controller
                 WHERE ab.fecha >= ? AND ab.fecha < DATE_ADD(?, INTERVAL 1 DAY)
                   AND ab.primer_login IS NOT NULL
                   AND ab.ultimo_login IS NOT NULL
+                  AND CHAR_LENGTH(REPLACE(REPLACE(TRIM(COALESCE(ab.cedula, '')), '-', ''), ' ', '')) >= 9
                 GROUP BY
                     COALESCE(at.empresa, aa.empresa, ''),
                     COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))),
-                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ab.agencia_id),
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ''),
                     COALESCE(at.ruta, aa.ruta, ''),
-                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')),
+                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), NULLIF(CASE WHEN TRIM(COALESCE(ab.usuario, '')) REGEXP '^[0-9-]+$' THEN '' ELSE ab.usuario END, ''), '')),
                     ab.cedula,
                     DATE(ab.fecha)
         ";
@@ -194,8 +207,8 @@ class NovedadHorarioController extends Controller
         $uniones[] = "
                 SELECT
                     COALESCE(at.empresa, aa.empresa, '') AS empresa,
-                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))) AS terminal,
-                    COALESCE(at.nombre_agencia, aa.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(an.agencia AS CHAR))) AS terminal,
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, '') AS nombre_agencia,
                     COALESCE(at.ruta, aa.ruta, '') AS ruta,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')) AS nombre_empleado,
                     an.identificacion AS cedula,
@@ -205,18 +218,19 @@ class NovedadHorarioController extends Controller
                     ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(an.entrada), MAX(COALESCE(an.salida, an.salida_inactividad))), 0) / 3600, 2) AS horas_acumuladas
                 FROM asistencias_net an
                 LEFT JOIN ({$agenciasPorTerminalSql}) at
-                    ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))), ''), '0')
+                    ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(an.agencia AS CHAR))), ''), '0')
                 LEFT JOIN ({$agenciasPorCodigoSql}) aa
-                    ON aa.agencia_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(COALESCE(NULLIF(an.agencia, ''), an.terminal) AS CHAR))), ''), '0')
+                    ON aa.agencia_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(an.agencia AS CHAR))), ''), '0')
                 LEFT JOIN ({$empleadosSql}) e
                     ON TRIM(e.cedula) = TRIM(an.identificacion)
                 WHERE an.entrada >= ? AND an.entrada < DATE_ADD(?, INTERVAL 1 DAY)
                   AND an.entrada IS NOT NULL
                   AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
+                  AND CHAR_LENGTH(REPLACE(REPLACE(TRIM(COALESCE(an.identificacion, '')), '-', ''), ' ', '')) >= 9
                 GROUP BY
                     COALESCE(at.empresa, aa.empresa, ''),
-                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))),
-                    COALESCE(at.nombre_agencia, aa.nombre_agencia, an.banca, an.agencia),
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(an.agencia AS CHAR))),
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ''),
                     COALESCE(at.ruta, aa.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')),
                     an.identificacion,
@@ -388,27 +402,39 @@ class NovedadHorarioController extends Controller
         $bindings = [];
         $agenciasPorTerminalSql = "
             SELECT
-                COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') AS terminal_key,
-                MAX(TRIM(CAST(terminal AS CHAR))) AS terminal,
-                MAX(nombre_agencia) AS nombre_agencia,
-                MAX(ruta) AS ruta,
-                MAX(empresa) AS empresa
-            FROM agencias
-            WHERE terminal IS NOT NULL
-              AND TRIM(CAST(terminal AS CHAR)) <> ''
-            GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0')
+                selected.terminal_key,
+                TRIM(CAST(a.terminal AS CHAR)) AS terminal,
+                a.nombre_agencia AS nombre_agencia,
+                a.ruta AS ruta,
+                a.empresa AS empresa
+            FROM agencias a
+            INNER JOIN (
+                SELECT
+                    COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') AS terminal_key,
+                    MAX(id) AS id
+                FROM agencias
+                WHERE terminal IS NOT NULL
+                  AND TRIM(CAST(terminal AS CHAR)) <> ''
+                GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0')
+            ) selected ON selected.id = a.id
         ";
         $agenciasPorCodigoSql = "
             SELECT
-                COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0') AS agencia_key,
-                MAX(TRIM(CAST(terminal AS CHAR))) AS terminal,
-                MAX(nombre_agencia) AS nombre_agencia,
-                MAX(ruta) AS ruta,
-                MAX(empresa) AS empresa
-            FROM agencias
-            WHERE agencia IS NOT NULL
-              AND TRIM(CAST(agencia AS CHAR)) <> ''
-            GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0')
+                selected.agencia_key,
+                TRIM(CAST(a.terminal AS CHAR)) AS terminal,
+                a.nombre_agencia AS nombre_agencia,
+                a.ruta AS ruta,
+                a.empresa AS empresa
+            FROM agencias a
+            INNER JOIN (
+                SELECT
+                    COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0') AS agencia_key,
+                    MAX(id) AS id
+                FROM agencias
+                WHERE agencia IS NOT NULL
+                  AND TRIM(CAST(agencia AS CHAR)) <> ''
+                GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0')
+            ) selected ON selected.id = a.id
         ";
         $empleadosSql = "
             SELECT
@@ -424,9 +450,9 @@ class NovedadHorarioController extends Controller
                 SELECT
                     COALESCE(at.empresa, aa.empresa, '') AS empresa,
                     COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))) AS terminal,
-                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ab.agencia_id) AS nombre_agencia,
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, '') AS nombre_agencia,
                     COALESCE(at.ruta, aa.ruta, '') AS ruta,
-                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')) AS nombre_empleado,
+                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), NULLIF(CASE WHEN TRIM(COALESCE(ab.usuario, '')) REGEXP '^[0-9-]+$' THEN '' ELSE ab.usuario END, ''), '')) AS nombre_empleado,
                     ab.cedula AS cedula,
                     DATE(ab.fecha) AS fecha,
                     MIN(ab.primer_login) AS primer_login,
@@ -442,12 +468,13 @@ class NovedadHorarioController extends Controller
                 WHERE ab.fecha >= ? AND ab.fecha < DATE_ADD(?, INTERVAL 1 DAY)
                   AND ab.primer_login IS NOT NULL
                   AND ab.ultimo_login IS NOT NULL
+                  AND CHAR_LENGTH(REPLACE(REPLACE(TRIM(COALESCE(ab.cedula, '')), '-', ''), ' ', '')) >= 9
                 GROUP BY
                     COALESCE(at.empresa, aa.empresa, ''),
                     COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))),
-                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ab.agencia_id),
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ''),
                     COALESCE(at.ruta, aa.ruta, ''),
-                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')),
+                    TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), NULLIF(CASE WHEN TRIM(COALESCE(ab.usuario, '')) REGEXP '^[0-9-]+$' THEN '' ELSE ab.usuario END, ''), '')),
                     ab.cedula,
                     DATE(ab.fecha)
         ";
@@ -457,8 +484,8 @@ class NovedadHorarioController extends Controller
         $uniones[] = "
                 SELECT
                     COALESCE(at.empresa, aa.empresa, '') AS empresa,
-                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))) AS terminal,
-                    COALESCE(at.nombre_agencia, aa.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(an.agencia AS CHAR))) AS terminal,
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, '') AS nombre_agencia,
                     COALESCE(at.ruta, aa.ruta, '') AS ruta,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')) AS nombre_empleado,
                     an.identificacion AS cedula,
@@ -468,18 +495,19 @@ class NovedadHorarioController extends Controller
                     ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(an.entrada), MAX(COALESCE(an.salida, an.salida_inactividad))), 0) / 3600, 2) AS horas_acumuladas
                 FROM asistencias_net an
                 LEFT JOIN ({$agenciasPorTerminalSql}) at
-                    ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))), ''), '0')
+                    ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(an.agencia AS CHAR))), ''), '0')
                 LEFT JOIN ({$agenciasPorCodigoSql}) aa
-                    ON aa.agencia_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(COALESCE(NULLIF(an.agencia, ''), an.terminal) AS CHAR))), ''), '0')
+                    ON aa.agencia_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(an.agencia AS CHAR))), ''), '0')
                 LEFT JOIN ({$empleadosSql}) e
                     ON TRIM(e.cedula) = TRIM(an.identificacion)
                 WHERE an.entrada >= ? AND an.entrada < DATE_ADD(?, INTERVAL 1 DAY)
                   AND an.entrada IS NOT NULL
                   AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
+                  AND CHAR_LENGTH(REPLACE(REPLACE(TRIM(COALESCE(an.identificacion, '')), '-', ''), ' ', '')) >= 9
                 GROUP BY
                     COALESCE(at.empresa, aa.empresa, ''),
-                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))),
-                    COALESCE(at.nombre_agencia, aa.nombre_agencia, an.banca, an.agencia),
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(an.agencia AS CHAR))),
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ''),
                     COALESCE(at.ruta, aa.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')),
                     an.identificacion,
