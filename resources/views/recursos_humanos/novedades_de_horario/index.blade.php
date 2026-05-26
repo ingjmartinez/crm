@@ -109,9 +109,14 @@
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between">
                                 <h5 class="card-title mb-0">Listado de Novedades</h5>
-                                <button type="button" class="btn btn-success btn-sm" id="btnExportarExcel">
-                                    <i class="ri-file-excel-2-line"></i> Exportar Excel
-                                </button>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-outline-success btn-sm" id="btnExportarPagoExcel">
+                                        <i class="ri-file-excel-2-line"></i> Novedad de Pago
+                                    </button>
+                                    <button type="button" class="btn btn-success btn-sm" id="btnExportarExcel">
+                                        <i class="ri-file-excel-2-line"></i> Exportar Excel
+                                    </button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
@@ -164,7 +169,7 @@
                             <div class="fw-semibold" id="detalleHorarioAgencia">-</div>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label text-muted mb-1">Total de Faltantes</label>
+                            <label class="form-label text-muted mb-1">Total de Horas</label>
                             <div class="fw-semibold" id="detalleHorarioTotalFaltantes">0.00 horas</div>
                             <small class="text-muted">Calculado por dia</small>
                         </div>
@@ -180,7 +185,7 @@
                             <thead>
                                 <tr>
                                     <th>Fecha</th>
-                                    <th class="text-end">Horas Faltantes</th>
+                                    <th class="text-end">Horas y Minutos</th>
                                     <th class="text-end">Monto del Dia</th>
                                 </tr>
                             </thead>
@@ -422,6 +427,26 @@
             window.location.href = `/recursos-humanos/novedades-horario/export?${params}`;
         }
 
+        function exportarPagoExcel() {
+            if (!horasRequeridasReporte) {
+                Swal.fire('Horario requerido', 'Primero debe configurar las horas requeridas para exportar.', 'warning');
+                return;
+            }
+
+            if (!valorHoraReporte) {
+                Swal.fire('Valor requerido', 'Primero debe configurar el valor de la hora para calcular el pago.', 'warning');
+                return;
+            }
+
+            const searchValue = tableNovedadesHorario ? tableNovedadesHorario.search() : '';
+            const params = obtenerParametrosReporte({
+                valor_hora: valorHoraReporte,
+                'search[value]': searchValue
+            });
+
+            window.location.href = `/recursos-humanos/novedades-horario/export-pago?${params}`;
+        }
+
         function cargarNovedadesHorario() {
             const empresa = document.getElementById('empresa').value;
             const fechaInicio = document.getElementById('fecha_inicio').value;
@@ -538,6 +563,7 @@
         document.getElementById('btnConfigurarHorario').addEventListener('click', configurarHoraReporte);
         document.getElementById('btnBuscar').addEventListener('click', cargarNovedadesHorario);
         document.getElementById('btnExportarExcel').addEventListener('click', exportarExcel);
+        document.getElementById('btnExportarPagoExcel').addEventListener('click', exportarPagoExcel);
 
         $('#tableNovedadesHorario').on('click', '.btn-ver-detalle-horario', function () {
             const row = tableNovedadesHorario.row($(this).closest('tr')).data();

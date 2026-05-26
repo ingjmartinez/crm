@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\NovedadesHorarioExport;
+use App\Exports\NovedadesHorarioPagoExport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -92,20 +93,59 @@ class NovedadHorarioController extends Controller
         );
     }
 
+    public function exportPago(Request $request)
+    {
+        $validated = $request->validate([
+            'empresa' => ['required', 'in:todos,grupo_joselito,negosur'],
+            'fecha_inicio' => ['required', 'date'],
+            'fecha_fin' => ['required', 'date', 'after_or_equal:fecha_inicio'],
+            'horas_requeridas' => ['required', 'integer', 'min:1'],
+            'valor_hora' => ['required', 'numeric', 'min:0.01'],
+            'detalle' => ['nullable', 'in:todos,cumple,tiene_falta'],
+        ]);
+
+        $rows = $this->getNovedadesHorarioRows($this->buildNovedadesHorarioQuery($validated, $request));
+        $resumenPago = $this->buildResumenPagoRows(
+            $rows,
+            (float) $validated['horas_requeridas'],
+            (float) $validated['valor_hora']
+        );
+        $filename = sprintf(
+            'novedad_de_pago_%s_%s.xlsx',
+            str_replace('-', '', $validated['fecha_inicio']),
+            str_replace('-', '', $validated['fecha_fin'])
+        );
+
+        return Excel::download(new NovedadesHorarioPagoExport($resumenPago), $filename);
+    }
+
     private function buildNovedadesHorarioQuery(array $validated, Request $request): array
     {
         $uniones = [];
         $bindings = [];
-        $agenciasSql = "
+        $agenciasPorTerminalSql = "
             SELECT
-                TRIM(CAST(terminal AS CHAR)) AS terminal,
+                COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') AS terminal_key,
+                MAX(TRIM(CAST(terminal AS CHAR))) AS terminal,
                 MAX(nombre_agencia) AS nombre_agencia,
                 MAX(ruta) AS ruta,
                 MAX(empresa) AS empresa
             FROM agencias
             WHERE terminal IS NOT NULL
               AND TRIM(CAST(terminal AS CHAR)) <> ''
-            GROUP BY TRIM(CAST(terminal AS CHAR))
+            GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0')
+        ";
+        $agenciasPorCodigoSql = "
+            SELECT
+                COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0') AS agencia_key,
+                MAX(TRIM(CAST(terminal AS CHAR))) AS terminal,
+                MAX(nombre_agencia) AS nombre_agencia,
+                MAX(ruta) AS ruta,
+                MAX(empresa) AS empresa
+            FROM agencias
+            WHERE agencia IS NOT NULL
+              AND TRIM(CAST(agencia AS CHAR)) <> ''
+            GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0')
         ";
         $empleadosSql = "
             SELECT
@@ -119,10 +159,10 @@ class NovedadHorarioController extends Controller
 
         $uniones[] = "
                 SELECT
-                    COALESCE(a.empresa, '') AS empresa,
-                    TRIM(CAST(ab.agencia_id AS CHAR)) AS terminal,
-                    COALESCE(a.nombre_agencia, ab.agencia_id) AS nombre_agencia,
-                    COALESCE(a.ruta, '') AS ruta,
+                    COALESCE(at.empresa, aa.empresa, '') AS empresa,
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))) AS terminal,
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ab.agencia_id) AS nombre_agencia,
+                    COALESCE(at.ruta, aa.ruta, '') AS ruta,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')) AS nombre_empleado,
                     ab.cedula AS cedula,
                     DATE(ab.fecha) AS fecha,
@@ -130,18 +170,20 @@ class NovedadHorarioController extends Controller
                     MAX(ab.ultimo_login) AS ultimo_login,
                     ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(ab.primer_login), MAX(ab.ultimo_login)), 0) / 3600, 2) AS horas_acumuladas
                 FROM asistencias_bet ab
-                LEFT JOIN ({$agenciasSql}) a
-                    ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(ab.agencia_id AS CHAR))
+                LEFT JOIN ({$agenciasPorTerminalSql}) at
+                    ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(ab.agencia_id AS CHAR))), ''), '0')
+                LEFT JOIN ({$agenciasPorCodigoSql}) aa
+                    ON aa.agencia_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(ab.agencia_id AS CHAR))), ''), '0')
                 LEFT JOIN ({$empleadosSql}) e
                     ON TRIM(e.cedula) = TRIM(ab.cedula)
                 WHERE ab.fecha >= ? AND ab.fecha < DATE_ADD(?, INTERVAL 1 DAY)
                   AND ab.primer_login IS NOT NULL
                   AND ab.ultimo_login IS NOT NULL
                 GROUP BY
-                    COALESCE(a.empresa, ''),
-                    TRIM(CAST(ab.agencia_id AS CHAR)),
-                    COALESCE(a.nombre_agencia, ab.agencia_id),
-                    COALESCE(a.ruta, ''),
+                    COALESCE(at.empresa, aa.empresa, ''),
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))),
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ab.agencia_id),
+                    COALESCE(at.ruta, aa.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')),
                     ab.cedula,
                     DATE(ab.fecha)
@@ -151,10 +193,10 @@ class NovedadHorarioController extends Controller
 
         $uniones[] = "
                 SELECT
-                    COALESCE(a.empresa, '') AS empresa,
-                    TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)) AS terminal,
-                    COALESCE(a.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
-                    COALESCE(a.ruta, '') AS ruta,
+                    COALESCE(at.empresa, aa.empresa, '') AS empresa,
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))) AS terminal,
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
+                    COALESCE(at.ruta, aa.ruta, '') AS ruta,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')) AS nombre_empleado,
                     an.identificacion AS cedula,
                     DATE(an.entrada) AS fecha,
@@ -162,18 +204,20 @@ class NovedadHorarioController extends Controller
                     MAX(COALESCE(an.salida, an.salida_inactividad)) AS ultimo_login,
                     ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(an.entrada), MAX(COALESCE(an.salida, an.salida_inactividad))), 0) / 3600, 2) AS horas_acumuladas
                 FROM asistencias_net an
-                LEFT JOIN ({$agenciasSql}) a
-                    ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))
+                LEFT JOIN ({$agenciasPorTerminalSql}) at
+                    ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))), ''), '0')
+                LEFT JOIN ({$agenciasPorCodigoSql}) aa
+                    ON aa.agencia_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(COALESCE(NULLIF(an.agencia, ''), an.terminal) AS CHAR))), ''), '0')
                 LEFT JOIN ({$empleadosSql}) e
                     ON TRIM(e.cedula) = TRIM(an.identificacion)
                 WHERE an.entrada >= ? AND an.entrada < DATE_ADD(?, INTERVAL 1 DAY)
                   AND an.entrada IS NOT NULL
                   AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
                 GROUP BY
-                    COALESCE(a.empresa, ''),
-                    TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)),
-                    COALESCE(a.nombre_agencia, an.banca, an.agencia),
-                    COALESCE(a.ruta, ''),
+                    COALESCE(at.empresa, aa.empresa, ''),
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))),
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, an.banca, an.agencia),
+                    COALESCE(at.ruta, aa.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')),
                     an.identificacion,
                     DATE(an.entrada)
@@ -260,6 +304,74 @@ class NovedadHorarioController extends Controller
             });
     }
 
+    private function buildResumenPagoRows($rows, float $horasRequeridas, float $valorHora)
+    {
+        return $rows
+            ->map(function ($row) use ($horasRequeridas, $valorHora) {
+                $horasAcumuladas = round((float) ($row->horas_acumuladas ?? 0), 2);
+                $horasFaltantes = round(max($horasRequeridas - $horasAcumuladas, 0), 2);
+
+                if ($horasFaltantes <= 0) {
+                    return null;
+                }
+
+                return [
+                    'key' => implode('|', [
+                        trim((string) ($row->cedula ?? '')),
+                        trim((string) ($row->terminal ?? '')),
+                        trim((string) ($row->nombre_agencia ?? '')),
+                    ]),
+                    'nombre' => trim((string) ($row->nombre_empleado ?? '')),
+                    'cedula' => trim((string) ($row->cedula ?? '')),
+                    'terminal' => trim((string) ($row->terminal ?? '')),
+                    'nombre_agencia' => trim((string) ($row->nombre_agencia ?? '')),
+                    'ruta' => trim((string) ($row->ruta ?? '')),
+                    'horas_faltantes' => $horasFaltantes,
+                    'monto_total' => round($horasFaltantes * $valorHora, 2),
+                ];
+            })
+            ->filter()
+            ->groupBy('key')
+            ->map(function ($group) {
+                $first = $group->first();
+                $horasFaltantes = round((float) $group->sum('horas_faltantes'), 2);
+
+                return [
+                    'nombre' => $first['nombre'],
+                    'cedula' => $first['cedula'],
+                    'terminal' => $first['terminal'],
+                    'nombre_agencia' => $first['nombre_agencia'],
+                    'ruta' => $first['ruta'],
+                    'total_horas' => $this->formatHorasMinutos($horasFaltantes),
+                    'monto_total' => round((float) $group->sum('monto_total'), 2),
+                ];
+            })
+            ->sortBy([
+                ['ruta', 'asc'],
+                ['nombre', 'asc'],
+                ['terminal', 'asc'],
+            ])
+            ->values();
+    }
+
+    private function formatHorasMinutos(float $horasDecimal): string
+    {
+        $minutosTotales = (int) round(max($horasDecimal, 0) * 60);
+        $horas = intdiv($minutosTotales, 60);
+        $minutos = $minutosTotales % 60;
+        $partes = [];
+
+        if ($horas > 0) {
+            $partes[] = $horas . ' ' . ($horas === 1 ? 'hora' : 'horas');
+        }
+
+        if ($minutos > 0 || $partes === []) {
+            $partes[] = $minutos . ' ' . ($minutos === 1 ? 'minuto' : 'minutos');
+        }
+
+        return implode(' ', $partes);
+    }
+
     public function detalle(Request $request)
     {
         $validated = $request->validate([
@@ -274,16 +386,29 @@ class NovedadHorarioController extends Controller
 
         $uniones = [];
         $bindings = [];
-        $agenciasSql = "
+        $agenciasPorTerminalSql = "
             SELECT
-                TRIM(CAST(terminal AS CHAR)) AS terminal,
+                COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') AS terminal_key,
+                MAX(TRIM(CAST(terminal AS CHAR))) AS terminal,
                 MAX(nombre_agencia) AS nombre_agencia,
                 MAX(ruta) AS ruta,
                 MAX(empresa) AS empresa
             FROM agencias
             WHERE terminal IS NOT NULL
               AND TRIM(CAST(terminal AS CHAR)) <> ''
-            GROUP BY TRIM(CAST(terminal AS CHAR))
+            GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0')
+        ";
+        $agenciasPorCodigoSql = "
+            SELECT
+                COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0') AS agencia_key,
+                MAX(TRIM(CAST(terminal AS CHAR))) AS terminal,
+                MAX(nombre_agencia) AS nombre_agencia,
+                MAX(ruta) AS ruta,
+                MAX(empresa) AS empresa
+            FROM agencias
+            WHERE agencia IS NOT NULL
+              AND TRIM(CAST(agencia AS CHAR)) <> ''
+            GROUP BY COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(agencia AS CHAR))), ''), '0')
         ";
         $empleadosSql = "
             SELECT
@@ -297,10 +422,10 @@ class NovedadHorarioController extends Controller
 
         $uniones[] = "
                 SELECT
-                    COALESCE(a.empresa, '') AS empresa,
-                    TRIM(CAST(ab.agencia_id AS CHAR)) AS terminal,
-                    COALESCE(a.nombre_agencia, ab.agencia_id) AS nombre_agencia,
-                    COALESCE(a.ruta, '') AS ruta,
+                    COALESCE(at.empresa, aa.empresa, '') AS empresa,
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))) AS terminal,
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ab.agencia_id) AS nombre_agencia,
+                    COALESCE(at.ruta, aa.ruta, '') AS ruta,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')) AS nombre_empleado,
                     ab.cedula AS cedula,
                     DATE(ab.fecha) AS fecha,
@@ -308,18 +433,20 @@ class NovedadHorarioController extends Controller
                     MAX(ab.ultimo_login) AS ultimo_login,
                     ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(ab.primer_login), MAX(ab.ultimo_login)), 0) / 3600, 2) AS horas_acumuladas
                 FROM asistencias_bet ab
-                LEFT JOIN ({$agenciasSql}) a
-                    ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(ab.agencia_id AS CHAR))
+                LEFT JOIN ({$agenciasPorTerminalSql}) at
+                    ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(ab.agencia_id AS CHAR))), ''), '0')
+                LEFT JOIN ({$agenciasPorCodigoSql}) aa
+                    ON aa.agencia_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(ab.agencia_id AS CHAR))), ''), '0')
                 LEFT JOIN ({$empleadosSql}) e
                     ON TRIM(e.cedula) = TRIM(ab.cedula)
                 WHERE ab.fecha >= ? AND ab.fecha < DATE_ADD(?, INTERVAL 1 DAY)
                   AND ab.primer_login IS NOT NULL
                   AND ab.ultimo_login IS NOT NULL
                 GROUP BY
-                    COALESCE(a.empresa, ''),
-                    TRIM(CAST(ab.agencia_id AS CHAR)),
-                    COALESCE(a.nombre_agencia, ab.agencia_id),
-                    COALESCE(a.ruta, ''),
+                    COALESCE(at.empresa, aa.empresa, ''),
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))),
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, ab.agencia_id),
+                    COALESCE(at.ruta, aa.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), ab.usuario, '')),
                     ab.cedula,
                     DATE(ab.fecha)
@@ -329,10 +456,10 @@ class NovedadHorarioController extends Controller
 
         $uniones[] = "
                 SELECT
-                    COALESCE(a.empresa, '') AS empresa,
-                    TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)) AS terminal,
-                    COALESCE(a.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
-                    COALESCE(a.ruta, '') AS ruta,
+                    COALESCE(at.empresa, aa.empresa, '') AS empresa,
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))) AS terminal,
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, an.banca, an.agencia) AS nombre_agencia,
+                    COALESCE(at.ruta, aa.ruta, '') AS ruta,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')) AS nombre_empleado,
                     an.identificacion AS cedula,
                     DATE(an.entrada) AS fecha,
@@ -340,18 +467,20 @@ class NovedadHorarioController extends Controller
                     MAX(COALESCE(an.salida, an.salida_inactividad)) AS ultimo_login,
                     ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(an.entrada), MAX(COALESCE(an.salida, an.salida_inactividad))), 0) / 3600, 2) AS horas_acumuladas
                 FROM asistencias_net an
-                LEFT JOIN ({$agenciasSql}) a
-                    ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))
+                LEFT JOIN ({$agenciasPorTerminalSql}) at
+                    ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))), ''), '0')
+                LEFT JOIN ({$agenciasPorCodigoSql}) aa
+                    ON aa.agencia_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(COALESCE(NULLIF(an.agencia, ''), an.terminal) AS CHAR))), ''), '0')
                 LEFT JOIN ({$empleadosSql}) e
                     ON TRIM(e.cedula) = TRIM(an.identificacion)
                 WHERE an.entrada >= ? AND an.entrada < DATE_ADD(?, INTERVAL 1 DAY)
                   AND an.entrada IS NOT NULL
                   AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
                 GROUP BY
-                    COALESCE(a.empresa, ''),
-                    TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR)),
-                    COALESCE(a.nombre_agencia, an.banca, an.agencia),
-                    COALESCE(a.ruta, ''),
+                    COALESCE(at.empresa, aa.empresa, ''),
+                    COALESCE(at.terminal, aa.terminal, TRIM(CAST(COALESCE(NULLIF(an.terminal, ''), an.agencia) AS CHAR))),
+                    COALESCE(at.nombre_agencia, aa.nombre_agencia, an.banca, an.agencia),
+                    COALESCE(at.ruta, aa.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')),
                     an.identificacion,
                     DATE(an.entrada)

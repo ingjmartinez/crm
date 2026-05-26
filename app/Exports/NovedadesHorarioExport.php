@@ -5,12 +5,14 @@ namespace App\Exports;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class NovedadesHorarioExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles
+class NovedadesHorarioExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithColumnFormatting
 {
     public function __construct(
         private Collection $rows,
@@ -61,6 +63,14 @@ class NovedadesHorarioExport implements FromCollection, WithHeadings, WithMappin
             $horasFaltantes > 0 ? 'Tiene falta' : 'Cumple',
             number_format($horasFaltantes, 2, '.', ''),
             number_format($montoFalta, 2, '.', ''),
+        ];
+    }
+
+    public function columnFormats(): array
+    {
+        return [
+            'A' => NumberFormat::FORMAT_TEXT,
+            'E' => NumberFormat::FORMAT_TEXT,
         ];
     }
 

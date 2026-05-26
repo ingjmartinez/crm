@@ -261,6 +261,8 @@ Route::middleware('auth')->group(function () {
         ->name('recursos-humanos.novedades-horario.list');
     Route::get('/recursos-humanos/novedades-horario/export', [NovedadHorarioController::class, 'export'])
         ->name('recursos-humanos.novedades-horario.export');
+    Route::get('/recursos-humanos/novedades-horario/export-pago', [NovedadHorarioController::class, 'exportPago'])
+        ->name('recursos-humanos.novedades-horario.export-pago');
     Route::get('/recursos-humanos/novedades-horario/detalle', [NovedadHorarioController::class, 'detalle'])
         ->name('recursos-humanos.novedades-horario.detalle');
 
