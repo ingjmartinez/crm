@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\NovedadesHorarioExport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class NovedadHorarioController extends Controller
 {
@@ -23,6 +25,75 @@ class NovedadHorarioController extends Controller
             'detalle' => ['nullable', 'in:todos,cumple,tiene_falta'],
         ]);
 
+        $queryData = $this->buildNovedadesHorarioQuery($validated, $request);
+        $recordsTotal = (int) DB::selectOne("SELECT COUNT(*) AS total FROM ({$queryData['baseSql']}) base", $queryData['bindings'])->total;
+        $recordsFiltered = (int) DB::selectOne(
+            "SELECT COUNT(*) AS total FROM ({$queryData['baseSql']}) base {$queryData['whereSql']}",
+            array_merge($queryData['bindings'], $queryData['whereBindings'])
+        )->total;
+        $resumen = DB::selectOne(
+            "
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(DISTINCT terminal) AS terminales,
+                    COUNT(DISTINCT nombre_agencia) AS agencias,
+                    COALESCE(SUM(horas_acumuladas), 0) AS horas_acumuladas
+                FROM ({$queryData['baseSql']}) base
+                {$queryData['whereSql']}
+            ",
+            array_merge($queryData['bindings'], $queryData['whereBindings'])
+        );
+
+        $start = max((int) $request->input('start', 0), 0);
+        $length = (int) $request->input('length', 25);
+        $maxLength = $request->boolean('export') ? 100000 : 200;
+        $length = $length > 0 ? min($length, $maxLength) : 25;
+        $novedades = $this->getNovedadesHorarioRows($queryData, $length, $start);
+
+        return response()->json([
+            'draw' => (int) $request->input('draw', 0),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $novedades->values(),
+            'resumen' => [
+                'total' => (int) ($resumen->total ?? 0),
+                'terminales' => (int) ($resumen->terminales ?? 0),
+                'agencias' => (int) ($resumen->agencias ?? 0),
+                'horas_acumuladas' => round((float) ($resumen->horas_acumuladas ?? 0), 2),
+            ],
+        ]);
+    }
+
+    public function export(Request $request)
+    {
+        $validated = $request->validate([
+            'empresa' => ['required', 'in:todos,grupo_joselito,negosur'],
+            'fecha_inicio' => ['required', 'date'],
+            'fecha_fin' => ['required', 'date', 'after_or_equal:fecha_inicio'],
+            'horas_requeridas' => ['required', 'integer', 'min:1'],
+            'valor_hora' => ['required', 'numeric', 'min:0.01'],
+            'detalle' => ['nullable', 'in:todos,cumple,tiene_falta'],
+        ]);
+
+        $rows = $this->getNovedadesHorarioRows($this->buildNovedadesHorarioQuery($validated, $request));
+        $filename = sprintf(
+            'novedades_horario_%s_%s.xlsx',
+            str_replace('-', '', $validated['fecha_inicio']),
+            str_replace('-', '', $validated['fecha_fin'])
+        );
+
+        return Excel::download(
+            new NovedadesHorarioExport(
+                $rows,
+                (float) $validated['horas_requeridas'],
+                (float) $validated['valor_hora']
+            ),
+            $filename
+        );
+    }
+
+    private function buildNovedadesHorarioQuery(array $validated, Request $request): array
+    {
         $uniones = [];
         $bindings = [];
         $agenciasSql = "
@@ -164,37 +235,21 @@ class NovedadHorarioController extends Controller
 
         $whereSql = $whereConditions ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
 
-        $recordsTotal = (int) DB::selectOne("SELECT COUNT(*) AS total FROM ({$baseSql}) base", $bindings)->total;
-        $recordsFiltered = (int) DB::selectOne(
-            "SELECT COUNT(*) AS total FROM ({$baseSql}) base {$whereSql}",
-            array_merge($bindings, $whereBindings)
-        )->total;
-        $resumen = DB::selectOne(
-            "
-                SELECT
-                    COUNT(*) AS total,
-                    COUNT(DISTINCT terminal) AS terminales,
-                    COUNT(DISTINCT nombre_agencia) AS agencias,
-                    COALESCE(SUM(horas_acumuladas), 0) AS horas_acumuladas
-                FROM ({$baseSql}) base
-                {$whereSql}
-            ",
-            array_merge($bindings, $whereBindings)
-        );
+        return compact('baseSql', 'bindings', 'whereSql', 'whereBindings');
+    }
 
-        $start = max((int) $request->input('start', 0), 0);
-        $length = (int) $request->input('length', 25);
-        $maxLength = $request->boolean('export') ? 100000 : 200;
-        $length = $length > 0 ? min($length, $maxLength) : 25;
+    private function getNovedadesHorarioRows(array $queryData, ?int $length = null, int $start = 0)
+    {
+        $limitSql = $length === null ? '' : "LIMIT {$length} OFFSET {$start}";
         $dataSql = "
             SELECT *
-            FROM ({$baseSql}) base
-            {$whereSql}
+            FROM ({$queryData['baseSql']}) base
+            {$queryData['whereSql']}
             ORDER BY fecha DESC, terminal, nombre_empleado
-            LIMIT {$length} OFFSET {$start}
+            {$limitSql}
         ";
 
-        $novedades = collect(DB::select($dataSql, array_merge($bindings, $whereBindings)))
+        return collect(DB::select($dataSql, array_merge($queryData['bindings'], $queryData['whereBindings'])))
             ->map(function ($row) {
                 $row->fecha = $row->fecha ? Carbon::parse($row->fecha)->format('Y-m-d') : null;
                 $row->primer_login = $row->primer_login ? Carbon::parse($row->primer_login)->format('Y-m-d H:i:s') : null;
@@ -203,19 +258,6 @@ class NovedadHorarioController extends Controller
 
                 return $row;
             });
-
-        return response()->json([
-            'draw' => (int) $request->input('draw', 0),
-            'recordsTotal' => $recordsTotal,
-            'recordsFiltered' => $recordsFiltered,
-            'data' => $novedades->values(),
-            'resumen' => [
-                'total' => (int) ($resumen->total ?? 0),
-                'terminales' => (int) ($resumen->terminales ?? 0),
-                'agencias' => (int) ($resumen->agencias ?? 0),
-                'horas_acumuladas' => round((float) ($resumen->horas_acumuladas ?? 0), 2),
-            ],
-        ]);
     }
 
     public function detalle(Request $request)

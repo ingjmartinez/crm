@@ -407,88 +407,19 @@
             });
         }
 
-        function descargarExcelHtml(nombreArchivo, encabezados, filas) {
-            const tabla = `
-                <table border="1">
-                    <thead>
-                        <tr>${encabezados.map(encabezado => `<th>${escaparHtml(encabezado)}</th>`).join('')}</tr>
-                    </thead>
-                    <tbody>
-                        ${filas.map(fila => `
-                            <tr>${fila.map(valor => `<td>${escaparHtml(valor)}</td>`).join('')}</tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-            const blob = new Blob([`\ufeff${tabla}`], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-
-            link.href = url;
-            link.download = nombreArchivo;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }
-
         function exportarExcel() {
             if (!horasRequeridasReporte) {
                 Swal.fire('Horario requerido', 'Primero debe configurar las horas requeridas para exportar.', 'warning');
                 return;
             }
 
-            Swal.fire({
-                title: 'Exportando',
-                text: 'Preparando archivo Excel...',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-
             const searchValue = tableNovedadesHorario ? tableNovedadesHorario.search() : '';
             const params = obtenerParametrosReporte({
-                draw: 1,
-                start: 0,
-                length: 100000,
-                export: 1,
+                valor_hora: valorHoraReporte,
                 'search[value]': searchValue
             });
 
-            fetch(`/recursos-humanos/novedades-horario/list?${params}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('No se pudo exportar.');
-                    }
-
-                    return response.json();
-                })
-                .then(json => {
-                    const filas = (json.data || []).map(row => [
-                        row.terminal,
-                        row.nombre_agencia,
-                        row.ruta,
-                        row.nombre_empleado,
-                        row.cedula,
-                        row.fecha,
-                        row.primer_login,
-                        row.ultimo_login,
-                        formatearNumero(row.horas_acumuladas),
-                        obtenerTextoDetalle(row)
-                    ]);
-
-                    descargarExcelHtml(
-                        `novedades_horario_${document.getElementById('fecha_inicio').value}_${document.getElementById('fecha_fin').value}.xls`,
-                        ['Terminal', 'Nombre de Agencia', 'Ruta', 'Nombre de Empleado', 'Cedula', 'Fecha', 'Primer Login', 'Ultimo Login', 'Horas_Acumuladas', 'Detalle'],
-                        filas
-                    );
-                    Swal.close();
-                })
-                .catch(() => {
-                    Swal.fire('Error', 'No se pudo exportar el archivo Excel.', 'error');
-                });
+            window.location.href = `/recursos-humanos/novedades-horario/export?${params}`;
         }
 
         function cargarNovedadesHorario() {
