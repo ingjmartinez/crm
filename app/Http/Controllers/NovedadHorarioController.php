@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Exports\NovedadesHorarioExport;
-use App\Exports\NovedadesHorarioPagoExport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class NovedadHorarioController extends Controller
 {
@@ -116,7 +119,50 @@ class NovedadHorarioController extends Controller
             str_replace('-', '', $validated['fecha_fin'])
         );
 
-        return Excel::download(new NovedadesHorarioPagoExport($resumenPago), $filename);
+        return response()->streamDownload(function () use ($resumenPago) {
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $headings = [
+                'Nombre',
+                'Cedula',
+                'Terminal',
+                'Nombre de Agencia',
+                'Ruta',
+                'Total de Horas',
+                'Monto Total',
+            ];
+
+            foreach ($headings as $index => $heading) {
+                $sheet->setCellValueByColumnAndRow($index + 1, 1, $heading);
+            }
+
+            $sheet->getStyle('A1:G1')->getFont()->setBold(true);
+            $rowNumber = 2;
+
+            foreach ($resumenPago as $row) {
+                $sheet->setCellValue("A{$rowNumber}", $row['nombre'] ?? '');
+                $sheet->setCellValueExplicit("B{$rowNumber}", (string) ($row['cedula'] ?? ''), DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit("C{$rowNumber}", (string) ($row['terminal'] ?? ''), DataType::TYPE_STRING);
+                $sheet->setCellValue("D{$rowNumber}", $row['nombre_agencia'] ?? '');
+                $sheet->setCellValue("E{$rowNumber}", $row['ruta'] ?? '');
+                $sheet->setCellValue("F{$rowNumber}", $row['total_horas'] ?? '');
+                $sheet->setCellValue("G{$rowNumber}", (float) ($row['monto_total'] ?? 0));
+                $rowNumber++;
+            }
+
+            $sheet->getStyle("B2:C{$rowNumber}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+            $sheet->getStyle("G2:G{$rowNumber}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+
+            foreach (range('A', 'G') as $column) {
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+            }
+
+            (new Xlsx($spreadsheet))->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
     }
 
     private function buildNovedadesHorarioQuery(array $validated, Request $request): array
