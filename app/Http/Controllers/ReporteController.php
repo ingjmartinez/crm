@@ -665,6 +665,87 @@ class ReporteController extends Controller
         return response()->json($resultados);
     }
 
+    public function ventasPorRuta(Request $request)
+    {
+        return view('reportes.ventas-por-ruta');
+    }
+
+    public function listVentasPorRuta(Request $request)
+    {
+        $sistema = $request->input('sistema', 'Lotobet');
+        $empresa = $request->input('empresa', 'todas');
+        $fechaInicio = $request->input('fecha_inicio');
+        $fechaFin = $request->input('fecha_fin');
+
+        if (!$fechaInicio || !$fechaFin || $fechaInicio > $fechaFin) {
+            return response()->json([]);
+        }
+
+        $tabla = $sistema === 'Lotobet' ? 'vt_usuarios_bet' : 'vt_usuarios_net';
+        $empresaSql = '';
+        $bindings = [$fechaInicio, $fechaFin];
+
+        if ($empresa === 'grupo_joselito') {
+            $empresaSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $bindings[] = '%joselito%';
+        } elseif ($empresa === 'negosur') {
+            $empresaSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $bindings[] = '%negosur%';
+        }
+
+        $sql = "
+            SELECT
+                r.Ruta,
+                FORMAT(r.Tradicional, 2, 'en_US') AS Tradicional,
+                FORMAT(r.No_Tradicional, 2, 'en_US') AS No_Tradicional,
+                FORMAT(r.Recarga, 2, 'en_US') AS Recarga,
+                FORMAT(r.Paquetico, 2, 'en_US') AS Paquetico,
+                FORMAT(r.Tradicional + r.No_Tradicional + r.Recarga + r.Paquetico, 2, 'en_US') AS Total_Dia
+            FROM (
+                SELECT
+                    COALESCE(NULLIF(TRIM(a.ruta), ''), 'Sin ruta') AS Ruta,
+                    SUM(CASE WHEN cj.tipo = 'tradicional' THEN v.monto ELSE 0 END) AS Tradicional,
+                    SUM(CASE WHEN cj.tipo = 'no tradicional' THEN v.monto ELSE 0 END) AS No_Tradicional,
+                    SUM(CASE WHEN cj.tipo = 'recarga' THEN v.monto ELSE 0 END) AS Recarga,
+                    SUM(CASE WHEN cj.tipo = 'paquetico' THEN v.monto ELSE 0 END) AS Paquetico
+                FROM {$tabla} v
+                JOIN agencias a
+                    ON COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(v.agencia_id AS CHAR))), ''), '0')
+                     = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(a.terminal AS CHAR))), ''), '0')
+                LEFT JOIN catalogo_juegos cj
+                    ON v.producto_id = cj.producto_id
+                WHERE v.fecha >= ?
+                  AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+                  {$empresaSql}
+                GROUP BY
+                    COALESCE(NULLIF(TRIM(a.ruta), ''), 'Sin ruta')
+            ) r
+
+            UNION ALL
+
+            SELECT
+                'TODAS' AS Ruta,
+                FORMAT(SUM(CASE WHEN cj.tipo = 'tradicional' THEN v.monto ELSE 0 END), 2, 'en_US') AS Tradicional,
+                FORMAT(SUM(CASE WHEN cj.tipo = 'no tradicional' THEN v.monto ELSE 0 END), 2, 'en_US') AS No_Tradicional,
+                FORMAT(SUM(CASE WHEN cj.tipo = 'recarga' THEN v.monto ELSE 0 END), 2, 'en_US') AS Recarga,
+                FORMAT(SUM(CASE WHEN cj.tipo = 'paquetico' THEN v.monto ELSE 0 END), 2, 'en_US') AS Paquetico,
+                FORMAT(SUM(v.monto), 2, 'en_US') AS Total_Dia
+            FROM {$tabla} v
+            JOIN agencias a
+                ON COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(v.agencia_id AS CHAR))), ''), '0')
+                 = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(a.terminal AS CHAR))), ''), '0')
+            LEFT JOIN catalogo_juegos cj
+                ON v.producto_id = cj.producto_id
+            WHERE v.fecha >= ?
+              AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+              {$empresaSql}
+        ";
+
+        $resultados = DB::select($sql, array_merge($bindings, $bindings));
+
+        return response()->json($resultados);
+    }
+
     public function cruceUsuarios(Request $request)
     {
         return view('reportes.cruce-usuarios');

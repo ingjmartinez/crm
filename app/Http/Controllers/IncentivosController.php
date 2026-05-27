@@ -1288,12 +1288,14 @@ class IncentivosController extends Controller
             ->filter()
             ->unique()
             ->values();
-        $nombresPorCedula = DB::table('empleados')
+        $empleadosPorCedula = DB::table('empleados')
             ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasNormalizadas->all())
             ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
             ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
+            ->selectRaw('MAX(empleadoid) AS empleadoid')
             ->groupByRaw('CAST(cedula AS UNSIGNED)')
-            ->pluck('nombre', 'cedula');
+            ->get()
+            ->keyBy('cedula');
 
         $ultimaVentaPorCedula = [];
         if ($cedulasNormalizadas->isNotEmpty()) {
@@ -1356,13 +1358,15 @@ class IncentivosController extends Controller
             }
         }
 
-        $data = $rawData->map(function ($row) use ($nombresPorCedula, $ultimaVentaPorCedula) {
+        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorCedula) {
             $cedulaKey = preg_replace('/\D+/', '', (string) ($row['cedula'] ?? ''));
-            $nombre = trim((string) ($nombresPorCedula[$cedulaKey] ?? ''));
+            $empleado = $empleadosPorCedula->get($cedulaKey);
+            $nombre = trim((string) ($empleado->nombre ?? ''));
             $ultimaVenta = $ultimaVentaPorCedula[$cedulaKey] ?? [];
 
             return [
                 'cedula' => $row['cedula'],
+                'empleadoid' => (string) ($empleado->empleadoid ?? ''),
                 'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
                 'ultima_terminal' => $ultimaVenta['terminal'] ?? '',
                 'ultima_agencia_nombre' => $ultimaVenta['nombre_agencia'] ?? 'SIN AGENCIA',

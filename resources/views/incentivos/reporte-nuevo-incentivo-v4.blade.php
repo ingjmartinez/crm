@@ -233,6 +233,7 @@
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
+                                    <button type="button" class="btn btn-dark" id="btnGenerarTxtPago">Generar TXT de pago</button>
                                     <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
                                     <button type="button" class="btn btn-success" id="btnConsultarRecargasPaqueticos">Recargas/Paqueticos</button>
                                 </div>
@@ -243,6 +244,7 @@
                                     <thead>
                                         <tr>
                                             <th class="col-cedula">Cedula</th>
+                                            <th>IdEmpleado</th>
                                             <th class="col-nombre">Nombre</th>
                                             <th class="col-empresa">Empresa</th>
                                             <th class="col-monto text-end">Ventas Ult. Mes</th>
@@ -1083,6 +1085,63 @@
         URL.revokeObjectURL(url);
     }
 
+    function toTxtPagoValue(value) {
+        return String(value ?? '')
+            .replace(/\t/g, ' ')
+            .replace(/\r?\n/g, ' ')
+            .trim();
+    }
+
+    function getComentarioPagoIncentivo() {
+        const fechaFin = document.getElementById('ni_fecha_fin')?.value || '';
+        const fecha = fechaFin ? new Date(`${fechaFin}T00:00:00`) : new Date();
+        const mes = fecha.toLocaleDateString('es-DO', { month: 'long', year: 'numeric' });
+
+        return `pago de incentivo ${mes}`;
+    }
+
+    function generarTxtPagoIncentivo() {
+        const rows = currentFilteredRows
+            .map((row) => ({
+                ...row,
+                __importe: toNumber(row?.nuevo_incentivo),
+                __idEmpleado: String(row?.empleadoid ?? '').trim(),
+            }))
+            .filter((row) => row.__importe > 0);
+
+        if (!rows.length) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay incentivos con importe mayor a cero para generar el TXT.', icon: 'warning' });
+            return;
+        }
+
+        const headers = ['IdEmpleado', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo'];
+        const comentario = getComentarioPagoIncentivo();
+        const lines = [
+            headers.join(','),
+            ...rows.map((row) => [
+                row.__idEmpleado,
+                'INC',
+                row.__importe.toFixed(2),
+                '',
+                '',
+                '',
+                comentario,
+                '',
+            ].map(toTxtPagoValue).join(',')),
+        ];
+
+        const fechaFin = document.getElementById('ni_fecha_fin')?.value || new Date().toISOString().slice(0, 10);
+        const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `pago_incentivo_${fechaFin}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
     function exportAdministrativosExcel() {
         const rows = getAdministrativeDisplayRows().map((row) => [
             row.grupo,
@@ -1598,6 +1657,7 @@
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${item.cedula}</td>
+                <td>${escapeHtml(item.empleadoid || '')}</td>
                 <td class="cell-nombre">${renderNombreEmpleado(item.nombre)}</td>
                 <td>${escapeHtml(normalizeEmpresaLabel(item.empresa))}</td>
                 <td class="text-end">${formatMoney(item.ventas_ultimo_mes)}</td>
@@ -1613,15 +1673,16 @@
             responsive: true,
             dom: 'Bfrtip',
             buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
-            order: [[3, 'desc']],
+            order: [[4, 'desc']],
             autoWidth: true,
             columnDefs: [
                 { targets: 0, width: '7rem' },
-                { targets: 1, width: '13rem' },
-                { targets: 2, width: '8rem' },
-                { targets: [3, 4, 7], width: '8.4rem', className: 'text-end' },
-                { targets: 5, width: '4.4rem', className: 'text-center' },
-                { targets: 6, width: '9rem' },
+                { targets: 1, width: '7rem' },
+                { targets: 2, width: '13rem' },
+                { targets: 3, width: '8rem' },
+                { targets: [4, 5, 8], width: '8.4rem', className: 'text-end' },
+                { targets: 6, width: '4.4rem', className: 'text-center' },
+                { targets: 7, width: '9rem' },
             ],
             pageLength: 10000,
             scrollY: '500px',
@@ -2491,6 +2552,10 @@
 
     document.querySelector('#btnGenerarNuevoIncentivo').addEventListener('click', function() {
         listNuevoIncentivo();
+    });
+
+    document.querySelector('#btnGenerarTxtPago').addEventListener('click', function() {
+        generarTxtPagoIncentivo();
     });
 
     document.querySelector('#btnFiltrarCumplimiento').addEventListener('click', function() {

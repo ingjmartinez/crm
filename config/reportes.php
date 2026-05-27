@@ -29,6 +29,15 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Ventas por ruta',
+        'descripcion' => 'Consulta ventas agrupadas por ruta y filtradas por empresa.',
+        'url' => '/reportes-ventas-por-ruta',
+        'icono' => 'ri-route-line',
+        'categoria' => 'Ventas',
+        'tags' => ['ruta', 'ventas', 'empresa'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Ventas por Agencia y Periodo',
         'descripcion' => 'Consulta ventas agrupadas por agencia en un rango de fechas.',
         'url' => '/reportes-ventas-agencia-periodo',

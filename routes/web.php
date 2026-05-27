@@ -7,6 +7,7 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AutoProcesoConfigController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ComercialController;
+use App\Http\Controllers\ContabilidadComisionController;
 use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\ContabilidadFlujoRutaController;
 use App\Http\Controllers\ContabilidadElectricidadController;
@@ -110,7 +111,16 @@ Route::middleware('auth')->group(function () {
         Route::put('/electricidad/averias-dia/{id}/observaciones', [ContabilidadElectricidadController::class, 'updateAveriasDiaObservaciones'])->name('electricidad.averias-dia.update-observaciones');
         Route::delete('/electricidad/averias-dia/{id}', [ContabilidadElectricidadController::class, 'destroyAveriasDia'])->name('electricidad.averias-dia.destroy');
         Route::view('/centro-costo', 'contabilidad.centro-costo')->name('centro-costo');
-        Route::view('/reportes/comisiones', 'contabilidad.reportes.comisiones')->name('reportes.comisiones');
+        Route::get('/reportes/comisiones', [ContabilidadComisionController::class, 'index'])->name('reportes.comisiones');
+        Route::post('/reportes/comisiones/calcular-todas', [ContabilidadComisionController::class, 'calcularTodas'])->name('reportes.comisiones.calcular-todas');
+        Route::get('/reportes/comisiones/acuerdos/create', [ContabilidadComisionController::class, 'create'])->name('reportes.comisiones.acuerdos.create');
+        Route::post('/reportes/comisiones/acuerdos', [ContabilidadComisionController::class, 'store'])->name('reportes.comisiones.acuerdos.store');
+        Route::get('/reportes/comisiones/acuerdos/{acuerdo}/edit', [ContabilidadComisionController::class, 'edit'])->name('reportes.comisiones.acuerdos.edit');
+        Route::post('/reportes/comisiones/acuerdos/{acuerdo}/clonar', [ContabilidadComisionController::class, 'clone'])->name('reportes.comisiones.acuerdos.clone');
+        Route::post('/reportes/comisiones/acuerdos/{acuerdo}/calcular', [ContabilidadComisionController::class, 'calcular'])->name('reportes.comisiones.acuerdos.calcular');
+        Route::put('/reportes/comisiones/acuerdos/{acuerdo}', [ContabilidadComisionController::class, 'update'])->name('reportes.comisiones.acuerdos.update');
+        Route::delete('/reportes/comisiones/acuerdos/{acuerdo}', [ContabilidadComisionController::class, 'destroy'])->name('reportes.comisiones.acuerdos.destroy');
+        Route::post('/reportes/comisiones/acuerdos/{acuerdo}/asignar-agencias', [ContabilidadComisionController::class, 'asignarAgencias'])->name('reportes.comisiones.acuerdos.asignar-agencias');
         Route::get('/reportes/estado-resultado', [ContabilidadEstadoResultadoController::class, 'index'])->name('reportes.estado-resultado');
         Route::get('/reportes/estado-resultado/meta', [ContabilidadEstadoResultadoController::class, 'meta'])->name('reportes.estado-resultado.meta');
         Route::get('/reportes/estado-resultado/data', [ContabilidadEstadoResultadoController::class, 'data'])->name('reportes.estado-resultado.data');
@@ -294,6 +304,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/reportes-cuadre-ventas', [ReporteController::class, 'cuadreVentas']);
     Route::get('/reportes-cuadre-ventas/list', [ReporteController::class, 'listCuadreVentas']);
+    Route::get('/reportes-ventas-por-ruta', [ReporteController::class, 'ventasPorRuta']);
+    Route::get('/reportes-ventas-por-ruta/list', [ReporteController::class, 'listVentasPorRuta']);
 
     Route::get('/reportes-ventas-agencia-periodo', [ReporteController::class, 'ventasAgenciaPeriodo']);
     Route::get('/reportes-ventas-agencia-periodo/list', [ReporteController::class, 'listVentasAgenciaPeriodo']);

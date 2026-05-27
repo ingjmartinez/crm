@@ -46,6 +46,16 @@ class Agencia extends Model
         )->withTimestamps();
     }
 
+    public function acuerdosComision()
+    {
+        return $this->belongsToMany(
+            AcuerdoComision::class,
+            'comision_acuerdo_agencia',
+            'agencia_id',
+            'comision_acuerdo_id'
+        )->withTimestamps();
+    }
+
     public function horarios()
     {
         return $this->hasMany(AgenciaHorario::class);
