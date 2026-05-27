@@ -324,6 +324,7 @@ Route::middleware('auth')->group(function () {
     Route::get('agencias-export', [AgenciaController::class, 'export'])->name('agencias.export');
     Route::post('agencias-import', [AgenciaController::class, 'import'])->name('agencias.import');
     Route::post('agencias-mass-update', [AgenciaController::class, 'massUpdate'])->name('agencias.mass-update');
+    Route::post('agencias-actualizar-horario', [AgenciaController::class, 'actualizarHorarioMasivo'])->name('agencias.actualizar-horario');
     Route::post('agencias-mass-update-preview', [AgenciaController::class, 'massUpdatePreview'])->name('agencias.mass-update-preview');
     Route::post('agencias-actualizar-desde-cc', [AgenciaController::class, 'actualizarDesdeCentroCosto'])->name('agencias.actualizar-desde-cc');
     Route::get('agencias-no-registradas-venta-fija-semana', [AgenciaController::class, 'noRegistradasVentaFijaSemana'])->name('agencias.no-registradas-venta-fija-semana');

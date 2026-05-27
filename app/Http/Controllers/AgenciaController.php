@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\IncumplimientoHorarioReportMail;
 use App\Models\Agencia;
+use App\Models\AgenciaHorario;
 use App\Models\CentroDeCosto;
 use App\Models\CoordinadorOperador;
 use App\Models\OperadorRuta;
@@ -795,6 +796,183 @@ class AgenciaController extends Controller
         ]);
     }
 
+    public function actualizarHorarioMasivo(Request $request)
+    {
+        $horarioRegex = '/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i';
+
+        $validated = $request->validate([
+            'scope' => ['required', 'string', Rule::in(['todas', 'activas', 'filtros', 'agencia'])],
+            'agencia_busqueda' => ['nullable', 'string', 'max:60'],
+            'estatus_filter' => ['nullable', 'string', Rule::in(['todos', 'activo', 'inactivo'])],
+            'empresa_filter' => ['nullable', 'string', Rule::in(['todas', 'joselito', 'negosur'])],
+            'reglas' => ['required', 'array', 'min:1', 'max:7'],
+            'reglas.*.dia_desde' => ['required', 'integer', 'between:1,7'],
+            'reglas.*.dia_hasta' => ['required', 'integer', 'between:1,7'],
+            'reglas.*.horario_am' => ['nullable', 'string', 'max:35', 'regex:' . $horarioRegex],
+            'reglas.*.horario_pm' => ['nullable', 'string', 'max:35', 'regex:' . $horarioRegex],
+        ], [
+            'reglas.required' => 'Agregue al menos una regla de horario.',
+            'reglas.*.horario_am.regex' => 'El Horario AM debe tener el formato 7:30 AM / 2:30 PM.',
+            'reglas.*.horario_pm.regex' => 'El Horario PM debe tener el formato 2:00 PM / 9:30 PM.',
+        ]);
+
+        $reglas = collect($validated['reglas'])
+            ->map(function (array $regla) {
+                return [
+                    'dia_desde' => (int) $regla['dia_desde'],
+                    'dia_hasta' => (int) $regla['dia_hasta'],
+                    'horario_am' => trim((string) ($regla['horario_am'] ?? '')),
+                    'horario_pm' => trim((string) ($regla['horario_pm'] ?? '')),
+                ];
+            })
+            ->filter(fn(array $regla) => $regla['horario_am'] !== '' || $regla['horario_pm'] !== '')
+            ->values();
+
+        if ($reglas->isEmpty()) {
+            return response()->json([
+                'message' => 'Agregue por lo menos un Horario AM o PM.',
+            ], 422);
+        }
+
+        $diasSeleccionados = [];
+        foreach ($reglas as $regla) {
+            foreach ($this->diasEnRango((int) $regla['dia_desde'], (int) $regla['dia_hasta']) as $dia) {
+                if (isset($diasSeleccionados[$dia])) {
+                    return response()->json([
+                        'message' => 'Hay dias repetidos entre reglas. Ajuste los rangos para que no se crucen.',
+                    ], 422);
+                }
+
+                $diasSeleccionados[$dia] = true;
+            }
+        }
+
+        if ((string) $validated['scope'] === 'agencia') {
+            $agenciaBusqueda = trim((string) ($validated['agencia_busqueda'] ?? ''));
+            if ($agenciaBusqueda === '') {
+                return response()->json([
+                    'message' => 'Indique el ID, codigo de agencia o terminal que desea actualizar.',
+                ], 422);
+            }
+
+            $agencia = $this->buscarAgenciaPorReferencia($agenciaBusqueda);
+            if (!$agencia) {
+                return response()->json([
+                    'message' => 'No se encontro una agencia con esa referencia.',
+                ], 422);
+            }
+
+            $agencias = collect([$agencia->only('id')])->map(fn(array $item) => (object) $item);
+        } else {
+            $query = Agencia::query();
+            $this->aplicarFiltrosActualizacionHorario(
+                $query,
+                (string) $validated['scope'],
+                (string) ($validated['estatus_filter'] ?? 'todos'),
+                (string) ($validated['empresa_filter'] ?? 'todas')
+            );
+
+            $agencias = $query->select('id')->get();
+        }
+
+        if ($agencias->isEmpty()) {
+            return response()->json([
+                'message' => 'No hay agencias que coincidan con el alcance seleccionado.',
+            ], 422);
+        }
+
+        $primeraRegla = $reglas->first();
+        $now = now();
+        $actualizados = 0;
+        $horariosActualizados = 0;
+
+        DB::transaction(function () use ($agencias, $reglas, $primeraRegla, $now, &$actualizados, &$horariosActualizados) {
+            Agencia::query()
+                ->whereIn('id', $agencias->pluck('id'))
+                ->update([
+                    'horario_am' => $primeraRegla['horario_am'] !== '' ? $primeraRegla['horario_am'] : null,
+                    'horario_pm' => $primeraRegla['horario_pm'] !== '' ? $primeraRegla['horario_pm'] : null,
+                    'updated_at' => $now,
+                ]);
+
+            foreach ($agencias as $agencia) {
+                foreach ($reglas as $regla) {
+                    foreach ($this->diasEnRango((int) $regla['dia_desde'], (int) $regla['dia_hasta']) as $dia) {
+                        AgenciaHorario::query()->updateOrCreate(
+                            [
+                                'agencia_id' => $agencia->id,
+                                'dia_semana' => $dia,
+                            ],
+                            [
+                                'horario_am' => $regla['horario_am'] !== '' ? $regla['horario_am'] : null,
+                                'horario_pm' => $regla['horario_pm'] !== '' ? $regla['horario_pm'] : null,
+                            ]
+                        );
+
+                        $horariosActualizados++;
+                    }
+                }
+
+                $actualizados++;
+            }
+        });
+
+        return response()->json([
+            'message' => 'Horarios actualizados correctamente.',
+            'agencias_actualizadas' => $actualizados,
+            'horarios_actualizados' => $horariosActualizados,
+            'dias_actualizados' => count($diasSeleccionados),
+        ]);
+    }
+
+    private function buscarAgenciaPorReferencia(string $referencia): ?Agencia
+    {
+        $referencia = trim($referencia);
+
+        if (ctype_digit($referencia)) {
+            $agenciaPorId = Agencia::query()->find((int) $referencia);
+            if ($agenciaPorId) {
+                return $agenciaPorId;
+            }
+        }
+
+        $terminalKey = $this->normalizarTerminal($referencia);
+
+        return Agencia::query()
+            ->where('agencia', $referencia)
+            ->orWhere('terminal', $referencia)
+            ->orWhereRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') = ?", [$terminalKey])
+            ->first();
+    }
+
+    private function aplicarFiltrosActualizacionHorario($query, string $scope, string $estatusFilter, string $empresaFilter): void
+    {
+        if ($scope === 'activas') {
+            $query->where('estatus', 1);
+        } elseif ($scope === 'filtros') {
+            if ($estatusFilter === 'activo') {
+                $query->where('estatus', 1);
+            } elseif ($estatusFilter === 'inactivo') {
+                $query->where('estatus', 0);
+            }
+        }
+
+        if ($scope === 'filtros') {
+            if ($empresaFilter === 'joselito') {
+                $query->whereRaw('LOWER(COALESCE(empresa, "")) LIKE ?', ['%joselito%']);
+            } elseif ($empresaFilter === 'negosur') {
+                $query->whereRaw('LOWER(COALESCE(empresa, "")) LIKE ?', ['%negosur%']);
+            }
+        }
+    }
+
+    private function diasEnRango(int $desde, int $hasta): array
+    {
+        return $desde <= $hasta
+            ? range($desde, $hasta)
+            : array_merge(range($desde, 7), range(1, $hasta));
+    }
+
     private function registrarTerminalesBase(array $terminales): array
     {
         $terminalesPorClave = collect($terminales)
@@ -1100,25 +1278,34 @@ class AgenciaController extends Controller
 
         $agencias = Agencia::query()
             ->select('id', 'agencia', 'nombre_agencia', 'terminal', 'horario_am', 'horario_pm')
+            ->with(['horarios:id,agencia_id,dia_semana,horario_am,horario_pm'])
             ->whereNotNull('terminal')
             ->where(function ($q) {
                 $q->whereNotNull('horario_am')
-                  ->orWhereNotNull('horario_pm');
+                  ->orWhereNotNull('horario_pm')
+                  ->orWhereHas('horarios', function ($horarios) {
+                      $horarios->whereNotNull('horario_am')
+                          ->orWhereNotNull('horario_pm');
+                  });
             })
             ->get();
 
         $mapAsistencia = $this->consolidarAsistenciasPorTerminal($fecha);
+        $diaSemana = Carbon::parse($fecha)->dayOfWeekIso;
 
         $rows = [];
 
         foreach ($agencias as $agencia) {
             $terminalKey = $this->normalizarTerminal($agencia->terminal);
             $asistencia = $mapAsistencia[$terminalKey] ?? null;
+            $horarioDia = $agencia->horarios->firstWhere('dia_semana', $diaSemana);
+            $horarioAm = $horarioDia->horario_am ?? $agencia->horario_am;
+            $horarioPm = $horarioDia->horario_pm ?? $agencia->horario_pm;
 
-            $entradaAmProgramada = $this->extraerHoraInicio($agencia->horario_am);
-            $salidaAmProgramada = $this->extraerHoraFin($agencia->horario_am);
-            $entradaPmProgramada = $this->extraerHoraInicio($agencia->horario_pm);
-            $salidaPmProgramada = $this->extraerHoraFin($agencia->horario_pm);
+            $entradaAmProgramada = $this->extraerHoraInicio($horarioAm);
+            $salidaAmProgramada = $this->extraerHoraFin($horarioAm);
+            $entradaPmProgramada = $this->extraerHoraInicio($horarioPm);
+            $salidaPmProgramada = $this->extraerHoraFin($horarioPm);
 
             // Para validar tardanza/salida anticipada se mantiene:
             // entrada del primer bloque disponible y salida del último bloque disponible.
@@ -1194,8 +1381,8 @@ class AgenciaController extends Controller
                 'agencia' => $agencia->agencia,
                 'nombre_agencia' => $agencia->nombre_agencia,
                 'terminal' => $agencia->terminal,
-                'horario_am' => $agencia->horario_am,
-                'horario_pm' => $agencia->horario_pm,
+                'horario_am' => $horarioAm,
+                'horario_pm' => $horarioPm,
                 'entrada_am_programada' => $entradaAmProgramada,
                 'salida_am_programada' => $salidaAmProgramada,
                 'entrada_pm_programada' => $entradaPmProgramada,

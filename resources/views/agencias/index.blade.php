@@ -49,6 +49,11 @@
                                                 </button>
                                             </div>
                                             <div class="col-6 col-md-3 d-grid">
+                                                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#horarioMasivoModal">
+                                                    <i class="ri-time-line align-bottom me-1"></i><span class="d-none d-md-inline">Actualizar horario</span><span class="d-md-none">Horario</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6 col-md-3 d-grid">
                                                 <button type="button" class="btn btn-dark btn-sm" id="btnActualizarDesdeCc">
                                                     <i class="ri-database-2-line align-bottom me-1"></i><span class="d-none d-md-inline">Actualizar desde cc</span><span class="d-md-none">CC</span>
                                                 </button>
@@ -150,6 +155,69 @@
                 </div>
             </div>
         </footer>
+    </div>
+
+    <div class="modal fade" id="horarioMasivoModal" tabindex="-1" aria-labelledby="horarioMasivoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <form id="formHorarioMasivo">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="horarioMasivoModalLabel">Actualizar horario</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-4">
+                                <label for="horarioMasivoScope" class="form-label">Aplicar a</label>
+                                <select class="form-select" id="horarioMasivoScope" name="scope">
+                                    <option value="todas">Todas las agencias</option>
+                                    <option value="activas" selected>Solo agencias activas</option>
+                                    <option value="filtros">Usar filtros actuales de la tabla</option>
+                                    <option value="agencia">Agencia especifica</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-4" id="horarioMasivoAgenciaWrapper" style="display:none;">
+                                <label for="horarioMasivoAgencia" class="form-label">Agencia</label>
+                                <input type="text" class="form-control" id="horarioMasivoAgencia" name="agencia_busqueda" placeholder="ID, codigo o terminal">
+                                <div class="form-text">Puede escribir el ID interno, codigo de agencia o terminal.</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="alert alert-info mb-0">
+                                    <strong class="d-block mb-1">Reglas por dias</strong>
+                                    Puede agregar varios rangos. Ejemplo: lunes a sabado con un horario y domingo con otro.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle mb-2" id="tablaReglasHorario">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="min-width: 140px;">Desde</th>
+                                        <th style="min-width: 140px;">Hasta</th>
+                                        <th style="min-width: 190px;">Horario AM</th>
+                                        <th style="min-width: 190px;">Horario PM</th>
+                                        <th class="text-center" style="width: 70px;">Accion</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnAgregarReglaHorario">
+                            <i class="ri-add-line me-1"></i>Agregar regla
+                        </button>
+                    </div>
+                    <div class="modal-footer d-flex gap-2">
+                        <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary flex-grow-1" id="btnGuardarHorarioMasivo">
+                            <i class="ri-save-line me-1"></i>Actualizar horario
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <!-- Modal para eliminar -->
@@ -438,6 +506,14 @@
         var btnEjecutarUpdateMasivo = $('#btnEjecutarUpdateMasivo');
         var resultadoPreviewMasivo = $('#resultadoPreviewMasivo');
         var formMassUpdate = $('#massUpdateModal form');
+        var horarioMasivoModal = $('#horarioMasivoModal');
+        var formHorarioMasivo = $('#formHorarioMasivo');
+        var tablaReglasHorarioBody = $('#tablaReglasHorario tbody');
+        var btnAgregarReglaHorario = $('#btnAgregarReglaHorario');
+        var btnGuardarHorarioMasivo = $('#btnGuardarHorarioMasivo');
+        var horarioMasivoScope = $('#horarioMasivoScope');
+        var horarioMasivoAgenciaWrapper = $('#horarioMasivoAgenciaWrapper');
+        var horarioMasivoAgencia = $('#horarioMasivoAgencia');
         var noRegistradasModal = $('#noRegistradasModal');
         var tablaNoRegistradasBody = $('#tablaNoRegistradas tbody');
         var noRegistradasRangoTexto = $('#noRegistradasRangoTexto');
@@ -474,6 +550,153 @@
 
         function escapeHtml(value) {
             return $('<div>').text(value ?? '').html();
+        }
+
+        var diasSemana = [
+            { value: 1, label: 'Lunes' },
+            { value: 2, label: 'Martes' },
+            { value: 3, label: 'Miercoles' },
+            { value: 4, label: 'Jueves' },
+            { value: 5, label: 'Viernes' },
+            { value: 6, label: 'Sabado' },
+            { value: 7, label: 'Domingo' }
+        ];
+
+        function opcionesDias(selected) {
+            return diasSemana.map(function(dia) {
+                var isSelected = Number(selected) === Number(dia.value) ? ' selected' : '';
+                return `<option value="${dia.value}"${isSelected}>${dia.label}</option>`;
+            }).join('');
+        }
+
+        function renumerarReglasHorario() {
+            tablaReglasHorarioBody.find('tr').each(function(index) {
+                $(this).find('[data-field]').each(function() {
+                    var field = $(this).data('field');
+                    $(this).attr('name', 'reglas[' + index + '][' + field + ']');
+                });
+            });
+
+            tablaReglasHorarioBody.find('.btn-remover-regla-horario').prop('disabled', tablaReglasHorarioBody.find('tr').length <= 1);
+        }
+
+        function agregarReglaHorario(config) {
+            config = config || {};
+            var row = `
+                <tr>
+                    <td>
+                        <select class="form-select form-select-sm" data-field="dia_desde" required>
+                            ${opcionesDias(config.dia_desde || 1)}
+                        </select>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm" data-field="dia_hasta" required>
+                            ${opcionesDias(config.dia_hasta || 6)}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" data-field="horario_am" value="${escapeHtml(config.horario_am || '')}" placeholder="7:30 AM / 2:30 PM">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" data-field="horario_pm" value="${escapeHtml(config.horario_pm || '')}" placeholder="2:00 PM / 9:30 PM">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-remover-regla-horario" title="Quitar regla">
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+
+            tablaReglasHorarioBody.append(row);
+            renumerarReglasHorario();
+        }
+
+        function reiniciarReglasHorario() {
+            tablaReglasHorarioBody.empty();
+            agregarReglaHorario({
+                dia_desde: 1,
+                dia_hasta: 6,
+                horario_am: '7:30 AM / 2:30 PM',
+                horario_pm: '2:00 PM / 9:30 PM'
+            });
+            agregarReglaHorario({
+                dia_desde: 7,
+                dia_hasta: 7,
+                horario_am: '7:30 AM / 2:30 PM',
+                horario_pm: '2:00 PM / 9:30 PM'
+            });
+        }
+
+        function aplicarVisibilidadAgenciaHorario() {
+            var agenciaEspecifica = horarioMasivoScope.val() === 'agencia';
+            horarioMasivoAgenciaWrapper.toggle(agenciaEspecifica);
+            horarioMasivoAgencia.prop('required', agenciaEspecifica);
+
+            if (!agenciaEspecifica) {
+                horarioMasivoAgencia.val('');
+            }
+        }
+
+        function ejecutarActualizacionHorarioMasivo() {
+            btnGuardarHorarioMasivo.prop('disabled', true);
+
+            Swal.fire({
+                title: 'Actualizando horarios',
+                text: 'Aplicando reglas por dia a las agencias seleccionadas...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: function() {
+                    Swal.showLoading();
+                }
+            });
+
+            var data = formHorarioMasivo.serializeArray();
+            data.push({ name: 'estatus_filter', value: estadoFiltro });
+            data.push({ name: 'empresa_filter', value: empresaFiltro });
+
+            $.ajax({
+                url: '{{ route('agencias.actualizar-horario') }}',
+                method: 'POST',
+                data: $.param(data),
+                success: function(response) {
+                    table.ajax.reload(null, false);
+                    cargarAgenciasParaActualizar(false);
+                    horarioMasivoModal.modal('hide');
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Horario actualizado',
+                        html: `
+                            <div class="text-start">
+                                <p class="mb-2">${escapeHtml(response.message || 'Proceso completado.')}</p>
+                                <ul class="mb-0 ps-3">
+                                    <li>Agencias actualizadas: <strong>${Number(response.agencias_actualizadas || 0).toLocaleString('es-DO')}</strong></li>
+                                    <li>Dias actualizados: <strong>${Number(response.dias_actualizados || 0).toLocaleString('es-DO')}</strong></li>
+                                    <li>Registros de horario: <strong>${Number(response.horarios_actualizados || 0).toLocaleString('es-DO')}</strong></li>
+                                </ul>
+                            </div>
+                        `,
+                        confirmButtonText: 'Entendido'
+                    });
+                },
+                error: function(xhr) {
+                    var msg = xhr?.responseJSON?.message || 'No se pudieron actualizar los horarios.';
+                    var errors = xhr?.responseJSON?.errors || null;
+                    var detail = errors
+                        ? Object.values(errors).flat().map(function(item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('')
+                        : '';
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        html: detail ? `<ul class="text-start mb-0">${detail}</ul>` : escapeHtml(msg)
+                    });
+                },
+                complete: function() {
+                    btnGuardarHorarioMasivo.prop('disabled', false);
+                }
+            });
         }
 
         function mostrarErrorCargaAgencias(xhr) {
@@ -1489,6 +1712,39 @@
 
         $('#btnActualizarDesdeCc').on('click', function() {
             actualizarAgenciasDesdeCc();
+        });
+
+        horarioMasivoModal.on('show.bs.modal', function() {
+            if (!tablaReglasHorarioBody.find('tr').length) {
+                reiniciarReglasHorario();
+            }
+            aplicarVisibilidadAgenciaHorario();
+        });
+
+        horarioMasivoModal.on('hidden.bs.modal', function() {
+            horarioMasivoScope.val('activas');
+            aplicarVisibilidadAgenciaHorario();
+        });
+
+        horarioMasivoScope.on('change', function() {
+            aplicarVisibilidadAgenciaHorario();
+        });
+
+        btnAgregarReglaHorario.on('click', function() {
+            agregarReglaHorario({
+                dia_desde: 7,
+                dia_hasta: 7
+            });
+        });
+
+        tablaReglasHorarioBody.on('click', '.btn-remover-regla-horario', function() {
+            $(this).closest('tr').remove();
+            renumerarReglasHorario();
+        });
+
+        formHorarioMasivo.on('submit', function(event) {
+            event.preventDefault();
+            ejecutarActualizacionHorarioMasivo();
         });
 
         tablaInactivasBody.on('click', '.btn-actualizar-estatus-agencia', function() {

@@ -45,4 +45,9 @@ class Agencia extends Model
             'coordinador_operador_id'
         )->withTimestamps();
     }
+
+    public function horarios()
+    {
+        return $this->hasMany(AgenciaHorario::class);
+    }
 }
