@@ -146,6 +146,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Comisiones por grupo',
+                'descripcion' => 'Calcula ventas por subgrupo usando centros de costo.',
+                'url' => '/contabilidad/reportes/comisiones-por-grupo',
+                'icono' => 'ri-group-line',
+                'categoria' => 'Reportes',
+                'tags' => ['comisiones', 'subgrupo', 'centro costo'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Estado de Resultado',
                 'descripcion' => 'Consulta ingresos, gastos y resultados financieros.',
                 'url' => '/contabilidad/reportes/estado-resultado',

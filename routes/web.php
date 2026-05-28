@@ -113,6 +113,8 @@ Route::middleware('auth')->group(function () {
         Route::view('/centro-costo', 'contabilidad.centro-costo')->name('centro-costo');
         Route::get('/reportes/comisiones', [ContabilidadComisionController::class, 'index'])->name('reportes.comisiones');
         Route::post('/reportes/comisiones/calcular-todas', [ContabilidadComisionController::class, 'calcularTodas'])->name('reportes.comisiones.calcular-todas');
+        Route::get('/reportes/comisiones-por-grupo', [ContabilidadComisionController::class, 'gruposIndex'])->name('reportes.comisiones-por-grupo');
+        Route::post('/reportes/comisiones-por-grupo/{subgrupo}/calcular', [ContabilidadComisionController::class, 'calcularGrupo'])->name('reportes.comisiones-por-grupo.calcular');
         Route::get('/reportes/comisiones/acuerdos/create', [ContabilidadComisionController::class, 'create'])->name('reportes.comisiones.acuerdos.create');
         Route::post('/reportes/comisiones/acuerdos', [ContabilidadComisionController::class, 'store'])->name('reportes.comisiones.acuerdos.store');
         Route::get('/reportes/comisiones/acuerdos/{acuerdo}/edit', [ContabilidadComisionController::class, 'edit'])->name('reportes.comisiones.acuerdos.edit');
