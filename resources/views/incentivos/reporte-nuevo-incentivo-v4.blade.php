@@ -535,6 +535,36 @@
         </div>
     </div>
 
+    <div id="modalGenerarPagoIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Generar archivo de pago</h5>
+                        <small class="text-muted">Selecciona el formato que deseas descargar.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-outline-dark w-100 h-100 py-3" id="btnDescargarPagoTxt">
+                                <span class="d-block fw-semibold">TXT</span>
+                                <small class="text-muted">Formato actual para pago</small>
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-outline-success w-100 h-100 py-3" id="btnDescargarPagoXlsx">
+                                <span class="d-block fw-semibold">Excel XLSX</span>
+                                <small class="text-muted">Mismo contenido en hoja de calculo</small>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="modalFaltantesIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
@@ -1100,7 +1130,11 @@
         return `pago de incentivo ${mes}`;
     }
 
-    function generarTxtPagoIncentivo() {
+    function getFechaFinPagoIncentivo() {
+        return document.getElementById('ni_fecha_fin')?.value || new Date().toISOString().slice(0, 10);
+    }
+
+    function getPagoIncentivoExportData() {
         const rows = currentFilteredRows
             .map((row) => ({
                 ...row,
@@ -1110,15 +1144,16 @@
             .filter((row) => row.__importe > 0);
 
         if (!rows.length) {
-            Swal.fire({ title: 'Sin datos', text: 'No hay incentivos con importe mayor a cero para generar el TXT.', icon: 'warning' });
-            return;
+            Swal.fire({ title: 'Sin datos', text: 'No hay incentivos con importe mayor a cero para generar el archivo de pago.', icon: 'warning' });
+            return null;
         }
 
         const headers = ['IdEmpleado', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo'];
         const comentario = getComentarioPagoIncentivo();
-        const lines = [
-            headers.join(','),
-            ...rows.map((row) => [
+
+        return {
+            headers,
+            rows: rows.map((row) => [
                 row.__idEmpleado,
                 'INC',
                 row.__importe.toFixed(2),
@@ -1127,19 +1162,105 @@
                 '',
                 comentario,
                 '',
-            ].map(toTxtPagoValue).join(',')),
-        ];
+            ].map(toTxtPagoValue)),
+            fechaFin: getFechaFinPagoIncentivo(),
+        };
+    }
 
-        const fechaFin = document.getElementById('ni_fecha_fin')?.value || new Date().toISOString().slice(0, 10);
-        const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8;' });
+    function downloadBlob(filename, blob) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `pago_incentivo_${fechaFin}.txt`;
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+    }
+
+    function generarTxtPagoIncentivo() {
+        const data = getPagoIncentivoExportData();
+        if (!data) {
+            return;
+        }
+
+        const lines = [
+            data.headers.join(','),
+            ...data.rows.map((row) => row.join(',')),
+        ];
+        const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8;' });
+        downloadBlob(`pago_incentivo_${data.fechaFin}.txt`, blob);
+    }
+
+    function escapeXml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+    }
+
+    function excelColumnName(index) {
+        let name = '';
+        let number = index + 1;
+        while (number > 0) {
+            const remainder = (number - 1) % 26;
+            name = String.fromCharCode(65 + remainder) + name;
+            number = Math.floor((number - 1) / 26);
+        }
+        return name;
+    }
+
+    function buildXlsxBlob(headers, rows) {
+        const zip = new JSZip();
+        const allRows = [headers, ...rows];
+        const sheetRows = allRows.map((row, rowIndex) => {
+            const rowNumber = rowIndex + 1;
+            const cells = row.map((value, columnIndex) => {
+                const cellRef = `${excelColumnName(columnIndex)}${rowNumber}`;
+                return `<c r="${cellRef}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
+            }).join('');
+
+            return `<row r="${rowNumber}">${cells}</row>`;
+        }).join('');
+
+        zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
+        zip.folder('_rels').file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+        zip.folder('xl').file('workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Pago incentivo" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+        zip.folder('xl').folder('_rels').file('workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
+        zip.folder('xl').folder('worksheets').file('sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`);
+
+        return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    }
+
+    function generarXlsxPagoIncentivo() {
+        const data = getPagoIncentivoExportData();
+        if (!data) {
+            return;
+        }
+
+        if (typeof JSZip === 'undefined') {
+            Swal.fire({ title: 'No disponible', text: 'No se pudo cargar el generador de Excel.', icon: 'error' });
+            return;
+        }
+
+        buildXlsxBlob(data.headers, data.rows).then((blob) => {
+            downloadBlob(`pago_incentivo_${data.fechaFin}.xlsx`, blob);
+        });
+    }
+
+    function cerrarModalPagoIncentivo() {
+        const modalElement = document.getElementById('modalGenerarPagoIncentivo');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
     }
 
     function exportAdministrativosExcel() {
@@ -2555,7 +2676,18 @@
     });
 
     document.querySelector('#btnGenerarTxtPago').addEventListener('click', function() {
+        const modal = new bootstrap.Modal(document.getElementById('modalGenerarPagoIncentivo'));
+        modal.show();
+    });
+
+    document.querySelector('#btnDescargarPagoTxt').addEventListener('click', function() {
         generarTxtPagoIncentivo();
+        cerrarModalPagoIncentivo();
+    });
+
+    document.querySelector('#btnDescargarPagoXlsx').addEventListener('click', function() {
+        generarXlsxPagoIncentivo();
+        cerrarModalPagoIncentivo();
     });
 
     document.querySelector('#btnFiltrarCumplimiento').addEventListener('click', function() {
