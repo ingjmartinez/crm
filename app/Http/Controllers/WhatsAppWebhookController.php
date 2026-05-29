@@ -34,12 +34,14 @@ class WhatsAppWebhookController extends Controller
         $message = trim((string) ($data['message'] ?? $data['text'] ?? $data['body'] ?? ''));
         $messageId = $this->extractMessageId((array) $data, $payload);
         $attachmentUrl = $this->extractAttachmentUrl((array) $data, $payload);
+        $location = $this->extractLocation((array) $data, $payload);
         $inboundAccount = $this->extractInboundAccount($payload, (array) $data);
         $sendAccount = $this->extractSendAccount($payload, (array) $data, $routeAccount);
         $sessionAccount = $inboundAccount !== '' ? $inboundAccount : $sendAccount;
         $hasMessage = $message !== '';
+        $hasLocation = $location !== null;
 
-        if ($attachmentUrl === null && $messageId !== null) {
+        if (!$hasLocation && $attachmentUrl === null && $messageId !== null) {
             $attachmentUrl = $this->whatsAppService->fetchReceivedAttachmentByMessageId($messageId);
         }
 
@@ -47,6 +49,7 @@ class WhatsAppWebhookController extends Controller
             'phone' => $phone,
             'message_id' => $messageId,
             'attachment_url' => $attachmentUrl,
+            'location' => $location,
             'inbound_account' => $inboundAccount,
             'send_account' => $sendAccount,
             'session_account' => $sessionAccount,
@@ -56,11 +59,12 @@ class WhatsAppWebhookController extends Controller
             'data_keys' => array_keys((array) $data),
         ]);
 
-        if ($phone === '' || (!$hasMessage && $attachmentUrl === null)) {
+        if ($phone === '' || (!$hasMessage && $attachmentUrl === null && !$hasLocation)) {
             Log::warning('WhatsApp webhook datos incompletos', [
                 'phone_empty' => $phone === '',
                 'message_empty' => !$hasMessage,
                 'attachment_empty' => $attachmentUrl === null,
+                'location_empty' => !$hasLocation,
                 'data_keys' => array_keys((array) $data),
             ]);
 
@@ -99,6 +103,7 @@ class WhatsAppWebhookController extends Controller
             $result = $this->chatbotService->handleIncoming($phone, $message, $sessionAccount, [
                 'message_id' => $messageId,
                 'attachment_url' => $attachmentUrl,
+                'location' => $location,
             ]);
             $reply = (string) ($result['reply'] ?? '');
             $session = $result['session'] ?? null;
@@ -280,6 +285,92 @@ class WhatsAppWebhookController extends Controller
         }
 
         return $attachment;
+    }
+
+    private function extractLocation(array $data, array $payload): ?array
+    {
+        $candidates = [
+            $data['location'] ?? null,
+            $data['ubicacion'] ?? null,
+            $data['geo'] ?? null,
+            $payload['location'] ?? null,
+            $payload['ubicacion'] ?? null,
+            $payload['geo'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $location = $this->normalizeLocationCandidate($candidate);
+            if ($location !== null) {
+                return $location;
+            }
+        }
+
+        $recursive = $this->findLocationRecursive($payload);
+
+        return $recursive !== null ? $this->normalizeLocationCandidate($recursive) : null;
+    }
+
+    private function findLocationRecursive(mixed $value, int $depth = 0): mixed
+    {
+        if ($depth > 5 || !is_array($value)) {
+            return null;
+        }
+
+        $location = $this->normalizeLocationCandidate($value);
+        if ($location !== null) {
+            return $location;
+        }
+
+        foreach ($value as $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+
+            $found = $this->findLocationRecursive($child, $depth + 1);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeLocationCandidate(mixed $candidate): ?array
+    {
+        if (!is_array($candidate)) {
+            return null;
+        }
+
+        $latitude = $candidate['latitude']
+            ?? $candidate['lat']
+            ?? $candidate['gps_lat']
+            ?? null;
+        $longitude = $candidate['longitude']
+            ?? $candidate['lng']
+            ?? $candidate['lon']
+            ?? $candidate['gps_lng']
+            ?? null;
+
+        if ($latitude === null || $longitude === null) {
+            return null;
+        }
+
+        if (!is_numeric($latitude) || !is_numeric($longitude)) {
+            return null;
+        }
+
+        $latitude = (float) $latitude;
+        $longitude = (float) $longitude;
+
+        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            return null;
+        }
+
+        return [
+            'lat' => round($latitude, 7),
+            'lng' => round($longitude, 7),
+            'name' => trim((string) ($candidate['name'] ?? $candidate['address'] ?? '')),
+        ];
     }
 
     private function validToken(array $payload): bool

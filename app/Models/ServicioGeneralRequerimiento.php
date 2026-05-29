@@ -14,6 +14,10 @@ class ServicioGeneralRequerimiento extends Model
         'whatsapp_phone',
         'asignado_id',
         'tipo',
+        'terminal_codigo',
+        'gps_lat',
+        'gps_lng',
+        'gps',
         'titulo',
         'descripcion',
         'prioridad',
@@ -31,6 +35,8 @@ class ServicioGeneralRequerimiento extends Model
 
     protected $casts = [
         'progreso' => 'integer',
+        'gps_lat' => 'decimal:7',
+        'gps_lng' => 'decimal:7',
         'cierre_solicitado_at' => 'datetime',
         'asignado_at' => 'datetime',
         'resuelto_at' => 'datetime',

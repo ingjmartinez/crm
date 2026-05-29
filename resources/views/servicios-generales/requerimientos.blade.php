@@ -115,6 +115,12 @@
             justify-content: space-between;
             width: 100%;
         }
+
+        .sg-map-frame {
+            width: 100%;
+            min-height: 420px;
+            border: 0;
+        }
     </style>
 
     <div class="main-content tech-solicitudes-page">
@@ -304,6 +310,7 @@
                                                 <th style="width: 120px;">Prioridad</th>
                                                 <th style="width: 140px;">Estado</th>
                                                 <th style="width: 110px;">Imagen</th>
+                                                <th style="width: 130px;">GPS</th>
                                                 <th style="width: 190px;">Progreso</th>
                                                 <th style="width: 180px;">Solicitante</th>
                                                 <th style="width: 180px;">Asignado</th>
@@ -313,7 +320,7 @@
                                         </thead>
                                         <tbody id="solicitudesTableBody">
                                             <tr>
-                                                <td colspan="11" class="text-center text-muted py-4">Cargando requerimientos...</td>
+                                                <td colspan="12" class="text-center text-muted py-4">Cargando requerimientos...</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -321,6 +328,29 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalMapaGps" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="modalMapaGpsTitulo">Ubicacion GPS</h5>
+                        <p class="text-muted small mb-0" id="modalMapaGpsCoordenadas"></p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <iframe id="modalMapaGpsFrame" class="sg-map-frame rounded border" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </div>
+                <div class="modal-footer">
+                    <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-info" id="modalMapaGpsLink">
+                        <i class="ri-map-pin-line me-1"></i>Abrir en Google Maps
+                    </a>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -426,6 +456,15 @@
                                     </a>
                                 </div>
                             </div>
+                            <div class="col-md-12" id="gpsAveriaContainer" style="display: none;">
+                                <label class="form-label">GPS recibido por WhatsApp</label>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-success" id="gpsAveriaVerMapa">
+                                        <i class="ri-map-pin-line me-1"></i>Ver mapa
+                                    </button>
+                                    <span class="text-muted ms-2" id="gpsAveriaTexto"></span>
+                                </div>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -454,6 +493,7 @@
         const TEC_REFRESH_INTERVAL_MS = 15000;
         const modalSolicitud = new bootstrap.Modal(document.getElementById('modalSolicitudTecnologia'));
         const modalImagenRequerimiento = new bootstrap.Modal(document.getElementById('modalImagenRequerimiento'));
+        const modalMapaGps = new bootstrap.Modal(document.getElementById('modalMapaGps'));
         let solicitudesRefreshTimer = null;
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -472,6 +512,13 @@
             document.getElementById('btnGuardarSolicitud').addEventListener('click', guardarSolicitud);
             document.getElementById('btnSolicitarCierre').addEventListener('click', solicitarCierreTicket);
             document.getElementById('btnFinalizarTicket').addEventListener('click', finalizarTicket);
+            document.getElementById('gpsAveriaVerMapa').addEventListener('click', function() {
+                abrirMapaGps(
+                    this.dataset.lat || '',
+                    this.dataset.lng || '',
+                    this.dataset.codigo || ''
+                );
+            });
             document.getElementById('progreso').addEventListener('input', function() {
                 updateProgressUI(this.value);
             });
@@ -509,6 +556,7 @@
             document.getElementById('detalleSolucionContainer').style.display = 'none';
             document.getElementById('progresoContainer').style.display = 'none';
             document.getElementById('imagenAveriaContainer').style.display = 'none';
+            document.getElementById('gpsAveriaContainer').style.display = 'none';
             document.getElementById('progreso').value = 0;
             updateProgressUI(0);
             document.getElementById('btnGuardarSolicitud').style.display = '';
@@ -588,7 +636,7 @@
             const tableBody = document.getElementById('solicitudesTableBody');
 
             if (!items.length) {
-                tableBody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4">No hay requerimientos para los filtros seleccionados.</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">No hay requerimientos para los filtros seleccionados.</td></tr>';
                 return;
             }
 
@@ -604,6 +652,7 @@
                         <td><span class="badge bg-${escapeHtml(item.badge_prioridad)}-subtle text-${escapeHtml(item.badge_prioridad)}">${escapeHtml(formatLabel(item.prioridad))}</span></td>
                         <td><span class="badge bg-${escapeHtml(item.badge_estado)}-subtle text-${escapeHtml(item.badge_estado)}">${escapeHtml(formatLabel(item.estado))}</span></td>
                         <td>${renderAttachmentCell(item)}</td>
+                        <td>${renderGpsCell(item)}</td>
                         <td>${renderProgressCell(item)}</td>
                         <td>
                             <div>${escapeHtml(item.solicitante)}</div>
@@ -629,6 +678,21 @@
             document.getElementById('modalImagenRequerimientoLink').href = url;
             document.getElementById('modalImagenRequerimientoTitulo').textContent = `Imagen de ${codigo}`;
             modalImagenRequerimiento.show();
+        }
+
+        function abrirMapaGps(lat, lng, codigo) {
+            if (!isValidCoordinate(lat, lng)) {
+                Swal.fire('GPS no disponible', 'Este requerimiento no tiene coordenadas validas.', 'warning');
+                return;
+            }
+
+            const gps = `${lat},${lng}`;
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(gps)}`;
+            document.getElementById('modalMapaGpsTitulo').textContent = codigo ? `Ubicacion de ${codigo}` : 'Ubicacion GPS';
+            document.getElementById('modalMapaGpsCoordenadas').textContent = gps;
+            document.getElementById('modalMapaGpsFrame').src = `https://maps.google.com/maps?q=${encodeURIComponent(gps)}&z=17&output=embed`;
+            document.getElementById('modalMapaGpsLink').href = mapsUrl;
+            modalMapaGps.show();
         }
 
         function abrirModalEdicion(id) {
@@ -657,6 +721,11 @@
                     document.getElementById('progresoContainer').style.display = '';
                     document.getElementById('imagenAveriaContainer').style.display = requerimiento.attachment_url ? '' : 'none';
                     document.getElementById('imagenAveriaLink').href = requerimiento.attachment_url || '#';
+                    document.getElementById('gpsAveriaContainer').style.display = requerimiento.gps ? '' : 'none';
+                    document.getElementById('gpsAveriaTexto').textContent = requerimiento.gps || '';
+                    document.getElementById('gpsAveriaVerMapa').dataset.lat = requerimiento.gps_lat || '';
+                    document.getElementById('gpsAveriaVerMapa').dataset.lng = requerimiento.gps_lng || '';
+                    document.getElementById('gpsAveriaVerMapa').dataset.codigo = requerimiento.ticket_codigo || '';
                     document.getElementById('modalSolicitudTitulo').textContent = `${requerimiento.ticket_codigo} - ${requerimiento.titulo}`;
                     document.getElementById('modalSolicitudMeta').textContent =
                         `${requerimiento.cierre_solicitado_at ? `Cierre solicitado por ${requerimiento.cierre_solicitado_por} el ${requerimiento.cierre_solicitado_at}` : `Solicitante: ${requerimiento.solicitante} | Asignado: ${requerimiento.asignado} | Creado: ${requerimiento.creado_en || ''}`}`;
@@ -862,6 +931,30 @@
                     <i class="ri-image-2-line me-1"></i>Ver
                 </button>
             `;
+        }
+
+        function renderGpsCell(item) {
+            if (!isValidCoordinate(item.gps_lat, item.gps_lng)) {
+                return '<span class="text-muted">Sin GPS</span>';
+            }
+
+            return `
+                <button type="button" class="btn btn-sm btn-success" onclick="abrirMapaGps('${escapeJs(item.gps_lat)}', '${escapeJs(item.gps_lng)}', '${escapeJs(item.ticket_codigo)}')">
+                    <i class="ri-map-pin-line me-1"></i>Ver
+                </button>
+            `;
+        }
+
+        function isValidCoordinate(lat, lng) {
+            const latitude = Number(lat);
+            const longitude = Number(lng);
+
+            return Number.isFinite(latitude)
+                && Number.isFinite(longitude)
+                && latitude >= -90
+                && latitude <= 90
+                && longitude >= -180
+                && longitude <= 180;
         }
 
         function renderProgressCell(item) {

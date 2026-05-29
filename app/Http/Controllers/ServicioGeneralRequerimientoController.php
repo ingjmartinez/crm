@@ -107,8 +107,17 @@ class ServicioGeneralRequerimientoController extends Controller
                 }
 
                 $subQuery->orWhere('titulo', 'like', '%' . $search . '%')
-                    ->orWhere('descripcion', 'like', '%' . $search . '%')
-                    ->orWhereHas('creador', fn($userQuery) => $userQuery->where('name', 'like', '%' . $search . '%'))
+                    ->orWhere('descripcion', 'like', '%' . $search . '%');
+
+                if (Schema::hasColumn('servicios_generales_requerimientos', 'terminal_codigo')) {
+                    $subQuery->orWhere('terminal_codigo', 'like', '%' . $search . '%');
+                }
+
+                if (Schema::hasColumn('servicios_generales_requerimientos', 'gps')) {
+                    $subQuery->orWhere('gps', 'like', '%' . $search . '%');
+                }
+
+                $subQuery->orWhereHas('creador', fn($userQuery) => $userQuery->where('name', 'like', '%' . $search . '%'))
                     ->orWhereHas('asignado', fn($userQuery) => $userQuery->where('name', 'like', '%' . $search . '%'));
             });
         }
@@ -388,6 +397,13 @@ class ServicioGeneralRequerimientoController extends Controller
             'tipo' => $r->tipo,
             'tipo_label' => $r->tipo_label,
             'badge_tipo' => $r->badge_tipo,
+            'terminal_codigo' => $r->terminal_codigo,
+            'gps_lat' => $r->gps_lat,
+            'gps_lng' => $r->gps_lng,
+            'gps' => $r->gps,
+            'gps_maps_url' => $r->gps_lat !== null && $r->gps_lng !== null
+                ? 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($r->gps_lat . ',' . $r->gps_lng)
+                : '',
             'titulo' => $r->titulo,
             'descripcion' => $r->descripcion,
             'prioridad' => $r->prioridad,

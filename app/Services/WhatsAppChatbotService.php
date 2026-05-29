@@ -11,15 +11,17 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class WhatsAppChatbotService
 {
-    public const SESSION_TIMEOUT_SECONDS = 60;
+    public const SESSION_TIMEOUT_SECONDS = 300;
     public const CLOSED_BY_TIMEOUT_STEP = 'cerrada_timeout';
 
     private const STEP_SG_TIPO = 'servicios_generales_tipo';
     private const STEP_SG_TERMINAL = 'servicios_generales_terminal';
+    private const STEP_SG_GPS = 'servicios_generales_gps';
     private const STEP_SG_IMAGEN = 'servicios_generales_imagen';
 
     public function handleIncoming(string $phone, string $message, ?string $account = null, array $incoming = []): array
@@ -113,6 +115,7 @@ class WhatsAppChatbotService
             'consulta_horario_fecha' => $this->handleConsultaHorarioFecha($session, $message),
             self::STEP_SG_TIPO => $this->handleServiciosGeneralesTipo($session, $message),
             self::STEP_SG_TERMINAL => $this->handleServiciosGeneralesTerminal($session, $message),
+            self::STEP_SG_GPS => $this->handleServiciosGeneralesGps($session, $message, $incoming),
             self::STEP_SG_IMAGEN => $this->registrarRequerimientoServiciosGenerales($session, $incoming),
             default => $this->resetToInicio($session),
         };
@@ -204,13 +207,35 @@ class WhatsAppChatbotService
             return 'No pude identificar el codigo del terminal. Envia solo el codigo del terminal afectado.';
         }
 
-        $session->step = self::STEP_SG_IMAGEN;
+        $session->step = self::STEP_SG_GPS;
         $session->context = array_merge(
             is_array($session->context) ? $session->context : [],
             ['terminal_codigo' => $terminalCodigo]
         );
 
-        return "Perfecto. Terminal {$terminalCodigo} recibido.\n\nAhora envia la imagen de la averia para registrar la solicitud.";
+        return "Perfecto. Terminal {$terminalCodigo} recibido.\n\nAhora envia la ubicacion GPS de la terminal desde WhatsApp. Usa Adjuntar > Ubicacion y comparte la ubicacion actual.";
+    }
+
+    private function handleServiciosGeneralesGps(ChatbotSession $session, string $message, array $incoming): string
+    {
+        $location = $this->extractIncomingLocation($incoming) ?? $this->parseLocationFromText($message);
+
+        if ($location === null) {
+            return "No pude leer la ubicacion GPS.\n\nPor favor envia la ubicacion desde WhatsApp usando Adjuntar > Ubicacion. Tambien puedes escribir las coordenadas en formato: 18.4861,-69.9312";
+        }
+
+        $gps = $this->formatGps($location['lat'], $location['lng']);
+        $session->step = self::STEP_SG_IMAGEN;
+        $session->context = array_merge(
+            is_array($session->context) ? $session->context : [],
+            [
+                'gps_lat' => $location['lat'],
+                'gps_lng' => $location['lng'],
+                'gps' => $gps,
+            ]
+        );
+
+        return "Ubicacion recibida: {$gps}\n\nAhora envia la imagen de la averia para registrar la solicitud.";
     }
 
     private function registrarRequerimientoServiciosGenerales(ChatbotSession $session, array $incoming): string
@@ -219,10 +244,13 @@ class WhatsAppChatbotService
         $tipo = (string) ($context['tipo'] ?? '');
         $tipoLabel = (string) ($context['label'] ?? '');
         $terminalCodigo = trim((string) ($context['terminal_codigo'] ?? ''));
+        $gpsLat = $context['gps_lat'] ?? null;
+        $gpsLng = $context['gps_lng'] ?? null;
+        $gps = trim((string) ($context['gps'] ?? ''));
         $attachmentUrl = $this->normalizeAttachmentUrl($incoming['attachment_url'] ?? null);
         $attachmentMessageId = $this->normalizeMessageId($incoming['message_id'] ?? null);
 
-        if ($tipo === '' || $terminalCodigo === '') {
+        if ($tipo === '' || $terminalCodigo === '' || $gps === '') {
             $session->step = 'inicio';
             $session->context = null;
 
@@ -234,23 +262,37 @@ class WhatsAppChatbotService
         }
 
         try {
-            $requerimiento = ServicioGeneralRequerimiento::create([
+            $payload = [
                 'user_id' => $this->chatbotUserId(),
                 'whatsapp_phone' => $session->phone,
                 'tipo' => $tipo,
                 'titulo' => 'Averia',
-                'descripcion' => "Solicitud recibida por WhatsApp.\n\nTipo: {$tipoLabel}\nTerminal: {$terminalCodigo}",
+                'descripcion' => "Solicitud recibida por WhatsApp.\n\nTipo: {$tipoLabel}\nTerminal: {$terminalCodigo}\nGPS: {$gps}",
                 'prioridad' => 'media',
                 'estado' => 'pendiente',
                 'progreso' => 0,
                 'attachment_url' => $attachmentUrl,
                 'attachment_message_id' => $attachmentMessageId,
-            ]);
+            ];
+
+            foreach ([
+                'terminal_codigo' => $terminalCodigo,
+                'gps_lat' => $gpsLat,
+                'gps_lng' => $gpsLng,
+                'gps' => $gps,
+            ] as $column => $value) {
+                if (Schema::hasColumn('servicios_generales_requerimientos', $column)) {
+                    $payload[$column] = $value;
+                }
+            }
+
+            $requerimiento = ServicioGeneralRequerimiento::create($payload);
         } catch (\Throwable $e) {
             Log::error('WhatsApp chatbot: error registrando averia de servicios generales', [
                 'phone' => $session->phone,
                 'tipo' => $tipo,
                 'terminal_codigo' => $terminalCodigo,
+                'gps' => $gps,
                 'attachment_url' => $attachmentUrl,
                 'message' => $e->getMessage(),
             ]);
@@ -264,7 +306,7 @@ class WhatsAppChatbotService
         $session->step = 'inicio';
         $session->context = null;
 
-        return "Solicitud registrada correctamente.\n\nCodigo: {$requerimiento->ticket_codigo}\nTipo: {$tipoLabel}\nTerminal: {$terminalCodigo}\nImagen: Recibida\nEstado: Pendiente";
+        return "Solicitud registrada correctamente.\n\nCodigo: {$requerimiento->ticket_codigo}\nTipo: {$tipoLabel}\nTerminal: {$terminalCodigo}\nGPS: {$gps}\nImagen: Recibida\nEstado: Pendiente";
     }
 
     private function handleConsultaHorarioCedula(ChatbotSession $session, string $message): string
@@ -636,6 +678,59 @@ class WhatsAppChatbotService
         $messageId = trim((string) $messageId);
 
         return $messageId !== '' ? $messageId : null;
+    }
+
+    private function extractIncomingLocation(array $incoming): ?array
+    {
+        $location = $incoming['location'] ?? null;
+
+        if (!is_array($location)) {
+            return null;
+        }
+
+        $lat = $location['lat'] ?? $location['latitude'] ?? null;
+        $lng = $location['lng'] ?? $location['longitude'] ?? $location['lon'] ?? null;
+
+        return $this->normalizeLocationValues($lat, $lng);
+    }
+
+    private function parseLocationFromText(string $message): ?array
+    {
+        $message = trim($message);
+
+        if ($message === '') {
+            return null;
+        }
+
+        if (preg_match('/(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)/', $message, $matches) !== 1) {
+            return null;
+        }
+
+        return $this->normalizeLocationValues($matches[1], $matches[2]);
+    }
+
+    private function normalizeLocationValues(mixed $lat, mixed $lng): ?array
+    {
+        if (!is_numeric($lat) || !is_numeric($lng)) {
+            return null;
+        }
+
+        $lat = round((float) $lat, 7);
+        $lng = round((float) $lng, 7);
+
+        if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
+            return null;
+        }
+
+        return [
+            'lat' => $lat,
+            'lng' => $lng,
+        ];
+    }
+
+    private function formatGps(mixed $lat, mixed $lng): string
+    {
+        return number_format((float) $lat, 7, '.', '') . ',' . number_format((float) $lng, 7, '.', '');
     }
 
     private function chatbotUserId(): int
