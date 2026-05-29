@@ -451,12 +451,15 @@
         const TEC_SOLICITUDES_REQUEST_CLOSE_BASE_URL = '{{ url('/servicios-generales/requerimientos') }}';
         const TEC_SOLICITUDES_FINALIZE_BASE_URL = '{{ url('/servicios-generales/requerimientos') }}';
         const TEC_CSRF = '{{ csrf_token() }}';
+        const TEC_REFRESH_INTERVAL_MS = 15000;
         const modalSolicitud = new bootstrap.Modal(document.getElementById('modalSolicitudTecnologia'));
         const modalImagenRequerimiento = new bootstrap.Modal(document.getElementById('modalImagenRequerimiento'));
+        let solicitudesRefreshTimer = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             bindTecnologiaEvents();
             cargarSolicitudes(getSolicitudIdFromUrl());
+            iniciarRefrescoAutomatico();
         });
 
         function bindTecnologiaEvents() {
@@ -515,7 +518,7 @@
             modalSolicitud.show();
         }
 
-        function cargarSolicitudes(openSolicitudId = null) {
+        function cargarSolicitudes(openSolicitudId = null, options = {}) {
             const params = new URLSearchParams();
 
             const tipo = document.getElementById('filtro-tipo').value;
@@ -551,7 +554,27 @@
                         }
                     }
                 })
-                .catch(showRequestError);
+                .catch(error => {
+                    if (!options.silent) {
+                        showRequestError(error);
+                    }
+                });
+        }
+
+        function iniciarRefrescoAutomatico() {
+            if (solicitudesRefreshTimer) {
+                clearInterval(solicitudesRefreshTimer);
+            }
+
+            solicitudesRefreshTimer = setInterval(function() {
+                const modalAbierto = document.querySelector('.modal.show') !== null;
+
+                if (document.hidden || modalAbierto) {
+                    return;
+                }
+
+                cargarSolicitudes(null, { silent: true });
+            }, TEC_REFRESH_INTERVAL_MS);
         }
 
         function renderStats(stats) {
@@ -804,6 +827,14 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        }
+
+        function escapeJs(value) {
+            return String(value ?? '')
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r');
         }
 
         function formatLabel(value) {
