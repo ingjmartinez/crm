@@ -382,6 +382,8 @@ class ServicioGeneralRequerimientoController extends Controller
             'badge_estado' => $r->badge_estado,
             'progreso' => (int) $r->progreso,
             'detalle_solucion' => $r->detalle_solucion,
+            'attachment_url' => $r->attachment_url,
+            'attachment_message_id' => $r->attachment_message_id,
             'solicitante' => $r->creador->name ?? 'N/D',
             'solicitante_email' => $r->creador->email ?? '',
             'asignado_id' => $r->asignado_id,

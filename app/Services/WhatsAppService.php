@@ -7,13 +7,69 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsAppService
 {
+    public function fetchReceivedAttachmentByMessageId(string $messageId): ?string
+    {
+        $endpoint = config('services.whatsapp.message_endpoint');
+        $secret = config('services.whatsapp.api_key');
+        $timeout = (int) config('services.whatsapp.timeout', 30);
+        $verifySsl = filter_var(config('services.whatsapp.verify_ssl', true), FILTER_VALIDATE_BOOLEAN);
+        $messageId = trim($messageId);
+
+        if ($messageId === '' || empty($endpoint) || empty($secret)) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->withOptions(['verify' => $verifySsl])
+                ->get($endpoint, [
+                    'secret' => $secret,
+                    'id' => $messageId,
+                    'type' => 'received',
+                ]);
+
+            if (!$response->successful()) {
+                Log::warning('WhatsAppService::fetchReceivedAttachmentByMessageId respuesta no exitosa', [
+                    'status' => $response->status(),
+                    'message_id' => $messageId,
+                ]);
+
+                return null;
+            }
+
+            $payload = $response->json();
+            $data = is_array($payload) ? ($payload['data'] ?? []) : [];
+            $attachment = is_array($data) ? ($data['attachment'] ?? null) : null;
+
+            if (!is_string($attachment)) {
+                return null;
+            }
+
+            $attachment = trim($attachment);
+
+            if ($attachment === '' || in_array(strtolower($attachment), ['false', 'null'], true)) {
+                return null;
+            }
+
+            return $attachment;
+        } catch (\Throwable $e) {
+            Log::warning('WhatsAppService::fetchReceivedAttachmentByMessageId excepcion', [
+                'message_id' => $messageId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
     public function sendText(string $recipient, string $message, ?string $account = null): array
     {
         $endpoint = config('services.whatsapp.send_endpoint');
         $secret = config('services.whatsapp.api_key');
         $timeout = (int) config('services.whatsapp.timeout', 30);
         $account = $account ?: config('services.whatsapp.default_account');
-        $verifySsl = (bool) config('services.whatsapp.verify_ssl', true);
+        $verifySsl = filter_var(config('services.whatsapp.verify_ssl', true), FILTER_VALIDATE_BOOLEAN);
 
         if (empty($endpoint) || empty($secret)) {
             Log::warning('WhatsAppService::sendText configuracion incompleta', [

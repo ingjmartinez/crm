@@ -401,6 +401,14 @@
                                 <label class="form-label">Detalle de gestion / solucion</label>
                                 <textarea class="form-control" id="detalle_solucion" name="detalle_solucion" rows="4" maxlength="5000" placeholder="Documenta el diagnostico, avance, solucion aplicada o proximo paso."></textarea>
                             </div>
+                            <div class="col-md-12" id="imagenAveriaContainer" style="display: none;">
+                                <label class="form-label">Imagen recibida por WhatsApp</label>
+                                <div>
+                                    <a href="#" target="_blank" rel="noopener" class="btn btn-sm btn-info" id="imagenAveriaLink">
+                                        <i class="ri-image-2-line me-1"></i>Ver imagen
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -479,6 +487,7 @@
             document.getElementById('estadoContainer').style.display = 'none';
             document.getElementById('detalleSolucionContainer').style.display = 'none';
             document.getElementById('progresoContainer').style.display = 'none';
+            document.getElementById('imagenAveriaContainer').style.display = 'none';
             document.getElementById('progreso').value = 0;
             updateProgressUI(0);
             document.getElementById('btnGuardarSolicitud').style.display = '';
@@ -597,6 +606,8 @@
                     document.getElementById('estadoContainer').style.display = '';
                     document.getElementById('detalleSolucionContainer').style.display = '';
                     document.getElementById('progresoContainer').style.display = '';
+                    document.getElementById('imagenAveriaContainer').style.display = requerimiento.attachment_url ? '' : 'none';
+                    document.getElementById('imagenAveriaLink').href = requerimiento.attachment_url || '#';
                     document.getElementById('modalSolicitudTitulo').textContent = `${requerimiento.ticket_codigo} - ${requerimiento.titulo}`;
                     document.getElementById('modalSolicitudMeta').textContent =
                         `${requerimiento.cierre_solicitado_at ? `Cierre solicitado por ${requerimiento.cierre_solicitado_por} el ${requerimiento.cierre_solicitado_at}` : `Solicitante: ${requerimiento.solicitante} | Asignado: ${requerimiento.asignado} | Creado: ${requerimiento.creado_en || ''}`}`;

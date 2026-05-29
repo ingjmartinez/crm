@@ -4,16 +4,25 @@ namespace App\Services;
 
 use App\Models\Agencia;
 use App\Models\ChatbotSession;
+use App\Models\ServicioGeneralRequerimiento;
 use App\Models\Token;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class WhatsAppChatbotService
 {
-    private const SESSION_TIMEOUT_SECONDS = 60;
+    public const SESSION_TIMEOUT_SECONDS = 60;
+    public const CLOSED_BY_TIMEOUT_STEP = 'cerrada_timeout';
 
-    public function handleIncoming(string $phone, string $message, ?string $account = null): array
+    private const STEP_SG_TIPO = 'servicios_generales_tipo';
+    private const STEP_SG_TERMINAL = 'servicios_generales_terminal';
+    private const STEP_SG_IMAGEN = 'servicios_generales_imagen';
+
+    public function handleIncoming(string $phone, string $message, ?string $account = null, array $incoming = []): array
     {
         $normalizedPhone = $this->normalizePhone($phone);
         $normalizedAccount = $this->normalizeAccount($account);
@@ -68,7 +77,7 @@ class WhatsAppChatbotService
             'message_count_after' => $session->message_count,
         ]);
 
-        $reply = $this->processStep($session, $message);
+        $reply = $this->processStep($session, $message, $incoming);
 
         $session->save();
 
@@ -88,7 +97,7 @@ class WhatsAppChatbotService
         ];
     }
 
-    private function processStep(ChatbotSession $session, string $message): string
+    private function processStep(ChatbotSession $session, string $message, array $incoming = []): string
     {
         Log::debug('WhatsApp chatbot: entrando a processStep', [
             'session_id' => $session->id,
@@ -102,6 +111,9 @@ class WhatsAppChatbotService
             'consulta_horario_cedula' => $this->handleConsultaHorarioCedula($session, $message),
             'consulta_horario_terminal' => $this->handleConsultaHorarioTerminal($session, $message),
             'consulta_horario_fecha' => $this->handleConsultaHorarioFecha($session, $message),
+            self::STEP_SG_TIPO => $this->handleServiciosGeneralesTipo($session, $message),
+            self::STEP_SG_TERMINAL => $this->handleServiciosGeneralesTerminal($session, $message),
+            self::STEP_SG_IMAGEN => $this->registrarRequerimientoServiciosGenerales($session, $incoming),
             default => $this->resetToInicio($session),
         };
     }
@@ -146,9 +158,113 @@ class WhatsAppChatbotService
             return 'Por favor indica la cedula del usuario.';
         }
 
+        if ($option === '2') {
+            $session->step = self::STEP_SG_TIPO;
+            $session->context = [
+                'intent' => 'reportar_averia',
+            ];
+
+            return $this->serviciosGeneralesTiposMessage();
+        }
+
         $session->step = 'consulta_hora_menu';
 
         return $this->consultaHoraMenuMessage();
+    }
+
+    private function handleServiciosGeneralesTipo(ChatbotSession $session, string $message): string
+    {
+        $tipos = [
+            '1' => ['tipo' => 'internet', 'label' => 'No tengo internet'],
+            '2' => ['tipo' => 'electricidad', 'label' => 'No tengo luz'],
+            '3' => ['tipo' => 'sistema_frizado', 'label' => 'Se me friso el sistema'],
+            '4' => ['tipo' => 'inversor', 'label' => 'Cambiar el inversor'],
+        ];
+
+        $option = trim($message);
+
+        if (!isset($tipos[$option])) {
+            return $this->serviciosGeneralesTiposMessage();
+        }
+
+        $session->step = self::STEP_SG_TERMINAL;
+        $session->context = array_merge(
+            is_array($session->context) ? $session->context : [],
+            $tipos[$option]
+        );
+
+        return 'Indica el codigo del terminal afectado.';
+    }
+
+    private function handleServiciosGeneralesTerminal(ChatbotSession $session, string $message): string
+    {
+        $terminalCodigo = trim($message);
+
+        if ($terminalCodigo === '' || strlen($terminalCodigo) < 2) {
+            return 'No pude identificar el codigo del terminal. Envia solo el codigo del terminal afectado.';
+        }
+
+        $session->step = self::STEP_SG_IMAGEN;
+        $session->context = array_merge(
+            is_array($session->context) ? $session->context : [],
+            ['terminal_codigo' => $terminalCodigo]
+        );
+
+        return "Perfecto. Terminal {$terminalCodigo} recibido.\n\nAhora envia la imagen de la averia para registrar la solicitud.";
+    }
+
+    private function registrarRequerimientoServiciosGenerales(ChatbotSession $session, array $incoming): string
+    {
+        $context = is_array($session->context) ? $session->context : [];
+        $tipo = (string) ($context['tipo'] ?? '');
+        $tipoLabel = (string) ($context['label'] ?? '');
+        $terminalCodigo = trim((string) ($context['terminal_codigo'] ?? ''));
+        $attachmentUrl = $this->normalizeAttachmentUrl($incoming['attachment_url'] ?? null);
+        $attachmentMessageId = $this->normalizeMessageId($incoming['message_id'] ?? null);
+
+        if ($tipo === '' || $terminalCodigo === '') {
+            $session->step = 'inicio';
+            $session->context = null;
+
+            return 'Perdi el contexto de la solicitud. Por favor inicia de nuevo y elige la opcion 2.';
+        }
+
+        if ($attachmentUrl === null) {
+            return 'Necesito que envies una imagen para continuar con el registro de la averia.';
+        }
+
+        try {
+            $requerimiento = ServicioGeneralRequerimiento::create([
+                'user_id' => $this->chatbotUserId(),
+                'whatsapp_phone' => $session->phone,
+                'tipo' => $tipo,
+                'titulo' => 'Averia',
+                'descripcion' => "Solicitud recibida por WhatsApp.\n\nTipo: {$tipoLabel}\nTerminal: {$terminalCodigo}",
+                'prioridad' => 'media',
+                'estado' => 'pendiente',
+                'progreso' => 0,
+                'attachment_url' => $attachmentUrl,
+                'attachment_message_id' => $attachmentMessageId,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('WhatsApp chatbot: error registrando averia de servicios generales', [
+                'phone' => $session->phone,
+                'tipo' => $tipo,
+                'terminal_codigo' => $terminalCodigo,
+                'attachment_url' => $attachmentUrl,
+                'message' => $e->getMessage(),
+            ]);
+
+            $session->step = 'inicio';
+            $session->context = null;
+
+            return 'No pude registrar la averia en este momento. Por favor intenta mas tarde.';
+        }
+
+        $session->step = 'inicio';
+        $session->context = null;
+
+        return "Solicitud registrada correctamente.\n\nCodigo: {$requerimiento->ticket_codigo}\nTipo: {$tipoLabel}\nTerminal: {$terminalCodigo}\nImagen: Recibida\nEstado: Pendiente";
     }
 
     private function handleConsultaHorarioCedula(ChatbotSession $session, string $message): string
@@ -411,9 +527,25 @@ class WhatsAppChatbotService
 
     private function consultaHoraMenuMessage(): string
     {
-        return "Hola como estas soy el chat bot y estoy para servirte.\n\n"
+        return "Hola, como estas? Soy tu asistente virtual y estoy aqui para servirte.\n\n"
             . "Por favor responde solo numericamente:\n\n"
-            . "1- consultar el horario de servicio";
+            . "1- consultar el horario de servicio\n"
+            . "2- averias";
+    }
+
+    private function serviciosGeneralesTiposMessage(): string
+    {
+        return "Selecciona el tipo de averia escribiendo solo el numero:\n\n"
+            . "1-No tengo internet\n"
+            . "2-No tengo luz\n"
+            . "3-Se me friso el sistema\n"
+            . "4-Cambiar el inversor";
+    }
+
+    public function inactivityFarewellMessage(): string
+    {
+        return "Gracias por comunicarte con nosotros. Por inactividad, esta sesion ha sido cerrada.\n\n"
+            . "Cuando necesites ayuda, escribenos nuevamente.";
     }
 
     private function resetToInicio(ChatbotSession $session): string
@@ -478,6 +610,45 @@ class WhatsAppChatbotService
         $normalized = ltrim($digits, '0');
 
         return $normalized !== '' ? $normalized : $digits;
+    }
+
+    private function normalizeAttachmentUrl(mixed $attachment): ?string
+    {
+        if (!is_string($attachment)) {
+            return null;
+        }
+
+        $attachment = trim($attachment);
+
+        if ($attachment === '' || in_array(strtolower($attachment), ['false', 'null'], true)) {
+            return null;
+        }
+
+        return $attachment;
+    }
+
+    private function normalizeMessageId(mixed $messageId): ?string
+    {
+        if ($messageId === null || is_array($messageId)) {
+            return null;
+        }
+
+        $messageId = trim((string) $messageId);
+
+        return $messageId !== '' ? $messageId : null;
+    }
+
+    private function chatbotUserId(): int
+    {
+        $user = User::firstOrCreate(
+            ['email' => 'chatbot@crm.local'],
+            [
+                'name' => 'Chatbot CRM',
+                'password' => Hash::make(Str::random(32)),
+            ]
+        );
+
+        return (int) $user->id;
     }
 
     private function parseFecha(string $fecha): ?string

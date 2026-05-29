@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('auto-proceso:run-due')->everyMinute();
+Schedule::command('chatbot:close-inactive-sessions')->everyMinute();

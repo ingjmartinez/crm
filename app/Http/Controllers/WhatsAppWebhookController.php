@@ -32,12 +32,21 @@ class WhatsAppWebhookController extends Controller
         $data = $payload['data'] ?? $payload;
         $phone = (string) ($data['phone'] ?? $data['from'] ?? $data['sender'] ?? '');
         $message = trim((string) ($data['message'] ?? $data['text'] ?? $data['body'] ?? ''));
+        $messageId = $this->extractMessageId((array) $data, $payload);
+        $attachmentUrl = $this->extractAttachmentUrl((array) $data, $payload);
         $inboundAccount = $this->extractInboundAccount($payload, (array) $data);
         $sendAccount = $this->extractSendAccount($payload, (array) $data, $routeAccount);
         $sessionAccount = $inboundAccount !== '' ? $inboundAccount : $sendAccount;
+        $hasMessage = $message !== '';
+
+        if ($attachmentUrl === null && $messageId !== null) {
+            $attachmentUrl = $this->whatsAppService->fetchReceivedAttachmentByMessageId($messageId);
+        }
 
         Log::debug('WhatsApp webhook datos extraidos', [
             'phone' => $phone,
+            'message_id' => $messageId,
+            'attachment_url' => $attachmentUrl,
             'inbound_account' => $inboundAccount,
             'send_account' => $sendAccount,
             'session_account' => $sessionAccount,
@@ -47,10 +56,11 @@ class WhatsAppWebhookController extends Controller
             'data_keys' => array_keys((array) $data),
         ]);
 
-        if ($phone === '' || $message === '') {
+        if ($phone === '' || (!$hasMessage && $attachmentUrl === null)) {
             Log::warning('WhatsApp webhook datos incompletos', [
                 'phone_empty' => $phone === '',
-                'message_empty' => $message === '',
+                'message_empty' => !$hasMessage,
+                'attachment_empty' => $attachmentUrl === null,
                 'data_keys' => array_keys((array) $data),
             ]);
 
@@ -86,7 +96,10 @@ class WhatsAppWebhookController extends Controller
                 return response()->json(['status' => 'ignored_account']);
             }
 
-            $result = $this->chatbotService->handleIncoming($phone, $message, $sessionAccount);
+            $result = $this->chatbotService->handleIncoming($phone, $message, $sessionAccount, [
+                'message_id' => $messageId,
+                'attachment_url' => $attachmentUrl,
+            ]);
             $reply = (string) ($result['reply'] ?? '');
             $session = $result['session'] ?? null;
 
@@ -216,6 +229,57 @@ class WhatsAppWebhookController extends Controller
         }
 
         return in_array($inboundAccount, $allowedAccounts, true);
+    }
+
+    private function extractMessageId(array $data, array $payload): ?string
+    {
+        $messageId = $data['id']
+            ?? $data['message_id']
+            ?? $data['msg_id']
+            ?? $payload['id']
+            ?? null;
+
+        if ($messageId === null) {
+            return null;
+        }
+
+        if (is_array($messageId)) {
+            $messageId = $messageId['id'] ?? null;
+        }
+
+        $messageId = trim((string) $messageId);
+
+        return $messageId !== '' ? $messageId : null;
+    }
+
+    private function extractAttachmentUrl(array $data, array $payload): ?string
+    {
+        $attachment = $data['attachment']
+            ?? $data['media']
+            ?? $data['image']
+            ?? $payload['attachment']
+            ?? $payload['media']
+            ?? $payload['image']
+            ?? null;
+
+        if (is_array($attachment)) {
+            $attachment = $attachment['url']
+                ?? $attachment['link']
+                ?? $attachment['src']
+                ?? null;
+        }
+
+        if (!is_string($attachment)) {
+            return null;
+        }
+
+        $attachment = trim($attachment);
+
+        if ($attachment === '' || in_array(strtolower($attachment), ['false', 'null'], true)) {
+            return null;
+        }
+
+        return $attachment;
     }
 
     private function validToken(array $payload): bool
