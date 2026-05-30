@@ -190,6 +190,15 @@ return [
                 'tags' => ['centro costo', 'sincronizar', 'contabilidad'],
                 'activo' => true,
             ],
+            [
+                'nombre' => 'Movimiento del Mayor',
+                'descripcion' => 'Consulta data local y sincroniza movimientos del mayor desde el API contable.',
+                'url' => '/contabilidad/movimiento-mayor',
+                'icono' => 'ri-book-2-line',
+                'categoria' => 'Gestion',
+                'tags' => ['movimiento mayor', 'entradas diario', 'sincronizar', 'contabilidad'],
+                'activo' => true,
+            ],
         ],
     ],
 

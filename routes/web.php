@@ -111,6 +111,7 @@ Route::middleware('auth')->group(function () {
         Route::put('/electricidad/averias-dia/{id}/observaciones', [ContabilidadElectricidadController::class, 'updateAveriasDiaObservaciones'])->name('electricidad.averias-dia.update-observaciones');
         Route::delete('/electricidad/averias-dia/{id}', [ContabilidadElectricidadController::class, 'destroyAveriasDia'])->name('electricidad.averias-dia.destroy');
         Route::view('/centro-costo', 'contabilidad.centro-costo')->name('centro-costo');
+        Route::view('/movimiento-mayor', 'contabilidad.movimiento-mayor')->name('movimiento-mayor');
         Route::get('/reportes/comisiones', [ContabilidadComisionController::class, 'index'])->name('reportes.comisiones');
         Route::post('/reportes/comisiones/calcular-todas', [ContabilidadComisionController::class, 'calcularTodas'])->name('reportes.comisiones.calcular-todas');
         Route::get('/reportes/comisiones-por-grupo', [ContabilidadComisionController::class, 'gruposIndex'])->name('reportes.comisiones-por-grupo');
@@ -137,6 +138,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/api-cuentas/{id}', [Api::class, 'updateCuenta']);
     Route::delete('/api-cuentas/{id}', [Api::class, 'destroyCuenta']);
     Route::get('/api-entradas', [Api::class, 'getEntradas']);
+    Route::get('/api-entradas-diario', [Api::class, 'getEntradasDiario']);
+    Route::post('/api-entradas-diario/sync', [Api::class, 'syncEntradasDiario']);
+    Route::delete('/api-entradas-diario', [Api::class, 'deleteEntradasDiario']);
     Route::get('/api-centros-costo', [Api::class, 'getCentrosCosto']);
     Route::post('/api-centros-costo/visibilidad', [Api::class, 'updateCentrosCostoVisibilidad']);
     Route::post('/api-centros-costo/sync', [Api::class, 'syncCentrosCosto']);
