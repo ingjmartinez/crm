@@ -264,6 +264,21 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function formatearEmpleadoConId(row) {
+            const empleadoId = String(row.empleado_id || '').trim();
+            const nombre = String(row.nombre_empleado || '').trim();
+
+            if (!empleadoId) {
+                return nombre;
+            }
+
+            if (!nombre) {
+                return empleadoId;
+            }
+
+            return `${empleadoId} - ${nombre}`;
+        }
+
         function renderizarDetalle(row) {
             if (!horasRequeridasReporte) {
                 return '<span class="text-muted">Sin configurar</span>';
@@ -533,7 +548,18 @@
                     { data: 'terminal' },
                     { data: 'nombre_agencia' },
                     { data: 'ruta' },
-                    { data: 'nombre_empleado' },
+                    {
+                        data: 'nombre_empleado',
+                        render: function (data, type, row) {
+                            const empleado = formatearEmpleadoConId(row);
+
+                            if (type !== 'display') {
+                                return empleado;
+                            }
+
+                            return escaparHtml(empleado);
+                        }
+                    },
                     { data: 'cedula' },
                     { data: 'fecha' },
                     { data: 'primer_login' },

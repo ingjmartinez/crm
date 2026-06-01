@@ -219,6 +219,7 @@ class NovedadHorarioController extends Controller
         $empleadosSql = "
             SELECT
                 TRIM(cedula) AS cedula,
+                MAX(TRIM(CAST(empleadoid AS CHAR))) AS empleado_id,
                 MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre_empleado
             FROM empleados
             WHERE cedula IS NOT NULL
@@ -233,6 +234,7 @@ class NovedadHorarioController extends Controller
                     COALESCE(at.nombre_agencia, aa.nombre_agencia, '') AS nombre_agencia,
                     COALESCE(at.ciudad, aa.ciudad, '') AS ciudad,
                     COALESCE(at.ruta, aa.ruta, '') AS ruta,
+                    MAX(e.empleado_id) AS empleado_id,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), NULLIF(CASE WHEN TRIM(COALESCE(ab.usuario, '')) REGEXP '^[0-9-]+$' THEN '' ELSE ab.usuario END, ''), '')) AS nombre_empleado,
                     ab.cedula AS cedula,
                     DATE(ab.fecha) AS fecha,
@@ -270,6 +272,7 @@ class NovedadHorarioController extends Controller
                     COALESCE(at.nombre_agencia, aa.nombre_agencia, '') AS nombre_agencia,
                     COALESCE(at.ciudad, aa.ciudad, '') AS ciudad,
                     COALESCE(at.ruta, aa.ruta, '') AS ruta,
+                    MAX(e.empleado_id) AS empleado_id,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')) AS nombre_empleado,
                     an.identificacion AS cedula,
                     DATE(an.entrada) AS fecha,
@@ -307,6 +310,7 @@ class NovedadHorarioController extends Controller
                 nombre_agencia,
                 ciudad,
                 ruta,
+                empleado_id,
                 nombre_empleado,
                 cedula,
                 fecha,
@@ -328,10 +332,11 @@ class NovedadHorarioController extends Controller
                 OR ciudad LIKE ?
                 OR ruta LIKE ?
                 OR empresa LIKE ?
+                OR empleado_id LIKE ?
                 OR nombre_empleado LIKE ?
                 OR cedula LIKE ?)";
             $searchValue = '%' . $search . '%';
-            $whereBindings = array_fill(0, 7, $searchValue);
+            $whereBindings = array_fill(0, 8, $searchValue);
         }
 
         if ($validated['empresa'] === 'grupo_joselito') {
@@ -403,6 +408,22 @@ class NovedadHorarioController extends Controller
             ->values();
     }
 
+    private function formatEmpleadoConId(mixed $empleadoId, mixed $nombre): string
+    {
+        $empleadoId = trim((string) $empleadoId);
+        $nombre = trim((string) $nombre);
+
+        if ($empleadoId === '') {
+            return $nombre;
+        }
+
+        if ($nombre === '') {
+            return $empleadoId;
+        }
+
+        return "{$empleadoId} - {$nombre}";
+    }
+
     private function buildResumenPagoRows($rows, float $horasRequeridas, float $valorHora)
     {
         return $rows
@@ -420,7 +441,8 @@ class NovedadHorarioController extends Controller
                         trim((string) ($row->terminal ?? '')),
                         trim((string) ($row->nombre_agencia ?? '')),
                     ]),
-                    'nombre' => trim((string) ($row->nombre_empleado ?? '')),
+                    'nombre' => $this->formatEmpleadoConId($row->empleado_id ?? '', $row->nombre_empleado ?? ''),
+                    'empleado_id' => trim((string) ($row->empleado_id ?? '')),
                     'cedula' => trim((string) ($row->cedula ?? '')),
                     'terminal' => trim((string) ($row->terminal ?? '')),
                     'nombre_agencia' => trim((string) ($row->nombre_agencia ?? '')),
@@ -437,6 +459,7 @@ class NovedadHorarioController extends Controller
 
                 return [
                     'nombre' => $first['nombre'],
+                    'empleado_id' => $first['empleado_id'],
                     'cedula' => $first['cedula'],
                     'terminal' => $first['terminal'],
                     'nombre_agencia' => $first['nombre_agencia'],
