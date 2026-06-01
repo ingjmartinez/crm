@@ -233,7 +233,7 @@
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
-                                    <button type="button" class="btn btn-dark" id="btnGenerarTxtPago">Generar TXT de pago</button>
+                                    <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
                                     <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
                                     <button type="button" class="btn btn-success" id="btnConsultarRecargasPaqueticos">Recargas/Paqueticos</button>
                                 </div>
@@ -530,36 +530,6 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-soft-secondary" id="btnBackToCoordinadores">Atras</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="modalGenerarPagoIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <div>
-                        <h5 class="modal-title">Generar archivo de pago</h5>
-                        <small class="text-muted">Selecciona el formato que deseas descargar.</small>
-                    </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <button type="button" class="btn btn-outline-dark w-100 h-100 py-3" id="btnDescargarPagoTxt">
-                                <span class="d-block fw-semibold">TXT</span>
-                                <small class="text-muted">Formato actual para pago</small>
-                            </button>
-                        </div>
-                        <div class="col-md-6">
-                            <button type="button" class="btn btn-outline-success w-100 h-100 py-3" id="btnDescargarPagoXlsx">
-                                <span class="d-block fw-semibold">Excel XLSX</span>
-                                <small class="text-muted">Mismo contenido en hoja de calculo</small>
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1239,6 +1209,24 @@
         return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     }
 
+    function buildExcelHtmlBlob(headers, rows) {
+        const tableRows = [headers, ...rows].map((row) => (
+            `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`
+        )).join('');
+        const html = `
+            <html>
+                <head>
+                    <meta charset="UTF-8">
+                </head>
+                <body>
+                    <table>${tableRows}</table>
+                </body>
+            </html>
+        `;
+
+        return new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    }
+
     function generarXlsxPagoIncentivo() {
         const data = getPagoIncentivoExportData();
         if (!data) {
@@ -1246,21 +1234,14 @@
         }
 
         if (typeof JSZip === 'undefined') {
-            Swal.fire({ title: 'No disponible', text: 'No se pudo cargar el generador de Excel.', icon: 'error' });
+            const blob = buildExcelHtmlBlob(data.headers, data.rows);
+            downloadBlob(`pago_incentivo_${data.fechaFin}.xls`, blob);
             return;
         }
 
         buildXlsxBlob(data.headers, data.rows).then((blob) => {
             downloadBlob(`pago_incentivo_${data.fechaFin}.xlsx`, blob);
         });
-    }
-
-    function cerrarModalPagoIncentivo() {
-        const modalElement = document.getElementById('modalGenerarPagoIncentivo');
-        const modal = bootstrap.Modal.getInstance(modalElement);
-        if (modal) {
-            modal.hide();
-        }
     }
 
     function exportAdministrativosExcel() {
@@ -2675,19 +2656,8 @@
         listNuevoIncentivo();
     });
 
-    document.querySelector('#btnGenerarTxtPago').addEventListener('click', function() {
-        const modal = new bootstrap.Modal(document.getElementById('modalGenerarPagoIncentivo'));
-        modal.show();
-    });
-
-    document.querySelector('#btnDescargarPagoTxt').addEventListener('click', function() {
-        generarTxtPagoIncentivo();
-        cerrarModalPagoIncentivo();
-    });
-
-    document.querySelector('#btnDescargarPagoXlsx').addEventListener('click', function() {
+    document.querySelector('#btnGenerarExcelPago').addEventListener('click', function() {
         generarXlsxPagoIncentivo();
-        cerrarModalPagoIncentivo();
     });
 
     document.querySelector('#btnFiltrarCumplimiento').addEventListener('click', function() {
