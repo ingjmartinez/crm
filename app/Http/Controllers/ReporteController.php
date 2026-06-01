@@ -915,7 +915,7 @@ class ReporteController extends Controller
 
     public function listCruceUsuarios(Request $request)
     {
-        $sistema = $request->input('sistema', 'Lotobet');
+        $sistema = $request->input('sistema', 'todos');
         $estatus = $request->input('estatus');
         $empresa = $request->input('empresa', 'todos');
         $fechaInicio = $request->input('fecha_inicio');
@@ -926,7 +926,7 @@ class ReporteController extends Controller
         }
 
         // Determinar la tabla según el sistema
-        $tabla = $sistema === 'Lotobet' ? 'vt_usuarios_bet' : 'vt_usuarios_net';
+        $ventasSql = $this->cruceUsuariosVentasSql($sistema);
         $empresaWhereSql = '';
         $empresaBindings = [];
 
@@ -980,9 +980,10 @@ class ReporteController extends Controller
 
                 DATE(MAX(v.fecha)) AS Ultima_Fecha_Venta
 
-            FROM {$tabla} v
+            FROM ({$ventasSql}) v
             LEFT JOIN agencias a
-                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(v.agencia_id AS CHAR))
+                ON COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(a.terminal AS CHAR))), ''), '0')
+                 = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(v.agencia_id AS CHAR))), ''), '0')
             LEFT JOIN empleados e
                 ON REPLACE(REPLACE(v.cedula,'-',''),' ','')
                  = REPLACE(REPLACE(e.cedula,'-',''),' ','')
@@ -1005,9 +1006,10 @@ class ReporteController extends Controller
             SELECT
                 v.agencia_id AS Agencia,
                 COUNT(DISTINCT DATE(v.fecha)) AS Dias_Sin_Cedula_Con_Ventas
-            FROM {$tabla} v
+            FROM ({$ventasSql}) v
             LEFT JOIN agencias a
-                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(v.agencia_id AS CHAR))
+                ON COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(a.terminal AS CHAR))), ''), '0')
+                 = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(v.agencia_id AS CHAR))), ''), '0')
             WHERE v.fecha >= ?
               AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
               AND (
@@ -1045,7 +1047,7 @@ class ReporteController extends Controller
 
     public function listCruceUsuariosSinCedulaFechas(Request $request)
     {
-        $sistema = $request->input('sistema', 'Lotobet');
+        $sistema = $request->input('sistema', 'todos');
         $empresa = $request->input('empresa', 'todos');
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
@@ -1058,7 +1060,7 @@ class ReporteController extends Controller
             ]);
         }
 
-        $tabla = $sistema === 'Lotobet' ? 'vt_usuarios_bet' : 'vt_usuarios_net';
+        $ventasSql = $this->cruceUsuariosVentasSql($sistema);
         $empresaWhereSql = '';
         $bindings = [$fechaInicio, $fechaFin, $agenciaId];
 
@@ -1074,9 +1076,10 @@ class ReporteController extends Controller
             SELECT
                 DATE(v.fecha) AS Fecha,
                 COUNT(*) AS Cantidad_Ventas
-            FROM {$tabla} v
+            FROM ({$ventasSql}) v
             LEFT JOIN agencias a
-                ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(v.agencia_id AS CHAR))
+                ON COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(a.terminal AS CHAR))), ''), '0')
+                 = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(v.agencia_id AS CHAR))), ''), '0')
             WHERE v.fecha >= ?
               AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
               AND v.agencia_id = ?
@@ -1093,6 +1096,25 @@ class ReporteController extends Controller
             'agencia' => $agenciaId,
             'fechas' => $fechas,
         ]);
+    }
+
+    private function cruceUsuariosVentasSql(string $sistema): string
+    {
+        $sistema = strtolower(trim($sistema));
+
+        if ($sistema === 'lotobet') {
+            return 'SELECT cedula, agencia_id, fecha FROM vt_usuarios_bet';
+        }
+
+        if ($sistema === 'lotonet') {
+            return 'SELECT cedula, agencia_id, fecha FROM vt_usuarios_net';
+        }
+
+        return '
+            SELECT cedula, agencia_id, fecha FROM vt_usuarios_bet
+            UNION ALL
+            SELECT cedula, agencia_id, fecha FROM vt_usuarios_net
+        ';
     }
 
     // ========== VERIFICADOR DE USUARIOS ==========

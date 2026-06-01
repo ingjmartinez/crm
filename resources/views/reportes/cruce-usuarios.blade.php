@@ -30,10 +30,12 @@
                             <div class="card-body">
                                 <div class="row mb-3">
                                     <div class="col-md-2">
-                                        <label for="sistema" class="form-label">Sistema</label>
-                                        <select id="sistema" class="form-control">
-                                            <option value="Lotobet">Lotobet</option>
-                                            <option value="Lotonet">Lotonet</option>
+                                        <input type="hidden" id="sistema" value="todos">
+                                        <label for="empresa" class="form-label">Empresa</label>
+                                        <select id="empresa" class="form-control">
+                                            <option value="todos">Todas</option>
+                                            <option value="grupo_joselito">Grupo Joselito</option>
+                                            <option value="negosur">Negosur</option>
                                         </select>
                                     </div>
                                     <div class="col-md-2">
@@ -42,14 +44,6 @@
                                             <option value="">Todos</option>
                                             <option value="No activo">No activo</option>
                                             <option value="No registrado">No registrado</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label for="empresa" class="form-label">Empresa</label>
-                                        <select id="empresa" class="form-control">
-                                            <option value="todos">Todas</option>
-                                            <option value="grupo_joselito">Grupo Joselito</option>
-                                            <option value="negosur">Negosur</option>
                                         </select>
                                     </div>
                                     <div class="col-md-2">
