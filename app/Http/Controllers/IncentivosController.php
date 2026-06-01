@@ -7,6 +7,7 @@ use App\Models\IncentivoAdministrativo;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class IncentivosController extends Controller
 {
@@ -1603,38 +1604,56 @@ class IncentivosController extends Controller
 
     public function reporteNuevoIncentivoV4View()
     {
-        $coordinadores = CoordinadorOperador::query()
-            ->where('puesto', 'coordinador')
-            ->withCount('agencias')
-            ->orderBy('nombre')
-            ->orderBy('apellido')
-            ->get(['id', 'nombre', 'apellido'])
-            ->map(function ($coordinador) {
-                return [
-                    'id' => $coordinador->id,
-                    'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
-                    'agencias' => (int) $coordinador->agencias_count,
-                    'agencias_validas' => 0,
-                    'monto_usuarios' => 0,
-                    'pct' => 0.0055,
-                ];
-            })
-            ->values();
+        $coordinadores = collect();
 
-        $administrativosConfig = IncentivoAdministrativo::query()
-            ->orderBy('grupo')
-            ->orderBy('empresa')
-            ->orderBy('nombre')
-            ->get(['grupo', 'nombre', 'empresa', 'pct_total'])
-            ->map(function ($row) {
-                return [
-                    'grupo' => (string) ($row->grupo ?? ''),
-                    'nombre' => (string) ($row->nombre ?? ''),
-                    'empresa' => (string) ($row->empresa ?? ''),
-                    'pct' => (float) ($row->pct_total ?? 0),
-                ];
-            })
-            ->values();
+        if (
+            Schema::hasTable('coordinador_operador')
+            && Schema::hasTable('coordinador_operador_agencia')
+            && Schema::hasTable('agencias')
+        ) {
+            $coordinadores = CoordinadorOperador::query()
+                ->where('puesto', 'coordinador')
+                ->withCount('agencias')
+                ->orderBy('nombre')
+                ->orderBy('apellido')
+                ->get(['id', 'nombre', 'apellido'])
+                ->map(function ($coordinador) {
+                    return [
+                        'id' => $coordinador->id,
+                        'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
+                        'agencias' => (int) $coordinador->agencias_count,
+                        'agencias_validas' => 0,
+                        'monto_usuarios' => 0,
+                        'pct' => 0.0055,
+                    ];
+                })
+                ->values();
+        }
+
+        $administrativosConfig = collect();
+
+        if (
+            Schema::hasTable('incentivo_administrativos')
+            && Schema::hasColumn('incentivo_administrativos', 'grupo')
+            && Schema::hasColumn('incentivo_administrativos', 'nombre')
+            && Schema::hasColumn('incentivo_administrativos', 'empresa')
+            && Schema::hasColumn('incentivo_administrativos', 'pct_total')
+        ) {
+            $administrativosConfig = IncentivoAdministrativo::query()
+                ->orderBy('grupo')
+                ->orderBy('empresa')
+                ->orderBy('nombre')
+                ->get(['grupo', 'nombre', 'empresa', 'pct_total'])
+                ->map(function ($row) {
+                    return [
+                        'grupo' => (string) ($row->grupo ?? ''),
+                        'nombre' => (string) ($row->nombre ?? ''),
+                        'empresa' => (string) ($row->empresa ?? ''),
+                        'pct' => (float) ($row->pct_total ?? 0),
+                    ];
+                })
+                ->values();
+        }
 
         return view('incentivos.reporte-nuevo-incentivo-v4', compact('coordinadores', 'administrativosConfig'));
     }
