@@ -27,7 +27,7 @@
                             </div>
                             <div class="card-body">
                                 <div class="row g-3 align-items-end">
-                                    <div class="col-md-2">
+                                    <div class="col-md-2 col-lg-2">
                                         <label for="empresa" class="form-label">Empresa</label>
                                         <select id="empresa" class="form-control">
                                             <option value="todos">Todas</option>
@@ -35,15 +35,33 @@
                                             <option value="negosur">Negosur</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-2 col-lg-2">
+                                        <label for="ciudad" class="form-label">Ciudad</label>
+                                        <select id="ciudad" class="form-control">
+                                            <option value="">Todas</option>
+                                            @foreach ($ciudades as $ciudad)
+                                                <option value="{{ $ciudad }}">{{ $ciudad }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2 col-lg-2">
+                                        <label for="ruta" class="form-label">Ruta</label>
+                                        <select id="ruta" class="form-control">
+                                            <option value="">Todas</option>
+                                            @foreach ($rutas as $ruta)
+                                                <option value="{{ $ruta }}">{{ $ruta }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2 col-lg-2">
                                         <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
                                         <input type="date" id="fecha_inicio" class="form-control" value="{{ date('Y-m-01') }}">
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-2 col-lg-2">
                                         <label for="fecha_fin" class="form-label">Fecha Fin</label>
                                         <input type="date" id="fecha_fin" class="form-control" value="{{ date('Y-m-d') }}">
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-2 col-lg-2">
                                         <label for="detalle_filtro" class="form-label">Detalle</label>
                                         <select id="detalle_filtro" class="form-control">
                                             <option value="todos">Todos</option>
@@ -51,13 +69,13 @@
                                             <option value="tiene_falta">Tiene falta</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-2 col-lg-2">
                                         <label class="form-label">Horario</label>
                                         <button type="button" class="btn btn-info w-100" id="btnConfigurarHorario">
                                             <i class="ri-settings-3-line"></i> Configurar
                                         </button>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-2 col-lg-2">
                                         <label class="form-label">&nbsp;</label>
                                         <button type="button" class="btn btn-primary w-100" id="btnBuscar">
                                             <i class="ri-search-line"></i> Consultar
@@ -404,6 +422,8 @@
         function obtenerParametrosReporte(extra = {}) {
             return new URLSearchParams({
                 empresa: document.getElementById('empresa').value,
+                ciudad: document.getElementById('ciudad').value,
+                ruta: document.getElementById('ruta').value,
                 fecha_inicio: document.getElementById('fecha_inicio').value,
                 fecha_fin: document.getElementById('fecha_fin').value,
                 horas_requeridas: horasRequeridasReporte,
@@ -449,6 +469,8 @@
 
         function cargarNovedadesHorario() {
             const empresa = document.getElementById('empresa').value;
+            const ciudad = document.getElementById('ciudad').value;
+            const ruta = document.getElementById('ruta').value;
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
             const detalleFiltro = document.getElementById('detalle_filtro').value;
@@ -491,6 +513,8 @@
                     type: 'GET',
                     data: {
                         empresa: empresa,
+                        ciudad: ciudad,
+                        ruta: ruta,
                         fecha_inicio: fechaInicio,
                         fecha_fin: fechaFin,
                         horas_requeridas: horasRequeridasReporte,

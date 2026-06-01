@@ -487,23 +487,23 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::prefix('servicios-generales')->name('servicios-generales.')
-        ->middleware('permission:servicios_generales.view')
+        ->middleware('role_or_permission:servicios_generales|servicios_generales.view')
         ->group(function () {
             Route::get('/', [ModuleHubController::class, 'serviciosGenerales'])->name('index');
             Route::get('/requerimientos', [ServicioGeneralRequerimientoController::class, 'index'])->name('requerimientos.index');
             Route::get('/requerimientos/list', [ServicioGeneralRequerimientoController::class, 'list'])->name('requerimientos.list');
             Route::post('/requerimientos', [ServicioGeneralRequerimientoController::class, 'store'])
-                ->middleware('permission:servicios_generales.create')
+                ->middleware('role_or_permission:servicios_generales|servicios_generales.create')
                 ->name('requerimientos.store');
             Route::get('/requerimientos/{requerimiento}', [ServicioGeneralRequerimientoController::class, 'show'])->name('requerimientos.show');
             Route::put('/requerimientos/{requerimiento}', [ServicioGeneralRequerimientoController::class, 'update'])
-                ->middleware('permission:servicios_generales.manage')
+                ->middleware('role_or_permission:servicios_generales|servicios_generales.manage')
                 ->name('requerimientos.update');
             Route::post('/requerimientos/{requerimiento}/solicitar-cierre', [ServicioGeneralRequerimientoController::class, 'solicitarCierre'])
-                ->middleware('permission:servicios_generales.manage')
+                ->middleware('role_or_permission:servicios_generales|servicios_generales.manage')
                 ->name('requerimientos.solicitar-cierre');
             Route::post('/requerimientos/{requerimiento}/finalizar', [ServicioGeneralRequerimientoController::class, 'finalizar'])
-                ->middleware('permission:servicios_generales.close')
+                ->middleware('role_or_permission:servicios_generales|servicios_generales.close')
                 ->name('requerimientos.finalizar');
         });
 

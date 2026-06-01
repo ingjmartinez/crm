@@ -16,7 +16,10 @@ class NovedadHorarioController extends Controller
 {
     public function index()
     {
-        return view('recursos_humanos.novedades_de_horario.index');
+        return view('recursos_humanos.novedades_de_horario.index', [
+            'ciudades' => $this->getFiltroOpciones('ciudad'),
+            'rutas' => $this->getFiltroOpciones('ruta'),
+        ]);
     }
 
     public function list(Request $request)
@@ -27,6 +30,8 @@ class NovedadHorarioController extends Controller
             'fecha_fin' => ['required', 'date', 'after_or_equal:fecha_inicio'],
             'horas_requeridas' => ['required', 'integer', 'min:1'],
             'detalle' => ['nullable', 'in:todos,cumple,tiene_falta'],
+            'ciudad' => ['nullable', 'string', 'max:120'],
+            'ruta' => ['nullable', 'string', 'max:120'],
         ]);
 
         $queryData = $this->buildNovedadesHorarioQuery($validated, $request);
@@ -77,6 +82,8 @@ class NovedadHorarioController extends Controller
             'horas_requeridas' => ['required', 'integer', 'min:1'],
             'valor_hora' => ['required', 'numeric', 'min:0.01'],
             'detalle' => ['nullable', 'in:todos,cumple,tiene_falta'],
+            'ciudad' => ['nullable', 'string', 'max:120'],
+            'ruta' => ['nullable', 'string', 'max:120'],
         ]);
 
         $rows = $this->getNovedadesHorarioRows($this->buildNovedadesHorarioQuery($validated, $request));
@@ -105,6 +112,8 @@ class NovedadHorarioController extends Controller
             'horas_requeridas' => ['required', 'integer', 'min:1'],
             'valor_hora' => ['required', 'numeric', 'min:0.01'],
             'detalle' => ['nullable', 'in:todos,cumple,tiene_falta'],
+            'ciudad' => ['nullable', 'string', 'max:120'],
+            'ruta' => ['nullable', 'string', 'max:120'],
         ]);
 
         $rows = $this->getNovedadesHorarioRows($this->buildNovedadesHorarioQuery($validated, $request));
@@ -174,6 +183,7 @@ class NovedadHorarioController extends Controller
                 selected.terminal_key,
                 TRIM(CAST(a.terminal AS CHAR)) AS terminal,
                 a.nombre_agencia AS nombre_agencia,
+                a.ciudad AS ciudad,
                 a.ruta AS ruta,
                 a.empresa AS empresa
             FROM agencias a
@@ -192,6 +202,7 @@ class NovedadHorarioController extends Controller
                 selected.agencia_key,
                 TRIM(CAST(a.terminal AS CHAR)) AS terminal,
                 a.nombre_agencia AS nombre_agencia,
+                a.ciudad AS ciudad,
                 a.ruta AS ruta,
                 a.empresa AS empresa
             FROM agencias a
@@ -220,6 +231,7 @@ class NovedadHorarioController extends Controller
                     COALESCE(at.empresa, aa.empresa, '') AS empresa,
                     COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))) AS terminal,
                     COALESCE(at.nombre_agencia, aa.nombre_agencia, '') AS nombre_agencia,
+                    COALESCE(at.ciudad, aa.ciudad, '') AS ciudad,
                     COALESCE(at.ruta, aa.ruta, '') AS ruta,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), NULLIF(CASE WHEN TRIM(COALESCE(ab.usuario, '')) REGEXP '^[0-9-]+$' THEN '' ELSE ab.usuario END, ''), '')) AS nombre_empleado,
                     ab.cedula AS cedula,
@@ -242,6 +254,7 @@ class NovedadHorarioController extends Controller
                     COALESCE(at.empresa, aa.empresa, ''),
                     COALESCE(at.terminal, aa.terminal, TRIM(CAST(ab.agencia_id AS CHAR))),
                     COALESCE(at.nombre_agencia, aa.nombre_agencia, ''),
+                    COALESCE(at.ciudad, aa.ciudad, ''),
                     COALESCE(at.ruta, aa.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), NULLIF(CASE WHEN TRIM(COALESCE(ab.usuario, '')) REGEXP '^[0-9-]+$' THEN '' ELSE ab.usuario END, ''), '')),
                     ab.cedula,
@@ -255,6 +268,7 @@ class NovedadHorarioController extends Controller
                     COALESCE(at.empresa, aa.empresa, '') AS empresa,
                     COALESCE(at.terminal, aa.terminal, TRIM(CAST(an.agencia AS CHAR))) AS terminal,
                     COALESCE(at.nombre_agencia, aa.nombre_agencia, '') AS nombre_agencia,
+                    COALESCE(at.ciudad, aa.ciudad, '') AS ciudad,
                     COALESCE(at.ruta, aa.ruta, '') AS ruta,
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')) AS nombre_empleado,
                     an.identificacion AS cedula,
@@ -277,6 +291,7 @@ class NovedadHorarioController extends Controller
                     COALESCE(at.empresa, aa.empresa, ''),
                     COALESCE(at.terminal, aa.terminal, TRIM(CAST(an.agencia AS CHAR))),
                     COALESCE(at.nombre_agencia, aa.nombre_agencia, ''),
+                    COALESCE(at.ciudad, aa.ciudad, ''),
                     COALESCE(at.ruta, aa.ruta, ''),
                     TRIM(COALESCE(NULLIF(e.nombre_empleado, ''), an.usuario, an.username, '')),
                     an.identificacion,
@@ -290,6 +305,7 @@ class NovedadHorarioController extends Controller
                 empresa,
                 terminal,
                 nombre_agencia,
+                ciudad,
                 ruta,
                 nombre_empleado,
                 cedula,
@@ -309,12 +325,13 @@ class NovedadHorarioController extends Controller
         if ($search !== '') {
             $whereConditions[] = "(terminal LIKE ?
                 OR nombre_agencia LIKE ?
+                OR ciudad LIKE ?
                 OR ruta LIKE ?
                 OR empresa LIKE ?
                 OR nombre_empleado LIKE ?
                 OR cedula LIKE ?)";
             $searchValue = '%' . $search . '%';
-            $whereBindings = array_fill(0, 6, $searchValue);
+            $whereBindings = array_fill(0, 7, $searchValue);
         }
 
         if ($validated['empresa'] === 'grupo_joselito') {
@@ -325,6 +342,16 @@ class NovedadHorarioController extends Controller
         if ($validated['empresa'] === 'negosur') {
             $whereConditions[] = 'LOWER(COALESCE(empresa, "")) LIKE ?';
             $whereBindings[] = '%negosur%';
+        }
+
+        if (!empty($validated['ciudad'])) {
+            $whereConditions[] = 'COALESCE(ciudad, "") = ?';
+            $whereBindings[] = $validated['ciudad'];
+        }
+
+        if (!empty($validated['ruta'])) {
+            $whereConditions[] = 'COALESCE(ruta, "") = ?';
+            $whereBindings[] = $validated['ruta'];
         }
 
         if ($detalle === 'cumple') {
@@ -362,6 +389,18 @@ class NovedadHorarioController extends Controller
 
                 return $row;
             });
+    }
+
+    private function getFiltroOpciones(string $column)
+    {
+        return collect(DB::table('agencias')
+            ->selectRaw("DISTINCT TRIM(COALESCE({$column}, '')) AS valor")
+            ->whereNotNull($column)
+            ->whereRaw("TRIM(COALESCE({$column}, '')) <> ''")
+            ->orderBy('valor')
+            ->pluck('valor'))
+            ->filter()
+            ->values();
     }
 
     private function buildResumenPagoRows($rows, float $horasRequeridas, float $valorHora)

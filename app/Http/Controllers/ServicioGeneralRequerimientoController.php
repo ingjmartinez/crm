@@ -49,7 +49,7 @@ class ServicioGeneralRequerimientoController extends Controller
             'stats' => $this->statsFor(auth()->user()),
             'puedeVerTodo' => $this->puedeVerTodo(auth()->user()),
             'setupPending' => !$this->tablaExiste(),
-            'puedeFinalizarGlobal' => $this->esAdmin(auth()->user()),
+            'puedeFinalizarGlobal' => $this->puedeCerrarModulo(auth()->user()),
         ]);
     }
 
@@ -516,6 +516,7 @@ class ServicioGeneralRequerimientoController extends Controller
     private function puedeEditar(User $user, ServicioGeneralRequerimiento $r): bool
     {
         return $this->esAdmin($user)
+            || $this->puedeGestionarModulo($user)
             || $this->esStaff($user)
             || (int) $r->user_id === (int) $user->id
             || (int) $r->asignado_id === (int) $user->id;
@@ -524,24 +525,40 @@ class ServicioGeneralRequerimientoController extends Controller
     private function puedeGestionarProgreso(User $user, ServicioGeneralRequerimiento $r): bool
     {
         return $this->esAdmin($user)
+            || $this->puedeGestionarModulo($user)
             || (int) $r->asignado_id === (int) $user->id;
     }
 
     private function puedeSolicitarCierre(User $user, ServicioGeneralRequerimiento $r): bool
     {
         return $this->esAdmin($user)
+            || $this->puedeGestionarModulo($user)
             || (int) $r->asignado_id === (int) $user->id;
     }
 
     private function puedeFinalizar(User $user, ServicioGeneralRequerimiento $r): bool
     {
-        return $this->esAdmin($user)
+        return $this->puedeCerrarModulo($user)
             || (int) $r->user_id === (int) $user->id;
     }
 
     private function esAdmin(User $user): bool
     {
         return $user->hasAnyRole(self::ADMIN_ROLE_NAMES);
+    }
+
+    private function puedeCerrarModulo(User $user): bool
+    {
+        return $this->esAdmin($user)
+            || $user->hasRole('servicios_generales')
+            || $user->hasPermissionTo('servicios_generales.close');
+    }
+
+    private function puedeGestionarModulo(User $user): bool
+    {
+        return $this->esAdmin($user)
+            || $user->hasRole('servicios_generales')
+            || $user->hasPermissionTo('servicios_generales.manage');
     }
 
     private function esStaff(User $user): bool
