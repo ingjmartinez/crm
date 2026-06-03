@@ -1810,6 +1810,10 @@
 
     <script>
         (function () {
+            let menuScrollAnimationFrame = null;
+            let menuScrollElement = null;
+            let menuScrollTarget = 0;
+
             function getMenuScrollElement() {
                 const candidates = [
                     document.querySelector('#navbar-nav .simplebar-content-wrapper'),
@@ -1821,6 +1825,65 @@
                 return candidates.find(function (element) {
                     return element && element.scrollHeight > element.clientHeight + 1;
                 }) || document.querySelector('#scrollbar .simplebar-content-wrapper') || document.getElementById('scrollbar');
+            }
+
+            function clampScrollTop(element, value) {
+                const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+                return Math.min(Math.max(value, 0), maxScrollTop);
+            }
+
+            function scrollMenuTo(element, targetScrollTop) {
+                if (!element) {
+                    return;
+                }
+
+                if (menuScrollElement !== element) {
+                    if (menuScrollAnimationFrame) {
+                        window.cancelAnimationFrame(menuScrollAnimationFrame);
+                        menuScrollAnimationFrame = null;
+                    }
+
+                    menuScrollElement = element;
+                    menuScrollTarget = element.scrollTop;
+                }
+
+                menuScrollTarget = clampScrollTop(element, targetScrollTop);
+
+                if (menuScrollAnimationFrame) {
+                    return;
+                }
+
+                function animateMenuScroll() {
+                    if (menuScrollElement !== element) {
+                        menuScrollAnimationFrame = null;
+                        return;
+                    }
+
+                    const distance = menuScrollTarget - element.scrollTop;
+
+                    if (Math.abs(distance) < 0.75) {
+                        element.scrollTop = menuScrollTarget;
+                        menuScrollAnimationFrame = null;
+                        return;
+                    }
+
+                    element.scrollTop += distance * 1.0;
+                    menuScrollAnimationFrame = window.requestAnimationFrame(animateMenuScroll);
+                }
+
+                menuScrollAnimationFrame = window.requestAnimationFrame(animateMenuScroll);
+            }
+
+            function getWheelDelta(event) {
+                if (event.deltaMode === 1) {
+                    return event.deltaY * 18;
+                }
+
+                if (event.deltaMode === 2) {
+                    return event.deltaY * window.innerHeight * 0.75;
+                }
+
+                return event.deltaY;
             }
 
             function recalculateMenuScroll() {
@@ -1862,9 +1925,9 @@
                     const topGap = scrollRect.top - sectionRect.top + 16;
 
                     if (bottomGap > 0) {
-                        scrollElement.scrollTop += bottomGap;
+                        scrollMenuTo(scrollElement, scrollElement.scrollTop + bottomGap);
                     } else if (topGap > 0) {
-                        scrollElement.scrollTop -= topGap;
+                        scrollMenuTo(scrollElement, scrollElement.scrollTop - topGap);
                     }
                 });
             }
@@ -1889,11 +1952,12 @@
                     return;
                 }
 
-                const previousScrollTop = scrollElement.scrollTop;
-                scrollElement.scrollTop += event.deltaY;
+                const previousTarget = menuScrollElement === scrollElement ? menuScrollTarget : scrollElement.scrollTop;
+                const nextTarget = clampScrollTop(scrollElement, previousTarget + getWheelDelta(event));
 
-                if (scrollElement.scrollTop !== previousScrollTop) {
+                if (nextTarget !== previousTarget) {
                     event.preventDefault();
+                    scrollMenuTo(scrollElement, nextTarget);
                 }
             }, { passive: false });
         })();

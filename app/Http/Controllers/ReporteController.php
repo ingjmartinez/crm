@@ -949,17 +949,63 @@ class ReporteController extends Controller
                     AS CHAR(11)
                 ) AS Identificacion,
 
-                MAX(e.empleadoid) AS Empleado_ID,
+                COALESCE(
+                    MAX(CASE
+                        WHEN e.empleadoid IS NOT NULL
+                         AND (
+                            e.fechasalida IS NULL
+                            OR e.fechasalida = '0000-00-00'
+                            OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                         )
+                        THEN e.empleadoid
+                    END),
+                    MAX(e.empleadoid)
+                ) AS Empleado_ID,
 
                 CASE
                     WHEN MAX(e.empleadoid) IS NULL
                         THEN 'ACTUALIZAR EN MAESTRA DE EMPLEADOS'
-                    ELSE CONCAT(MAX(e.nombres), ' ', MAX(e.apellidos))
+                    ELSE CONCAT(
+                        COALESCE(
+                            MAX(CASE
+                                WHEN e.empleadoid IS NOT NULL
+                                 AND (
+                                    e.fechasalida IS NULL
+                                    OR e.fechasalida = '0000-00-00'
+                                    OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                                 )
+                                THEN e.nombres
+                            END),
+                            MAX(e.nombres)
+                        ),
+                        ' ',
+                        COALESCE(
+                            MAX(CASE
+                                WHEN e.empleadoid IS NOT NULL
+                                 AND (
+                                    e.fechasalida IS NULL
+                                    OR e.fechasalida = '0000-00-00'
+                                    OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                                 )
+                                THEN e.apellidos
+                            END),
+                            MAX(e.apellidos)
+                        )
+                    )
                 END AS NombreCompleto,
 
                 CASE
                     WHEN MAX(e.empleadoid) IS NULL
-                      OR (MAX(e.fechasalida) IS NOT NULL AND MAX(e.fechasalida) <> '0000-00-00')
+                      OR SUM(CASE
+                            WHEN e.empleadoid IS NOT NULL
+                             AND (
+                                e.fechasalida IS NULL
+                                OR e.fechasalida = '0000-00-00'
+                                OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                             )
+                            THEN 1
+                            ELSE 0
+                        END) = 0
                     THEN CONCAT(
                         'Agencia(s): ',
                         GROUP_CONCAT(
@@ -973,9 +1019,18 @@ class ReporteController extends Controller
 
                 CASE
                     WHEN MAX(e.empleadoid) IS NULL THEN 'No registrado'
-                    WHEN MAX(e.fechasalida) IS NULL OR MAX(e.fechasalida) = '0000-00-00'
+                    WHEN SUM(CASE
+                            WHEN e.empleadoid IS NOT NULL
+                             AND (
+                                e.fechasalida IS NULL
+                                OR e.fechasalida = '0000-00-00'
+                                OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                             )
+                            THEN 1
+                            ELSE 0
+                        END) > 0
                         THEN 'Activo'
-                    ELSE CONCAT('No Activo - ', MAX(e.fechasalida))
+                    ELSE CONCAT('No Activo - ', MAX(NULLIF(e.fechasalida, '0000-00-00')))
                 END AS Estatus,
 
                 DATE(MAX(v.fecha)) AS Ultima_Fecha_Venta
