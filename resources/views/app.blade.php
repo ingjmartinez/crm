@@ -102,6 +102,11 @@
             padding-bottom: 2rem;
         }
 
+        html[data-layout="vertical"] #scrollbar .simplebar-content,
+        html[data-layout="twocolumn"] #scrollbar .simplebar-content {
+            min-height: 100%;
+        }
+
         html[data-layout="vertical"] #navbar-nav,
         html[data-layout="twocolumn"] #navbar-nav {
             min-height: 0;
@@ -120,6 +125,7 @@
         html[data-layout="vertical"] #navbar-nav .simplebar-content-wrapper,
         html[data-layout="twocolumn"] #navbar-nav .simplebar-content-wrapper {
             max-height: 100%;
+            overflow-y: auto !important;
         }
 
         html[data-layout="vertical"] #navbar-nav .simplebar-content,
@@ -1804,6 +1810,19 @@
 
     <script>
         (function () {
+            function getMenuScrollElement() {
+                const candidates = [
+                    document.querySelector('#navbar-nav .simplebar-content-wrapper'),
+                    document.querySelector('#scrollbar .simplebar-content-wrapper'),
+                    document.getElementById('navbar-nav'),
+                    document.getElementById('scrollbar')
+                ];
+
+                return candidates.find(function (element) {
+                    return element && element.scrollHeight > element.clientHeight + 1;
+                }) || document.querySelector('#scrollbar .simplebar-content-wrapper') || document.getElementById('scrollbar');
+            }
+
             function recalculateMenuScroll() {
                 const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
                 document.documentElement.style.setProperty('--crm-sidebar-height', viewportHeight + 'px');
@@ -1831,7 +1850,7 @@
 
                 window.requestAnimationFrame(function () {
                     const scrollbar = document.getElementById('scrollbar');
-                    const scrollElement = document.querySelector('#scrollbar .simplebar-content-wrapper') || scrollbar;
+                    const scrollElement = getMenuScrollElement() || scrollbar;
 
                     if (!scrollElement) {
                         return;
@@ -1858,6 +1877,25 @@
                 keepMenuSectionVisible(event.target);
             });
             document.addEventListener('hidden.bs.collapse', recalculateMenuScroll);
+
+            document.addEventListener('wheel', function (event) {
+                if (!event.target.closest || !event.target.closest('.app-menu.navbar-menu')) {
+                    return;
+                }
+
+                const scrollElement = getMenuScrollElement();
+
+                if (!scrollElement) {
+                    return;
+                }
+
+                const previousScrollTop = scrollElement.scrollTop;
+                scrollElement.scrollTop += event.deltaY;
+
+                if (scrollElement.scrollTop !== previousScrollTop) {
+                    event.preventDefault();
+                }
+            }, { passive: false });
         })();
     </script>
 
