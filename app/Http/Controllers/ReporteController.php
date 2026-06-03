@@ -8,6 +8,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ReporteController extends Controller
 {
@@ -1093,11 +1094,67 @@ class ReporteController extends Controller
         });
         
         $resultados = array_values($resultados); // Reindexar el array
+        $this->anexarSeguimientoCruceUsuarios($resultados);
 
         return response()->json([
             'resultados' => $resultados,
             'agencias_sin_cedula' => $agenciasSinCedula,
         ]);
+    }
+
+    private function anexarSeguimientoCruceUsuarios(array &$resultados): void
+    {
+        foreach ($resultados as $item) {
+            $item->Seguimiento_ID = null;
+            $item->Seguimiento_Estado = null;
+            $item->Seguimiento_Inicio = null;
+            $item->Seguimiento_Finalizado = null;
+        }
+
+        if (empty($resultados) || !Schema::hasTable('cruce_usuario_seguimientos')) {
+            return;
+        }
+
+        $cedulas = collect($resultados)
+            ->pluck('Identificacion')
+            ->map(fn($cedula) => preg_replace('/[^0-9]/', '', (string) $cedula))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($cedulas->isEmpty()) {
+            return;
+        }
+
+        $seguimientos = DB::table('cruce_usuario_seguimientos')
+            ->whereIn('cedula', $cedulas)
+            ->get()
+            ->keyBy(function ($item) {
+                return implode('|', [
+                    $item->cedula,
+                    $item->ultima_fecha_venta,
+                    $item->estatus_origen,
+                ]);
+            });
+
+        foreach ($resultados as $item) {
+            $key = implode('|', [
+                preg_replace('/[^0-9]/', '', (string) $item->Identificacion),
+                $item->Ultima_Fecha_Venta,
+                $item->Estatus,
+            ]);
+
+            $seguimiento = $seguimientos->get($key);
+
+            if (!$seguimiento) {
+                continue;
+            }
+
+            $item->Seguimiento_ID = $seguimiento->id;
+            $item->Seguimiento_Estado = $seguimiento->estado;
+            $item->Seguimiento_Inicio = $seguimiento->gestion_inicio_at;
+            $item->Seguimiento_Finalizado = $seguimiento->finalizado_at;
+        }
     }
 
     public function listCruceUsuariosSinCedulaFechas(Request $request)

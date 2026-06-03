@@ -13,6 +13,7 @@ use App\Http\Controllers\ContabilidadFlujoRutaController;
 use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\CoordinadorOperadorController;
+use App\Http\Controllers\CruceUsuarioSeguimientoController;
 use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\EntrevistaOnlineController;
 use App\Http\Controllers\FaltantesController;
@@ -326,6 +327,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
     Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
     Route::get('/reportes-cruce-usuarios/sin-cedula-fechas', [ReporteController::class, 'listCruceUsuariosSinCedulaFechas']);
+    Route::post('/reportes-cruce-usuarios/seguimiento', [CruceUsuarioSeguimientoController::class, 'storeFromReporte'])
+        ->name('reportes.cruce-usuarios.seguimiento.store');
 
     Route::get('/reportes-compensacion', [ReporteController::class, 'compensacion']);
     Route::get('/reportes-compensacion/list', [ReporteController::class, 'listCompensacion']);
@@ -477,6 +480,11 @@ Route::middleware('auth')->group(function () {
 
     Route::prefix('tecnologia')->name('tecnologia.')->group(function () {
         Route::get('/', [ModuleHubController::class, 'tecnologia'])->name('index');
+        Route::get('/seguimiento-cruce-usuarios', [CruceUsuarioSeguimientoController::class, 'index'])->name('cruce-usuarios.index');
+        Route::get('/seguimiento-cruce-usuarios/list', [CruceUsuarioSeguimientoController::class, 'list'])->name('cruce-usuarios.list');
+        Route::post('/seguimiento-cruce-usuarios/iniciar-masivo', [CruceUsuarioSeguimientoController::class, 'iniciarMasivo'])->name('cruce-usuarios.iniciar-masivo');
+        Route::post('/seguimiento-cruce-usuarios/{seguimiento}/iniciar', [CruceUsuarioSeguimientoController::class, 'iniciar'])->name('cruce-usuarios.iniciar');
+        Route::post('/seguimiento-cruce-usuarios/{seguimiento}/finalizar', [CruceUsuarioSeguimientoController::class, 'finalizar'])->name('cruce-usuarios.finalizar');
         Route::get('/solicitudes', [TecnologiaSolicitudController::class, 'index'])->name('solicitudes.index');
         Route::get('/solicitudes/list', [TecnologiaSolicitudController::class, 'list'])->name('solicitudes.list');
         Route::post('/solicitudes', [TecnologiaSolicitudController::class, 'store'])->name('solicitudes.store');

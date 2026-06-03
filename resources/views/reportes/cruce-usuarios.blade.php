@@ -60,6 +60,12 @@
                                             <i class="ri-search-line"></i> Buscar
                                         </button>
                                     </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">&nbsp;</label>
+                                        <button type="button" class="btn btn-outline-info d-block" id="btnEnviarSeguimiento" disabled>
+                                            <i class="ri-send-plane-line"></i> Enviar a seguimiento
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -98,6 +104,7 @@
                                                 <th>Nombre Completo</th>
                                                 <th>Detalle</th>
                                                 <th>Estatus</th>
+                                                <th>Finalizada</th>
                                                 <th>Última Fecha Venta</th>
                                             </tr>
                                         </thead>
@@ -157,6 +164,8 @@
     <script>
         let table;
         let agenciasSinCedula = [];
+        const CRUCE_SEGUIMIENTO_STORE_URL = '{{ route('reportes.cruce-usuarios.seguimiento.store') }}';
+        const CSRF_TOKEN = '{{ csrf_token() }}';
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -274,6 +283,88 @@
             });
         }
 
+        function renderSeguimiento(data, type, row) {
+            if (!row.Seguimiento_Estado) {
+                return '<span class="badge bg-secondary">Sin seguimiento</span>';
+            }
+
+            if (row.Seguimiento_Estado === 'finalizado') {
+                return '<span class="badge bg-success">Finalizada' +
+                    (row.Seguimiento_Finalizado ? ' - ' + escapeHtml(row.Seguimiento_Finalizado) : '') +
+                    '</span>';
+            }
+
+            if (row.Seguimiento_Estado === 'en_gestion') {
+                return '<span class="badge bg-info">En gestion' +
+                    (row.Seguimiento_Inicio ? ' - ' + escapeHtml(row.Seguimiento_Inicio) : '') +
+                    '</span>';
+            }
+
+            return '<span class="badge bg-warning text-dark">Pendiente</span>';
+        }
+
+        function filasActualesReporte() {
+            if (!table) {
+                return [];
+            }
+
+            return table.rows({ search: 'applied' }).data().toArray();
+        }
+
+        function enviarSeguimiento() {
+            const filas = filasActualesReporte();
+
+            if (!filas.length) {
+                Swal.fire('Sin datos', 'Primero genera el reporte para enviar casos a seguimiento.', 'info');
+                return;
+            }
+
+            Swal.fire({
+                title: 'Enviar a seguimiento',
+                text: 'Se crearan casos para las filas visibles del reporte. Los casos existentes no se duplicaran.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Enviar',
+                cancelButtonText: 'Cancelar'
+            }).then(function(result) {
+                if (!result.isConfirmed) {
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Creando seguimiento...',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                $.ajax({
+                    url: CRUCE_SEGUIMIENTO_STORE_URL,
+                    type: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': CSRF_TOKEN
+                    },
+                    data: JSON.stringify({
+                        items: filas,
+                        meta: {
+                            sistema: document.getElementById('sistema').value,
+                            empresa: document.getElementById('empresa').value,
+                            fecha_inicio: document.getElementById('fecha_inicio').value,
+                            fecha_fin: document.getElementById('fecha_fin').value
+                        }
+                    }),
+                    contentType: 'application/json',
+                    success: function(response) {
+                        Swal.fire('Listo', response.message || 'Seguimiento creado.', 'success');
+                        table.ajax.reload(null, false);
+                    },
+                    error: function(xhr) {
+                        const message = xhr.responseJSON?.message || 'No fue posible crear el seguimiento.';
+                        Swal.fire('Error', message, 'error');
+                    }
+                });
+            });
+        }
+
         function cargarDatos() {
             const sistema = document.getElementById('sistema').value;
             const estatus = document.getElementById('estatus').value;
@@ -323,7 +414,9 @@
                     dataSrc: function(json) {
                         agenciasSinCedula = json.agencias_sin_cedula || [];
                         renderResumenSinCedula();
-                        return json.resultados || [];
+                        const resultados = json.resultados || [];
+                        document.getElementById('btnEnviarSeguimiento').disabled = resultados.length === 0;
+                        return resultados;
                     },
                     complete: function() {
                         Swal.close();
@@ -351,6 +444,10 @@
                             }
                         }
                     },
+                    {
+                        data: 'Seguimiento_Estado',
+                        render: renderSeguimiento
+                    },
                     { data: 'Ultima_Fecha_Venta' }
                 ],
                 autoWidth: false,
@@ -360,7 +457,8 @@
                     { width: "200px", targets: 2 },
                     { width: "auto", targets: 3 },
                     { width: "150px", targets: 4 },
-                    { width: "120px", targets: 5 }
+                    { width: "170px", targets: 5 },
+                    { width: "120px", targets: 6 }
                 ],
                 paging: false,
                 dom: 'Bfrtip',
@@ -370,11 +468,12 @@
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
                 },
-                order: [[5, 'desc']]
+                order: [[6, 'desc']]
             });
         }
 
         document.getElementById('btnBuscar').addEventListener('click', cargarDatos);
+        document.getElementById('btnEnviarSeguimiento').addEventListener('click', enviarSeguimiento);
 
         document.getElementById('btnVerSinCedula').addEventListener('click', function(event) {
             event.preventDefault();
