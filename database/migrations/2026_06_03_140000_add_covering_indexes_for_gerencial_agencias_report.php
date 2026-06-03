@@ -9,14 +9,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $this->addIndexIfMissing('VT_usuarios_Bet', 'idx_vt_bet_fecha_agencia_monto', ['fecha', 'agencia_id', 'monto']);
-        $this->addIndexIfMissing('VT_usuarios_Net', 'idx_vt_net_fecha_agencia_monto', ['fecha', 'agencia_id', 'monto']);
+        $this->addIndexIfMissing('vt_usuarios_bet', 'idx_vt_bet_fecha_agencia_monto', ['fecha', 'agencia_id', 'monto']);
+        $this->addIndexIfMissing('vt_usuarios_net', 'idx_vt_net_fecha_agencia_monto', ['fecha', 'agencia_id', 'monto']);
     }
 
     public function down(): void
     {
-        $this->dropIndexIfExists('VT_usuarios_Bet', 'idx_vt_bet_fecha_agencia_monto');
-        $this->dropIndexIfExists('VT_usuarios_Net', 'idx_vt_net_fecha_agencia_monto');
+        $this->dropIndexIfExists('vt_usuarios_bet', 'idx_vt_bet_fecha_agencia_monto');
+        $this->dropIndexIfExists('vt_usuarios_net', 'idx_vt_net_fecha_agencia_monto');
     }
 
     private function addIndexIfMissing(string $table, string $indexName, array $columns): void
