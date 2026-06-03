@@ -62,7 +62,7 @@
                                                 <i class="ri-search-line me-1"></i>Buscar
                                             </button>
                                             <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modal-configuracion-gerencial">
-                                                <i class="ri-settings-3-line me-1"></i>Configurar
+                                                <i class="ri-settings-3-line me-1"></i>Configurar agencias
                                             </button>
                                             <a href="{{ route('gerencia.gerencial') }}" class="btn btn-light">Limpiar</a>
                                             <button type="button" class="btn btn-danger" id="btn-generar-pdf">
@@ -78,31 +78,21 @@
                     <div class="col-lg-12">
                         <div class="card border-info border-opacity-25">
                             <div class="card-header bg-info-subtle">
-                                <h6 class="card-title mb-0">Parametros de Clasificacion (A, B, C, D)</h6>
+                                <h6 class="card-title mb-0">Parametros de Clasificacion de Agencias (AAA, AA, A, B, C, D)</h6>
                             </div>
                             <div class="card-body">
                                 <div class="row g-3">
-                                    <div class="col-md-6">
+                                    <div class="col-12">
                                         <div class="p-3 border rounded h-100">
                                             <div class="fw-semibold mb-2">Agencia</div>
                                             <div class="small text-muted mb-2">Monto minimo para entrar en cada categoria:</div>
                                             <div class="d-flex flex-wrap gap-2">
+                                                <span class="badge bg-dark-subtle text-dark" id="badge-agencia-aaa"></span>
+                                                <span class="badge bg-info-subtle text-info" id="badge-agencia-aa"></span>
                                                 <span class="badge bg-primary-subtle text-primary" id="badge-agencia-a"></span>
                                                 <span class="badge bg-success-subtle text-success" id="badge-agencia-b"></span>
                                                 <span class="badge bg-warning-subtle text-warning" id="badge-agencia-c"></span>
                                                 <span class="badge bg-danger-subtle text-danger" id="badge-agencia-d"></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="p-3 border rounded h-100">
-                                            <div class="fw-semibold mb-2">Agente de venta (Cedula)</div>
-                                            <div class="small text-muted mb-2">Monto minimo para entrar en cada categoria:</div>
-                                            <div class="d-flex flex-wrap gap-2">
-                                                <span class="badge bg-primary-subtle text-primary" id="badge-agente-a"></span>
-                                                <span class="badge bg-success-subtle text-success" id="badge-agente-b"></span>
-                                                <span class="badge bg-warning-subtle text-warning" id="badge-agente-c"></span>
-                                                <span class="badge bg-danger-subtle text-danger" id="badge-agente-d"></span>
                                             </div>
                                         </div>
                                     </div>
@@ -118,7 +108,27 @@
                             </div>
                             <div class="card-body">
                                 <div class="row g-3">
-                                    <div class="col-md-6 col-xl-3">
+                                    <div class="col-md-6 col-xl-2">
+                                        <div class="p-3 border rounded h-100">
+                                            <div class="fw-semibold fs-5 mb-2">Categoria AAA</div>
+                                            <div class="small mb-1 text-success">Suben: <span id="cat-aaa-suben">0</span></div>
+                                            <div class="small mb-1 text-muted" id="cat-aaa-suben-detalle">-</div>
+                                            <div class="small mb-1 text-danger">Bajan: <span id="cat-aaa-bajan">0</span></div>
+                                            <div class="small mb-1 text-muted" id="cat-aaa-bajan-detalle">-</div>
+                                            <div class="small text-muted">Sin cambios: <span id="cat-aaa-igual">0</span></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-xl-2">
+                                        <div class="p-3 border rounded h-100">
+                                            <div class="fw-semibold fs-5 mb-2">Categoria AA</div>
+                                            <div class="small mb-1 text-success">Suben: <span id="cat-aa-suben">0</span></div>
+                                            <div class="small mb-1 text-muted" id="cat-aa-suben-detalle">-</div>
+                                            <div class="small mb-1 text-danger">Bajan: <span id="cat-aa-bajan">0</span></div>
+                                            <div class="small mb-1 text-muted" id="cat-aa-bajan-detalle">-</div>
+                                            <div class="small text-muted">Sin cambios: <span id="cat-aa-igual">0</span></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-xl-2">
                                         <div class="p-3 border rounded h-100">
                                             <div class="fw-semibold fs-5 mb-2">Categoria A</div>
                                             <div class="small mb-1 text-success">Suben: <span id="cat-a-suben">0</span></div>
@@ -128,7 +138,7 @@
                                             <div class="small text-muted">Sin cambios: <span id="cat-a-igual">0</span></div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6 col-xl-3">
+                                    <div class="col-md-6 col-xl-2">
                                         <div class="p-3 border rounded h-100">
                                             <div class="fw-semibold fs-5 mb-2">Categoria B</div>
                                             <div class="small mb-1 text-success">Suben: <span id="cat-b-suben">0</span></div>
@@ -138,7 +148,7 @@
                                             <div class="small text-muted">Sin cambios: <span id="cat-b-igual">0</span></div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6 col-xl-3">
+                                    <div class="col-md-6 col-xl-2">
                                         <div class="p-3 border rounded h-100">
                                             <div class="fw-semibold fs-5 mb-2">Categoria C</div>
                                             <div class="small mb-1 text-success">Suben: <span id="cat-c-suben">0</span></div>
@@ -148,7 +158,7 @@
                                             <div class="small text-muted">Sin cambios: <span id="cat-c-igual">0</span></div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6 col-xl-3">
+                                    <div class="col-md-6 col-xl-2">
                                         <div class="p-3 border rounded h-100">
                                             <div class="fw-semibold fs-5 mb-2">Categoria D</div>
                                             <div class="small mb-1 text-success">Suben: <span id="cat-d-suben">0</span></div>
@@ -201,11 +211,19 @@
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info py-2 mb-3">
-                        Solo se manejan las categorias A, B, C y D. Debes ingresar valores descendentes: A > B > C y D es el limite maximo para ventas bajas.
+                        Solo se manejan agencias. Debes ingresar valores descendentes: AAA > AA > A > B > C y D es el limite maximo para ventas bajas.
                     </div>
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <h6 class="mb-2">Agencia</h6>
+                            <div class="mb-2">
+                                <label class="form-label">AAA (minimo)</label>
+                                <input type="number" min="1" class="form-control" id="cfg-agencia-aaa">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">AA (minimo)</label>
+                                <input type="number" min="1" class="form-control" id="cfg-agencia-aa">
+                            </div>
                             <div class="mb-2">
                                 <label class="form-label">A (minimo)</label>
                                 <input type="number" min="1" class="form-control" id="cfg-agencia-a">
@@ -221,25 +239,6 @@
                             <div class="mb-0">
                                 <label class="form-label">D (maximo)</label>
                                 <input type="number" min="1" class="form-control" id="cfg-agencia-d">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <h6 class="mb-2">Agente de venta (Cedula)</h6>
-                            <div class="mb-2">
-                                <label class="form-label">A (minimo)</label>
-                                <input type="number" min="1" class="form-control" id="cfg-agente-a">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">B (minimo)</label>
-                                <input type="number" min="1" class="form-control" id="cfg-agente-b">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">C (minimo)</label>
-                                <input type="number" min="1" class="form-control" id="cfg-agente-c">
-                            </div>
-                            <div class="mb-0">
-                                <label class="form-label">D (maximo)</label>
-                                <input type="number" min="1" class="form-control" id="cfg-agente-d">
                             </div>
                         </div>
                     </div>
@@ -302,8 +301,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 @php
     $configuracionInicial = $configuracionClasificacion ?? [
-        'agencia' => ['A' => 150000, 'B' => 110000, 'C' => 60001, 'D' => 60000],
-        'agente' => ['A' => 150000, 'B' => 110000, 'C' => 60001, 'D' => 60000],
+        'agencia' => ['AAA' => 500001, 'AA' => 300001, 'A' => 150001, 'B' => 100001, 'C' => 60001, 'D' => 60000],
     ];
 @endphp
 <script>
@@ -485,8 +483,7 @@
             // =========================
             // Tarjetas superiores
             // =========================
-            const topGap = 12;
-            const topCardW = (contentWidth - topGap) / 2;
+            const topCardW = contentWidth;
             const agenciaBodyLines = [
                 {
                     type: 'label',
@@ -494,6 +491,12 @@
                     color: [100, 100, 100],
                     fontSize: 10,
                     gapAfter: 7
+                },
+                {
+                    text: `${badgeAgenciaAAA?.textContent || ''}    ${badgeAgenciaAA?.textContent || ''}`,
+                    color: [0, 0, 0],
+                    fontSize: 11,
+                    gapAfter: 6
                 },
                 {
                     text: `${badgeAgenciaA?.textContent || ''}    ${badgeAgenciaB?.textContent || ''}`,
@@ -508,31 +511,7 @@
                     gapAfter: 0
                 }
             ];
-            const agenteBodyLines = [
-                {
-                    type: 'label',
-                    text: 'Monto minimo para entrar en cada categoria:',
-                    color: [100, 100, 100],
-                    fontSize: 10,
-                    gapAfter: 7
-                },
-                {
-                    text: `${badgeAgenteA?.textContent || ''}    ${badgeAgenteB?.textContent || ''}`,
-                    color: [0, 0, 0],
-                    fontSize: 11,
-                    gapAfter: 6
-                },
-                {
-                    text: `${badgeAgenteC?.textContent || ''}    ${badgeAgenteD?.textContent || ''}`,
-                    color: [0, 0, 0],
-                    fontSize: 11,
-                    gapAfter: 0
-                }
-            ];
-            const topCardH = Math.min(100, Math.max(
-                getCardHeight(topCardW, agenciaBodyLines),
-                getCardHeight(topCardW, agenteBodyLines)
-            ));
+            const topCardH = Math.min(100, getCardHeight(topCardW, agenciaBodyLines));
 
             ensureVerticalSpace(topCardH + 28);
 
@@ -546,18 +525,6 @@
                 fillColor: [232, 240, 254],
                 borderColor: [41, 128, 185],
                 bodyLines: agenciaBodyLines
-            });
-
-            drawCard({
-                x: margin + topCardW + topGap,
-                y,
-                w: topCardW,
-                h: topCardH,
-                title: 'Agente de venta (Cédula)',
-                titleColor: [41, 128, 185],
-                fillColor: [232, 240, 254],
-                borderColor: [41, 128, 185],
-                bodyLines: agenteBodyLines
             });
 
             y += topCardH + 28;
@@ -576,6 +543,24 @@
             // Tarjetas de análisis
             // =========================
             const analisis = [
+                {
+                    cat: 'AAA',
+                    color: [33, 37, 41],
+                    suben: safeText('cat-aaa-suben', '0'),
+                    subenDetalle: safeText('cat-aaa-suben-detalle', '-'),
+                    bajan: safeText('cat-aaa-bajan', '0'),
+                    bajanDetalle: safeText('cat-aaa-bajan-detalle', '-'),
+                    igual: safeText('cat-aaa-igual', '0')
+                },
+                {
+                    cat: 'AA',
+                    color: [13, 202, 240],
+                    suben: safeText('cat-aa-suben', '0'),
+                    subenDetalle: safeText('cat-aa-suben-detalle', '-'),
+                    bajan: safeText('cat-aa-bajan', '0'),
+                    bajanDetalle: safeText('cat-aa-bajan-detalle', '-'),
+                    igual: safeText('cat-aa-igual', '0')
+                },
                 {
                     cat: 'A',
                     color: [13, 110, 253],
@@ -617,7 +602,8 @@
             const analisisGap = 16;
             const analisisCardW = (contentWidth - analisisGap) / 2;
             const analisisCardH = 96;
-            ensureVerticalSpace((analisisCardH * 2) + analisisGap + 22);
+            const analisisRows = Math.ceil(analisis.length / 2);
+            ensureVerticalSpace((analisisCardH * analisisRows) + (analisisGap * (analisisRows - 1)) + 22);
 
             analisis.forEach((a, i) => {
                 const x = margin + ((i % 2) * (analisisCardW + analisisGap));
@@ -667,7 +653,7 @@
                 });
             });
 
-            y += (analisisCardH * 2) + analisisGap + 22;
+            y += (analisisCardH * analisisRows) + (analisisGap * (analisisRows - 1)) + 22;
 
             // =========================
             // Tabla
@@ -684,9 +670,9 @@
 
             if (dataTable) {
                 rows = dataTable.rows({ search: 'applied', order: 'applied' }).data().toArray().map(function (row) {
-                    const tipoConteo = String(row?.tipo_conteo || '').toUpperCase() === 'AGENTE'
-                        ? 'Agente de venta'
-                        : (String(row?.tipo_conteo || '').toUpperCase() === 'AGENCIA' ? 'Agencia' : (row?.tipo_conteo || '-'));
+                    const tipoConteo = String(row?.tipo_conteo || '').toUpperCase() === 'AGENCIA'
+                        ? 'Agencia'
+                        : (row?.tipo_conteo || '-');
 
                     const crecimiento = Number(row?.crecimiento || 0).toLocaleString('en-US');
                     const porcCrecimiento = row?.porc_crecimiento === null || row?.porc_crecimiento === undefined
@@ -808,24 +794,34 @@
         const modalConfigElement = document.getElementById('modal-configuracion-gerencial');
         let configuracion = @json($configuracionInicial);
 
+        const inputCfgAgenciaAAA = document.getElementById('cfg-agencia-aaa');
+        const inputCfgAgenciaAA = document.getElementById('cfg-agencia-aa');
         const inputCfgAgenciaA = document.getElementById('cfg-agencia-a');
         const inputCfgAgenciaB = document.getElementById('cfg-agencia-b');
         const inputCfgAgenciaC = document.getElementById('cfg-agencia-c');
         const inputCfgAgenciaD = document.getElementById('cfg-agencia-d');
-        const inputCfgAgenteA = document.getElementById('cfg-agente-a');
-        const inputCfgAgenteB = document.getElementById('cfg-agente-b');
-        const inputCfgAgenteC = document.getElementById('cfg-agente-c');
-        const inputCfgAgenteD = document.getElementById('cfg-agente-d');
 
+        const badgeAgenciaAAA = document.getElementById('badge-agencia-aaa');
+        const badgeAgenciaAA = document.getElementById('badge-agencia-aa');
         const badgeAgenciaA = document.getElementById('badge-agencia-a');
         const badgeAgenciaB = document.getElementById('badge-agencia-b');
         const badgeAgenciaC = document.getElementById('badge-agencia-c');
         const badgeAgenciaD = document.getElementById('badge-agencia-d');
-        const badgeAgenteA = document.getElementById('badge-agente-a');
-        const badgeAgenteB = document.getElementById('badge-agente-b');
-        const badgeAgenteC = document.getElementById('badge-agente-c');
-        const badgeAgenteD = document.getElementById('badge-agente-d');
         const analisisRefs = {
+            AAA: {
+                suben: document.getElementById('cat-aaa-suben'),
+                bajan: document.getElementById('cat-aaa-bajan'),
+                igual: document.getElementById('cat-aaa-igual'),
+                subenDetalle: document.getElementById('cat-aaa-suben-detalle'),
+                bajanDetalle: document.getElementById('cat-aaa-bajan-detalle'),
+            },
+            AA: {
+                suben: document.getElementById('cat-aa-suben'),
+                bajan: document.getElementById('cat-aa-bajan'),
+                igual: document.getElementById('cat-aa-igual'),
+                subenDetalle: document.getElementById('cat-aa-suben-detalle'),
+                bajanDetalle: document.getElementById('cat-aa-bajan-detalle'),
+            },
             A: {
                 suben: document.getElementById('cat-a-suben'),
                 bajan: document.getElementById('cat-a-bajan'),
@@ -992,18 +988,26 @@
 
         function getRangoCategoria(categoria) {
             const cat = String(categoria || '').toUpperCase();
-            const cfg = configuracion.agencia || { A: 0, B: 0, C: 0, D: 0 };
+            const cfg = configuracion.agencia || { AAA: 0, AA: 0, A: 0, B: 0, C: 0, D: 0 };
+
+            if (cat === 'AAA') {
+                return '>= ' + formatoEntero(cfg.AAA);
+            }
+
+            if (cat === 'AA') {
+                return formatoEntero(cfg.AA) + ' a ' + formatoEntero(cfg.AAA - 1);
+            }
 
             if (cat === 'A') {
-                return '>= ' + formatoEntero(cfg.A);
+                return formatoEntero(cfg.A) + ' a ' + formatoEntero(cfg.AA - 1);
             }
 
             if (cat === 'B') {
-                return '>= ' + formatoEntero(cfg.B) + ' y < ' + formatoEntero(cfg.A);
+                return formatoEntero(cfg.B) + ' a ' + formatoEntero(cfg.A - 1);
             }
 
             if (cat === 'C') {
-                return '>= ' + formatoEntero(cfg.C) + ' y < ' + formatoEntero(cfg.B);
+                return formatoEntero(cfg.C) + ' a ' + formatoEntero(cfg.B - 1);
             }
 
             if (cat === 'D') {
@@ -1017,7 +1021,7 @@
             if (!referenciaRangosCategorias) return;
 
             referenciaRangosCategorias.innerHTML = '';
-            ['A', 'B', 'C', 'D'].forEach(function (cat) {
+            ['AAA', 'AA', 'A', 'B', 'C', 'D'].forEach(function (cat) {
                 const span = document.createElement('span');
                 span.className = 'badge bg-light text-dark border';
                 span.textContent = cat + ': ' + getRangoCategoria(cat);
@@ -1026,55 +1030,47 @@
         }
 
         function cargarConfiguracionEnModal() {
+            inputCfgAgenciaAAA.value = configuracion.agencia.AAA;
+            inputCfgAgenciaAA.value = configuracion.agencia.AA;
             inputCfgAgenciaA.value = configuracion.agencia.A;
             inputCfgAgenciaB.value = configuracion.agencia.B;
             inputCfgAgenciaC.value = configuracion.agencia.C;
             inputCfgAgenciaD.value = configuracion.agencia.D;
-
-            inputCfgAgenteA.value = configuracion.agente.A;
-            inputCfgAgenteB.value = configuracion.agente.B;
-            inputCfgAgenteC.value = configuracion.agente.C;
-            inputCfgAgenteD.value = configuracion.agente.D;
         }
 
         function actualizarTarjetaParametros() {
-            badgeAgenciaA.textContent = 'A >= ' + formatoEntero(configuracion.agencia.A);
-            badgeAgenciaB.textContent = 'B >= ' + formatoEntero(configuracion.agencia.B);
-            badgeAgenciaC.textContent = 'C >= ' + formatoEntero(configuracion.agencia.C);
+            badgeAgenciaAAA.textContent = 'AAA >= ' + formatoEntero(configuracion.agencia.AAA);
+            badgeAgenciaAA.textContent = 'AA ' + formatoEntero(configuracion.agencia.AA) + ' - ' + formatoEntero(configuracion.agencia.AAA - 1);
+            badgeAgenciaA.textContent = 'A ' + formatoEntero(configuracion.agencia.A) + ' - ' + formatoEntero(configuracion.agencia.AA - 1);
+            badgeAgenciaB.textContent = 'B ' + formatoEntero(configuracion.agencia.B) + ' - ' + formatoEntero(configuracion.agencia.A - 1);
+            badgeAgenciaC.textContent = 'C ' + formatoEntero(configuracion.agencia.C) + ' - ' + formatoEntero(configuracion.agencia.B - 1);
             badgeAgenciaD.textContent = 'D <= ' + formatoEntero(configuracion.agencia.D);
-
-            badgeAgenteA.textContent = 'A >= ' + formatoEntero(configuracion.agente.A);
-            badgeAgenteB.textContent = 'B >= ' + formatoEntero(configuracion.agente.B);
-            badgeAgenteC.textContent = 'C >= ' + formatoEntero(configuracion.agente.C);
-            badgeAgenteD.textContent = 'D <= ' + formatoEntero(configuracion.agente.D);
         }
 
         function obtenerConfiguracionDesdeModal() {
             return {
                 agencia: {
+                    AAA: Number(inputCfgAgenciaAAA.value || 0),
+                    AA: Number(inputCfgAgenciaAA.value || 0),
                     A: Number(inputCfgAgenciaA.value || 0),
                     B: Number(inputCfgAgenciaB.value || 0),
                     C: Number(inputCfgAgenciaC.value || 0),
                     D: Number(inputCfgAgenciaD.value || 0),
-                },
-                agente: {
-                    A: Number(inputCfgAgenteA.value || 0),
-                    B: Number(inputCfgAgenteB.value || 0),
-                    C: Number(inputCfgAgenteC.value || 0),
-                    D: Number(inputCfgAgenteD.value || 0),
                 }
             };
         }
 
         function configuracionValida(cfg) {
-            const agenciaValida = cfg.agencia.A > cfg.agencia.B && cfg.agencia.B > cfg.agencia.C && cfg.agencia.C > cfg.agencia.D && cfg.agencia.D > 0;
-            const agenteValida = cfg.agente.A > cfg.agente.B && cfg.agente.B > cfg.agente.C && cfg.agente.C > cfg.agente.D && cfg.agente.D > 0;
-
-            return agenciaValida && agenteValida;
+            return cfg.agencia.AAA > cfg.agencia.AA
+                && cfg.agencia.AA > cfg.agencia.A
+                && cfg.agencia.A > cfg.agencia.B
+                && cfg.agencia.B > cfg.agencia.C
+                && cfg.agencia.C > cfg.agencia.D
+                && cfg.agencia.D > 0;
         }
 
         function resolverTipoMovimiento(categoriaInicio, categoriaFin) {
-            const orden = ['A', 'B', 'C', 'D'];
+            const orden = ['AAA', 'AA', 'A', 'B', 'C', 'D'];
             const inicio = String(categoriaInicio || '').toUpperCase();
             const fin = String(categoriaFin || '').toUpperCase();
             const idxInicio = orden.indexOf(inicio);
@@ -1187,7 +1183,7 @@
         }
 
         function conectarClicksAnalisis() {
-            ['A', 'B', 'C', 'D'].forEach(function (categoria) {
+            ['AAA', 'AA', 'A', 'B', 'C', 'D'].forEach(function (categoria) {
                 const ref = analisisRefs[categoria];
                 if (!ref) return;
 
@@ -1208,8 +1204,10 @@
         }
 
         function actualizarTarjetasAnalisisAgencias(transiciones) {
-            const orden = ['A', 'B', 'C', 'D'];
+            const orden = ['AAA', 'AA', 'A', 'B', 'C', 'D'];
             const resumen = {
+                AAA: { suben: 0, bajan: 0, igual: 0, subenDetalle: {}, bajanDetalle: {} },
+                AA: { suben: 0, bajan: 0, igual: 0, subenDetalle: {}, bajanDetalle: {} },
                 A: { suben: 0, bajan: 0, igual: 0, subenDetalle: {}, bajanDetalle: {} },
                 B: { suben: 0, bajan: 0, igual: 0, subenDetalle: {}, bajanDetalle: {} },
                 C: { suben: 0, bajan: 0, igual: 0, subenDetalle: {}, bajanDetalle: {} },
@@ -1258,7 +1256,7 @@
                     .join(' | ');
             }
 
-            ['A', 'B', 'C', 'D'].forEach(function (cat) {
+            ['AAA', 'AA', 'A', 'B', 'C', 'D'].forEach(function (cat) {
                 const ref = analisisRefs[cat];
                 if (!ref) return;
                 if (ref.suben) {
@@ -1286,16 +1284,12 @@
         const dataTable = $('#table-gerencial').DataTable({
             responsive: true,
             pageLength: 25,
-            order: [[0, 'asc'], [1, 'asc']],
+            order: [],
             data: [],
             columns: [
                 {
                     data: 'tipo_conteo',
                     render: function (data) {
-                        if (String(data || '').toUpperCase() === 'AGENTE') {
-                            return 'Agente de venta';
-                        }
-
                         if (String(data || '').toUpperCase() === 'AGENCIA') {
                             return 'Agencia';
                         }
@@ -1372,14 +1366,12 @@
                 anio: inputAnio?.value || '{{ now()->year }}',
                 mes_inicio: inputMesInicio?.value || '',
                 mes_fin: inputMesFin?.value || '',
+                agencia_aaa: configuracion.agencia.AAA,
+                agencia_aa: configuracion.agencia.AA,
                 agencia_a: configuracion.agencia.A,
                 agencia_b: configuracion.agencia.B,
                 agencia_c: configuracion.agencia.C,
-                agencia_d: configuracion.agencia.D,
-                agente_a: configuracion.agente.A,
-                agente_b: configuracion.agente.B,
-                agente_c: configuracion.agente.C,
-                agente_d: configuracion.agente.D
+                agencia_d: configuracion.agencia.D
             });
 
             const response = await fetch('{{ route('gerencia.gerencial.data') }}?' + params.toString(), {
@@ -1449,7 +1441,7 @@
             btnGuardarConfig.addEventListener('click', function () {
                 const nuevaConfig = obtenerConfiguracionDesdeModal();
                 if (!configuracionValida(nuevaConfig)) {
-                    Swal.fire('Parametros invalidos', 'Asegura que A > B > C > D y que todos los valores sean mayores que 0. D se usa como limite maximo para ventas bajas.', 'warning');
+                    Swal.fire('Parametros invalidos', 'Asegura que AAA > AA > A > B > C > D y que todos los valores sean mayores que 0. D se usa como limite maximo para ventas bajas.', 'warning');
                     return;
                 }
 

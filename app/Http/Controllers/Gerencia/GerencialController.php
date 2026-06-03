@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Gerencia;
 
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -45,316 +46,11 @@ class GerencialController extends Controller
 
         set_time_limit(300);
 
-        $sql = <<<'SQL'
-WITH ventas_agencia_unificadas AS (
-    SELECT
-        agencia_id,
-        SUM(monto) AS monto,
-        MONTH(fecha) AS mes
-    FROM vt_usuarios_bet
-    WHERE YEAR(fecha) = ?
-      AND MONTH(fecha) IN (?, ?)
-    GROUP BY agencia_id, MONTH(fecha)
-
-    UNION ALL
-
-    SELECT
-        agencia_id,
-        SUM(monto) AS monto,
-        MONTH(fecha) AS mes
-    FROM vt_usuarios_net
-    WHERE YEAR(fecha) = ?
-      AND MONTH(fecha) IN (?, ?)
-    GROUP BY agencia_id, MONTH(fecha)
-),
-ventas_cedula_unificadas AS (
-    SELECT
-        cedula,
-        SUM(monto) AS monto,
-        MONTH(fecha) AS mes
-    FROM vt_usuarios_bet
-    WHERE YEAR(fecha) = ?
-      AND MONTH(fecha) IN (?, ?)
-    GROUP BY cedula, MONTH(fecha)
-
-    UNION ALL
-
-    SELECT
-        cedula,
-        SUM(monto) AS monto,
-        MONTH(fecha) AS mes
-    FROM vt_usuarios_net
-    WHERE YEAR(fecha) = ?
-      AND MONTH(fecha) IN (?, ?)
-    GROUP BY cedula, MONTH(fecha)
-),
-agencias_clasificadas AS (
-    SELECT
-        'AGENCIA' AS Tipo_Conteo,
-        mes,
-        agencia_id AS identificador,
-        SUM(monto) AS total_ventas,
-        CASE
-            WHEN SUM(monto) >= ? THEN 'A'
-            WHEN SUM(monto) >= ? THEN 'B'
-            WHEN SUM(monto) >= ? THEN 'C'
-            ELSE 'D'
-        END AS Clasificacion
-    FROM ventas_agencia_unificadas
-    GROUP BY mes, agencia_id
-),
-conteo_agencias AS (
-    SELECT
-        Tipo_Conteo,
-        Clasificacion,
-        SUM(CASE WHEN mes = ? THEN 1 ELSE 0 END) AS Conteo_Mes_Inicio,
-        SUM(CASE WHEN mes = ? THEN 1 ELSE 0 END) AS Conteo_Mes_Fin
-    FROM agencias_clasificadas
-    WHERE Clasificacion IN ('A', 'B', 'C', 'D')
-    GROUP BY Tipo_Conteo, Clasificacion
-),
-cedulas_clasificadas AS (
-    SELECT
-        'AGENTE' AS Tipo_Conteo,
-        mes,
-        cedula AS identificador,
-        SUM(monto) AS total_ventas,
-        CASE
-            WHEN SUM(monto) >= ? THEN 'A'
-            WHEN SUM(monto) >= ? THEN 'B'
-            WHEN SUM(monto) >= ? THEN 'C'
-            ELSE 'D'
-        END AS Clasificacion
-    FROM ventas_cedula_unificadas
-    GROUP BY mes, cedula
-),
-conteo_cedulas AS (
-    SELECT
-        Tipo_Conteo,
-        Clasificacion,
-        SUM(CASE WHEN mes = ? THEN 1 ELSE 0 END) AS Conteo_Mes_Inicio,
-        SUM(CASE WHEN mes = ? THEN 1 ELSE 0 END) AS Conteo_Mes_Fin
-    FROM cedulas_clasificadas
-    WHERE Clasificacion IN ('A', 'B', 'C', 'D')
-    GROUP BY Tipo_Conteo, Clasificacion
-)
-SELECT
-    Tipo_Conteo,
-    Clasificacion,
-    Conteo_Mes_Inicio,
-    Conteo_Mes_Fin,
-    (Conteo_Mes_Fin - Conteo_Mes_Inicio) AS Crecimiento,
-    CASE
-        WHEN Conteo_Mes_Inicio = 0 THEN NULL
-        ELSE ROUND(((Conteo_Mes_Fin - Conteo_Mes_Inicio) / Conteo_Mes_Inicio) * 100, 2)
-    END AS Porc_Crecimiento
-FROM (
-    SELECT * FROM conteo_agencias
-    UNION ALL
-    SELECT * FROM conteo_cedulas
-) t
-ORDER BY
-    FIELD(Tipo_Conteo, 'AGENCIA', 'AGENTE'),
-    FIELD(Clasificacion, 'A', 'B', 'C', 'D')
-SQL;
-
-        $bindings = [
-            $anio,
-            $mesInicio,
-            $mesFin,
-            $anio,
-            $mesInicio,
-            $mesFin,
-            $anio,
-            $mesInicio,
-            $mesFin,
-            $anio,
-            $mesInicio,
-            $mesFin,
-            $configuracion['agencia']['A'],
-            $configuracion['agencia']['B'],
-            $configuracion['agencia']['C'],
-            $mesInicio,
-            $mesFin,
-            $configuracion['agente']['A'],
-            $configuracion['agente']['B'],
-            $configuracion['agente']['C'],
-            $mesInicio,
-            $mesFin,
-        ];
-
-        $resultados = collect(DB::select($sql, $bindings))
-            ->map(function ($row) {
-                return [
-                    'tipo_conteo' => (string) ($row->Tipo_Conteo ?? ''),
-                    'clasificacion' => (string) ($row->Clasificacion ?? ''),
-                    'conteo_mes_inicio' => (int) ($row->Conteo_Mes_Inicio ?? 0),
-                    'conteo_mes_fin' => (int) ($row->Conteo_Mes_Fin ?? 0),
-                    'crecimiento' => (int) ($row->Crecimiento ?? 0),
-                    'porc_crecimiento' => $row->Porc_Crecimiento !== null
-                        ? (float) $row->Porc_Crecimiento
-                        : null,
-                ];
-            })
-            ->values();
-
-        $sqlTransicionesAgencias = <<<'SQL'
-WITH ventas_agencia_unificadas AS (
-    SELECT
-        agencia_id,
-        SUM(monto) AS monto,
-        MONTH(fecha) AS mes
-    FROM vt_usuarios_bet
-    WHERE YEAR(fecha) = ?
-      AND MONTH(fecha) IN (?, ?)
-    GROUP BY agencia_id, MONTH(fecha)
-
-    UNION ALL
-
-    SELECT
-        agencia_id,
-        SUM(monto) AS monto,
-        MONTH(fecha) AS mes
-    FROM vt_usuarios_net
-    WHERE YEAR(fecha) = ?
-      AND MONTH(fecha) IN (?, ?)
-    GROUP BY agencia_id, MONTH(fecha)
-),
-agencias_clasificadas AS (
-    SELECT
-        agencia_id,
-        mes,
-        CASE
-            WHEN SUM(monto) >= ? THEN 'A'
-            WHEN SUM(monto) >= ? THEN 'B'
-            WHEN SUM(monto) >= ? THEN 'C'
-            ELSE 'D'
-        END AS categoria
-    FROM ventas_agencia_unificadas
-    GROUP BY agencia_id, mes
-),
-mes_inicio AS (
-    SELECT agencia_id, categoria AS categoria_inicio
-    FROM agencias_clasificadas
-    WHERE mes = ?
-),
-mes_fin AS (
-    SELECT agencia_id, categoria AS categoria_fin
-    FROM agencias_clasificadas
-    WHERE mes = ?
-)
-SELECT
-    t.categoria_inicio,
-    t.categoria_fin,
-    t.total
-FROM (
-    SELECT
-        i.categoria_inicio AS categoria_inicio,
-        COALESCE(f.categoria_fin, 'D') AS categoria_fin,
-        COUNT(*) AS total
-    FROM mes_inicio i
-    LEFT JOIN mes_fin f ON f.agencia_id = i.agencia_id
-    GROUP BY i.categoria_inicio, COALESCE(f.categoria_fin, 'D')
-) t
-ORDER BY
-    FIELD(t.categoria_inicio, 'A', 'B', 'C', 'D'),
-    FIELD(t.categoria_fin, 'A', 'B', 'C', 'D')
-SQL;
-
-        $bindingsTransicionesAgencias = [
-            $anio,
-            $mesInicio,
-            $mesFin,
-            $anio,
-            $mesInicio,
-            $mesFin,
-            $configuracion['agencia']['A'],
-            $configuracion['agencia']['B'],
-            $configuracion['agencia']['C'],
-            $mesInicio,
-            $mesFin,
-        ];
-
-        $transicionesAgencias = collect(DB::select($sqlTransicionesAgencias, $bindingsTransicionesAgencias))
-            ->map(function ($row) {
-                return [
-                    'categoria_inicio' => (string) ($row->categoria_inicio ?? ''),
-                    'categoria_fin' => (string) ($row->categoria_fin ?? ''),
-                    'total' => (int) ($row->total ?? 0),
-                ];
-            })
-            ->values();
-
-        $sqlDetalleTransicionesAgencias = <<<'SQL'
-WITH ventas_agencia_unificadas AS (
-    SELECT
-        agencia_id,
-        SUM(monto) AS monto,
-        MONTH(fecha) AS mes
-    FROM vt_usuarios_bet
-    WHERE YEAR(fecha) = ?
-      AND MONTH(fecha) IN (?, ?)
-    GROUP BY agencia_id, MONTH(fecha)
-
-    UNION ALL
-
-    SELECT
-        agencia_id,
-        SUM(monto) AS monto,
-        MONTH(fecha) AS mes
-    FROM vt_usuarios_net
-    WHERE YEAR(fecha) = ?
-      AND MONTH(fecha) IN (?, ?)
-    GROUP BY agencia_id, MONTH(fecha)
-),
-agencias_clasificadas AS (
-    SELECT
-        agencia_id,
-        mes,
-        CASE
-            WHEN SUM(monto) >= ? THEN 'A'
-            WHEN SUM(monto) >= ? THEN 'B'
-            WHEN SUM(monto) >= ? THEN 'C'
-            ELSE 'D'
-        END AS categoria
-    FROM ventas_agencia_unificadas
-    GROUP BY agencia_id, mes
-),
-mes_inicio AS (
-    SELECT agencia_id, categoria AS categoria_inicio
-    FROM agencias_clasificadas
-    WHERE mes = ?
-),
-mes_fin AS (
-    SELECT agencia_id, categoria AS categoria_fin
-    FROM agencias_clasificadas
-    WHERE mes = ?
-)
-SELECT
-    TRIM(CAST(i.agencia_id AS CHAR)) AS codigo_agencia,
-    COALESCE(NULLIF(TRIM(a.nombre_agencia), ''), CONCAT('Agencia ', TRIM(CAST(i.agencia_id AS CHAR)))) AS nombre_agencia,
-    i.categoria_inicio,
-    COALESCE(f.categoria_fin, 'D') AS categoria_fin
-FROM mes_inicio i
-LEFT JOIN mes_fin f ON f.agencia_id = i.agencia_id
-LEFT JOIN agencias a ON TRIM(CAST(a.terminal AS CHAR)) = TRIM(CAST(i.agencia_id AS CHAR))
-ORDER BY
-    FIELD(i.categoria_inicio, 'A', 'B', 'C', 'D'),
-    FIELD(COALESCE(f.categoria_fin, 'D'), 'A', 'B', 'C', 'D'),
-    nombre_agencia,
-    codigo_agencia
-SQL;
-
-        $detalleTransicionesAgencias = collect(DB::select($sqlDetalleTransicionesAgencias, $bindingsTransicionesAgencias))
-            ->map(function ($row) {
-                return [
-                    'codigo_agencia' => (string) ($row->codigo_agencia ?? ''),
-                    'nombre_agencia' => (string) ($row->nombre_agencia ?? ''),
-                    'categoria_inicio' => (string) ($row->categoria_inicio ?? ''),
-                    'categoria_fin' => (string) ($row->categoria_fin ?? ''),
-                ];
-            })
-            ->values();
+        $ventasPorAgenciaMes = $this->ventasAgenciasPorMes($anio, $mesInicio, $mesFin);
+        $clasificadas = $this->clasificarVentasAgencias($ventasPorAgenciaMes, $configuracion['agencia']);
+        $resultados = $this->resumenClasificacionesAgencias($clasificadas, $mesInicio, $mesFin);
+        $transicionesAgencias = $this->transicionesAgencias($clasificadas, $mesInicio, $mesFin);
+        $detalleTransicionesAgencias = $this->detalleTransicionesAgencias($clasificadas, $mesInicio, $mesFin);
 
         return response()->json([
             'data' => $resultados,
@@ -394,30 +90,261 @@ SQL;
         return $month;
     }
 
+    private function ventasAgenciasPorMes(int $anio, int $mesInicio, int $mesFin)
+    {
+        $inicioDesde = Carbon::create($anio, $mesInicio, 1)->startOfDay();
+        $inicioHasta = $inicioDesde->copy()->addMonthNoOverflow();
+        $finDesde = Carbon::create($anio, $mesFin, 1)->startOfDay();
+        $finHasta = $finDesde->copy()->addMonthNoOverflow();
+        $betIndexHint = $this->ventasAgenciaIndexHint(
+            'vt_usuarios_bet',
+            'idx_vt_bet_fecha_agencia_monto',
+            'idx_vt_bet_fecha_agencia'
+        );
+        $netIndexHint = $this->ventasAgenciaIndexHint(
+            'vt_usuarios_net',
+            'idx_vt_net_fecha_agencia_monto',
+            'idx_vt_net_fecha_agencia'
+        );
+
+        $sql = <<<SQL
+SELECT agencia_id, mes, SUM(monto) AS total_ventas
+FROM (
+    SELECT agencia_id, ? AS mes, SUM(monto) AS monto
+    FROM vt_usuarios_bet {$betIndexHint}
+    WHERE fecha >= ? AND fecha < ?
+    GROUP BY agencia_id
+
+    UNION ALL
+
+    SELECT agencia_id, ? AS mes, SUM(monto) AS monto
+    FROM vt_usuarios_net {$netIndexHint}
+    WHERE fecha >= ? AND fecha < ?
+    GROUP BY agencia_id
+
+    UNION ALL
+
+    SELECT agencia_id, ? AS mes, SUM(monto) AS monto
+    FROM vt_usuarios_bet {$betIndexHint}
+    WHERE fecha >= ? AND fecha < ?
+    GROUP BY agencia_id
+
+    UNION ALL
+
+    SELECT agencia_id, ? AS mes, SUM(monto) AS monto
+    FROM vt_usuarios_net {$netIndexHint}
+    WHERE fecha >= ? AND fecha < ?
+    GROUP BY agencia_id
+) ventas
+GROUP BY agencia_id, mes
+SQL;
+
+        return collect(DB::select($sql, [
+            $mesInicio,
+            $inicioDesde->toDateTimeString(),
+            $inicioHasta->toDateTimeString(),
+            $mesInicio,
+            $inicioDesde->toDateTimeString(),
+            $inicioHasta->toDateTimeString(),
+            $mesFin,
+            $finDesde->toDateTimeString(),
+            $finHasta->toDateTimeString(),
+            $mesFin,
+            $finDesde->toDateTimeString(),
+            $finHasta->toDateTimeString(),
+        ]));
+    }
+
+    private function clasificarVentasAgencias($ventasPorAgenciaMes, array $umbrales)
+    {
+        return $ventasPorAgenciaMes
+            ->map(function ($row) use ($umbrales) {
+                $total = (float) ($row->total_ventas ?? 0);
+
+                return [
+                    'agencia_id' => (string) ($row->agencia_id ?? ''),
+                    'mes' => (int) ($row->mes ?? 0),
+                    'total_ventas' => $total,
+                    'categoria' => $this->clasificarMontoAgencia($total, $umbrales),
+                ];
+            })
+            ->filter(fn($row) => $row['agencia_id'] !== '' && $row['mes'] > 0)
+            ->values();
+    }
+
+    private function resumenClasificacionesAgencias($clasificadas, int $mesInicio, int $mesFin)
+    {
+        $orden = $this->ordenCategoriasAgencia();
+
+        return collect($orden)
+            ->map(function (string $categoria) use ($clasificadas, $mesInicio, $mesFin) {
+                $inicio = $clasificadas
+                    ->where('mes', $mesInicio)
+                    ->where('categoria', $categoria)
+                    ->count();
+                $fin = $clasificadas
+                    ->where('mes', $mesFin)
+                    ->where('categoria', $categoria)
+                    ->count();
+                $crecimiento = $fin - $inicio;
+
+                return [
+                    'tipo_conteo' => 'AGENCIA',
+                    'clasificacion' => $categoria,
+                    'conteo_mes_inicio' => $inicio,
+                    'conteo_mes_fin' => $fin,
+                    'crecimiento' => $crecimiento,
+                    'porc_crecimiento' => $inicio > 0
+                        ? round(($crecimiento / $inicio) * 100, 2)
+                        : null,
+                ];
+            })
+            ->values();
+    }
+
+    private function transicionesAgencias($clasificadas, int $mesInicio, int $mesFin)
+    {
+        $porAgenciaMes = $clasificadas->groupBy('agencia_id');
+
+        return $porAgenciaMes
+            ->map(function ($items) use ($mesInicio, $mesFin) {
+                $inicio = $items->firstWhere('mes', $mesInicio);
+
+                if (!$inicio) {
+                    return null;
+                }
+
+                $fin = $items->firstWhere('mes', $mesFin);
+
+                return [
+                    'categoria_inicio' => $inicio['categoria'],
+                    'categoria_fin' => $fin['categoria'] ?? 'D',
+                ];
+            })
+            ->filter()
+            ->groupBy(fn($item) => $item['categoria_inicio'] . '|' . $item['categoria_fin'])
+            ->map(function ($items, $key) {
+                [$inicio, $fin] = explode('|', $key);
+
+                return [
+                    'categoria_inicio' => $inicio,
+                    'categoria_fin' => $fin,
+                    'total' => $items->count(),
+                ];
+            })
+            ->sortBy(function ($item) {
+                $orden = array_flip($this->ordenCategoriasAgencia());
+
+                return (($orden[$item['categoria_inicio']] ?? 99) * 10) + ($orden[$item['categoria_fin']] ?? 99);
+            })
+            ->values();
+    }
+
+    private function detalleTransicionesAgencias($clasificadas, int $mesInicio, int $mesFin)
+    {
+        $inicioPorAgencia = $clasificadas
+            ->where('mes', $mesInicio)
+            ->keyBy('agencia_id');
+        $finPorAgencia = $clasificadas
+            ->where('mes', $mesFin)
+            ->keyBy('agencia_id');
+        $agencias = DB::table('agencias')
+            ->whereIn('terminal', $inicioPorAgencia->keys()->all())
+            ->select('terminal', 'nombre_agencia')
+            ->get()
+            ->keyBy(fn($row) => (string) $row->terminal);
+        $orden = array_flip($this->ordenCategoriasAgencia());
+
+        return $inicioPorAgencia
+            ->map(function ($inicio, $agenciaId) use ($finPorAgencia, $agencias) {
+                $agencia = $agencias->get((string) $agenciaId);
+
+                return [
+                    'codigo_agencia' => (string) $agenciaId,
+                    'nombre_agencia' => $agencia && trim((string) $agencia->nombre_agencia) !== ''
+                        ? (string) $agencia->nombre_agencia
+                        : 'Agencia ' . $agenciaId,
+                    'categoria_inicio' => $inicio['categoria'],
+                    'categoria_fin' => $finPorAgencia->get($agenciaId)['categoria'] ?? 'D',
+                ];
+            })
+            ->sortBy(function ($item) use ($orden) {
+                return (($orden[$item['categoria_inicio']] ?? 99) * 10)
+                    + ($orden[$item['categoria_fin']] ?? 99)
+                    . '|' . $item['nombre_agencia']
+                    . '|' . $item['codigo_agencia'];
+            })
+            ->values();
+    }
+
+    private function ventasAgenciaIndexHint(string $table, string $coveringIndex, string $fallbackIndex): string
+    {
+        static $cache = [];
+
+        foreach ([$coveringIndex, $fallbackIndex] as $indexName) {
+            $cacheKey = strtolower($table . ':' . $indexName);
+
+            if (!array_key_exists($cacheKey, $cache)) {
+                $database = DB::getDatabaseName();
+                $row = DB::selectOne(
+                    'SELECT COUNT(*) AS total FROM information_schema.statistics WHERE table_schema = ? AND LOWER(table_name) = LOWER(?) AND LOWER(index_name) = LOWER(?)',
+                    [$database, $table, $indexName]
+                );
+                $cache[$cacheKey] = (int) ($row->total ?? 0) > 0;
+            }
+
+            if ($cache[$cacheKey]) {
+                return "FORCE INDEX (`{$indexName}`)";
+            }
+        }
+
+        return '';
+    }
+
+    private function clasificarMontoAgencia(float $monto, array $umbrales): string
+    {
+        foreach ($this->ordenCategoriasAgencia() as $categoria) {
+            if ($monto >= (float) ($umbrales[$categoria] ?? 0)) {
+                return $categoria;
+            }
+        }
+
+        return 'D';
+    }
+
+    private function ordenCategoriasAgencia(): array
+    {
+        return ['AAA', 'AA', 'A', 'B', 'C', 'D'];
+    }
+
     private function resolveThresholdConfig(Request $request): array
     {
         $default = $this->defaultThresholdConfig();
 
+        $agenciaAAA = $this->normalizeThreshold($request->query('agencia_aaa'), $default['agencia']['AAA']);
+        $agenciaAA = $this->normalizeThreshold($request->query('agencia_aa'), $default['agencia']['AA']);
         $agenciaA = $this->normalizeThreshold($request->query('agencia_a'), $default['agencia']['A']);
         $agenciaB = $this->normalizeThreshold($request->query('agencia_b'), $default['agencia']['B']);
         $agenciaC = $this->normalizeThreshold($request->query('agencia_c'), $default['agencia']['C']);
         $agenciaD = $this->normalizeThreshold($request->query('agencia_d'), $default['agencia']['D']);
 
-        $agenteA = $this->normalizeThreshold($request->query('agente_a'), $default['agente']['A']);
-        $agenteB = $this->normalizeThreshold($request->query('agente_b'), $default['agente']['B']);
-        $agenteC = $this->normalizeThreshold($request->query('agente_c'), $default['agente']['C']);
-        $agenteD = $this->normalizeThreshold($request->query('agente_d'), $default['agente']['D']);
-
-        $agenciaValida = $agenciaA > $agenciaB && $agenciaB > $agenciaC && $agenciaC > $agenciaD;
-        $agenteValida = $agenteA > $agenteB && $agenteB > $agenteC && $agenteC > $agenteD;
+        $agenciaValida = $agenciaAAA > $agenciaAA
+            && $agenciaAA > $agenciaA
+            && $agenciaA > $agenciaB
+            && $agenciaB > $agenciaC
+            && $agenciaC > $agenciaD;
 
         return [
             'agencia' => $agenciaValida
-                ? ['A' => $agenciaA, 'B' => $agenciaB, 'C' => $agenciaC, 'D' => $agenciaD]
+                ? [
+                    'AAA' => $agenciaAAA,
+                    'AA' => $agenciaAA,
+                    'A' => $agenciaA,
+                    'B' => $agenciaB,
+                    'C' => $agenciaC,
+                    'D' => $agenciaD,
+                ]
                 : $default['agencia'],
-            'agente' => $agenteValida
-                ? ['A' => $agenteA, 'B' => $agenteB, 'C' => $agenteC, 'D' => $agenteD]
-                : $default['agente'],
         ];
     }
 
@@ -435,14 +362,10 @@ SQL;
     {
         return [
             'agencia' => [
-                'A' => 150000,
-                'B' => 110000,
-                'C' => 60001,
-                'D' => 60000,
-            ],
-            'agente' => [
-                'A' => 150000,
-                'B' => 110000,
+                'AAA' => 500001,
+                'AA' => 300001,
+                'A' => 150001,
+                'B' => 100001,
                 'C' => 60001,
                 'D' => 60000,
             ],
