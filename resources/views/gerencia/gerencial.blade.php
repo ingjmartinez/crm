@@ -434,6 +434,58 @@
                 });
             }
 
+            function drawAgencyCategoryPanel({ x, y, w, h, categories }) {
+                doc.setFillColor(232, 240, 254);
+                doc.setDrawColor(41, 128, 185);
+                doc.roundedRect(x, y, w, h, 10, 10, 'FD');
+
+                doc.setFontSize(13);
+                doc.setTextColor(41, 128, 185);
+                doc.setFont('helvetica', 'bold');
+                doc.text('Agencia', x + 12, y + 20);
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9.5);
+                doc.setTextColor(90, 90, 90);
+                doc.text('Monto minimo para entrar en cada categoria:', x + 12, y + 36);
+
+                const gap = 6;
+                const cardX = x + 12;
+                const cardY = y + 46;
+                const cardW = (w - 24 - (gap * (categories.length - 1))) / categories.length;
+                const cardH = 34;
+                const colors = {
+                    AAA: [33, 37, 41],
+                    AA: [13, 202, 240],
+                    A: [13, 110, 253],
+                    B: [25, 135, 84],
+                    C: [255, 193, 7],
+                    D: [220, 53, 69],
+                };
+
+                categories.forEach(function (item, index) {
+                    const currentX = cardX + (index * (cardW + gap));
+                    const color = colors[item.cat] || [41, 128, 185];
+
+                    doc.setFillColor(255, 255, 255);
+                    doc.setDrawColor(...color);
+                    doc.roundedRect(currentX, cardY, cardW, cardH, 4, 4, 'FD');
+
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(10);
+                    doc.setTextColor(...color);
+                    doc.text(item.cat, currentX + 6, cardY + 12);
+
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(7.6);
+                    doc.setTextColor(40, 40, 40);
+                    const rangeLines = doc.splitTextToSize(item.range, cardW - 12);
+                    doc.text(rangeLines.slice(0, 2), currentX + 6, cardY + 24);
+                });
+
+                doc.setFont('helvetica', 'normal');
+            }
+
             function safeText(id, fallback = '-') {
                 return document.getElementById(id)?.textContent?.trim() || fallback;
             }
@@ -484,47 +536,22 @@
             // Tarjetas superiores
             // =========================
             const topCardW = contentWidth;
-            const agenciaBodyLines = [
-                {
-                    type: 'label',
-                    text: 'Monto minimo para entrar en cada categoria:',
-                    color: [100, 100, 100],
-                    fontSize: 10,
-                    gapAfter: 7
-                },
-                {
-                    text: `${badgeAgenciaAAA?.textContent || ''}    ${badgeAgenciaAA?.textContent || ''}`,
-                    color: [0, 0, 0],
-                    fontSize: 11,
-                    gapAfter: 6
-                },
-                {
-                    text: `${badgeAgenciaA?.textContent || ''}    ${badgeAgenciaB?.textContent || ''}`,
-                    color: [0, 0, 0],
-                    fontSize: 11,
-                    gapAfter: 6
-                },
-                {
-                    text: `${badgeAgenciaC?.textContent || ''}    ${badgeAgenciaD?.textContent || ''}`,
-                    color: [0, 0, 0],
-                    fontSize: 11,
-                    gapAfter: 0
-                }
-            ];
-            const topCardH = Math.min(100, getCardHeight(topCardW, agenciaBodyLines));
+            const agenciaCategorias = ['AAA', 'AA', 'A', 'B', 'C', 'D'].map(function (cat) {
+                return {
+                    cat,
+                    range: getRangoCategoria(cat)
+                };
+            });
+            const topCardH = 92;
 
             ensureVerticalSpace(topCardH + 28);
 
-            drawCard({
+            drawAgencyCategoryPanel({
                 x: margin,
                 y,
                 w: topCardW,
                 h: topCardH,
-                title: 'Agencia',
-                titleColor: [41, 128, 185],
-                fillColor: [232, 240, 254],
-                borderColor: [41, 128, 185],
-                bodyLines: agenciaBodyLines
+                categories: agenciaCategorias
             });
 
             y += topCardH + 28;
