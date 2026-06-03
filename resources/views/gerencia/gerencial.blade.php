@@ -759,6 +759,26 @@
                         4: { cellWidth: 80, halign: 'right' },
                         5: { cellWidth: 95, halign: 'right' }
                     },
+                    didParseCell: function (data) {
+                        if (data.section !== 'body' || ![4, 5].includes(data.column.index)) {
+                            return;
+                        }
+
+                        const rawValue = String(data.cell.raw || '')
+                            .replace('%', '')
+                            .replace(/,/g, '')
+                            .trim();
+                        const value = Number(rawValue);
+
+                        if (Number.isNaN(value)) {
+                            return;
+                        }
+
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.textColor = value < 0
+                            ? [220, 53, 69]
+                            : [25, 135, 84];
+                    },
                     didDrawPage: function () {
                         doc.setFontSize(10);
                         doc.setTextColor(120, 120, 120);
