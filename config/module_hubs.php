@@ -393,6 +393,16 @@ return [
                 'permission' => 'servicios_generales.view',
                 'activo' => true,
             ],
+            [
+                'nombre' => 'Mantenimiento de Equipos',
+                'descripcion' => 'Asigna equipos por terminal y controla vencimientos de mantenimiento preventivo.',
+                'url' => '/servicios-generales/mantenimiento-equipos',
+                'icono' => 'ri-computer-line',
+                'categoria' => 'Mantenimiento',
+                'tags' => ['servicios generales', 'mantenimiento', 'equipos', 'terminales'],
+                'permission' => 'servicios_generales.view',
+                'activo' => true,
+            ],
         ],
     ],
 

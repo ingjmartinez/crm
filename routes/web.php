@@ -42,6 +42,7 @@ use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\RutaController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SuperAdminSesionController;
+use App\Http\Controllers\ServicioGeneralMantenimientoEquipoController;
 use App\Http\Controllers\ServicioGeneralRequerimientoController;
 use App\Http\Controllers\TareaController;
 use App\Http\Controllers\TecnologiaSolicitudController;
@@ -513,6 +514,20 @@ Route::middleware('auth')->group(function () {
             Route::post('/requerimientos/{requerimiento}/finalizar', [ServicioGeneralRequerimientoController::class, 'finalizar'])
                 ->middleware('role_or_permission:servicios_generales|servicios_generales.close')
                 ->name('requerimientos.finalizar');
+            Route::get('/mantenimiento-equipos', [ServicioGeneralMantenimientoEquipoController::class, 'index'])->name('mantenimiento-equipos.index');
+            Route::get('/mantenimiento-equipos/list', [ServicioGeneralMantenimientoEquipoController::class, 'list'])->name('mantenimiento-equipos.list');
+            Route::post('/mantenimiento-equipos', [ServicioGeneralMantenimientoEquipoController::class, 'store'])
+                ->middleware('role_or_permission:servicios_generales|servicios_generales.create')
+                ->name('mantenimiento-equipos.store');
+            Route::put('/mantenimiento-equipos/{mantenimiento}', [ServicioGeneralMantenimientoEquipoController::class, 'update'])
+                ->middleware('role_or_permission:servicios_generales|servicios_generales.manage')
+                ->name('mantenimiento-equipos.update');
+            Route::post('/mantenimiento-equipos/{mantenimiento}/realizar', [ServicioGeneralMantenimientoEquipoController::class, 'realizar'])
+                ->middleware('role_or_permission:servicios_generales|servicios_generales.manage')
+                ->name('mantenimiento-equipos.realizar');
+            Route::delete('/mantenimiento-equipos/{mantenimiento}', [ServicioGeneralMantenimientoEquipoController::class, 'destroy'])
+                ->middleware('role_or_permission:servicios_generales|servicios_generales.manage')
+                ->name('mantenimiento-equipos.destroy');
         });
 
     Route::get('/generar-lotobet', fn() => view('lotobet.index'));

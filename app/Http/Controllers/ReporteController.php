@@ -1080,8 +1080,17 @@ class ReporteController extends Controller
         // Restaurar el strict mode
         DB::statement("SET SESSION sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
 
+        $filtrosSeguimiento = [
+            'En gestion' => 'en_gestion',
+            'Finalizado' => 'finalizado',
+        ];
+        $filtrarPorSeguimiento = array_key_exists((string) $estatus, $filtrosSeguimiento);
+
         // Filtrar resultados
-        $resultados = array_filter($resultados, function($item) use ($estatus) {
+        $resultados = array_filter($resultados, function($item) use ($estatus, $filtrarPorSeguimiento) {
+            if ($filtrarPorSeguimiento) {
+                return $item->Estatus !== 'Activo';
+            }
             // Si se seleccionó un estatus específico, filtrar por ese
             if ($estatus) {
                 if ($estatus === 'No activo') {
@@ -1095,6 +1104,13 @@ class ReporteController extends Controller
         
         $resultados = array_values($resultados); // Reindexar el array
         $this->anexarSeguimientoCruceUsuarios($resultados);
+
+        if ($filtrarPorSeguimiento) {
+            $estadoSeguimiento = $filtrosSeguimiento[$estatus];
+            $resultados = array_values(array_filter($resultados, function ($item) use ($estadoSeguimiento) {
+                return $item->Seguimiento_Estado === $estadoSeguimiento;
+            }));
+        }
 
         return response()->json([
             'resultados' => $resultados,

@@ -44,6 +44,8 @@
                                             <option value="">Todos</option>
                                             <option value="No activo">No activo</option>
                                             <option value="No registrado">No registrado</option>
+                                            <option value="En gestion">En gestion</option>
+                                            <option value="Finalizado">Finalizado</option>
                                         </select>
                                     </div>
                                     <div class="col-md-2">
@@ -467,6 +469,13 @@
                 ],
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
+                },
+                rowCallback: function(row, data) {
+                    $(row).removeClass('table-success');
+
+                    if (data.Seguimiento_Estado === 'finalizado') {
+                        $(row).addClass('table-success');
+                    }
                 },
                 order: [[6, 'desc']]
             });
