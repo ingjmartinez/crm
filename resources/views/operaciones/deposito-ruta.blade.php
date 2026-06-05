@@ -20,6 +20,54 @@
                 </div>
 
                 <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body d-flex align-items-center justify-content-between">
+                                <div>
+                                    <p class="text-muted mb-1">Estatus pendiente</p>
+                                    <h3 class="mb-0" id="cardPendienteDepositoRuta">0</h3>
+                                </div>
+                                <div class="avatar-sm">
+                                    <span class="avatar-title rounded bg-warning-subtle text-warning fs-3">
+                                        <i class="ri-time-line"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body d-flex align-items-center justify-content-between">
+                                <div>
+                                    <p class="text-muted mb-1">Estatus recibido</p>
+                                    <h3 class="mb-0" id="cardRecibidoDepositoRuta">0</h3>
+                                </div>
+                                <div class="avatar-sm">
+                                    <span class="avatar-title rounded bg-success-subtle text-success fs-3">
+                                        <i class="ri-checkbox-circle-line"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body d-flex align-items-center justify-content-between">
+                                <div>
+                                    <p class="text-muted mb-1">Monto total mostrado</p>
+                                    <h3 class="mb-0" id="cardMontoDepositoRuta">0.00</h3>
+                                </div>
+                                <div class="avatar-sm">
+                                    <span class="avatar-title rounded bg-primary-subtle text-primary fs-3">
+                                        <i class="ri-money-dollar-circle-line"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -30,15 +78,33 @@
                                 <span class="badge bg-soft-primary text-primary">WhatsApp</span>
                             </div>
                             <div class="card-body">
+                                <div class="row g-2 align-items-end mb-3">
+                                    <div class="col-md-4 col-lg-3">
+                                        <label for="filtroFechaDepositoRuta" class="form-label">Filtrar por fecha</label>
+                                        <input type="date" id="filtroFechaDepositoRuta" class="form-control">
+                                    </div>
+                                    <div class="col-md-auto">
+                                        <button type="button" class="btn btn-primary" id="btnFiltrarFechaDepositoRuta">
+                                            <i class="ri-filter-3-line align-bottom me-1"></i>Filtrar
+                                        </button>
+                                    </div>
+                                    <div class="col-md-auto">
+                                        <button type="button" class="btn btn-outline-secondary" id="btnLimpiarFechaDepositoRuta">
+                                            <i class="ri-eraser-line align-bottom me-1"></i>Limpiar
+                                        </button>
+                                    </div>
+                                </div>
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-striped align-middle w-100" id="tablaDepositoRuta"
-                                        data-url="{{ route('operaciones.deposito-ruta.data') }}">
+                                        data-url="{{ route('operaciones.deposito-ruta.data') }}"
+                                        data-estado-url-template="{{ route('operaciones.deposito-ruta.estado', ['deposito' => '__ID__']) }}">
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Fecha</th>
                                                 <th>Telefono</th>
                                                 <th>Banco</th>
                                                 <th>Ruta</th>
+                                                <th class="text-end">Monto depositado</th>
                                                 <th>Estado</th>
                                                 <th>Imagen</th>
                                             </tr>
@@ -76,11 +142,19 @@
         document.addEventListener('DOMContentLoaded', function () {
             const tabla = $('#tablaDepositoRuta');
             const dataUrl = tabla.data('url');
+            const estadoUrlTemplate = tabla.data('estado-url-template');
+            const filtroFecha = document.getElementById('filtroFechaDepositoRuta');
+            const btnFiltrarFecha = document.getElementById('btnFiltrarFechaDepositoRuta');
+            const btnLimpiarFecha = document.getElementById('btnLimpiarFechaDepositoRuta');
             const modalImagen = new bootstrap.Modal(document.getElementById('modalImagenDepositoRuta'));
+            const today = new Date().toISOString().slice(0, 10);
+            let autoRefreshTimer = null;
 
             if (!tabla.length || !dataUrl) {
                 return;
             }
+
+            filtroFecha.value = filtroFecha.value || today;
 
             function escapeJs(value) {
                 return String(value ?? '')
@@ -97,10 +171,42 @@
                 modalImagen.show();
             };
 
-            tabla.DataTable({
+            function actualizarTarjetas(resumen) {
+                document.getElementById('cardPendienteDepositoRuta').textContent = Number(resumen?.pendiente || 0).toLocaleString('en-US');
+                document.getElementById('cardRecibidoDepositoRuta').textContent = Number(resumen?.recibido || 0).toLocaleString('en-US');
+                document.getElementById('cardMontoDepositoRuta').textContent = Number(resumen?.monto_total || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+
+            function badgeEstado(estado, id) {
+                const normalized = String(estado || 'Pendiente').toLowerCase();
+                const esRecibido = normalized === 'recibido';
+                const nextEstado = esRecibido ? 'pendiente' : 'recibido';
+                const btnClass = esRecibido ? 'btn-success' : 'btn-warning';
+                const label = esRecibido ? 'Recibido' : 'Pendiente';
+
+                return `<button type="button" class="btn btn-sm ${btnClass} btn-cambiar-estado"
+                    data-id="${id}" data-next-estado="${nextEstado}">
+                    ${label}
+                </button>`;
+            }
+
+            const dataTable = tabla.DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: dataUrl,
+                ajax: {
+                    url: dataUrl,
+                    data: function (params) {
+                        params.fecha = filtroFecha.value || '';
+                    },
+                    dataSrc: function (json) {
+                        actualizarTarjetas(json.resumen || {});
+
+                        return json.data || [];
+                    }
+                },
                 pageLength: 25,
                 order: [[0, 'desc']],
                 columns: [
@@ -109,10 +215,18 @@
                     { data: 'banco', name: 'banco' },
                     { data: 'ruta_nombre', name: 'ruta_nombre' },
                     {
+                        data: 'monto_depositado',
+                        name: 'monto_depositado',
+                        className: 'text-end',
+                        render: function (data) {
+                            return `<span class="fw-semibold">${data || '0.00'}</span>`;
+                        }
+                    },
+                    {
                         data: 'estado',
                         name: 'estado',
-                        render: function (data) {
-                            return `<span class="badge bg-warning-subtle text-warning">${data || 'Pendiente'}</span>`;
+                        render: function (data, type, row) {
+                            return badgeEstado(data, row.id);
                         }
                     },
                     {
@@ -134,6 +248,75 @@
                 ],
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json'
+                }
+            });
+
+            btnFiltrarFecha.addEventListener('click', function () {
+                dataTable.ajax.reload();
+            });
+
+            filtroFecha.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    dataTable.ajax.reload();
+                }
+            });
+
+            btnLimpiarFecha.addEventListener('click', function () {
+                filtroFecha.value = today;
+                dataTable.ajax.reload();
+            });
+
+            tabla.on('click', '.btn-cambiar-estado', function () {
+                const button = this;
+                const id = button.dataset.id;
+                const nextEstado = button.dataset.nextEstado;
+
+                if (!id || !nextEstado || !estadoUrlTemplate) {
+                    return;
+                }
+
+                button.disabled = true;
+
+                fetch(String(estadoUrlTemplate).replace('__ID__', id), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ estado: nextEstado })
+                })
+                    .then(async function (response) {
+                        const payload = await response.json().catch(() => ({}));
+
+                        if (!response.ok) {
+                            throw new Error(payload.message || 'No se pudo actualizar el estado.');
+                        }
+
+                        dataTable.ajax.reload(null, false);
+                    })
+                    .catch(function (error) {
+                        if (window.Swal) {
+                            Swal.fire('Error', error.message || 'No se pudo actualizar el estado.', 'error');
+                        } else {
+                            alert(error.message || 'No se pudo actualizar el estado.');
+                        }
+
+                        button.disabled = false;
+                    });
+            });
+
+            autoRefreshTimer = setInterval(function () {
+                if (document.hidden || document.body.classList.contains('modal-open')) {
+                    return;
+                }
+
+                dataTable.ajax.reload(null, false);
+            }, 15000);
+
+            window.addEventListener('beforeunload', function () {
+                if (autoRefreshTimer) {
+                    clearInterval(autoRefreshTimer);
                 }
             });
         });

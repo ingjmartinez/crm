@@ -14,6 +14,7 @@ return new class extends Migration
             $table->string('whatsapp_phone', 30)->index();
             $table->string('banco', 80)->index();
             $table->string('ruta_nombre', 150)->nullable()->index();
+            $table->decimal('monto_depositado', 14, 2)->default(0);
             $table->text('comprobante_url');
             $table->string('comprobante_message_id', 120)->nullable()->index();
             $table->string('estado', 30)->default('pendiente')->index();

@@ -415,6 +415,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/operaciones', [ModuleHubController::class, 'operaciones'])->name('operaciones.index');
     Route::get('/operaciones/deposito-ruta', [OperacionDepositoRutaController::class, 'index'])->name('operaciones.deposito-ruta');
     Route::get('/operaciones/deposito-ruta/data', [OperacionDepositoRutaController::class, 'data'])->name('operaciones.deposito-ruta.data');
+    Route::post('/operaciones/deposito-ruta/{deposito}/estado', [OperacionDepositoRutaController::class, 'updateEstado'])->name('operaciones.deposito-ruta.estado');
     Route::get('/operaciones/panel', fn() => view('operaciones.panel'))->name('operaciones.panel');
     Route::get('/operaciones/gestion', fn() => view('operaciones.gestion'))->name('operaciones.gestion');
     Route::get('/operaciones/rutas-consolidadas', [OperacionesRutasConsolidadasController::class, 'index'])->name('operaciones.rutas-consolidadas');

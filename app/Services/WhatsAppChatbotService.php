@@ -26,6 +26,7 @@ class WhatsAppChatbotService
     private const STEP_SG_IMAGEN = 'servicios_generales_imagen';
     private const STEP_OPERADOR_BANCO = 'operador_banco';
     private const STEP_OPERADOR_IMAGEN = 'operador_imagen';
+    private const STEP_OPERADOR_MONTO = 'operador_monto';
     private const STEP_OPERADOR_RUTA = 'operador_ruta';
 
     public function handleIncoming(string $phone, string $message, ?string $account = null, array $incoming = []): array
@@ -123,6 +124,7 @@ class WhatsAppChatbotService
             self::STEP_SG_IMAGEN => $this->registrarRequerimientoServiciosGenerales($session, $incoming),
             self::STEP_OPERADOR_BANCO => $this->handleOperadorBanco($session, $message),
             self::STEP_OPERADOR_IMAGEN => $this->registrarDepositoRuta($session, $incoming),
+            self::STEP_OPERADOR_MONTO => $this->handleOperadorMonto($session, $message),
             self::STEP_OPERADOR_RUTA => $this->handleOperadorRuta($session, $message),
             default => $this->resetToInicio($session),
         };
@@ -365,13 +367,30 @@ class WhatsAppChatbotService
             return 'Necesito que envies la imagen del deposito bancario para continuar.';
         }
 
-        $session->step = self::STEP_OPERADOR_RUTA;
+        $session->step = self::STEP_OPERADOR_MONTO;
         $session->context = array_merge($context, [
             'comprobante_url' => $attachmentUrl,
             'comprobante_message_id' => $attachmentMessageId,
         ]);
 
-        return 'Imagen recibida correctamente. Ahora indica el nombre de la ruta del deposito.';
+        return 'Imagen recibida correctamente. Ahora digite el monto del deposito.';
+    }
+
+    private function handleOperadorMonto(ChatbotSession $session, string $message): string
+    {
+        $context = is_array($session->context) ? $session->context : [];
+        $monto = $this->parseMontoDeposito($message);
+
+        if ($monto === null || $monto <= 0) {
+            return 'No pude leer el monto del deposito. Envia solo el monto, ejemplo: 1500.00';
+        }
+
+        $session->step = self::STEP_OPERADOR_RUTA;
+        $session->context = array_merge($context, [
+            'monto_depositado' => $monto,
+        ]);
+
+        return 'Monto recibido correctamente. Ahora indica el nombre de la ruta del deposito.';
     }
 
     private function handleOperadorRuta(ChatbotSession $session, string $message): string
@@ -380,9 +399,10 @@ class WhatsAppChatbotService
         $banco = trim((string) ($context['banco'] ?? ''));
         $attachmentUrl = $this->normalizeAttachmentUrl($context['comprobante_url'] ?? null);
         $attachmentMessageId = $this->normalizeMessageId($context['comprobante_message_id'] ?? null);
+        $montoDepositado = is_numeric($context['monto_depositado'] ?? null) ? (float) $context['monto_depositado'] : 0.0;
         $rutaNombre = trim($message);
 
-        if ($banco === '' || $attachmentUrl === null) {
+        if ($banco === '' || $attachmentUrl === null || $montoDepositado <= 0) {
             $session->step = 'inicio';
             $session->context = null;
 
@@ -399,6 +419,7 @@ class WhatsAppChatbotService
                 'whatsapp_phone' => $session->phone,
                 'banco' => $banco,
                 'ruta_nombre' => $rutaNombre,
+                'monto_depositado' => $montoDepositado,
                 'comprobante_url' => $attachmentUrl,
                 'comprobante_message_id' => $attachmentMessageId,
                 'estado' => 'pendiente',
@@ -409,6 +430,7 @@ class WhatsAppChatbotService
                 'account' => $session->account,
                 'banco' => $banco,
                 'ruta_nombre' => $rutaNombre,
+                'monto_depositado' => $montoDepositado,
                 'attachment_url' => $attachmentUrl,
                 'message' => $e->getMessage(),
             ]);
@@ -422,7 +444,9 @@ class WhatsAppChatbotService
         $session->step = 'inicio';
         $session->context = null;
 
-        return "Deposito recibido correctamente.\n\nBanco: {$banco}\nRuta: {$rutaNombre}\nImagen: Recibida\nEstado: Pendiente";
+        $montoFormateado = number_format($montoDepositado, 2);
+
+        return "Deposito recibido correctamente.\n\nBanco: {$banco}\nRuta: {$rutaNombre}\nMonto: {$montoFormateado}\nImagen: Recibida\nEstado: Pendiente";
     }
 
     private function handleConsultaHorarioCedula(ChatbotSession $session, string $message): string
@@ -803,6 +827,37 @@ class WhatsAppChatbotService
         $messageId = trim((string) $messageId);
 
         return $messageId !== '' ? $messageId : null;
+    }
+
+    private function parseMontoDeposito(string $value): ?float
+    {
+        $value = trim(preg_replace('/[^\d,.\-]/', '', $value) ?? '');
+
+        if ($value === '' || $value === '-' || str_starts_with($value, '-')) {
+            return null;
+        }
+
+        $lastComma = strrpos($value, ',');
+        $lastDot = strrpos($value, '.');
+
+        if ($lastComma !== false && $lastDot !== false) {
+            $decimalSeparator = $lastComma > $lastDot ? ',' : '.';
+            $thousandSeparator = $decimalSeparator === ',' ? '.' : ',';
+            $value = str_replace($thousandSeparator, '', $value);
+            $value = str_replace($decimalSeparator, '.', $value);
+        } elseif ($lastComma !== false) {
+            $decimals = strlen($value) - $lastComma - 1;
+            $value = $decimals > 0 && $decimals <= 2
+                ? str_replace(',', '.', $value)
+                : str_replace(',', '', $value);
+        } elseif ($lastDot !== false) {
+            $decimals = strlen($value) - $lastDot - 1;
+            if ($decimals > 2) {
+                $value = str_replace('.', '', $value);
+            }
+        }
+
+        return is_numeric($value) ? round((float) $value, 2) : null;
     }
 
     private function extractIncomingLocation(array $incoming): ?array
