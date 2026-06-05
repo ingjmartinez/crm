@@ -473,11 +473,16 @@
             document.getElementById('badgeEmpresaActual').textContent = empresaTexto(obtenerEmpresaActual());
         }
 
-        function cargarDashboard() {
+        function cargarDashboard(refresh = false) {
             const empresa = obtenerEmpresaActual();
             actualizarBadgeEmpresa();
+            const params = new URLSearchParams({ empresa });
 
-            fetch('/empleados/dashboard?empresa=' + encodeURIComponent(empresa), {
+            if (refresh) {
+                params.set('refresh', '1');
+            }
+
+            return fetch('/empleados/dashboard?' + params.toString(), {
                 headers: {
                     'Accept': 'application/json',
                 },
@@ -587,8 +592,7 @@
                         text: "Sincronización completada con éxito",
                         icon: "success"
                     });
-                    cargarDashboard();
-                    list();
+                    cargarDashboard(true).finally(list);
                 })
                 .catch(error => {
                     textSwal.innerHTML = "Sincronizando: 100%";
@@ -602,18 +606,15 @@
         });
 
         document.getElementById('empresa').addEventListener('change', function () {
-            cargarDashboard();
-            list();
+            cargarDashboard().finally(list);
         });
 
         document.getElementById('btnRefrescarDashboard').addEventListener('click', function () {
-            cargarDashboard();
-            list();
+            cargarDashboard(true).finally(list);
         });
 
         document.addEventListener('DOMContentLoaded', function () {
-            cargarDashboard();
-            list();
+            cargarDashboard().finally(list);
         });
     </script>
 @endsection

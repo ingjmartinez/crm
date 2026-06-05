@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Empleado;
 use Illuminate\Http\Request;
 use App\Models\VwUsuariosUnion;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -46,81 +47,94 @@ class EmpleadoController extends Controller
     public function dashboard(Request $request)
     {
         $empresa = trim((string) $request->query('empresa', ''));
+        $refresh = $request->boolean('refresh');
+
+        if ($empresa !== '' && !in_array($empresa, ['168', '169'], true)) {
+            return response()->json(['error' => 'Empresa invalida.'], 422);
+        }
+
+        $cacheKey = 'empleados.dashboard.' . ($empresa ?: 'todas');
+
+        if ($refresh) {
+            Cache::forget($cacheKey);
+        }
+
+        return response()->json(Cache::remember($cacheKey, now()->addMinutes(10), function () use ($empresa) {
+            return $this->buildDashboardEmpleados($empresa);
+        }));
+    }
+
+    private function buildDashboardEmpleados(string $empresa): array
+    {
+        $activeSql = "fechasalida IS NULL OR TRIM(CAST(fechasalida AS CHAR)) = ''";
+        $salarySql = "COALESCE(CAST(REPLACE(CAST(salariomensual AS CHAR), ',', '') AS DECIMAL(18, 2)), 0)";
 
         $query = Empleado::query();
         if (in_array($empresa, ['168', '169'], true)) {
             $query->where('companyid', $empresa);
         }
 
-        $empleados = $query->get([
-            'companyid',
-            'empleadoid',
-            'nombres',
-            'apellidos',
-            'fechaingreso',
-            'fechasalida',
-            'ciudad',
-            'salariomensual',
-        ]);
+        $resumen = (clone $query)
+            ->selectRaw('COUNT(*) AS total_empleados')
+            ->selectRaw("SUM(CASE WHEN {$activeSql} THEN 1 ELSE 0 END) AS activos")
+            ->selectRaw("SUM(CASE WHEN NOT ({$activeSql}) THEN 1 ELSE 0 END) AS inactivos")
+            ->selectRaw("SUM({$salarySql}) AS salario_mensual_total")
+            ->selectRaw("SUM(CASE WHEN {$activeSql} THEN {$salarySql} ELSE 0 END) AS salario_mensual_activos")
+            ->selectRaw("SUM(CASE WHEN NOT ({$activeSql}) THEN {$salarySql} ELSE 0 END) AS salario_mensual_inactivos")
+            ->selectRaw("AVG({$salarySql}) AS salario_promedio")
+            ->first();
 
-        $normalizados = $empleados->map(function ($empleado) {
-            $fechaSalida = trim((string) ($empleado->fechasalida ?? ''));
-            $salario = is_numeric($empleado->salariomensual) ? (float) $empleado->salariomensual : 0.0;
-            $ciudad = trim((string) ($empleado->ciudad ?? '')) ?: 'Sin ciudad';
-
-            return [
-                'companyid' => (string) $empleado->companyid,
-                'company' => (string) $empleado->companyid === '168' ? 'Grupo Joselito' : 'Negosur',
-                'activo' => $fechaSalida === '',
-                'ciudad' => $ciudad,
-                'salario' => $salario,
-            ];
-        });
-
-        $activos = $normalizados->where('activo', true);
-        $inactivos = $normalizados->where('activo', false);
-
-        $salarioPorCiudad = $normalizados
-            ->groupBy('ciudad')
-            ->map(function ($items, $ciudad) {
-                $activosCiudad = $items->where('activo', true);
-
+        $salarioPorCiudad = (clone $query)
+            ->selectRaw("COALESCE(NULLIF(TRIM(CAST(ciudad AS CHAR)), ''), 'Sin ciudad') AS ciudad")
+            ->selectRaw("ROUND(SUM(CASE WHEN {$activeSql} THEN {$salarySql} ELSE 0 END), 2) AS salario")
+            ->selectRaw('COUNT(*) AS empleados')
+            ->selectRaw("SUM(CASE WHEN {$activeSql} THEN 1 ELSE 0 END) AS activos")
+            ->selectRaw("SUM(CASE WHEN NOT ({$activeSql}) THEN 1 ELSE 0 END) AS inactivos")
+            ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(CAST(ciudad AS CHAR)), ''), 'Sin ciudad')"))
+            ->orderByDesc('salario')
+            ->limit(12)
+            ->get()
+            ->map(function ($row) {
                 return [
-                    'ciudad' => $ciudad,
-                    'salario' => round($activosCiudad->sum('salario'), 2),
-                    'empleados' => $items->count(),
-                    'activos' => $activosCiudad->count(),
-                    'inactivos' => $items->where('activo', false)->count(),
-                ];
-            })
-            ->sortByDesc('salario')
-            ->values();
-
-        $salarioPorEmpresa = $activos
-            ->groupBy('company')
-            ->map(function ($items, $empresaNombre) {
-                return [
-                    'empresa' => $empresaNombre,
-                    'salario' => round($items->sum('salario'), 2),
-                    'empleados' => $items->count(),
+                    'ciudad' => (string) $row->ciudad,
+                    'salario' => round((float) $row->salario, 2),
+                    'empleados' => (int) $row->empleados,
+                    'activos' => (int) $row->activos,
+                    'inactivos' => (int) $row->inactivos,
                 ];
             })
             ->values();
 
-        return response()->json([
+        $salarioPorEmpresa = (clone $query)
+            ->whereRaw($activeSql)
+            ->selectRaw("CASE WHEN companyid = '168' THEN 'Grupo Joselito' ELSE 'Negosur' END AS empresa")
+            ->selectRaw("ROUND(SUM({$salarySql}), 2) AS salario")
+            ->selectRaw('COUNT(*) AS empleados')
+            ->groupBy(DB::raw("CASE WHEN companyid = '168' THEN 'Grupo Joselito' ELSE 'Negosur' END"))
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'empresa' => (string) $row->empresa,
+                    'salario' => round((float) $row->salario, 2),
+                    'empleados' => (int) $row->empleados,
+                ];
+            })
+            ->values();
+
+        return [
             'resumen' => [
-                'total_empleados' => $normalizados->count(),
-                'activos' => $activos->count(),
-                'inactivos' => $inactivos->count(),
-                'salario_mensual_total' => round($normalizados->sum('salario'), 2),
-                'salario_mensual_activos' => round($activos->sum('salario'), 2),
-                'salario_mensual_inactivos' => round($inactivos->sum('salario'), 2),
-                'salario_promedio' => round($normalizados->avg('salario') ?: 0, 2),
+                'total_empleados' => (int) ($resumen->total_empleados ?? 0),
+                'activos' => (int) ($resumen->activos ?? 0),
+                'inactivos' => (int) ($resumen->inactivos ?? 0),
+                'salario_mensual_total' => round((float) ($resumen->salario_mensual_total ?? 0), 2),
+                'salario_mensual_activos' => round((float) ($resumen->salario_mensual_activos ?? 0), 2),
+                'salario_mensual_inactivos' => round((float) ($resumen->salario_mensual_inactivos ?? 0), 2),
+                'salario_promedio' => round((float) ($resumen->salario_promedio ?? 0), 2),
             ],
             'charts' => [
                 'estado' => [
                     'labels' => ['Activos', 'Inactivos'],
-                    'series' => [$activos->count(), $inactivos->count()],
+                    'series' => [(int) ($resumen->activos ?? 0), (int) ($resumen->inactivos ?? 0)],
                 ],
                 'salario_ciudad' => [
                     'labels' => $salarioPorCiudad->pluck('ciudad')->take(10)->values(),
@@ -136,7 +150,10 @@ class EmpleadoController extends Controller
                 ],
             ],
             'detalle_ciudad' => $salarioPorCiudad->take(12)->values(),
-        ]);
+            'meta' => [
+                'cached_until' => now()->addMinutes(10)->toDateTimeString(),
+            ],
+        ];
     }
 
     public function sincronizar(Request $request)
@@ -233,12 +250,21 @@ class EmpleadoController extends Controller
             ]);
         }
 
+        $this->clearDashboardEmpleadosCache();
+
         return response()->json([
             'message' => 'Datos sincronizados correctamente',
             'total' => count($empleados),
             'procesados' => $procesados,
             'omitidos' => $omitidos,
         ]);
+    }
+
+    private function clearDashboardEmpleadosCache(): void
+    {
+        foreach (['todas', '168', '169'] as $empresa) {
+            Cache::forget('empleados.dashboard.' . $empresa);
+        }
     }
 
     private function mapearEmpleadoApi(array $e, string $empresa): array
