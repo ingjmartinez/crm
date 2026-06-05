@@ -27,6 +27,7 @@ use App\Http\Controllers\MetaIncentivoController;
 use App\Http\Controllers\ModuleHubController;
 use App\Http\Controllers\NovedadHorarioController;
 use App\Http\Controllers\OperacionesReporteDiarioController;
+use App\Http\Controllers\OperacionesRutasConsolidadasController;
 use App\Http\Controllers\OperadorRutaController;
 use App\Http\Controllers\PagoAOtraEmpresaController;
 use App\Http\Controllers\PagoMismaEmpresaController;
@@ -407,6 +408,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/operaciones', [ModuleHubController::class, 'operaciones'])->name('operaciones.index');
     Route::get('/operaciones/panel', fn() => view('operaciones.panel'))->name('operaciones.panel');
     Route::get('/operaciones/gestion', fn() => view('operaciones.gestion'))->name('operaciones.gestion');
+    Route::get('/operaciones/rutas-consolidadas', [OperacionesRutasConsolidadasController::class, 'index'])->name('operaciones.rutas-consolidadas');
+    Route::post('/operaciones/rutas-consolidadas/procesar', [OperacionesRutasConsolidadasController::class, 'procesar'])->name('operaciones.rutas-consolidadas.procesar');
     Route::get('/operaciones/reportes/diario', [OperacionesReporteDiarioController::class, 'index'])->name('operaciones.reporte.diario');
     Route::get('/operaciones/reportes/diario/exportar/excel', [OperacionesReporteDiarioController::class, 'exportExcel'])->name('operaciones.reporte.diario.export.excel');
     Route::get('/operaciones/reportes/diario/exportar/pdf', [OperacionesReporteDiarioController::class, 'exportPdf'])->name('operaciones.reporte.diario.export.pdf');

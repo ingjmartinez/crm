@@ -243,6 +243,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Rutas Consolidadas',
+                'descripcion' => 'Consulta y consolida la informacion operativa de rutas.',
+                'url' => '/operaciones/rutas-consolidadas',
+                'icono' => 'ri-road-map-line',
+                'categoria' => 'Rutas',
+                'tags' => ['rutas', 'consolidado', 'operaciones'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Reporte Diario',
                 'descripcion' => 'Procesa informes diarios, comprobantes, bancos y gastos.',
                 'url' => '/operaciones/reportes/diario',
