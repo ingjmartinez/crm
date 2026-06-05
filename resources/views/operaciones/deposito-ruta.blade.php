@@ -38,6 +38,7 @@
                                                 <th>Fecha</th>
                                                 <th>Telefono</th>
                                                 <th>Banco</th>
+                                                <th>Ruta</th>
                                                 <th>Estado</th>
                                                 <th>Imagen</th>
                                             </tr>
@@ -52,6 +53,22 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="modalImagenDepositoRuta" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalImagenDepositoRutaTitulo">Imagen del deposito</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <a id="modalImagenDepositoRutaLink" href="#" target="_blank" rel="noopener noreferrer">
+                        <img id="modalImagenDepositoRutaPreview" src="" alt="Imagen del deposito" class="img-fluid rounded border">
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -59,10 +76,26 @@
         document.addEventListener('DOMContentLoaded', function () {
             const tabla = $('#tablaDepositoRuta');
             const dataUrl = tabla.data('url');
+            const modalImagen = new bootstrap.Modal(document.getElementById('modalImagenDepositoRuta'));
 
             if (!tabla.length || !dataUrl) {
                 return;
             }
+
+            function escapeJs(value) {
+                return String(value ?? '')
+                    .replace(/\\/g, '\\\\')
+                    .replace(/'/g, "\\'")
+                    .replace(/\n/g, '\\n')
+                    .replace(/\r/g, '\\r');
+            }
+
+            window.abrirImagenDepositoRuta = function (url, banco) {
+                document.getElementById('modalImagenDepositoRutaPreview').src = url;
+                document.getElementById('modalImagenDepositoRutaLink').href = url;
+                document.getElementById('modalImagenDepositoRutaTitulo').textContent = `Deposito - ${banco || 'Banco'}`;
+                modalImagen.show();
+            };
 
             tabla.DataTable({
                 processing: true,
@@ -74,6 +107,7 @@
                     { data: 'fecha', name: 'fecha' },
                     { data: 'whatsapp_phone', name: 'whatsapp_phone' },
                     { data: 'banco', name: 'banco' },
+                    { data: 'ruta_nombre', name: 'ruta_nombre' },
                     {
                         data: 'estado',
                         name: 'estado',
@@ -82,17 +116,19 @@
                         }
                     },
                     {
-                        data: 'imagen_url',
+                        data: 'comprobante_url',
                         orderable: false,
                         searchable: false,
-                        render: function (data) {
+                        render: function (data, type, row) {
                             if (!data) {
                                 return '<span class="text-muted">Sin imagen</span>';
                             }
 
-                            return `<a href="${data}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
-                                <i class="ri-image-2-line me-1"></i>Ver imagen
-                            </a>`;
+                            return `
+                                <button type="button" class="btn btn-sm btn-info" onclick="abrirImagenDepositoRuta('${escapeJs(data)}', '${escapeJs(row.banco)}')">
+                                    <i class="ri-image-2-line me-1"></i>Ver
+                                </button>
+                            `;
                         }
                     }
                 ],

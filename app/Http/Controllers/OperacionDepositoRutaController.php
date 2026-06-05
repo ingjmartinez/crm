@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\OperacionDepositoRuta;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
@@ -27,16 +26,21 @@ class OperacionDepositoRutaController extends Controller
             ]);
         }
 
+        $hasRutaNombre = Schema::hasColumn('operaciones_deposito_rutas', 'ruta_nombre');
         $query = OperacionDepositoRuta::query()->latest();
         $total = (clone $query)->count();
         $search = trim((string) $request->input('search.value', ''));
 
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
+            $query->where(function ($q) use ($search, $hasRutaNombre) {
                 $q->where('whatsapp_phone', 'like', "%{$search}%")
                     ->orWhere('banco', 'like', "%{$search}%")
                     ->orWhere('estado', 'like', "%{$search}%")
                     ->orWhere('comprobante_message_id', 'like', "%{$search}%");
+
+                if ($hasRutaNombre) {
+                    $q->orWhere('ruta_nombre', 'like', "%{$search}%");
+                }
             });
         }
 
@@ -49,14 +53,15 @@ class OperacionDepositoRutaController extends Controller
             ->skip($start)
             ->take($length)
             ->get()
-            ->map(function (OperacionDepositoRuta $deposito) {
+            ->map(function (OperacionDepositoRuta $deposito) use ($hasRutaNombre) {
                 return [
                     'id' => $deposito->id,
                     'fecha' => optional($deposito->created_at)->format('d/m/Y h:i A'),
                     'whatsapp_phone' => $deposito->whatsapp_phone,
                     'banco' => $deposito->banco,
+                    'ruta_nombre' => $hasRutaNombre ? ($deposito->ruta_nombre ?: 'No indicada') : 'No indicada',
                     'estado' => ucfirst($deposito->estado),
-                    'imagen_url' => route('operaciones.deposito-ruta.imagen', $deposito),
+                    'comprobante_url' => $deposito->comprobante_url,
                 ];
             });
 
@@ -68,8 +73,4 @@ class OperacionDepositoRutaController extends Controller
         ]);
     }
 
-    public function imagen(OperacionDepositoRuta $deposito): RedirectResponse
-    {
-        return redirect()->away($deposito->comprobante_url);
-    }
 }

@@ -12,6 +12,7 @@ class OperacionDepositoRuta extends Model
         'account',
         'whatsapp_phone',
         'banco',
+        'ruta_nombre',
         'comprobante_url',
         'comprobante_message_id',
         'estado',
