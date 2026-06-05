@@ -383,6 +383,14 @@
                         dataTable.ajax.reload(null, false);
                         modalConfirmarEstado.hide();
                         cambioEstadoPendiente = null;
+
+                        if (nextEstado === 'recibido' && payload.whatsapp_sent === false && window.Swal) {
+                            Swal.fire(
+                                'Estado actualizado',
+                                payload.whatsapp_result?.message || 'El deposito fue marcado como recibido, pero no se pudo enviar la notificacion por WhatsApp.',
+                                'warning'
+                            );
+                        }
                     })
                     .catch(function (error) {
                         if (window.Swal) {

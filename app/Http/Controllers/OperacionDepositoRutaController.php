@@ -6,6 +6,7 @@ use App\Models\OperacionDepositoRuta;
 use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
@@ -116,32 +117,70 @@ class OperacionDepositoRutaController extends Controller
             'estado' => $validated['estado'],
         ]);
 
+        $whatsappResult = null;
+
         if ($estadoAnterior !== 'recibido' && $deposito->estado === 'recibido') {
-            $this->notificarDepositoRecibido($deposito);
+            $whatsappResult = $this->notificarDepositoRecibido($deposito);
         }
 
         return response()->json([
             'message' => 'Estado actualizado correctamente.',
             'estado' => ucfirst($deposito->estado),
+            'whatsapp_sent' => (bool) ($whatsappResult['success'] ?? false),
+            'whatsapp_result' => $whatsappResult,
         ]);
     }
 
-    private function notificarDepositoRecibido(OperacionDepositoRuta $deposito): void
+    private function notificarDepositoRecibido(OperacionDepositoRuta $deposito): array
     {
+        $recipient = $this->formatWhatsappRecipient((string) $deposito->whatsapp_phone);
+
+        if ($recipient === null) {
+            Log::warning('Deposito ruta: no se envio WhatsApp por telefono invalido', [
+                'deposito_id' => $deposito->id,
+                'whatsapp_phone' => $deposito->whatsapp_phone,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Telefono invalido para WhatsApp.',
+            ];
+        }
+
         $monto = number_format((float) ($deposito->monto_depositado ?? 0), 2);
         $ruta = trim((string) ($deposito->ruta_nombre ?? ''));
         $ruta = $ruta !== '' ? $ruta : 'No indicada';
+        $referencia = 'Ref-' . str_pad((string) $deposito->id, 5, '0', STR_PAD_LEFT);
         $message = "Deposito recibido correctamente.\n\n"
+            . "Referencia: {$referencia}\n"
             . "Banco: {$deposito->banco}\n"
             . "Ruta: {$ruta}\n"
             . "Monto: {$monto}\n"
             . "Estado: Recibido";
 
-        $this->whatsAppService->sendText(
-            (string) $deposito->whatsapp_phone,
-            $message,
-            $deposito->account
-        );
+        $result = $this->whatsAppService->sendText($recipient, $message);
+
+        Log::info('Deposito ruta: resultado envio WhatsApp cambio estado', [
+            'deposito_id' => $deposito->id,
+            'recipient' => $recipient,
+            'success' => (bool) ($result['success'] ?? false),
+            'status' => $result['status'] ?? null,
+            'message' => $result['message'] ?? null,
+            'provider_response' => $result['provider_response'] ?? null,
+        ]);
+
+        return $result;
+    }
+
+    private function formatWhatsappRecipient(string $phone): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if ($digits === '' || strlen($digits) < 8) {
+            return null;
+        }
+
+        return str_starts_with(trim($phone), '+') ? trim($phone) : '+' . $digits;
     }
 
     private function resumen($query, bool $hasMontoDepositado): array
