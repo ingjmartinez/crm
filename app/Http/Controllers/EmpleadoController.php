@@ -20,8 +20,17 @@ class EmpleadoController extends Controller
     public function list(Request $request)
     {
         $empresa = trim((string) $request->query('empresa', ''));
+        $baseQuery = Empleado::query();
 
-        $query = Empleado::select(
+        if (in_array($empresa, ['168', '169'], true)) {
+            $baseQuery->where('companyid', $empresa);
+        }
+
+        if ($request->has('draw')) {
+            return $this->listDataTable($request, $baseQuery);
+        }
+
+        $query = (clone $baseQuery)->select(
             DB::raw("CASE WHEN companyid = '168'
                 THEN 'Grupo Joselito'
                 ELSE 'Negosur'
@@ -36,12 +45,72 @@ class EmpleadoController extends Controller
             'salariomensual'
         );
 
-        if (in_array($empresa, ['168', '169'], true)) {
-            $query->where('companyid', $empresa);
-        }
-
         $empleados = $query->get();
         return response()->json($empleados);
+    }
+
+    private function listDataTable(Request $request, $baseQuery)
+    {
+        $columns = [
+            0 => 'companyid',
+            1 => 'empleadoid',
+            2 => 'nombres',
+            3 => 'apellidos',
+            4 => 'cedula',
+            5 => 'ciudad',
+            6 => 'salariomensual',
+            7 => 'fechaingreso',
+            8 => 'fechasalida',
+        ];
+        $search = trim((string) data_get($request->input('search', []), 'value', ''));
+        $start = max(0, (int) $request->input('start', 0));
+        $length = (int) $request->input('length', 10);
+        $length = $length > 0 ? min($length, 100) : 10;
+        $orderIndex = (int) data_get($request->input('order', []), '0.column', 1);
+        $orderColumn = $columns[$orderIndex] ?? 'empleadoid';
+        $orderDir = strtolower((string) data_get($request->input('order', []), '0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        $recordsTotal = (clone $baseQuery)->count();
+        $filteredQuery = clone $baseQuery;
+
+        if ($search !== '') {
+            $filteredQuery->where(function ($query) use ($search) {
+                $query->where('empleadoid', 'like', "%{$search}%")
+                    ->orWhere('nombres', 'like', "%{$search}%")
+                    ->orWhere('apellidos', 'like', "%{$search}%")
+                    ->orWhere('cedula', 'like', "%{$search}%")
+                    ->orWhere('ciudad', 'like', "%{$search}%")
+                    ->orWhereRaw("CASE WHEN companyid = '168' THEN 'Grupo Joselito' ELSE 'Negosur' END LIKE ?", ["%{$search}%"]);
+            });
+        }
+
+        $recordsFiltered = (clone $filteredQuery)->count();
+        $data = $filteredQuery
+            ->select(
+                DB::raw("CASE WHEN companyid = '168'
+                    THEN 'Grupo Joselito'
+                    ELSE 'Negosur'
+                END AS company"),
+                'empleadoid',
+                'nombres',
+                'apellidos',
+                'fechaingreso',
+                'fechasalida',
+                'cedula',
+                'ciudad',
+                'salariomensual'
+            )
+            ->orderBy($orderColumn, $orderDir)
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        return response()->json([
+            'draw' => (int) $request->input('draw', 0),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
     }
 
     public function dashboard(Request $request)

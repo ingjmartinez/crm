@@ -260,6 +260,7 @@
         let chartSalarioCiudad = null;
         let chartEmpleadosCiudad = null;
         let chartSalarioEmpresa = null;
+        let empleadosTable = null;
 
         function formatoMonto(valor) {
             return Number(valor || 0).toLocaleString('en-US', {
@@ -500,54 +501,63 @@
         }
 
         function list() {
-            const empresa = obtenerEmpresaActual();
-
-            fetch("/empleados/list?empresa=" + encodeURIComponent(empresa), {
-                headers: {
-                    'Accept': 'application/json',
-                },
-            })
-                .then(response => parsearRespuestaJson(response, 'Error al cargar listado de empleados'))
-                .then(data => {
-                    const tableBody = document.querySelector('#tableEmpleados tbody');
-                    tableBody.innerHTML = '';
-
-                    data.forEach(item => {
-                        const activo = !item.fechasalida;
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${item.company}</td>
-                            <td>${item.empleadoid}</td>
-                            <td>${item.nombres}</td>
-                            <td>${item.apellidos}</td>
-                            <td>${item.cedula ?? ''}</td>
-                            <td>${item.ciudad ?? ''}</td>
-                            <td class="text-end">$${formatoMonto(item.salariomensual || 0)}</td>
-                            <td>${item.fechaingreso ?? ''}</td>
-                            <td>${activo ? '<span class="badge bg-success-subtle text-success">Activo</span>' : '<span class="badge bg-danger-subtle text-danger">' + (item.fechasalida ?? '') + '</span>'}</td>
-                        `;
-                        tableBody.appendChild(row);
-                    });
-
-                    if ($.fn.DataTable.isDataTable('#tableEmpleados')) {
-                        $('#tableEmpleados').DataTable().destroy();
-                    }
-
-                    $('#tableEmpleados').DataTable({
-                        responsive: true,
-                        scrollX: true,
-                        pageLength: 10,
-                        dom: 'Bfrtip',
-                        buttons: ['copy', 'csv', 'excel', 'pdf', 'print']
-                    });
-                })
-                .catch(error => {
-                    console.error('Error fetching empleados:', error);
-                    Swal.fire('Error', 'No se pudieron cargar los empleados.', 'error');
+            if (!empleadosTable) {
+                empleadosTable = $('#tableEmpleados').DataTable({
+                    processing: true,
+                    serverSide: true,
+                    responsive: true,
+                    scrollX: true,
+                    searchDelay: 450,
+                    pageLength: 10,
+                    dom: 'Bfrtip',
+                    buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+                    ajax: {
+                        url: '/empleados/list',
+                        data: function (data) {
+                            data.empresa = obtenerEmpresaActual();
+                        },
+                        error: function (xhr) {
+                            console.error('Error fetching empleados:', xhr);
+                            Swal.fire('Error', 'No se pudieron cargar los empleados.', 'error');
+                        }
+                    },
+                    columns: [
+                        { data: 'company', defaultContent: '-' },
+                        { data: 'empleadoid', defaultContent: '-' },
+                        { data: 'nombres', defaultContent: '-' },
+                        { data: 'apellidos', defaultContent: '-' },
+                        { data: 'cedula', defaultContent: '' },
+                        { data: 'ciudad', defaultContent: '' },
+                        {
+                            data: 'salariomensual',
+                            className: 'text-end',
+                            render: function (data) {
+                                return '$' + formatoMonto(data || 0);
+                            }
+                        },
+                        { data: 'fechaingreso', defaultContent: '' },
+                        {
+                            data: 'fechasalida',
+                            render: function (data) {
+                                return !data
+                                    ? '<span class="badge bg-success-subtle text-success">Activo</span>'
+                                    : '<span class="badge bg-danger-subtle text-danger">' + data + '</span>';
+                            }
+                        }
+                    ]
                 });
+
+                return Promise.resolve();
+            }
+
+            return new Promise(function (resolve) {
+                empleadosTable.one('draw', resolve);
+                empleadosTable.ajax.reload(null, true);
+            });
         }
 
         document.querySelector("#btnSincronizar").addEventListener("click", function () {
+            const btnSincronizar = this;
             const empresa = document.getElementById('empresa').value;
 
             if (!empresa) {
@@ -559,6 +569,8 @@
                 });
                 return;
             }
+
+            btnSincronizar.disabled = true;
 
             Swal.fire({
                 title: "Sincronizando: 0% ...",
@@ -575,7 +587,9 @@
             const interval = setInterval(() => {
                 elapsed += 1;
                 let percent = Math.min(Math.round((elapsed / duration) * 90), 90);
-                textSwal.innerHTML = "Sincronizando: " + percent + "%";
+                if (textSwal) {
+                    textSwal.innerHTML = "Sincronizando: " + percent + "%";
+                }
             }, 1000);
 
             fetch('/empleados/sincronizar?empresa=' + empresa, {
@@ -585,23 +599,31 @@
             })
                 .then(response => parsearRespuestaJson(response, 'Error durante la sincronizacion de empleados'))
                 .then(() => {
-                    textSwal.innerHTML = "Sincronizando: 100%";
+                    if (textSwal) {
+                        textSwal.innerHTML = "Sincronizando: 100%";
+                    }
                     clearInterval(interval);
-                    Swal.fire({
+                    return Swal.fire({
                         title: "Listo",
                         text: "Sincronización completada con éxito",
                         icon: "success"
+                    }).then(() => {
+                        return cargarDashboard(true).finally(list);
                     });
-                    cargarDashboard(true).finally(list);
                 })
                 .catch(error => {
-                    textSwal.innerHTML = "Sincronizando: 100%";
+                    if (textSwal) {
+                        textSwal.innerHTML = "Sincronizando: 100%";
+                    }
                     clearInterval(interval);
                     Swal.fire({
                         title: "Error",
                         text: error?.message || 'No fue posible sincronizar empleados.',
                         icon: "warning"
                     });
+                })
+                .finally(() => {
+                    btnSincronizar.disabled = false;
                 });
         });
 
