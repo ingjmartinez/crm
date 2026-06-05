@@ -26,6 +26,7 @@ use App\Http\Controllers\MarController;
 use App\Http\Controllers\MetaIncentivoController;
 use App\Http\Controllers\ModuleHubController;
 use App\Http\Controllers\NovedadHorarioController;
+use App\Http\Controllers\OperacionDepositoRutaController;
 use App\Http\Controllers\OperacionesReporteDiarioController;
 use App\Http\Controllers\OperacionesRutasConsolidadasController;
 use App\Http\Controllers\OperadorRutaController;
@@ -412,6 +413,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
     // Modulo Operaciones
     Route::get('/operaciones', [ModuleHubController::class, 'operaciones'])->name('operaciones.index');
+    Route::get('/operaciones/deposito-ruta', [OperacionDepositoRutaController::class, 'index'])->name('operaciones.deposito-ruta');
+    Route::get('/operaciones/deposito-ruta/data', [OperacionDepositoRutaController::class, 'data'])->name('operaciones.deposito-ruta.data');
+    Route::get('/operaciones/deposito-ruta/{deposito}/imagen', [OperacionDepositoRutaController::class, 'imagen'])->name('operaciones.deposito-ruta.imagen');
     Route::get('/operaciones/panel', fn() => view('operaciones.panel'))->name('operaciones.panel');
     Route::get('/operaciones/gestion', fn() => view('operaciones.gestion'))->name('operaciones.gestion');
     Route::get('/operaciones/rutas-consolidadas', [OperacionesRutasConsolidadasController::class, 'index'])->name('operaciones.rutas-consolidadas');

@@ -94,12 +94,18 @@ class ModuleHubController extends Controller
             ->sort()
             ->values();
 
-        return view('module-hub.index', [
+        $extra = [];
+
+        if ($module === 'operaciones') {
+            $extra['depositosRutaDataUrl'] = route('operaciones.deposito-ruta.data');
+        }
+
+        return view('module-hub.index', array_merge([
             'module' => $module,
             'titulo' => $hub['titulo'] ?? ucfirst($module),
             'breadcrumb' => $hub['breadcrumb'] ?? ($hub['titulo'] ?? ucfirst($module)),
             'items' => $items,
             'categorias' => $categorias,
-        ]);
+        ], $extra));
     }
 }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Agencia;
 use App\Models\ChatbotSession;
+use App\Models\OperacionDepositoRuta;
 use App\Models\ServicioGeneralRequerimiento;
 use App\Models\Token;
 use App\Models\User;
@@ -23,6 +24,8 @@ class WhatsAppChatbotService
     private const STEP_SG_TERMINAL = 'servicios_generales_terminal';
     private const STEP_SG_GPS = 'servicios_generales_gps';
     private const STEP_SG_IMAGEN = 'servicios_generales_imagen';
+    private const STEP_OPERADOR_BANCO = 'operador_banco';
+    private const STEP_OPERADOR_IMAGEN = 'operador_imagen';
 
     public function handleIncoming(string $phone, string $message, ?string $account = null, array $incoming = []): array
     {
@@ -117,6 +120,8 @@ class WhatsAppChatbotService
             self::STEP_SG_TERMINAL => $this->handleServiciosGeneralesTerminal($session, $message),
             self::STEP_SG_GPS => $this->handleServiciosGeneralesGps($session, $message, $incoming),
             self::STEP_SG_IMAGEN => $this->registrarRequerimientoServiciosGenerales($session, $incoming),
+            self::STEP_OPERADOR_BANCO => $this->handleOperadorBanco($session, $message),
+            self::STEP_OPERADOR_IMAGEN => $this->registrarDepositoRuta($session, $incoming),
             default => $this->resetToInicio($session),
         };
     }
@@ -170,6 +175,15 @@ class WhatsAppChatbotService
             return $this->serviciosGeneralesTiposMessage();
         }
 
+        if ($option === '3') {
+            $session->step = self::STEP_OPERADOR_BANCO;
+            $session->context = [
+                'intent' => 'operador_deposito_ruta',
+            ];
+
+            return $this->operadorBancosMessage();
+        }
+
         $session->step = 'consulta_hora_menu';
 
         return $this->consultaHoraMenuMessage();
@@ -197,6 +211,28 @@ class WhatsAppChatbotService
         );
 
         return 'Indica el codigo del terminal afectado.';
+    }
+
+    private function handleOperadorBanco(ChatbotSession $session, string $message): string
+    {
+        $bancos = [
+            '1' => 'Banco Reservas',
+            '2' => 'Banco Caribe',
+            '3' => 'Banco Santa Cruz',
+        ];
+        $option = trim($message);
+
+        if (!isset($bancos[$option])) {
+            return $this->operadorBancosMessage();
+        }
+
+        $session->step = self::STEP_OPERADOR_IMAGEN;
+        $session->context = array_merge(
+            is_array($session->context) ? $session->context : [],
+            ['banco' => $bancos[$option]]
+        );
+
+        return "Banco seleccionado: {$bancos[$option]}.\n\nAhora carga la imagen del deposito bancario.";
     }
 
     private function handleServiciosGeneralesTerminal(ChatbotSession $session, string $message): string
@@ -307,6 +343,54 @@ class WhatsAppChatbotService
         $session->context = null;
 
         return "Solicitud registrada correctamente.\n\nCodigo: {$requerimiento->ticket_codigo}\nTipo: {$tipoLabel}\nTerminal: {$terminalCodigo}\nGPS: {$gps}\nImagen: Recibida\nEstado: Pendiente";
+    }
+
+    private function registrarDepositoRuta(ChatbotSession $session, array $incoming): string
+    {
+        $context = is_array($session->context) ? $session->context : [];
+        $banco = trim((string) ($context['banco'] ?? ''));
+        $attachmentUrl = $this->normalizeAttachmentUrl($incoming['attachment_url'] ?? null);
+        $attachmentMessageId = $this->normalizeMessageId($incoming['message_id'] ?? null);
+
+        if ($banco === '') {
+            $session->step = 'inicio';
+            $session->context = null;
+
+            return 'Perdi el contexto del banco. Por favor inicia de nuevo y elige la opcion 3.';
+        }
+
+        if ($attachmentUrl === null) {
+            return 'Necesito que envies la imagen del deposito bancario para continuar.';
+        }
+
+        try {
+            OperacionDepositoRuta::create([
+                'account' => $session->account,
+                'whatsapp_phone' => $session->phone,
+                'banco' => $banco,
+                'comprobante_url' => $attachmentUrl,
+                'comprobante_message_id' => $attachmentMessageId,
+                'estado' => 'pendiente',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('WhatsApp chatbot: error registrando deposito de ruta', [
+                'phone' => $session->phone,
+                'account' => $session->account,
+                'banco' => $banco,
+                'attachment_url' => $attachmentUrl,
+                'message' => $e->getMessage(),
+            ]);
+
+            $session->step = 'inicio';
+            $session->context = null;
+
+            return 'No pude registrar el deposito en este momento. Por favor intenta mas tarde.';
+        }
+
+        $session->step = 'inicio';
+        $session->context = null;
+
+        return "Deposito recibido correctamente.\n\nBanco: {$banco}\nImagen: Recibida\nEstado: Pendiente";
     }
 
     private function handleConsultaHorarioCedula(ChatbotSession $session, string $message): string
@@ -572,7 +656,8 @@ class WhatsAppChatbotService
         return "Hola, como estas? Soy tu asistente virtual y estoy aqui para servirte.\n\n"
             . "Por favor responde solo numericamente:\n\n"
             . "1- consultar el horario de servicio\n"
-            . "2- averias";
+            . "2- averias\n"
+            . "3- operador";
     }
 
     private function serviciosGeneralesTiposMessage(): string
@@ -582,6 +667,14 @@ class WhatsAppChatbotService
             . "2-No tengo luz\n"
             . "3-Se me friso el sistema\n"
             . "4-Cambiar el inversor";
+    }
+
+    private function operadorBancosMessage(): string
+    {
+        return "Selecciona el banco donde depositaste escribiendo solo el numero:\n\n"
+            . "1-Banco Reservas\n"
+            . "2-Banco Caribe\n"
+            . "3-Banco Santa Cruz";
     }
 
     public function inactivityFarewellMessage(): string

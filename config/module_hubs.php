@@ -252,6 +252,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Deposito Ruta',
+                'descripcion' => 'Consulta los comprobantes bancarios recibidos desde el chatbot.',
+                'url' => '/operaciones/deposito-ruta',
+                'icono' => 'ri-bank-card-line',
+                'categoria' => 'Gestion',
+                'tags' => ['deposito', 'ruta', 'chatbot', 'banco', 'comprobante'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Reporte Diario',
                 'descripcion' => 'Procesa informes diarios, comprobantes, bancos y gastos.',
                 'url' => '/operaciones/reportes/diario',
