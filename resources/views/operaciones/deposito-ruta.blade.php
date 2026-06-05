@@ -100,6 +100,7 @@
                                         data-estado-url-template="{{ route('operaciones.deposito-ruta.estado', ['deposito' => '__ID__']) }}">
                                         <thead class="table-light">
                                             <tr>
+                                                <th>Referencia</th>
                                                 <th>Fecha</th>
                                                 <th>Telefono</th>
                                                 <th>Banco</th>
@@ -148,6 +149,7 @@
             const btnLimpiarFecha = document.getElementById('btnLimpiarFechaDepositoRuta');
             const modalImagen = new bootstrap.Modal(document.getElementById('modalImagenDepositoRuta'));
             const today = new Date().toISOString().slice(0, 10);
+            const puedeRevertirEstado = @json(auth()->user()?->hasRole('superadmin') ?? false);
             let autoRefreshTimer = null;
 
             if (!tabla.length || !dataUrl) {
@@ -186,9 +188,11 @@
                 const nextEstado = esRecibido ? 'pendiente' : 'recibido';
                 const btnClass = esRecibido ? 'btn-success' : 'btn-warning';
                 const label = esRecibido ? 'Recibido' : 'Pendiente';
+                const disabled = esRecibido && !puedeRevertirEstado ? 'disabled' : '';
+                const title = esRecibido && !puedeRevertirEstado ? 'Solo superadmin puede cambiar un deposito recibido' : '';
 
                 return `<button type="button" class="btn btn-sm ${btnClass} btn-cambiar-estado"
-                    data-id="${id}" data-next-estado="${nextEstado}">
+                    data-id="${id}" data-next-estado="${nextEstado}" title="${title}" ${disabled}>
                     ${label}
                 </button>`;
             }
@@ -208,8 +212,9 @@
                     }
                 },
                 pageLength: 25,
-                order: [[0, 'desc']],
+                order: [[1, 'desc']],
                 columns: [
+                    { data: 'referencia', name: 'referencia' },
                     { data: 'fecha', name: 'fecha' },
                     { data: 'whatsapp_phone', name: 'whatsapp_phone' },
                     { data: 'banco', name: 'banco' },
