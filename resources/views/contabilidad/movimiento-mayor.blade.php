@@ -125,6 +125,8 @@
                                             <th>Credito</th>
                                             <th>Descripcion</th>
                                             <th>Centro Costo</th>
+                                            <th>IdCentroCosto</th>
+                                            <th>IdViejo</th>
                                             <th>Grupo</th>
                                             <th>SubGrupo</th>
                                             <th>IdSubGrupo</th>
@@ -331,6 +333,17 @@
             Swal.showLoading();
         }
 
+        function limpiarTablaEntradasDiario() {
+            if ($.fn.DataTable.isDataTable('#tableEntradasDiario')) {
+                $('#tableEntradasDiario').DataTable().clear().destroy();
+            }
+
+            document.querySelector('#tableEntradasDiario tbody').innerHTML = '';
+            document.getElementById('entradaDiarioTotalRegistros').textContent = '0';
+            document.getElementById('entradaDiarioTotalDebito').textContent = '0.00';
+            document.getElementById('entradaDiarioTotalCredito').textContent = '0.00';
+        }
+
         async function sincronizarBloqueEntradasDiario(filtros, bloque) {
             const response = await fetch('/api-entradas-diario/sync', {
                 method: 'POST',
@@ -415,6 +428,7 @@
             const textoOriginal = boton.innerText;
             boton.disabled = true;
             boton.innerText = 'Sincronizando...';
+            limpiarTablaEntradasDiario();
 
             const colaBloques = crearBloquesFecha(filtros.fechaInicio, filtros.fechaFin, 1);
             const progreso = {
@@ -575,6 +589,8 @@
                     <td class="text-end">${formatMoney(item.Credito)}</td>
                     <td>${escapeHtml(item.Descripcion)}</td>
                     <td>${escapeHtml(item.CentroCosto)}</td>
+                    <td>${escapeHtml(item.IdCentroCosto)}</td>
+                    <td>${escapeHtml(item.IdViejo)}</td>
                     <td>${escapeHtml(item.Grupo)}</td>
                     <td>${escapeHtml(item.SubGrupo)}</td>
                     <td>${escapeHtml(item.IdSubGrupo)}</td>

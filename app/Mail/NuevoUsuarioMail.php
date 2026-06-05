@@ -19,6 +19,7 @@ class NuevoUsuarioMail extends Mailable
     public function __construct(
         public User $user,
         public string $plainPassword,
+        public bool $isReset = false,
     ) {}
 
     /**
@@ -27,7 +28,9 @@ class NuevoUsuarioMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Bienvenido a Grupo Joselito - Datos de acceso',
+            subject: $this->isReset
+                ? 'Contraseña temporal - CRM Grupo Joselito'
+                : 'Bienvenido a Grupo Joselito - Datos de acceso',
         );
     }
 

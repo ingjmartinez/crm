@@ -80,6 +80,28 @@
         </footer>
     </div>
 
+    <!-- Modal para resetear contraseña -->
+    <div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-labelledby="resetPasswordModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="resetPasswordModalLabel">Resetear contraseña</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Se asignará la contraseña temporal <strong>0000</strong>, se enviará por correo y el usuario deberá crear una nueva contraseña al iniciar sesión.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form id="resetPasswordForm" method="POST" style="display:inline;">
+                        @csrf
+                        <button type="submit" class="btn btn-warning">Resetear y enviar correo</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal para eliminar -->
     <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -139,7 +161,10 @@
                             buttons += `
                                 <a href="/usuarios/${row.id}/edit" class="btn btn-sm btn-success" title="Editar">
                                     <i class="ri-pencil-line"></i>
-                                </a>`;
+                                </a>
+                                <button class="btn btn-sm btn-warning btn-reset-password" data-id="${row.id}" title="Resetear contraseña">
+                                    <i class="ri-key-2-line"></i>
+                                </button>`;
                         }
 
                         // No mostrar boton eliminar para el usuario actual
@@ -167,6 +192,13 @@
             var form = $('#deleteForm');
             form.attr('action', '/usuarios/' + id);
             $('#deleteModal').modal('show');
+        });
+
+        $('#tableUsuarios').on('click', '.btn-reset-password', function() {
+            var id = $(this).data('id');
+            var form = $('#resetPasswordForm');
+            form.attr('action', '/usuarios/' + id + '/reset-password');
+            $('#resetPasswordModal').modal('show');
         });
 
         // Mostrar mensaje de exito si existe

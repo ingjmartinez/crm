@@ -73,6 +73,11 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
+    Route::get('/password/cambiar-obligatorio', [AuthController::class, 'showForcePasswordChangeForm'])->name('password.force.form');
+    Route::post('/password/cambiar-obligatorio', [AuthController::class, 'forcePasswordChange'])->name('password.force.update');
+});
+
+Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/gerencia', [ModuleHubController::class, 'gerencia'])->name('gerencia.index');
     Route::get('/gerencia/gerencial', [\App\Http\Controllers\Gerencia\GerencialController::class, 'index'])->name('gerencia.gerencial');
     Route::get('/gerencia/gerencial/data', [\App\Http\Controllers\Gerencia\GerencialController::class, 'data'])->name('gerencia.gerencial.data');
@@ -367,6 +372,7 @@ Route::middleware('auth')->group(function () {
     Route::post('agencias-incumplimientos-horario/send-mail', [AgenciaController::class, 'enviarMiniReporteIncumplimiento'])->name('agencias.incumplimientos.send-mail');
 
     Route::resource('usuarios', UserController::class)->except(['show']);
+    Route::post('usuarios/{usuario}/reset-password', [UserController::class, 'resetPassword'])->name('usuarios.reset-password');
     Route::get('usuarios-list', [UserController::class, 'list'])->name('usuarios.list');
     Route::get('/superadmin/sesiones', [SuperAdminSesionController::class, 'index'])
         ->middleware('role:superadmin')

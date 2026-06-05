@@ -17,7 +17,7 @@ class UserController extends Controller
         $this->middleware('permission:usuarios.view')->only(['index']);
         $this->middleware('permission:usuarios.list')->only(['list']);
         $this->middleware('permission:usuarios.create')->only(['create', 'store']);
-        $this->middleware('permission:usuarios.edit')->only(['edit', 'update']);
+        $this->middleware('permission:usuarios.edit')->only(['edit', 'update', 'resetPassword']);
         $this->middleware('permission:usuarios.delete')->only(['destroy']);
     }
 
@@ -47,13 +47,13 @@ class UserController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
-            'password' => ['required', 'confirmed', Password::min(8)],
             'roles' => 'nullable|array',
             'roles.*' => 'string|exists:roles,name',
         ]);
 
-        $plainPassword = $validated['password'];
+        $plainPassword = '0000';
         $validated['password'] = Hash::make($plainPassword);
+        $validated['must_change_password'] = true;
 
         $user = User::create($validated);
 
@@ -75,6 +75,25 @@ class UserController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
+    public function resetPassword(User $usuario)
+    {
+        $plainPassword = '0000';
+        $usuario->password = Hash::make($plainPassword);
+        $usuario->must_change_password = true;
+        $usuario->save();
+
+        try {
+            Mail::to($usuario->email)->send(new NuevoUsuarioMail($usuario, $plainPassword, true));
+        } catch (\Exception $e) {
+            return redirect()->route('usuarios.index')
+                ->with('success', 'Contraseña reseteada correctamente.')
+                ->with('error', 'No se pudo enviar el correo: ' . $e->getMessage());
+        }
+
+        return redirect()->route('usuarios.index')
+            ->with('success', 'Contraseña reseteada correctamente. Se envió el correo con la clave temporal 0000.');
+    }
+
     public function edit(User $usuario)
     {
         $roles = Role::orderBy('name')->get();

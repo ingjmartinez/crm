@@ -832,6 +832,13 @@
             <div id="scrollbar">
                 <div class="container-fluid">
                     <div id="two-column-menu"></div>
+                    @php
+                        $sidebarUser = auth()->user();
+                        $isContabilidadOnlyRole = $sidebarUser
+                            && method_exists($sidebarUser, 'hasRole')
+                            && $sidebarUser->hasRole('contabilidad')
+                            && !$sidebarUser->hasRole('superadmin');
+                    @endphp
                     <ul class="navbar-nav" id="navbar-nav">
                         <li class="menu-title">
                             <a href="{{ url('/') }}" class="text-reset text-decoration-none">
@@ -846,55 +853,64 @@
                             </a>
                         </li>
 
-                        <li class="nav-item">
-                            <a href="{{ route('procesos.index') }}"
-                                class="nav-link menu-link {{ request()->is('procesos*') ? 'active' : '' }}">
-                                <i class="ri-flow-chart"></i> <span data-key="t-procesos">Procesos</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ route('recursos-humanos.index') }}"
-                                class="nav-link menu-link {{ request()->is('recursos-humanos*') || request()->is('empleados*') || request()->is('registro-empleados*') || request()->is('entrevistas-online*') || request()->is('ventas-sin-empleado*') ? 'active' : '' }}">
-                                <i class="ri-team-line"></i> <span data-key="t-recursos-humanos">Recursos Humanos</span>
-                            </a>
-                        </li>
+                        @unless($isContabilidadOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('procesos.index') }}"
+                                    class="nav-link menu-link {{ request()->is('procesos*') ? 'active' : '' }}">
+                                    <i class="ri-flow-chart"></i> <span data-key="t-procesos">Procesos</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('recursos-humanos.index') }}"
+                                    class="nav-link menu-link {{ request()->is('recursos-humanos*') || request()->is('empleados*') || request()->is('registro-empleados*') || request()->is('entrevistas-online*') || request()->is('ventas-sin-empleado*') ? 'active' : '' }}">
+                                    <i class="ri-team-line"></i> <span data-key="t-recursos-humanos">Recursos Humanos</span>
+                                </a>
+                            </li>
+                        @endunless
                         <li class="nav-item">
                             <a href="{{ route('contabilidad.index') }}"
                                 class="nav-link menu-link {{ request()->is('contabilidad*') ? 'active' : '' }}">
                                 <i class="ri-dashboard-2-line"></i> <span data-key="t-contabilidad">Contabilidad</span>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="{{ url('/tareas') }}" class="nav-link menu-link">
-                                <i class="ri-task-line"></i> <span data-key="t-tareas">Tareas</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ route('tareas.proyecto') }}" class="nav-link menu-link">
-                                <i class="ri-stack-line"></i> <span data-key="t-proyecto">Proyecto</span>
-                            </a>
-                        </li>
+                        @unless($isContabilidadOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ url('/tareas') }}" class="nav-link menu-link">
+                                    <i class="ri-task-line"></i> <span data-key="t-tareas">Tareas</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('tareas.proyecto') }}" class="nav-link menu-link">
+                                    <i class="ri-stack-line"></i> <span data-key="t-proyecto">Proyecto</span>
+                                </a>
+                            </li>
+                        @endunless
                         @can('servicios_generales.view')
+                            @unless($isContabilidadOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('servicios-generales.index') }}"
                                     class="nav-link menu-link {{ request()->is('servicios-generales*') ? 'active' : '' }}">
                                     <i class="ri-tools-line"></i> <span data-key="t-servicios-generales">Servicios Generales</span>
                                 </a>
                             </li>
+                            @endunless
                         @endcan
-                        <li class="nav-item">
-                            <a href="{{ route('tecnologia.index') }}"
-                                class="nav-link menu-link {{ request()->is('tecnologia*') ? 'active' : '' }}">
-                                <i class="ri-computer-line"></i> <span data-key="t-tecnologia">Tecnologia</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ route('mantenimiento.index') }}"
-                                class="nav-link menu-link {{ request()->is('mantenimiento*') || request()->is('agencias*') || request()->is('usuarios*') || request()->is('coordinador-operador*') || request()->is('roles*') || request()->is('permissions*') ? 'active' : '' }}">
-                                <i class="ri-settings-2-line"></i> <span data-key="t-apps">Mantenimientos</span>
-                            </a>
-                        </li>
+                        @unless($isContabilidadOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('tecnologia.index') }}"
+                                    class="nav-link menu-link {{ request()->is('tecnologia*') ? 'active' : '' }}">
+                                    <i class="ri-computer-line"></i> <span data-key="t-tecnologia">Tecnologia</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('mantenimiento.index') }}"
+                                    class="nav-link menu-link {{ request()->is('mantenimiento*') || request()->is('agencias*') || request()->is('usuarios*') || request()->is('coordinador-operador*') || request()->is('roles*') || request()->is('permissions*') ? 'active' : '' }}">
+                                    <i class="ri-settings-2-line"></i> <span data-key="t-apps">Mantenimientos</span>
+                                </a>
+                            </li>
+                        @endunless
 
+                        @unless($isContabilidadOnlyRole)
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarApps" data-bs-toggle="collapse"
                                 role="button" aria-expanded="true" aria-controls="sidebarApps">
@@ -1050,6 +1066,7 @@
                                 </ul>
                             </div>
                         </li>
+                        @endunless
 
                         <li class="nav-item">
                             <a href="{{ route('reportes.index') }}"
@@ -1057,31 +1074,33 @@
                                 <i class="ri-apps-2-line"></i> <span data-key="t-apps">Reportes</span>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="{{ route('incentivos.index') }}"
-                                class="nav-link menu-link {{ request()->is('incentivos*') ? 'active' : '' }}">
-                                <i class="ri-award-line"></i> <span data-key="t-apps">Incentivos</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ route('operaciones.index') }}"
-                                class="nav-link menu-link {{ request()->is('operaciones*') ? 'active' : '' }}">
-                                <i class="ri-settings-3-line"></i> <span data-key="t-apps">Operaciones</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ route('comercial.index') }}"
-                                class="nav-link menu-link {{ request()->is('comercial*') ? 'active' : '' }}">
-                                <i class="ri-line-chart-line"></i> <span data-key="t-apps">Comercial</span>
-                            </a>
-                        </li>
+                        @unless($isContabilidadOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('incentivos.index') }}"
+                                    class="nav-link menu-link {{ request()->is('incentivos*') ? 'active' : '' }}">
+                                    <i class="ri-award-line"></i> <span data-key="t-apps">Incentivos</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('operaciones.index') }}"
+                                    class="nav-link menu-link {{ request()->is('operaciones*') ? 'active' : '' }}">
+                                    <i class="ri-settings-3-line"></i> <span data-key="t-apps">Operaciones</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('comercial.index') }}"
+                                    class="nav-link menu-link {{ request()->is('comercial*') ? 'active' : '' }}">
+                                    <i class="ri-line-chart-line"></i> <span data-key="t-apps">Comercial</span>
+                                </a>
+                            </li>
 
-                        <li class="nav-item">
-                            <a href="{{ route('gerencia.index') }}"
-                                class="nav-link menu-link {{ request()->is('gerencia*') ? 'active' : '' }}">
-                                <i class="ri-briefcase-line"></i> <span data-key="t-gerencia">Gerencia</span>
-                            </a>
-                        </li>
+                            <li class="nav-item">
+                                <a href="{{ route('gerencia.index') }}"
+                                    class="nav-link menu-link {{ request()->is('gerencia*') ? 'active' : '' }}">
+                                    <i class="ri-briefcase-line"></i> <span data-key="t-gerencia">Gerencia</span>
+                                </a>
+                            </li>
+                        @endunless
                     </ul>
                 </div>
                 <!-- Sidebar -->
