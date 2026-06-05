@@ -105,8 +105,8 @@
                                                 <th>Banco</th>
                                                 <th>Ruta</th>
                                                 <th class="text-end">Monto depositado</th>
-                                                <th>Estado</th>
                                                 <th>Imagen</th>
+                                                <th>Estado</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -223,13 +223,6 @@
                         }
                     },
                     {
-                        data: 'estado',
-                        name: 'estado',
-                        render: function (data, type, row) {
-                            return badgeEstado(data, row.id);
-                        }
-                    },
-                    {
                         data: 'comprobante_url',
                         orderable: false,
                         searchable: false,
@@ -243,6 +236,13 @@
                                     <i class="ri-image-2-line me-1"></i>Ver
                                 </button>
                             `;
+                        }
+                    },
+                    {
+                        data: 'estado',
+                        name: 'estado',
+                        render: function (data, type, row) {
+                            return badgeEstado(data, row.id);
                         }
                     }
                 ],
