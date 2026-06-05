@@ -136,6 +136,27 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="modalConfirmarEstadoDepositoRuta" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar cambio de estado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-1" id="modalConfirmarEstadoTexto">Deseas aplicar este cambio?</p>
+                    <p class="text-muted mb-0 small">Al marcar como recibido se enviara la confirmacion por WhatsApp al numero registrado.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnConfirmarCambioEstadoDepositoRuta">
+                        Si, aplicar cambio
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -148,15 +169,17 @@
             const btnFiltrarFecha = document.getElementById('btnFiltrarFechaDepositoRuta');
             const btnLimpiarFecha = document.getElementById('btnLimpiarFechaDepositoRuta');
             const modalImagen = new bootstrap.Modal(document.getElementById('modalImagenDepositoRuta'));
-            const today = new Date().toISOString().slice(0, 10);
+            const modalConfirmarEstado = new bootstrap.Modal(document.getElementById('modalConfirmarEstadoDepositoRuta'));
+            const modalConfirmarEstadoTexto = document.getElementById('modalConfirmarEstadoTexto');
+            const btnConfirmarCambioEstado = document.getElementById('btnConfirmarCambioEstadoDepositoRuta');
             const puedeRevertirEstado = @json(auth()->user()?->hasRole('superadmin') ?? false);
             let autoRefreshTimer = null;
+            let fechaAplicada = '';
+            let cambioEstadoPendiente = null;
 
             if (!tabla.length || !dataUrl) {
                 return;
             }
-
-            filtroFecha.value = filtroFecha.value || today;
 
             function escapeJs(value) {
                 return String(value ?? '')
@@ -200,16 +223,44 @@
             const dataTable = tabla.DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: {
-                    url: dataUrl,
-                    data: function (params) {
-                        params.fecha = filtroFecha.value || '';
-                    },
-                    dataSrc: function (json) {
-                        actualizarTarjetas(json.resumen || {});
+                ajax: function (params, callback) {
+                    if (!fechaAplicada) {
+                        actualizarTarjetas({});
+                        callback({
+                            draw: params.draw,
+                            recordsTotal: 0,
+                            recordsFiltered: 0,
+                            resumen: {
+                                pendiente: 0,
+                                recibido: 0,
+                                monto_total: 0
+                            },
+                            data: []
+                        });
 
-                        return json.data || [];
+                        return;
                     }
+
+                    $.ajax({
+                        url: dataUrl,
+                        data: Object.assign({}, params, {
+                            fecha: fechaAplicada
+                        }),
+                        dataType: 'json'
+                    })
+                        .done(function (json) {
+                            actualizarTarjetas(json.resumen || {});
+                            callback(json);
+                        })
+                        .fail(function () {
+                            actualizarTarjetas({});
+                            callback({
+                                draw: params.draw,
+                                recordsTotal: 0,
+                                recordsFiltered: 0,
+                                data: []
+                            });
+                        });
                 },
                 pageLength: 25,
                 order: [[1, 'desc']],
@@ -257,17 +308,30 @@
             });
 
             btnFiltrarFecha.addEventListener('click', function () {
+                fechaAplicada = filtroFecha.value || '';
+
+                if (!fechaAplicada) {
+                    if (window.Swal) {
+                        Swal.fire('Fecha requerida', 'Selecciona una fecha para filtrar.', 'info');
+                    } else {
+                        alert('Selecciona una fecha para filtrar.');
+                    }
+
+                    return;
+                }
+
                 dataTable.ajax.reload();
             });
 
             filtroFecha.addEventListener('keydown', function (event) {
                 if (event.key === 'Enter') {
-                    dataTable.ajax.reload();
+                    btnFiltrarFecha.click();
                 }
             });
 
             btnLimpiarFecha.addEventListener('click', function () {
-                filtroFecha.value = today;
+                filtroFecha.value = '';
+                fechaAplicada = '';
                 dataTable.ajax.reload();
             });
 
@@ -280,7 +344,25 @@
                     return;
                 }
 
+                const estadoLabel = nextEstado === 'recibido' ? 'Recibido' : 'Pendiente';
+                cambioEstadoPendiente = {
+                    button,
+                    id,
+                    nextEstado,
+                };
+
+                modalConfirmarEstadoTexto.textContent = `Deseas cambiar este deposito a estado "${estadoLabel}"?`;
+                modalConfirmarEstado.show();
+            });
+
+            btnConfirmarCambioEstado.addEventListener('click', function () {
+                if (!cambioEstadoPendiente) {
+                    return;
+                }
+
+                const { button, id, nextEstado } = cambioEstadoPendiente;
                 button.disabled = true;
+                btnConfirmarCambioEstado.disabled = true;
 
                 fetch(String(estadoUrlTemplate).replace('__ID__', id), {
                     method: 'POST',
@@ -299,6 +381,8 @@
                         }
 
                         dataTable.ajax.reload(null, false);
+                        modalConfirmarEstado.hide();
+                        cambioEstadoPendiente = null;
                     })
                     .catch(function (error) {
                         if (window.Swal) {
@@ -308,11 +392,20 @@
                         }
 
                         button.disabled = false;
+                    })
+                    .finally(function () {
+                        btnConfirmarCambioEstado.disabled = false;
                     });
             });
 
+            document.getElementById('modalConfirmarEstadoDepositoRuta').addEventListener('hidden.bs.modal', function () {
+                if (!btnConfirmarCambioEstado.disabled) {
+                    cambioEstadoPendiente = null;
+                }
+            });
+
             autoRefreshTimer = setInterval(function () {
-                if (document.hidden || document.body.classList.contains('modal-open')) {
+                if (!fechaAplicada || document.hidden || document.body.classList.contains('modal-open')) {
                     return;
                 }
 

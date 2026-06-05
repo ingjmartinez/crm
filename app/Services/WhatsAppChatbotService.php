@@ -27,6 +27,7 @@ class WhatsAppChatbotService
     private const STEP_OPERADOR_BANCO = 'operador_banco';
     private const STEP_OPERADOR_IMAGEN = 'operador_imagen';
     private const STEP_OPERADOR_MONTO = 'operador_monto';
+    private const STEP_OPERADOR_CONFIRMAR_MONTO = 'operador_confirmar_monto';
     private const STEP_OPERADOR_RUTA = 'operador_ruta';
 
     public function handleIncoming(string $phone, string $message, ?string $account = null, array $incoming = []): array
@@ -125,6 +126,7 @@ class WhatsAppChatbotService
             self::STEP_OPERADOR_BANCO => $this->handleOperadorBanco($session, $message),
             self::STEP_OPERADOR_IMAGEN => $this->registrarDepositoRuta($session, $incoming),
             self::STEP_OPERADOR_MONTO => $this->handleOperadorMonto($session, $message),
+            self::STEP_OPERADOR_CONFIRMAR_MONTO => $this->handleOperadorConfirmarMonto($session, $message),
             self::STEP_OPERADOR_RUTA => $this->handleOperadorRuta($session, $message),
             default => $this->resetToInicio($session),
         };
@@ -373,7 +375,7 @@ class WhatsAppChatbotService
             'comprobante_message_id' => $attachmentMessageId,
         ]);
 
-        return 'Imagen recibida correctamente. Ahora digite el monto del deposito.';
+        return "Imagen recibida correctamente.\n\nAhora digite el monto del deposito.";
     }
 
     private function handleOperadorMonto(ChatbotSession $session, string $message): string
@@ -385,12 +387,35 @@ class WhatsAppChatbotService
             return 'No pude leer el monto del deposito. Envia solo el monto, ejemplo: 1500.00';
         }
 
-        $session->step = self::STEP_OPERADOR_RUTA;
+        $session->step = self::STEP_OPERADOR_CONFIRMAR_MONTO;
         $session->context = array_merge($context, [
             'monto_depositado' => $monto,
         ]);
+        $montoFormateado = number_format($monto, 2);
 
-        return 'Monto recibido correctamente. Ahora indica el nombre de la ruta del deposito.';
+        return "Monto digitado: {$montoFormateado}\n\nEs correcto?\n1-si\n2-no";
+    }
+
+    private function handleOperadorConfirmarMonto(ChatbotSession $session, string $message): string
+    {
+        $option = trim(strtolower($message));
+
+        if ($option === '1' || $option === 'si' || $option === 'sí') {
+            $session->step = self::STEP_OPERADOR_RUTA;
+
+            return 'Perfecto. Ahora indica el nombre de la ruta del deposito.';
+        }
+
+        if ($option === '2' || $option === 'no') {
+            $context = is_array($session->context) ? $session->context : [];
+            unset($context['monto_depositado']);
+            $session->step = self::STEP_OPERADOR_MONTO;
+            $session->context = $context;
+
+            return 'Entendido. Digite nuevamente el monto del deposito.';
+        }
+
+        return "Responde solo con una opcion:\n1-si\n2-no";
     }
 
     private function handleOperadorRuta(ChatbotSession $session, string $message): string
