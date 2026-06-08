@@ -838,6 +838,17 @@
                             && method_exists($sidebarUser, 'hasRole')
                             && $sidebarUser->hasRole('contabilidad')
                             && !$sidebarUser->hasRole('superadmin');
+                        $isRecursosHumanosOnlyRole = $sidebarUser
+                            && method_exists($sidebarUser, 'hasRole')
+                            && $sidebarUser->hasRole('rh')
+                            && !$sidebarUser->hasRole('superadmin')
+                            && !$sidebarUser->hasRole('admin');
+                        $canSeeRecursosHumanos = $sidebarUser
+                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin'))
+                                || (method_exists($sidebarUser, 'can') && $sidebarUser->can('recursos_humanos.view')));
+                        $canSeeReportes = $sidebarUser
+                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin'))
+                                || (method_exists($sidebarUser, 'can') && $sidebarUser->can('reportes.view')));
                     @endphp
                     <ul class="navbar-nav" id="navbar-nav">
                         <li class="menu-title">
@@ -846,34 +857,40 @@
                             </a>
                         </li>
 
-                        <li class="nav-item">
-                            <a href="{{ route('dashboard.index') }}"
-                                class="nav-link menu-link {{ request()->routeIs('inicio.index') || request()->is('dashboard*') || request()->is('ventas-lotobet-dashboard*') || request()->is('ventas-lotonet-dashboard*') || request()->is('ventas-lotobet-flash-dashboard*') || request()->is('ventas-mar-dashboard*') || request()->is('kpi-lotobet*') ? 'active' : '' }}">
-                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Dashboard</span>
-                            </a>
-                        </li>
+                        @unless($isRecursosHumanosOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('dashboard.index') }}"
+                                    class="nav-link menu-link {{ request()->routeIs('inicio.index') || request()->is('dashboard*') || request()->is('ventas-lotobet-dashboard*') || request()->is('ventas-lotonet-dashboard*') || request()->is('ventas-lotobet-flash-dashboard*') || request()->is('ventas-mar-dashboard*') || request()->is('kpi-lotobet*') ? 'active' : '' }}">
+                                    <i class="ri-apps-2-line"></i> <span data-key="t-apps">Dashboard</span>
+                                </a>
+                            </li>
+                        @endunless
 
-                        @unless($isContabilidadOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('procesos.index') }}"
                                     class="nav-link menu-link {{ request()->is('procesos*') ? 'active' : '' }}">
                                     <i class="ri-flow-chart"></i> <span data-key="t-procesos">Procesos</span>
                                 </a>
                             </li>
+                        @endunless
+                        @if($canSeeRecursosHumanos)
                             <li class="nav-item">
                                 <a href="{{ route('recursos-humanos.index') }}"
                                     class="nav-link menu-link {{ request()->is('recursos-humanos*') || request()->is('empleados*') || request()->is('registro-empleados*') || request()->is('entrevistas-online*') || request()->is('ventas-sin-empleado*') ? 'active' : '' }}">
                                     <i class="ri-team-line"></i> <span data-key="t-recursos-humanos">Recursos Humanos</span>
                                 </a>
                             </li>
+                        @endif
+                        @unless($isRecursosHumanosOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('contabilidad.index') }}"
+                                    class="nav-link menu-link {{ request()->is('contabilidad*') ? 'active' : '' }}">
+                                    <i class="ri-dashboard-2-line"></i> <span data-key="t-contabilidad">Contabilidad</span>
+                                </a>
+                            </li>
                         @endunless
-                        <li class="nav-item">
-                            <a href="{{ route('contabilidad.index') }}"
-                                class="nav-link menu-link {{ request()->is('contabilidad*') ? 'active' : '' }}">
-                                <i class="ri-dashboard-2-line"></i> <span data-key="t-contabilidad">Contabilidad</span>
-                            </a>
-                        </li>
-                        @unless($isContabilidadOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ url('/tareas') }}" class="nav-link menu-link">
                                     <i class="ri-task-line"></i> <span data-key="t-tareas">Tareas</span>
@@ -886,7 +903,7 @@
                             </li>
                         @endunless
                         @can('servicios_generales.view')
-                            @unless($isContabilidadOnlyRole)
+                            @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('servicios-generales.index') }}"
                                     class="nav-link menu-link {{ request()->is('servicios-generales*') ? 'active' : '' }}">
@@ -895,7 +912,7 @@
                             </li>
                             @endunless
                         @endcan
-                        @unless($isContabilidadOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('tecnologia.index') }}"
                                     class="nav-link menu-link {{ request()->is('tecnologia*') ? 'active' : '' }}">
@@ -910,7 +927,7 @@
                             </li>
                         @endunless
 
-                        @unless($isContabilidadOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarApps" data-bs-toggle="collapse"
                                 role="button" aria-expanded="true" aria-controls="sidebarApps">
@@ -1068,13 +1085,15 @@
                         </li>
                         @endunless
 
-                        <li class="nav-item">
-                            <a href="{{ route('reportes.index') }}"
-                                class="nav-link menu-link {{ request()->is('reportes') || request()->is('reportes-*') ? 'active' : '' }}">
-                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Reportes</span>
-                            </a>
-                        </li>
-                        @unless($isContabilidadOnlyRole)
+                        @if($canSeeReportes)
+                            <li class="nav-item">
+                                <a href="{{ route('reportes.index') }}"
+                                    class="nav-link menu-link {{ request()->is('reportes') || request()->is('reportes-*') ? 'active' : '' }}">
+                                    <i class="ri-apps-2-line"></i> <span data-key="t-apps">Reportes</span>
+                                </a>
+                            </li>
+                        @endif
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('incentivos.index') }}"
                                     class="nav-link menu-link {{ request()->is('incentivos*') ? 'active' : '' }}">

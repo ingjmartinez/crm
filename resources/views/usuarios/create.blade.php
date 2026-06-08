@@ -35,7 +35,7 @@
                                     @csrf
 
                                     <div class="row">
-                                        <div class="col-12 col-md-6 mb-3 d-none">
+                                        <div class="col-12 col-md-6 mb-3">
                                             <label for="name" class="form-label">Nombre <span class="text-danger">*</span></label>
                                             <div class="input-group">
                                                 <span class="input-group-text"><i class="ri-user-line"></i></span>

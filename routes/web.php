@@ -272,88 +272,92 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/ventas-mar-dashboard', [MarController::class, 'dashboardVentasMar']);
     Route::get('/ventas-mar-dashboard/data', [MarController::class, 'dashboardVentasMarData']);
 
-    Route::get('/recursos-humanos', [RecursosHumanosController::class, 'index'])->name('recursos-humanos.index');
-    Route::get('/empleados', [EmpleadoController::class, 'index']);
-    Route::get('/empleados/list', [EmpleadoController::class, 'list']);
-    Route::get('/empleados/dashboard', [EmpleadoController::class, 'dashboard']);
-    Route::get('/empleados/show/{id}', [EmpleadoController::class, 'show']);
-    Route::post('/empleados/store', [EmpleadoController::class, 'store']);
-    Route::get('/empleados/destroy/{id}', [EmpleadoController::class, 'destroy']);
-    Route::get('/empleados/sincronizar', [EmpleadoController::class, 'sincronizar']);
-    Route::get('/recursos-humanos/novedades-horario', [NovedadHorarioController::class, 'index'])
-        ->name('recursos-humanos.novedades-horario.index');
-    Route::get('/recursos-humanos/novedades-horario/list', [NovedadHorarioController::class, 'list'])
-        ->name('recursos-humanos.novedades-horario.list');
-    Route::get('/recursos-humanos/novedades-horario/export', [NovedadHorarioController::class, 'export'])
-        ->name('recursos-humanos.novedades-horario.export');
-    Route::get('/recursos-humanos/novedades-horario/export-pago', [NovedadHorarioController::class, 'exportPago'])
-        ->name('recursos-humanos.novedades-horario.export-pago');
-    Route::get('/recursos-humanos/novedades-horario/detalle', [NovedadHorarioController::class, 'detalle'])
-        ->name('recursos-humanos.novedades-horario.detalle');
-    Route::prefix('recursos-humanos/seguimiento-cruce-usuarios')->name('recursos-humanos.cruce-usuarios.')->group(function () {
-        Route::get('/', [CruceUsuarioSeguimientoController::class, 'index'])->name('index');
-        Route::get('/list', [CruceUsuarioSeguimientoController::class, 'list'])->name('list');
-        Route::post('/iniciar-masivo', [CruceUsuarioSeguimientoController::class, 'iniciarMasivo'])->name('iniciar-masivo');
-        Route::post('/{seguimiento}/iniciar', [CruceUsuarioSeguimientoController::class, 'iniciar'])->name('iniciar');
-        Route::post('/{seguimiento}/finalizar', [CruceUsuarioSeguimientoController::class, 'finalizar'])->name('finalizar');
+    Route::middleware('role_or_permission:superadmin|admin|recursos_humanos.view')->group(function () {
+        Route::get('/recursos-humanos', [RecursosHumanosController::class, 'index'])->name('recursos-humanos.index');
+        Route::get('/empleados', [EmpleadoController::class, 'index']);
+        Route::get('/empleados/list', [EmpleadoController::class, 'list']);
+        Route::get('/empleados/dashboard', [EmpleadoController::class, 'dashboard']);
+        Route::get('/empleados/show/{id}', [EmpleadoController::class, 'show']);
+        Route::post('/empleados/store', [EmpleadoController::class, 'store']);
+        Route::get('/empleados/destroy/{id}', [EmpleadoController::class, 'destroy']);
+        Route::get('/empleados/sincronizar', [EmpleadoController::class, 'sincronizar']);
+        Route::get('/recursos-humanos/novedades-horario', [NovedadHorarioController::class, 'index'])
+            ->name('recursos-humanos.novedades-horario.index');
+        Route::get('/recursos-humanos/novedades-horario/list', [NovedadHorarioController::class, 'list'])
+            ->name('recursos-humanos.novedades-horario.list');
+        Route::get('/recursos-humanos/novedades-horario/export', [NovedadHorarioController::class, 'export'])
+            ->name('recursos-humanos.novedades-horario.export');
+        Route::get('/recursos-humanos/novedades-horario/export-pago', [NovedadHorarioController::class, 'exportPago'])
+            ->name('recursos-humanos.novedades-horario.export-pago');
+        Route::get('/recursos-humanos/novedades-horario/detalle', [NovedadHorarioController::class, 'detalle'])
+            ->name('recursos-humanos.novedades-horario.detalle');
+        Route::prefix('recursos-humanos/seguimiento-cruce-usuarios')->name('recursos-humanos.cruce-usuarios.')->group(function () {
+            Route::get('/', [CruceUsuarioSeguimientoController::class, 'index'])->name('index');
+            Route::get('/list', [CruceUsuarioSeguimientoController::class, 'list'])->name('list');
+            Route::post('/iniciar-masivo', [CruceUsuarioSeguimientoController::class, 'iniciarMasivo'])->name('iniciar-masivo');
+            Route::post('/{seguimiento}/iniciar', [CruceUsuarioSeguimientoController::class, 'iniciar'])->name('iniciar');
+            Route::post('/{seguimiento}/finalizar', [CruceUsuarioSeguimientoController::class, 'finalizar'])->name('finalizar');
+        });
+
+        Route::prefix('entrevistas-online')->name('entrevistas-online.')->group(function () {
+            Route::get('/', [EntrevistaOnlineController::class, 'index'])->name('index');
+            Route::get('/list', [EntrevistaOnlineController::class, 'list'])->name('list');
+            Route::get('/{id}', [EntrevistaOnlineController::class, 'show'])->name('show')->whereNumber('id');
+            Route::post('/', [EntrevistaOnlineController::class, 'store'])->name('store');
+            Route::put('/{id}', [EntrevistaOnlineController::class, 'update'])->name('update')->whereNumber('id');
+            Route::delete('/{id}', [EntrevistaOnlineController::class, 'destroy'])->name('destroy')->whereNumber('id');
+        });
+
+        Route::get('/empleados-no-regularizados', [EmpleadoController::class, 'noRegularizados']);
+        Route::get('/empleados-no-regularizados/list', [EmpleadoController::class, 'listNoRegularizados']);
+        Route::get('/ventas-sin-empleado', [EmpleadoController::class, 'ventasSinEmpleado']);
+        Route::get('/ventas-sin-empleado/list', [EmpleadoController::class, 'listVentasSinEmpleado']);
+
+        Route::resource('registro-empleados', RegistroEmpleadoController::class);
     });
 
-    Route::prefix('entrevistas-online')->name('entrevistas-online.')->group(function () {
-        Route::get('/', [EntrevistaOnlineController::class, 'index'])->name('index');
-        Route::get('/list', [EntrevistaOnlineController::class, 'list'])->name('list');
-        Route::get('/{id}', [EntrevistaOnlineController::class, 'show'])->name('show')->whereNumber('id');
-        Route::post('/', [EntrevistaOnlineController::class, 'store'])->name('store');
-        Route::put('/{id}', [EntrevistaOnlineController::class, 'update'])->name('update')->whereNumber('id');
-        Route::delete('/{id}', [EntrevistaOnlineController::class, 'destroy'])->name('destroy')->whereNumber('id');
+    Route::middleware('role_or_permission:superadmin|admin|reportes.view')->group(function () {
+        Route::get('/reportes', [ReporteController::class, 'indexReportes'])->name('reportes.index');
+
+        Route::get('/reportes-ventas-usuario-bet', [ReporteController::class, 'ventasUsuarioBet']);
+        Route::get('/reportes-ventas-usuario-bet/list', [ReporteController::class, 'listVentasUsuarioBet']);
+        Route::get('/reportes-ventas-usuario-bet/excel', [ReporteController::class, 'excelVentasUsuarioBet']);
+        Route::get('/reportes-ventas-usuario-bet/pdf', [ReporteController::class, 'pdfVentasUsuarioBet']);
+
+        Route::get('/reportes-faltantes-bet', [ReporteController::class, 'faltantesBet']);
+        Route::get('/reportes-faltantes-bet/list', [ReporteController::class, 'listFaltantesBet']);
+        Route::get('/reportes-faltantes-bet/excel', [ReporteController::class, 'excelFaltantesBet']);
+        Route::get('/reportes-faltantes-bet/pdf', [ReporteController::class, 'pdfFaltantesBet']);
+
+        Route::get('/reportes-cuadre-ventas', [ReporteController::class, 'cuadreVentas']);
+        Route::get('/reportes-cuadre-ventas/list', [ReporteController::class, 'listCuadreVentas']);
+        Route::get('/reportes-ventas-por-ruta', [ReporteController::class, 'ventasPorRuta']);
+        Route::get('/reportes-ventas-por-ruta/list', [ReporteController::class, 'listVentasPorRuta']);
+
+        Route::get('/reportes-ventas-agencia-periodo', [ReporteController::class, 'ventasAgenciaPeriodo']);
+        Route::get('/reportes-ventas-agencia-periodo/list', [ReporteController::class, 'listVentasAgenciaPeriodo']);
+
+        Route::get('/reportes-ventas-por-agencia', [ReporteController::class, 'ventasPorAgencia']);
+        Route::get('/reportes-ventas-por-agencia/list', [ReporteController::class, 'listVentasPorAgencia']);
+        Route::get('/reportes-ventas-por-agencia/agencia', [ReporteController::class, 'buscarAgencia']);
+
+        Route::get('/reportes-ventas-por-cedula', [ReporteController::class, 'ventasPorCedula']);
+        Route::get('/reportes-ventas-por-cedula/list', [ReporteController::class, 'listVentasPorCedula']);
+
+        Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
+        Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
+        Route::get('/reportes-cruce-usuarios/sin-cedula-fechas', [ReporteController::class, 'listCruceUsuariosSinCedulaFechas']);
+        Route::post('/reportes-cruce-usuarios/seguimiento', [CruceUsuarioSeguimientoController::class, 'storeFromReporte'])
+            ->name('reportes.cruce-usuarios.seguimiento.store');
+
+        Route::get('/reportes-compensacion', [ReporteController::class, 'compensacion']);
+        Route::get('/reportes-compensacion/list', [ReporteController::class, 'listCompensacion']);
+        Route::get('/reportes-compensacion/pdf-grupo-joselito', [ReporteController::class, 'pdfCompensacionGrupoJoselito']);
+
+        Route::get('/reportes-verificador-usuarios', [ReporteController::class, 'verificadorUsuarios']);
+        Route::get('/reportes-verificador-usuarios/list', [ReporteController::class, 'listVerificadorUsuarios']);
+        Route::get('/reportes-verificador-usuarios/excel', [ReporteController::class, 'excelVerificadorUsuarios']);
     });
-
-    Route::get('/empleados-no-regularizados', [EmpleadoController::class, 'noRegularizados']);
-    Route::get('/empleados-no-regularizados/list', [EmpleadoController::class, 'listNoRegularizados']);
-    Route::get('/ventas-sin-empleado', [EmpleadoController::class, 'ventasSinEmpleado']);
-    Route::get('/ventas-sin-empleado/list', [EmpleadoController::class, 'listVentasSinEmpleado']);
-
-    Route::get('/reportes', [ReporteController::class, 'indexReportes'])->name('reportes.index');
-
-    Route::get('/reportes-ventas-usuario-bet', [ReporteController::class, 'ventasUsuarioBet']);
-    Route::get('/reportes-ventas-usuario-bet/list', [ReporteController::class, 'listVentasUsuarioBet']);
-    Route::get('/reportes-ventas-usuario-bet/excel', [ReporteController::class, 'excelVentasUsuarioBet']);
-    Route::get('/reportes-ventas-usuario-bet/pdf', [ReporteController::class, 'pdfVentasUsuarioBet']);
-
-    Route::get('/reportes-faltantes-bet', [ReporteController::class, 'faltantesBet']);
-    Route::get('/reportes-faltantes-bet/list', [ReporteController::class, 'listFaltantesBet']);
-    Route::get('/reportes-faltantes-bet/excel', [ReporteController::class, 'excelFaltantesBet']);
-    Route::get('/reportes-faltantes-bet/pdf', [ReporteController::class, 'pdfFaltantesBet']);
-
-    Route::get('/reportes-cuadre-ventas', [ReporteController::class, 'cuadreVentas']);
-    Route::get('/reportes-cuadre-ventas/list', [ReporteController::class, 'listCuadreVentas']);
-    Route::get('/reportes-ventas-por-ruta', [ReporteController::class, 'ventasPorRuta']);
-    Route::get('/reportes-ventas-por-ruta/list', [ReporteController::class, 'listVentasPorRuta']);
-
-    Route::get('/reportes-ventas-agencia-periodo', [ReporteController::class, 'ventasAgenciaPeriodo']);
-    Route::get('/reportes-ventas-agencia-periodo/list', [ReporteController::class, 'listVentasAgenciaPeriodo']);
-
-    Route::get('/reportes-ventas-por-agencia', [ReporteController::class, 'ventasPorAgencia']);
-    Route::get('/reportes-ventas-por-agencia/list', [ReporteController::class, 'listVentasPorAgencia']);
-    Route::get('/reportes-ventas-por-agencia/agencia', [ReporteController::class, 'buscarAgencia']);
-
-    Route::get('/reportes-ventas-por-cedula', [ReporteController::class, 'ventasPorCedula']);
-    Route::get('/reportes-ventas-por-cedula/list', [ReporteController::class, 'listVentasPorCedula']);
-
-    Route::get('/reportes-cruce-usuarios', [ReporteController::class, 'cruceUsuarios']);
-    Route::get('/reportes-cruce-usuarios/list', [ReporteController::class, 'listCruceUsuarios']);
-    Route::get('/reportes-cruce-usuarios/sin-cedula-fechas', [ReporteController::class, 'listCruceUsuariosSinCedulaFechas']);
-    Route::post('/reportes-cruce-usuarios/seguimiento', [CruceUsuarioSeguimientoController::class, 'storeFromReporte'])
-        ->name('reportes.cruce-usuarios.seguimiento.store');
-
-    Route::get('/reportes-compensacion', [ReporteController::class, 'compensacion']);
-    Route::get('/reportes-compensacion/list', [ReporteController::class, 'listCompensacion']);
-    Route::get('/reportes-compensacion/pdf-grupo-joselito', [ReporteController::class, 'pdfCompensacionGrupoJoselito']);
-
-    Route::get('/reportes-verificador-usuarios', [ReporteController::class, 'verificadorUsuarios']);
-    Route::get('/reportes-verificador-usuarios/list', [ReporteController::class, 'listVerificadorUsuarios']);
-    Route::get('/reportes-verificador-usuarios/excel', [ReporteController::class, 'excelVerificadorUsuarios']);
-
-    Route::resource('registro-empleados', RegistroEmpleadoController::class);
 
     Route::resource('agencias', AgenciaController::class);
     Route::get('agencias-list', [AgenciaController::class, 'list'])->name('agencias.list');

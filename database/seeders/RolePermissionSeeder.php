@@ -25,6 +25,8 @@ class RolePermissionSeeder extends Seeder
             'permissions.create',
             'permissions.edit',
             'permissions.delete',
+            'recursos_humanos.view',
+            'reportes.view',
             'servicios_generales.view',
             'servicios_generales.create',
             'servicios_generales.manage',
@@ -39,7 +41,7 @@ class RolePermissionSeeder extends Seeder
             'superadmin' => $permissions,
             'admin' => $permissions,
             'contabilidad' => ['usuarios.view', 'usuarios.list'],
-            'rh' => ['usuarios.view', 'usuarios.list'],
+            'rh' => ['recursos_humanos.view', 'reportes.view'],
             'comercial' => ['usuarios.view', 'usuarios.list'],
             'monitoreo' => ['usuarios.view', 'usuarios.list'],
             'servicios_generales' => [
