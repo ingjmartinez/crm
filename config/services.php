@@ -58,4 +58,11 @@ return [
         ),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'vision_model' => env('OPENAI_VISION_MODEL', 'gpt-4.1-mini'),
+        'timeout' => env('OPENAI_API_TIMEOUT', 60),
+        'verify_ssl' => env('OPENAI_API_VERIFY_SSL', true),
+    ],
+
 ];

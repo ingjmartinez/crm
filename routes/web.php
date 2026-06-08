@@ -290,6 +290,13 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('recursos-humanos.novedades-horario.export-pago');
     Route::get('/recursos-humanos/novedades-horario/detalle', [NovedadHorarioController::class, 'detalle'])
         ->name('recursos-humanos.novedades-horario.detalle');
+    Route::prefix('recursos-humanos/seguimiento-cruce-usuarios')->name('recursos-humanos.cruce-usuarios.')->group(function () {
+        Route::get('/', [CruceUsuarioSeguimientoController::class, 'index'])->name('index');
+        Route::get('/list', [CruceUsuarioSeguimientoController::class, 'list'])->name('list');
+        Route::post('/iniciar-masivo', [CruceUsuarioSeguimientoController::class, 'iniciarMasivo'])->name('iniciar-masivo');
+        Route::post('/{seguimiento}/iniciar', [CruceUsuarioSeguimientoController::class, 'iniciar'])->name('iniciar');
+        Route::post('/{seguimiento}/finalizar', [CruceUsuarioSeguimientoController::class, 'finalizar'])->name('finalizar');
+    });
 
     Route::prefix('entrevistas-online')->name('entrevistas-online.')->group(function () {
         Route::get('/', [EntrevistaOnlineController::class, 'index'])->name('index');
@@ -494,11 +501,6 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
     Route::prefix('tecnologia')->name('tecnologia.')->group(function () {
         Route::get('/', [ModuleHubController::class, 'tecnologia'])->name('index');
-        Route::get('/seguimiento-cruce-usuarios', [CruceUsuarioSeguimientoController::class, 'index'])->name('cruce-usuarios.index');
-        Route::get('/seguimiento-cruce-usuarios/list', [CruceUsuarioSeguimientoController::class, 'list'])->name('cruce-usuarios.list');
-        Route::post('/seguimiento-cruce-usuarios/iniciar-masivo', [CruceUsuarioSeguimientoController::class, 'iniciarMasivo'])->name('cruce-usuarios.iniciar-masivo');
-        Route::post('/seguimiento-cruce-usuarios/{seguimiento}/iniciar', [CruceUsuarioSeguimientoController::class, 'iniciar'])->name('cruce-usuarios.iniciar');
-        Route::post('/seguimiento-cruce-usuarios/{seguimiento}/finalizar', [CruceUsuarioSeguimientoController::class, 'finalizar'])->name('cruce-usuarios.finalizar');
         Route::get('/solicitudes', [TecnologiaSolicitudController::class, 'index'])->name('solicitudes.index');
         Route::get('/solicitudes/list', [TecnologiaSolicitudController::class, 'list'])->name('solicitudes.list');
         Route::post('/solicitudes', [TecnologiaSolicitudController::class, 'store'])->name('solicitudes.store');

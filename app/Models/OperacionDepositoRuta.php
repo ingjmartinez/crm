@@ -14,6 +14,12 @@ class OperacionDepositoRuta extends Model
         'banco',
         'ruta_nombre',
         'monto_depositado',
+        'monto_ocr',
+        'ocr_estado',
+        'ocr_confianza',
+        'ocr_observacion',
+        'ocr_texto',
+        'ocr_procesado_at',
         'comprobante_url',
         'comprobante_message_id',
         'estado',
@@ -23,6 +29,8 @@ class OperacionDepositoRuta extends Model
     {
         return [
             'monto_depositado' => 'decimal:2',
+            'monto_ocr' => 'decimal:2',
+            'ocr_procesado_at' => 'datetime',
         ];
     }
 }

@@ -29,6 +29,15 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Seguimiento Cruce de Usuarios',
+        'descripcion' => 'Gestiona los casos generados desde el reporte de cruce de usuarios.',
+        'url' => '/recursos-humanos/seguimiento-cruce-usuarios',
+        'icono' => 'ri-user-search-line',
+        'categoria' => 'Seguimiento',
+        'tags' => ['recursos humanos', 'cruce usuarios', 'seguimiento', 'reportes'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Entrevista Online',
         'descripcion' => 'Registra entrevistas telefonicas u online realizadas a candidatos.',
         'url' => '/entrevistas-online',

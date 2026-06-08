@@ -385,15 +385,6 @@ return [
                 'tags' => ['tecnologia', 'solicitudes', 'soporte'],
                 'activo' => true,
             ],
-            [
-                'nombre' => 'Seguimiento Cruce de Usuarios',
-                'descripcion' => 'Gestiona los casos generados desde el reporte de cruce de usuarios.',
-                'url' => '/tecnologia/seguimiento-cruce-usuarios',
-                'icono' => 'ri-user-search-line',
-                'categoria' => 'Seguimiento',
-                'tags' => ['tecnologia', 'cruce usuarios', 'seguimiento', 'reportes'],
-                'activo' => true,
-            ],
         ],
     ],
 

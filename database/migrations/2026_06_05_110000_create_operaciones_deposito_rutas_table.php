@@ -15,6 +15,12 @@ return new class extends Migration
             $table->string('banco', 80)->index();
             $table->string('ruta_nombre', 150)->nullable()->index();
             $table->decimal('monto_depositado', 14, 2)->default(0);
+            $table->decimal('monto_ocr', 14, 2)->nullable();
+            $table->string('ocr_estado', 30)->default('pendiente')->index();
+            $table->string('ocr_confianza', 30)->nullable();
+            $table->text('ocr_observacion')->nullable();
+            $table->longText('ocr_texto')->nullable();
+            $table->timestamp('ocr_procesado_at')->nullable();
             $table->text('comprobante_url');
             $table->string('comprobante_message_id', 120)->nullable()->index();
             $table->string('estado', 30)->default('pendiente')->index();

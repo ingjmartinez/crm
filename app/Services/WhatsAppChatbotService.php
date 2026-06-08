@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\ProcessOperacionDepositoRutaOcr;
 use App\Models\Agencia;
 use App\Models\ChatbotSession;
 use App\Models\OperacionDepositoRuta;
@@ -439,7 +440,7 @@ class WhatsAppChatbotService
         }
 
         try {
-            OperacionDepositoRuta::create([
+            $deposito = OperacionDepositoRuta::create([
                 'account' => $session->account,
                 'whatsapp_phone' => $session->phone,
                 'banco' => $banco,
@@ -449,6 +450,8 @@ class WhatsAppChatbotService
                 'comprobante_message_id' => $attachmentMessageId,
                 'estado' => 'pendiente',
             ]);
+
+            ProcessOperacionDepositoRutaOcr::dispatch($deposito->id);
         } catch (\Throwable $e) {
             Log::error('WhatsApp chatbot: error registrando deposito de ruta', [
                 'phone' => $session->phone,

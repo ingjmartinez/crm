@@ -35,6 +35,7 @@ class OperacionDepositoRutaController extends Controller
 
         $hasRutaNombre = Schema::hasColumn('operaciones_deposito_rutas', 'ruta_nombre');
         $hasMontoDepositado = Schema::hasColumn('operaciones_deposito_rutas', 'monto_depositado');
+        $hasOcrFields = Schema::hasColumn('operaciones_deposito_rutas', 'ocr_estado');
         $fecha = $this->normalizeFecha($request->input('fecha')) ?? now()->toDateString();
         $baseQuery = OperacionDepositoRuta::query();
         $baseQuery->whereDate('created_at', $fecha);
@@ -66,8 +67,9 @@ class OperacionDepositoRutaController extends Controller
             ->skip($start)
             ->take($length)
             ->get()
-            ->map(function (OperacionDepositoRuta $deposito) use ($hasRutaNombre, $hasMontoDepositado) {
+            ->map(function (OperacionDepositoRuta $deposito) use ($hasRutaNombre, $hasMontoDepositado, $hasOcrFields) {
                 $monto = $hasMontoDepositado ? (float) $deposito->monto_depositado : 0.0;
+                $montoOcr = $hasOcrFields && $deposito->monto_ocr !== null ? (float) $deposito->monto_ocr : null;
 
                 return [
                     'id' => $deposito->id,
@@ -78,6 +80,10 @@ class OperacionDepositoRutaController extends Controller
                     'ruta_nombre' => $hasRutaNombre ? ($deposito->ruta_nombre ?: 'No indicada') : 'No indicada',
                     'monto_depositado' => number_format($monto, 2),
                     'monto_depositado_raw' => $monto,
+                    'monto_ocr' => $montoOcr !== null ? number_format($montoOcr, 2) : null,
+                    'ocr_estado' => $hasOcrFields ? ($deposito->ocr_estado ?: 'pendiente') : 'pendiente',
+                    'ocr_confianza' => $hasOcrFields ? $deposito->ocr_confianza : null,
+                    'ocr_observacion' => $hasOcrFields ? $deposito->ocr_observacion : null,
                     'estado' => ucfirst($deposito->estado),
                     'comprobante_url' => $deposito->comprobante_url,
                 ];

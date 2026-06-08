@@ -11,7 +11,7 @@
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
-                                    <li class="breadcrumb-item"><a href="{{ route('tecnologia.index') }}">Tecnologia</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ route('recursos-humanos.index') }}">Recursos Humanos</a></li>
                                     <li class="breadcrumb-item active">Seguimiento Cruce de Usuarios</li>
                                 </ol>
                             </div>
@@ -114,9 +114,9 @@
 
 @section('script')
     <script>
-        const SEGUIMIENTO_LIST_URL = '{{ route('tecnologia.cruce-usuarios.list') }}';
-        const SEGUIMIENTO_INICIAR_URL = '{{ url('/tecnologia/seguimiento-cruce-usuarios') }}/';
-        const SEGUIMIENTO_INICIAR_MASIVO_URL = '{{ route('tecnologia.cruce-usuarios.iniciar-masivo') }}';
+        const SEGUIMIENTO_LIST_URL = '{{ route('recursos-humanos.cruce-usuarios.list') }}';
+        const SEGUIMIENTO_INICIAR_URL = '{{ url('/recursos-humanos/seguimiento-cruce-usuarios') }}/';
+        const SEGUIMIENTO_INICIAR_MASIVO_URL = '{{ route('recursos-humanos.cruce-usuarios.iniciar-masivo') }}';
         const CSRF_TOKEN_CRUCE = '{{ csrf_token() }}';
         let tablaSeguimiento;
 

@@ -106,6 +106,8 @@
                                                 <th>Banco</th>
                                                 <th>Ruta</th>
                                                 <th class="text-end">Monto depositado</th>
+                                                <th class="text-end">Monto OCR</th>
+                                                <th>Validacion OCR</th>
                                                 <th>Imagen</th>
                                                 <th>Estado</th>
                                             </tr>
@@ -276,6 +278,33 @@
                         className: 'text-end',
                         render: function (data) {
                             return `<span class="fw-semibold">${data || '0.00'}</span>`;
+                        }
+                    },
+                    {
+                        data: 'monto_ocr',
+                        name: 'monto_ocr',
+                        className: 'text-end',
+                        render: function (data) {
+                            return data ? `<span class="fw-semibold">${data}</span>` : '<span class="text-muted">-</span>';
+                        }
+                    },
+                    {
+                        data: 'ocr_estado',
+                        name: 'ocr_estado',
+                        render: function (data, type, row) {
+                            const estado = String(data || 'pendiente').toLowerCase();
+                            const labels = {
+                                pendiente: ['Pendiente', 'bg-secondary-subtle text-secondary'],
+                                procesando: ['Procesando', 'bg-info-subtle text-info'],
+                                coincide: ['Coincide', 'bg-success-subtle text-success'],
+                                no_coincide: ['No coincide', 'bg-danger-subtle text-danger'],
+                                revision: ['Revision', 'bg-warning-subtle text-warning'],
+                                error: ['Error', 'bg-dark-subtle text-dark']
+                            };
+                            const config = labels[estado] || labels.pendiente;
+                            const title = row.ocr_observacion ? ` title="${escapeJs(row.ocr_observacion)}"` : '';
+
+                            return `<span class="badge ${config[1]}"${title}>${config[0]}</span>`;
                         }
                     },
                     {
