@@ -3,7 +3,10 @@
 @section('content')
     <style>
         .module-hub-card {
-            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+            transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 0.22s ease,
+                border-color 0.22s ease;
+            will-change: transform;
         }
 
         .module-hub-card .module-hub-icon .avatar-title,
@@ -24,23 +27,25 @@
 
         .module-hub-card .avatar-title,
         .module-hub-card .module-hub-arrow {
-            transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+            transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+                background-color 0.22s ease,
+                color 0.22s ease;
         }
 
         .module-hub-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(64, 81, 137, 0.35) !important;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+            transform: translateY(-2px);
+            border-color: rgba(64, 81, 137, 0.22) !important;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
         }
 
         .module-hub-card:hover .avatar-title {
-            transform: scale(1.06);
+            transform: scale(1.02);
             background-color: var(--vz-primary) !important;
             color: #fff !important;
         }
 
         .module-hub-card:hover .module-hub-arrow {
-            transform: translate(3px, -3px);
+            transform: translate(1px, -1px);
             color: var(--vz-primary) !important;
         }
     </style>
