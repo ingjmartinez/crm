@@ -272,7 +272,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/ventas-mar-dashboard', [MarController::class, 'dashboardVentasMar']);
     Route::get('/ventas-mar-dashboard/data', [MarController::class, 'dashboardVentasMarData']);
 
-    Route::middleware('role_or_permission:superadmin|admin|recursos_humanos.view')->group(function () {
+    Route::middleware('role_or_permission:superadmin|admin|rh|recursos_humanos.view')->group(function () {
         Route::get('/recursos-humanos', [RecursosHumanosController::class, 'index'])->name('recursos-humanos.index');
         Route::get('/empleados', [EmpleadoController::class, 'index']);
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
@@ -316,7 +316,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::resource('registro-empleados', RegistroEmpleadoController::class);
     });
 
-    Route::middleware('role_or_permission:superadmin|admin|reportes.view')->group(function () {
+    Route::middleware('role_or_permission:superadmin|admin|rh|reportes.view')->group(function () {
         Route::get('/reportes', [ReporteController::class, 'indexReportes'])->name('reportes.index');
 
         Route::get('/reportes-ventas-usuario-bet', [ReporteController::class, 'ventasUsuarioBet']);

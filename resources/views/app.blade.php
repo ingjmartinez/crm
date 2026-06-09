@@ -844,10 +844,10 @@
                             && !$sidebarUser->hasRole('superadmin')
                             && !$sidebarUser->hasRole('admin');
                         $canSeeRecursosHumanos = $sidebarUser
-                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin'))
+                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin') || $sidebarUser->hasRole('rh'))
                                 || (method_exists($sidebarUser, 'can') && $sidebarUser->can('recursos_humanos.view')));
                         $canSeeReportes = $sidebarUser
-                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin'))
+                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin') || $sidebarUser->hasRole('rh'))
                                 || (method_exists($sidebarUser, 'can') && $sidebarUser->can('reportes.view')));
                     @endphp
                     <ul class="navbar-nav" id="navbar-nav">
