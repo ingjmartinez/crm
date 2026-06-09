@@ -34,6 +34,10 @@ class CruceUsuarioSeguimientoController extends Controller
             $query->where('estado', $request->estado);
         }
 
+        if ($request->filled('empresa') && $request->empresa !== 'todos') {
+            $query->where('empresa', $request->empresa);
+        }
+
         if ($request->filled('cedula')) {
             $query->where('cedula', 'like', '%' . $this->normalizarCedula($request->cedula) . '%');
         }
@@ -106,6 +110,8 @@ class CruceUsuarioSeguimientoController extends Controller
                     'empleado_id' => $item['Empleado_ID'] ?? null,
                     'nombre_completo' => $item['NombreCompleto'] ?? null,
                     'detalle' => $item['Detalle'] ?? null,
+                    'estatus_origen' => $item['Estatus'],
+                    'ultima_fecha_venta' => $item['Ultima_Fecha_Venta'] ?? null,
                     'reporte_fecha_inicio' => $validated['meta']['fecha_inicio'] ?? null,
                     'reporte_fecha_fin' => $validated['meta']['fecha_fin'] ?? null,
                     'sistema' => $validated['meta']['sistema'] ?? 'todos',
@@ -166,6 +172,7 @@ class CruceUsuarioSeguimientoController extends Controller
 
         $validated = $request->validate([
             'estado' => ['nullable', 'string', 'in:,pendiente,en_gestion,finalizado'],
+            'empresa' => ['nullable', 'string', 'in:todos,grupo_joselito,negosur'],
             'search' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -177,6 +184,10 @@ class CruceUsuarioSeguimientoController extends Controller
                 'success' => false,
                 'message' => 'El inicio masivo solo aplica a casos pendientes.',
             ], 422);
+        }
+
+        if (($validated['empresa'] ?? 'todos') !== 'todos') {
+            $query->where('empresa', $validated['empresa']);
         }
 
         if (!empty($validated['search'])) {

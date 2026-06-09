@@ -55,7 +55,7 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="filtroEstado" class="form-label">Estado</label>
                                 <select id="filtroEstado" class="form-control">
                                     <option value="">Todos</option>
@@ -64,7 +64,15 @@
                                     <option value="finalizado">Finalizado</option>
                                 </select>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-2">
+                                <label for="filtroEmpresa" class="form-label">Empresa</label>
+                                <select id="filtroEmpresa" class="form-control">
+                                    <option value="todos">Todas</option>
+                                    <option value="grupo_joselito">Grupo Joselito</option>
+                                    <option value="negosur">Negosur</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
                                 <label for="filtroBusqueda" class="form-label">Busqueda</label>
                                 <input type="text" id="filtroBusqueda" class="form-control" placeholder="Cedula, nombre, agencia o estatus">
                             </div>
@@ -93,6 +101,7 @@
                                         <th>Caso</th>
                                         <th>Cedula</th>
                                         <th>Nombre</th>
+                                        <th>Empresa</th>
                                         <th>Estatus reporte</th>
                                         <th>Detalle</th>
                                         <th>Ultima venta</th>
@@ -174,6 +183,7 @@
                     type: 'GET',
                     data: function(params) {
                         params.estado = document.getElementById('filtroEstado').value;
+                        params.empresa = document.getElementById('filtroEmpresa').value;
                         params.search = document.getElementById('filtroBusqueda').value;
                     },
                     dataSrc: function(json) {
@@ -190,6 +200,20 @@
                     { data: 'codigo' },
                     { data: 'cedula' },
                     { data: 'nombre_completo', defaultContent: '-' },
+                    {
+                        data: 'empresa',
+                        render: function(data) {
+                            if (data === 'grupo_joselito') {
+                                return 'Grupo Joselito';
+                            }
+
+                            if (data === 'negosur') {
+                                return 'Negosur';
+                            }
+
+                            return 'Todas';
+                        }
+                    },
                     { data: 'estatus_origen' },
                     {
                         data: 'detalle',
@@ -203,7 +227,7 @@
                     { data: 'finalizado_at', defaultContent: '-' },
                     { data: null, orderable: false, searchable: false, render: renderAcciones }
                 ],
-                order: [[5, 'desc']],
+                order: [[6, 'desc']],
                 pageLength: 25,
                 scrollX: true,
                 language: {
@@ -240,6 +264,7 @@
 
         function iniciarMasivo() {
             const estado = document.getElementById('filtroEstado').value;
+            const empresa = document.getElementById('filtroEmpresa').value;
             const search = document.getElementById('filtroBusqueda').value;
 
             if (estado && estado !== 'pendiente') {
@@ -263,6 +288,7 @@
 
                 postAccion(SEGUIMIENTO_INICIAR_MASIVO_URL, {
                     estado: estado,
+                    empresa: empresa,
                     search: search
                 }, 'Gestion masiva iniciada.');
             });
@@ -276,6 +302,7 @@
 
             document.getElementById('btnLimpiar').addEventListener('click', function() {
                 document.getElementById('filtroEstado').value = '';
+                document.getElementById('filtroEmpresa').value = 'todos';
                 document.getElementById('filtroBusqueda').value = '';
                 cargarTabla();
             });
