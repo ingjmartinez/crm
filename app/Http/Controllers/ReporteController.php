@@ -1105,6 +1105,12 @@ class ReporteController extends Controller
         $resultados = array_values($resultados); // Reindexar el array
         $this->anexarSeguimientoCruceUsuarios($resultados);
 
+        if ($estatus === 'No activo') {
+            $resultados = array_values(array_filter($resultados, function ($item) {
+                return $item->Seguimiento_Estado !== 'finalizado';
+            }));
+        }
+
         if ($filtrarPorSeguimiento) {
             $estadoSeguimiento = $filtrosSeguimiento[$estatus];
             $resultados = array_values(array_filter($resultados, function ($item) use ($estadoSeguimiento) {
@@ -1144,23 +1150,16 @@ class ReporteController extends Controller
 
         $seguimientos = DB::table('cruce_usuario_seguimientos')
             ->whereIn('cedula', $cedulas)
+            ->orderByRaw("FIELD(estado, 'finalizado', 'en_gestion', 'pendiente') ASC")
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->get()
-            ->keyBy(function ($item) {
-                return implode('|', [
-                    $item->cedula,
-                    $item->ultima_fecha_venta,
-                    $item->estatus_origen,
-                ]);
-            });
+            ->unique('cedula')
+            ->keyBy('cedula');
 
         foreach ($resultados as $item) {
-            $key = implode('|', [
-                preg_replace('/[^0-9]/', '', (string) $item->Identificacion),
-                $item->Ultima_Fecha_Venta,
-                $item->Estatus,
-            ]);
-
-            $seguimiento = $seguimientos->get($key);
+            $cedula = preg_replace('/[^0-9]/', '', (string) $item->Identificacion);
+            $seguimiento = $seguimientos->get($cedula);
 
             if (!$seguimiento) {
                 continue;

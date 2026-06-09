@@ -101,11 +101,7 @@ class CruceUsuarioSeguimientoController extends Controller
             }
 
             $seguimiento = CruceUsuarioSeguimiento::firstOrCreate(
-                [
-                    'cedula' => $cedula,
-                    'ultima_fecha_venta' => $item['Ultima_Fecha_Venta'] ?? null,
-                    'estatus_origen' => $item['Estatus'],
-                ],
+                ['cedula' => $cedula],
                 [
                     'empleado_id' => $item['Empleado_ID'] ?? null,
                     'nombre_completo' => $item['NombreCompleto'] ?? null,
