@@ -30,6 +30,7 @@ class WhatsAppChatbotService
     private const STEP_OPERADOR_MONTO = 'operador_monto';
     private const STEP_OPERADOR_CONFIRMAR_MONTO = 'operador_confirmar_monto';
     private const STEP_OPERADOR_RUTA = 'operador_ruta';
+    private const STEP_DEPARTAMENTO_MENU = 'departamento_menu';
 
     public function handleIncoming(string $phone, string $message, ?string $account = null, array $incoming = []): array
     {
@@ -114,8 +115,14 @@ class WhatsAppChatbotService
             'step' => $session->step,
         ]);
 
+        if ($this->isGreeting($message)) {
+            $session->step = 'inicio';
+            $session->context = null;
+        }
+
         return match ($session->step) {
             'inicio' => $this->handleInicio($session, $message),
+            self::STEP_DEPARTAMENTO_MENU => $this->handleDepartamentoMenu($session, $message),
             'consulta_hora_menu' => $this->handleConsultaHoraMenu($session, $message),
             'consulta_horario_cedula' => $this->handleConsultaHorarioCedula($session, $message),
             'consulta_horario_terminal' => $this->handleConsultaHorarioTerminal($session, $message),
@@ -144,14 +151,58 @@ class WhatsAppChatbotService
             'message_preview' => $this->preview($message),
         ]);
 
-        $session->step = 'consulta_hora_menu';
+        $session->step = self::STEP_DEPARTAMENTO_MENU;
         $session->context = [
             'first_message' => $context['first_message'] ?? $message,
             'last_message' => $message,
-            'menu' => 'principal',
+            'menu' => 'departamentos',
         ];
 
-        return $this->consultaHoraMenuMessage();
+        return $this->departamentoMenuMessage();
+    }
+
+    private function handleDepartamentoMenu(ChatbotSession $session, string $message): string
+    {
+        $option = trim($message);
+
+        Log::debug('WhatsApp chatbot: handleDepartamentoMenu', [
+            'session_id' => $session->id,
+            'phone' => $session->phone,
+            'option' => $option,
+        ]);
+
+        if ($option === '1') {
+            $session->step = 'consulta_hora_menu';
+            $session->context = [
+                'departamento' => 'agente_ventas',
+            ];
+
+            return $this->consultaHoraMenuMessage();
+        }
+
+        if ($option === '2') {
+            $session->step = self::STEP_SG_TIPO;
+            $session->context = [
+                'departamento' => 'servicios_tecnicos',
+                'intent' => 'reportar_averia',
+            ];
+
+            return $this->serviciosGeneralesTiposMessage();
+        }
+
+        if ($option === '3') {
+            $session->step = self::STEP_OPERADOR_BANCO;
+            $session->context = [
+                'departamento' => 'operadores',
+                'intent' => 'operador_deposito_ruta',
+            ];
+
+            return $this->operadorBancosMessage();
+        }
+
+        $session->step = self::STEP_DEPARTAMENTO_MENU;
+
+        return $this->departamentoMenuMessage();
     }
 
     private function handleConsultaHoraMenu(ChatbotSession $session, string $message): string
@@ -171,24 +222,6 @@ class WhatsAppChatbotService
             ];
 
             return 'Por favor indica la cedula del usuario.';
-        }
-
-        if ($option === '2') {
-            $session->step = self::STEP_SG_TIPO;
-            $session->context = [
-                'intent' => 'reportar_averia',
-            ];
-
-            return $this->serviciosGeneralesTiposMessage();
-        }
-
-        if ($option === '3') {
-            $session->step = self::STEP_OPERADOR_BANCO;
-            $session->context = [
-                'intent' => 'operador_deposito_ruta',
-            ];
-
-            return $this->operadorBancosMessage();
         }
 
         $session->step = 'consulta_hora_menu';
@@ -737,11 +770,18 @@ class WhatsAppChatbotService
 
     private function consultaHoraMenuMessage(): string
     {
-        return "Hola, como estas? Soy tu asistente virtual y estoy aqui para servirte.\n\n"
+        return "Agente de ventas\n\n"
             . "Por favor responde solo numericamente:\n\n"
-            . "1- consultar el horario de servicio\n"
-            . "2- averias\n"
-            . "3- operador";
+            . "1- consultar el horario de servicio";
+    }
+
+    private function departamentoMenuMessage(): string
+    {
+        return "Hola, como estas? Soy tu asistente virtual y estoy aqui para servirte.\n\n"
+            . "Selecciona el departamento escribiendo solo el numero:\n\n"
+            . "1-Agente de ventas\n"
+            . "2-Servicios Tecnicos\n"
+            . "3-Operadores";
     }
 
     private function serviciosGeneralesTiposMessage(): string
@@ -780,6 +820,24 @@ class WhatsAppChatbotService
         $session->context = null;
 
         return $this->handleInicio($session, (string) $session->last_message);
+    }
+
+    private function isGreeting(string $message): bool
+    {
+        $normalized = Str::of($message)
+            ->lower()
+            ->ascii()
+            ->replaceMatches('/[^a-z0-9\s]/', '')
+            ->squish()
+            ->toString();
+
+        return in_array($normalized, [
+            'hola',
+            'buenas',
+            'buenos dias',
+            'buenas tardes',
+            'buenas noches',
+        ], true);
     }
 
     private function getOrCreateSession(string $phone, string $account): ChatbotSession
