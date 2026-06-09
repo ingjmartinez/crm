@@ -72,6 +72,7 @@
                                                 <th>Identificación</th>
                                                 <th>Día</th>
                                                 <th>Agencia</th>
+                                                <th>Nombre Agencia</th>
                                                 <th class="text-end">Total Día Agencia</th>
                                             </tr>
                                         </thead>
@@ -156,6 +157,7 @@
                     { data: 'Identificacion' },
                     { data: 'Dia' },
                     { data: 'Agencia' },
+                    { data: 'Nombre_Agencia' },
                     {
                         data: 'Total_Dia_Agencia',
                         className: 'text-end',
@@ -173,7 +175,7 @@
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
                 },
-                order: [[1, 'asc'], [3, 'desc']],
+                order: [[1, 'asc'], [4, 'desc']],
                 paging: false,
                 searching: false,
                 info: false,

@@ -10,13 +10,13 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">Verificación de Usuario Lotobet</h4>
+                            <h4 class="mb-sm-0">Ventas por Usuario</h4>
 
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('reportes.index') }}">Reportes</a></li>
-                                    <li class="breadcrumb-item active">Verificacion de Usuario Lotobet</li>
+                                    <li class="breadcrumb-item active">Ventas por Usuario</li>
                                 </ol>
                             </div>
                         </div>
@@ -28,12 +28,24 @@
                     <div class="col-lg-12">
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between">
-                                <h5 class="card-title mb-0">Sistema Lotobet</h5>
+                                <h5 class="card-title mb-0">Ventas por Usuario</h5>
 
-                                <div class="d-flex gap-3 align-items-center justify-content-between">
-                                    <div><label class="mb-0" for="empresa">Mes</label></div>
+                                <div class="d-flex gap-3 align-items-center justify-content-between flex-wrap">
                                     <div>
-                                        <input type="month" class="form-control" id="mes">
+                                        <label class="mb-0" for="empresa">Empresa</label>
+                                        <select id="empresa" class="form-control">
+                                            <option value="todos">Todas</option>
+                                            <option value="grupo_joselito">Grupo Joselito</option>
+                                            <option value="negosur">Negosur</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="mb-0" for="fecha_inicio">Desde</label>
+                                        <input type="date" class="form-control" id="fecha_inicio" value="{{ date('Y-m-01') }}">
+                                    </div>
+                                    <div>
+                                        <label class="mb-0" for="fecha_fin">Hasta</label>
+                                        <input type="date" class="form-control" id="fecha_fin" value="{{ date('Y-m-d') }}">
                                     </div>
 
                                     <button id="btnFiltrar" class="btn btn-primary">
@@ -42,10 +54,6 @@
 
                                     <button id="btnExportarExcel" class="btn btn-success">
                                         Exportar Excel
-                                    </button>
-
-                                    <button id="btnExportarPdf" class="btn btn-danger">
-                                        Exportar Pdf
                                     </button>
                                 </div>
                             </div>
@@ -56,10 +64,12 @@
                                         style="width:100%; height:525px; max-height:525px; overflow-y:scroll;">
                                         <thead>
                                             <tr>
-                                                <th>Consorcio</th>
-                                                <th>Agencia</th>
                                                 <th>Cedula</th>
-                                                <th>Tipo</th>
+                                                <th>Nombre</th>
+                                                <th>Tradicional</th>
+                                                <th>No tradicional</th>
+                                                <th>Recargas</th>
+                                                <th>Total</th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
@@ -112,7 +122,7 @@
 
 @section('script')
     <script>
-        document.getElementById('btnFiltrar').addEventListener('click', function() {
+        document.getElementById('btnFiltrar').addEventListener('click', function(event) {
             listVentasUsuarioBet(1, event);
         });
 
@@ -120,8 +130,8 @@
             if (event) {
                 event.preventDefault();
             }
-            const mes = document.getElementById('mes').value;
-            const url = `/reportes-ventas-usuario-bet/list?mes=${mes}&page=${page}`;
+            const params = filtrosReporte(page);
+            const url = `/reportes-ventas-usuario-bet/list?${params.toString()}`;
 
             Swal.fire({
                 title: "Cargando data ...",
@@ -141,10 +151,12 @@
                     data.data.forEach(row => {
                         const tr = document.createElement('tr');
                         tr.innerHTML = `
-                            <td>${row.consorcio_id}</td>
-                            <td>${row.agencia_id}</td>
-                            <td>${row.cedula}</td>
-                            <td>${row.tipo}</td>
+                            <td>${escapeHtml(row.cedula)}</td>
+                            <td>${escapeHtml(row.nombre)}</td>
+                            <td class="text-end">${formatMoney(row.tradicional)}</td>
+                            <td class="text-end">${formatMoney(row.no_tradicional)}</td>
+                            <td class="text-end">${formatMoney(row.recargas)}</td>
+                            <td class="text-end fw-semibold">${formatMoney(row.total)}</td>
                         `;
                         tableBody.appendChild(tr);
                     });
@@ -179,19 +191,48 @@
                         Swal.close();
                     });
                 })
-                .catch(error => console.error('Error fetching data:', error));
+                .catch(error => {
+                    Swal.close();
+                    console.error('Error fetching data:', error);
+                });
         }
 
         document.getElementById('btnExportarExcel').addEventListener('click', function() {
-            const mes = document.getElementById('mes').value;
-            const url = `/reportes-ventas-usuario-bet/excel?mes=${mes}`;
+            const params = filtrosReporte();
+            params.delete('page');
+            const url = `/reportes-ventas-usuario-bet/excel?${params.toString()}`;
             window.open(url, '_blank');
         });
 
-         document.getElementById('btnExportarPdf').addEventListener('click', function() {
-            const mes = document.getElementById('mes').value;
-            const url = `/reportes-ventas-usuario-bet/pdf?mes=${mes}`;
-            window.open(url, '_blank');
-        });
+        function filtrosReporte(page = null) {
+            const params = new URLSearchParams({
+                empresa: document.getElementById('empresa').value,
+                fecha_inicio: document.getElementById('fecha_inicio').value,
+                fecha_fin: document.getElementById('fecha_fin').value
+            });
+
+            if (page !== null) {
+                params.set('page', page);
+            }
+
+            return params;
+        }
+
+        function formatMoney(value) {
+            return Number(value || 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, character => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            }[character]));
+        }
     </script>
 @endsection

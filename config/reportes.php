@@ -2,12 +2,12 @@
 
 return [
     [
-        'nombre' => 'Ventas por Usuario BET',
-        'descripcion' => 'Consulta ventas por usuario en un mes seleccionado.',
+        'nombre' => 'Ventas por Usuario',
+        'descripcion' => 'Consulta ventas por usuario en un rango de fechas.',
         'url' => '/reportes-ventas-usuario-bet',
         'icono' => 'ri-user-search-line',
         'categoria' => 'Ventas',
-        'tags' => ['usuarios', 'bet', 'ventas'],
+        'tags' => ['usuarios', 'ventas'],
         'activo' => true,
     ],
     [

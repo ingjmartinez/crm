@@ -349,23 +349,52 @@ class ReporteController extends Controller
     {
         header('Content-Type: application/json');
 
-        $mes = $request->input('mes');
+        $validated = $request->validate([
+            'empresa' => 'nullable|in:todos,grupo_joselito,negosur',
+            'fecha_inicio' => 'nullable|date',
+            'fecha_fin' => 'nullable|date|after_or_equal:fecha_inicio',
+        ]);
+
         $page = $request->input('page', 1);
+        $empresa = $validated['empresa'] ?? 'todos';
+        $fechaInicio = $validated['fecha_inicio'] ?? null;
+        $fechaFin = $validated['fecha_fin'] ?? null;
 
-        $query = DB::table('vt_usuarios_bet')
-            ->select('consorcio_id', 'agencia_id', 'cedula', 'tipo')
-            ->whereNotIn('cedula', function ($sub) {
-                $sub->select('cedula')->from('empleados')->whereNotNull('cedula');
-            });
+        $query = DB::table('vt_usuarios_bet as v')
+            ->leftJoin('empleados as e', DB::raw("REPLACE(REPLACE(COALESCE(v.cedula, ''), '-', ''), ' ', '')"), '=', DB::raw("REPLACE(REPLACE(COALESCE(e.cedula, ''), '-', ''), ' ', '')"))
+            ->selectRaw("
+                REPLACE(REPLACE(COALESCE(v.cedula, ''), '-', ''), ' ', '') AS cedula,
+                COALESCE(
+                    NULLIF(TRIM(CONCAT(COALESCE(MAX(e.nombres), ''), ' ', COALESCE(MAX(e.apellidos), ''))), ''),
+                    'Actualizar en la maestra de empleado'
+                ) AS nombre,
+                ROUND(SUM(CASE WHEN LOWER(TRIM(v.tipo)) = 'tradicional' THEN COALESCE(v.monto, 0) ELSE 0 END), 2) AS tradicional,
+                ROUND(SUM(CASE WHEN LOWER(TRIM(v.tipo)) IN ('no tradicional', 'no_tradicional') THEN COALESCE(v.monto, 0) ELSE 0 END), 2) AS no_tradicional,
+                ROUND(SUM(CASE WHEN LOWER(TRIM(v.tipo)) IN ('recarga', 'recargas') THEN COALESCE(v.monto, 0) ELSE 0 END), 2) AS recargas,
+                ROUND(SUM(COALESCE(v.monto, 0)), 2) AS total
+            ");
 
-        if ($mes) {
-            [$year, $month] = explode('-', $mes);
-            $query->whereYear('fecha', $year)->whereMonth('fecha', $month);
+        if ($fechaInicio && $fechaFin) {
+            $query->whereDate('v.fecha', '>=', $fechaInicio)
+                ->whereDate('v.fecha', '<=', $fechaFin);
+        }
+
+        if ($empresa !== 'todos') {
+            $query->leftJoin('agencias as a', DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(a.terminal AS CHAR))"));
+
+            if ($empresa === 'grupo_joselito') {
+                $query->whereRaw('LOWER(COALESCE(a.empresa, "")) LIKE ?', ['%joselito%']);
+            }
+
+            if ($empresa === 'negosur') {
+                $query->whereRaw('LOWER(COALESCE(a.empresa, "")) LIKE ?', ['%negosur%']);
+            }
         }
 
         $registros = $query
-            ->groupBy('consorcio_id', 'agencia_id', 'cedula', 'tipo')
-            ->orderBy('cedula', 'desc')
+            ->whereRaw("NULLIF(REPLACE(REPLACE(COALESCE(v.cedula, ''), '-', ''), ' ', ''), '') IS NOT NULL")
+            ->groupByRaw("REPLACE(REPLACE(COALESCE(v.cedula, ''), '-', ''), ' ', '')")
+            ->orderByRaw("REPLACE(REPLACE(COALESCE(v.cedula, ''), '-', ''), ' ', '') DESC")
             ->paginate(50, ['*'], 'page', $page);
 
         return $registros->toJson();
@@ -379,10 +408,13 @@ class ReporteController extends Controller
         $tipo = $request->input('tipo');
         $fecha = $request->input('fecha');
         $mes = $request->input('mes');
+        $empresa = $request->input('empresa', 'todos');
+        $fechaInicio = $request->input('fecha_inicio');
+        $fechaFin = $request->input('fecha_fin');
 
         $fileName = 'ventas_usuarioio_bet_' . now()->format('Ymd_His') . '.xlsx';
 
-        return Excel::download(new VentasUsuarioExport($tipo, $fecha, $mes), $fileName);
+        return Excel::download(new VentasUsuarioExport($tipo, $fecha, $mes, $empresa, $fechaInicio, $fechaFin), $fileName);
     }
 
     function pdfVentasUsuarioBet(Request $request)
@@ -903,9 +935,28 @@ class ReporteController extends Controller
                 ->unionAll($buildConsultaBase('vt_usuarios_bet'));
         }
 
+        $agencias = DB::table('agencias')
+            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0') AS terminal_normalizada")
+            ->selectRaw("MAX(TRIM(COALESCE(nombre_agencia, ''))) AS nombre_agencia")
+            ->whereNotNull('terminal')
+            ->groupByRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(terminal AS CHAR))), ''), '0')");
+
         $resultados = DB::query()
             ->fromSub($ventasUnificadas, 'ventas_unificadas')
-            ->selectRaw('Identificacion, Dia, Agencia, CAST(SUM(monto) AS DECIMAL(15,2)) AS Total_Dia_Agencia')
+            ->leftJoinSub($agencias, 'agencias_catalogo', function ($join) {
+                $join->on(
+                    DB::raw("COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(ventas_unificadas.Agencia AS CHAR))), ''), '0')"),
+                    '=',
+                    'agencias_catalogo.terminal_normalizada'
+                );
+            })
+            ->selectRaw("
+                Identificacion,
+                Dia,
+                Agencia,
+                COALESCE(NULLIF(MAX(agencias_catalogo.nombre_agencia), ''), 'Sin nombre') AS Nombre_Agencia,
+                CAST(SUM(monto) AS DECIMAL(15,2)) AS Total_Dia_Agencia
+            ")
             ->groupBy('Identificacion', 'Dia', 'Agencia')
             ->orderBy('Dia', 'asc')
             ->orderByDesc('Total_Dia_Agencia')
