@@ -492,6 +492,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Reporte Nuevo Incentivo V5 - Pruebas',
+                'descripcion' => 'Version de pruebas para validar cambios sin afectar el reporte V4.',
+                'url' => '/incentivos/reporte-nuevo-incentivo-v5-view',
+                'icono' => 'ri-flask-line',
+                'categoria' => 'Reportes',
+                'tags' => ['reporte', 'nuevo incentivo', 'v5', 'pruebas', 'empresa'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Incentivo Administrativo',
                 'descripcion' => 'Administra empleados base para distribucion administrativa.',
                 'url' => '/incentivos/incentivo-administrativo',
