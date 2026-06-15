@@ -317,24 +317,28 @@ class ReporteController extends Controller
     public function pdfCompensacionGrupoJoselito(Request $request)
     {
         $validated = $request->validate([
+            'empresa' => 'nullable|in:todos,grupo_joselito,negosur',
             'fecha_inicio' => 'required|date',
             'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
         ]);
 
+        $empresa = $validated['empresa'] ?? 'grupo_joselito';
+
         $consulta = Request::create('/reportes-compensacion/list', 'GET', [
-            'empresa' => 'grupo_joselito',
+            'empresa' => $empresa,
             'fecha_inicio' => $validated['fecha_inicio'],
             'fecha_fin' => $validated['fecha_fin'],
         ]);
 
         $payload = $this->listCompensacion($consulta)->getData(true);
-        $fileName = 'compensacion_grupo_joselito_' .
+        $fileName = 'compensacion_' . $empresa . '_' .
             str_replace('-', '', $validated['fecha_inicio']) . '_' .
             str_replace('-', '', $validated['fecha_fin']) . '.pdf';
 
         $pdf = Pdf::loadView('reportes.compensacion-grupo-joselito-pdf', [
             'fechaInicio' => $validated['fecha_inicio'],
             'fechaFin' => $validated['fecha_fin'],
+            'empresa' => $payload['resumen']['empresa'] ?? 'Grupo Joselito',
             'resumen' => $payload['resumen'] ?? [],
             'tradicional' => $payload['data'] ?? [],
             'diario' => $payload['visual']['diario'] ?? [],

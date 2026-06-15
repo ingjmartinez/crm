@@ -758,6 +758,7 @@
         }
 
         function generarPdfGrupoJoselito() {
+            const empresa = document.getElementById('empresa').value;
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
 
@@ -772,6 +773,7 @@
             }
 
             const params = new URLSearchParams({
+                empresa: empresa,
                 fecha_inicio: fechaInicio,
                 fecha_fin: fechaFin
             });

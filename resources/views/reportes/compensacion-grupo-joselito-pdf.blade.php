@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Reporte Compensacion Grupo Joselito</title>
+    <title>Reporte Compensacion {{ $empresa ?? 'Grupo Joselito' }}</title>
     <style>
         @page {
             margin: 18px 22px;
@@ -205,7 +205,7 @@
 
     <div class="header">
         <h1 class="title">Reporte de Compensacion</h1>
-        <p class="subtitle">Grupo Joselito | Rango {{ \Carbon\Carbon::parse($fechaInicio)->format('d/m/Y') }} al {{ \Carbon\Carbon::parse($fechaFin)->format('d/m/Y') }}</p>
+        <p class="subtitle">{{ $empresa ?? 'Grupo Joselito' }} | Rango {{ \Carbon\Carbon::parse($fechaInicio)->format('d/m/Y') }} al {{ \Carbon\Carbon::parse($fechaFin)->format('d/m/Y') }}</p>
         <div class="badge">Generado: {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }}</div>
     </div>
 
