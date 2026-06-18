@@ -120,6 +120,15 @@ return [
                 'tags' => ['ventas', 'producto', 'comercial'],
                 'activo' => true,
             ],
+            [
+                'nombre' => 'Gestion de Usuarios',
+                'descripcion' => 'Carga y analiza archivos CSV de ventas por usuario y turno.',
+                'url' => '/comercial/gestion-usuarios',
+                'icono' => 'ri-user-settings-line',
+                'categoria' => 'Usuarios',
+                'tags' => ['usuarios', 'turnos', 'csv', 'ventas'],
+                'activo' => true,
+            ],
         ],
     ],
 

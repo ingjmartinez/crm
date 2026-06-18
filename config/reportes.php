@@ -56,6 +56,15 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Gestion de Agencias',
+        'descripcion' => 'Carga y limpia archivos tradicionales y no tradicionales de agencias.',
+        'url' => '/reportes-gestion-agencias',
+        'icono' => 'ri-building-2-line',
+        'categoria' => 'Agencias',
+        'tags' => ['agencia', 'xlsx', 'tradicional', 'no tradicional'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Ventas por Cedula',
         'descripcion' => 'Busca ventas asociadas a una cedula especifica.',
         'url' => '/reportes-ventas-por-cedula',

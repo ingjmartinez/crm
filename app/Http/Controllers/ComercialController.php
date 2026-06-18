@@ -6,7 +6,9 @@ use App\Exports\AgenciaPlanExport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
+use Throwable;
 
 class ComercialController extends Controller
 {
@@ -15,6 +17,58 @@ class ComercialController extends Controller
         return view('comercial.index', [
             'kpis' => $this->getAcumuladosBet(),
         ]);
+    }
+
+    public function gestionUsuarios()
+    {
+        return view('comercial.gestion_usuarios', $this->emptyGestionUsuariosPayload());
+    }
+
+    public function analizarGestionUsuarios(Request $request)
+    {
+        @set_time_limit(300);
+
+        $request->validate([
+            'archivo' => ['required', 'file', 'mimes:csv,txt', 'max:51200'],
+        ], [
+            'archivo.required' => 'Selecciona un archivo CSV para analizar.',
+            'archivo.mimes' => 'El archivo debe ser CSV o TXT.',
+            'archivo.max' => 'El archivo no puede superar 50 MB.',
+        ]);
+
+        $archivo = $request->file('archivo');
+
+        Log::info('gestion_usuarios_csv_inicio', [
+            'archivo' => $archivo->getClientOriginalName(),
+            'bytes' => $archivo->getSize(),
+        ]);
+
+        try {
+            $payload = $this->parseGestionUsuariosCsv($archivo->getRealPath());
+            $payload['archivoNombre'] = $archivo->getClientOriginalName();
+
+            Log::info('gestion_usuarios_csv_fin', [
+                'archivo' => $payload['archivoNombre'],
+                'filas' => $payload['totalFilas'],
+                'preview' => count($payload['filas']),
+                'memoria_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
+            ]);
+
+            return view('comercial.gestion_usuarios', $payload);
+        } catch (Throwable $e) {
+            Log::error('gestion_usuarios_csv_error', [
+                'archivo' => $archivo->getClientOriginalName(),
+                'mensaje' => $e->getMessage(),
+                'linea' => $e->getLine(),
+                'archivo_error' => $e->getFile(),
+            ]);
+
+            $payload = $this->emptyGestionUsuariosPayload();
+            $payload['archivoNombre'] = $archivo->getClientOriginalName();
+            $payload['errores'][] = 'No se pudo generar el reporte. Revisa storage/logs/laravel.log para ver el detalle tecnico.';
+
+            return view('comercial.gestion_usuarios', $payload);
+        }
     }
 
     public function kpiVentas(Request $request)
@@ -549,5 +603,289 @@ class ComercialController extends Controller
             'rangoFin' => $rangoFin,
             'filas' => $filas,
         ];
+    }
+
+    private function emptyGestionUsuariosPayload(): array
+    {
+        return [
+            'archivoNombre' => null,
+            'periodoReporte' => null,
+            'filas' => [],
+            'totalFilas' => 0,
+            'totalCedulas' => 0,
+            'limiteVista' => 500,
+            'errores' => [],
+        ];
+    }
+
+    private function parseGestionUsuariosCsv(string $path): array
+    {
+        $payload = $this->emptyGestionUsuariosPayload();
+        $payload['errores'] = [];
+        $limiteVista = $payload['limiteVista'];
+        $header = null;
+        $linea = 0;
+        $cedulas = [];
+
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            $payload['errores'][] = 'No se pudo abrir el archivo cargado.';
+            return $payload;
+        }
+
+        $delimiter = $this->detectarSeparadorCsvGestionUsuarios($path);
+
+        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+            $linea++;
+            $row = array_map(fn ($value) => $this->cleanCsvValue($value), $row);
+
+            if ($linea <= 2) {
+                $text = trim(implode(' ', array_filter($row)));
+                if (stripos($text, 'Desde') !== false) {
+                    $payload['periodoReporte'] = $text;
+                }
+            }
+
+            if ($header === null) {
+                if (in_array('NumeroExterno3', $row, true)) {
+                    $header = $row;
+                }
+                continue;
+            }
+
+            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                continue;
+            }
+
+            if (count($row) < count($header)) {
+                $row = array_pad($row, count($header), '');
+            }
+
+            $assoc = array_combine($header, array_slice($row, 0, count($header)));
+            if (!is_array($assoc)) {
+                continue;
+            }
+
+            $fila = $this->normalizeGestionUsuariosRow($assoc);
+            $payload['totalFilas']++;
+
+            $this->agregarVentaDetallePorCedula($cedulas, $fila);
+        }
+
+        fclose($handle);
+
+        if ($header === null) {
+            $payload['errores'][] = 'No se encontro la cabecera esperada del reporte.';
+        }
+
+        $payload['totalCedulas'] = count($cedulas);
+        $payload['filas'] = collect($cedulas)
+            ->map(function (array $fila) {
+                foreach ($fila['turnos'] as $turno) {
+                    $fila['tickets_tradicional'] += array_sum($turno['tickets_tradicional']);
+                    $fila['venta_tradicional_total'] += array_sum($turno['ventas_tradicional']);
+                    $fila['venta_no_tradicional_producto'] += $turno['venta_no_tradicional'];
+                    $fila['venta_recarga'] += $turno['venta_recarga'];
+                    $fila['venta_externa_total'] += array_sum($turno['ventas_externa']);
+                }
+
+                $fila['total_general'] = $fila['venta_tradicional_total']
+                    + $fila['venta_no_tradicional_producto']
+                    + $fila['venta_recarga']
+                    + $fila['venta_externa_total'];
+                $productos = array_keys($fila['productos']);
+                unset($fila['lineas_procesadas']);
+                unset($fila['turnos']);
+                unset($fila['productos']);
+
+                $fila['producto'] = count($productos) <= 1
+                    ? ($productos[0] ?? '')
+                    : 'Varios (' . count($productos) . ')';
+
+                return $fila;
+            })
+            ->sortBy('cedula')
+            ->take($limiteVista)
+            ->values()
+            ->all();
+
+        return $payload;
+    }
+
+    private function agregarVentaDetallePorCedula(array &$cedulas, array $fila): void
+    {
+        $key = $fila['cedula'] !== ''
+            ? $fila['cedula']
+            : implode('|', [$fila['numero_externo'], $fila['banca'], $fila['descripcion']]);
+
+        if (!isset($cedulas[$key])) {
+            $cedulas[$key] = [
+                'numero_externo' => $fila['numero_externo'],
+                'banca' => $fila['banca'],
+                'grupo' => $fila['grupo'],
+                'region' => $fila['region'],
+                'ruta' => $fila['ruta'],
+                'cedula' => $fila['cedula'],
+                'descripcion' => $fila['descripcion'],
+                'producto' => '',
+                'productos' => [],
+                'lineas_procesadas' => [],
+                'turnos' => [],
+                'tickets_tradicional' => 0,
+                'venta_tradicional_total' => 0,
+                'venta_no_tradicional_producto' => 0,
+                'venta_recarga' => 0,
+                'venta_externa_total' => 0,
+                'total_general' => 0,
+            ];
+        }
+
+        foreach (['numero_externo', 'banca', 'grupo', 'region', 'ruta', 'cedula', 'descripcion'] as $campo) {
+            if ($cedulas[$key][$campo] === '' && $fila[$campo] !== '') {
+                $cedulas[$key][$campo] = $fila[$campo];
+            }
+        }
+
+        if ($fila['producto'] !== '') {
+            $cedulas[$key]['productos'][$fila['producto']] = true;
+        }
+
+        $turnoKey = implode('|', [
+            $fila['numero_externo'],
+            $fila['banca'],
+            $fila['primera_entrada'],
+            $fila['ultima_entrada'],
+            $fila['turno'],
+        ]);
+
+        if (!isset($cedulas[$key]['turnos'][$turnoKey])) {
+            $cedulas[$key]['turnos'][$turnoKey] = [
+                'tickets_tradicional' => [],
+                'ventas_tradicional' => [],
+                'venta_no_tradicional' => 0,
+                'venta_recarga' => 0,
+                'ventas_externa' => [],
+            ];
+        }
+
+        $lineaKey = implode('|', [
+            $fila['numero_externo'],
+            $fila['banca'],
+            $fila['cedula'],
+            $fila['producto'],
+            $fila['primera_entrada'],
+            $fila['ultima_entrada'],
+            $fila['turno'],
+            $fila['tickets_tradicional'],
+            $fila['venta_tradicional_producto'],
+            $fila['venta_no_tradicional_producto'],
+            $fila['venta_recarga'],
+            $fila['venta_externa_producto'],
+        ]);
+
+        if (isset($cedulas[$key]['lineas_procesadas'][$lineaKey])) {
+            return;
+        }
+
+        $cedulas[$key]['lineas_procesadas'][$lineaKey] = true;
+        $productoKey = $fila['producto'] !== '' ? $fila['producto'] : $lineaKey;
+
+        if ($fila['tickets_tradicional'] !== 0) {
+            $cedulas[$key]['turnos'][$turnoKey]['tickets_tradicional'][$productoKey] = $fila['tickets_tradicional'];
+        }
+
+        if ($fila['venta_tradicional_producto'] != 0.0) {
+            $cedulas[$key]['turnos'][$turnoKey]['ventas_tradicional'][$productoKey] = $fila['venta_tradicional_producto'];
+        }
+
+        $cedulas[$key]['turnos'][$turnoKey]['venta_recarga'] = max(
+            $cedulas[$key]['turnos'][$turnoKey]['venta_recarga'],
+            $fila['venta_recarga']
+        );
+
+        if ($fila['venta_no_tradicional_producto'] != 0.0) {
+            $cedulas[$key]['turnos'][$turnoKey]['venta_no_tradicional'] = max(
+                $cedulas[$key]['turnos'][$turnoKey]['venta_no_tradicional'],
+                $fila['venta_no_tradicional_producto']
+            );
+        }
+
+        if ($fila['venta_externa_producto'] != 0.0) {
+            $cedulas[$key]['turnos'][$turnoKey]['ventas_externa'][$productoKey] = $fila['venta_externa_producto'];
+        }
+    }
+
+    private function normalizeGestionUsuariosRow(array $row): array
+    {
+        return [
+            'numero_externo' => $this->cleanCsvValue($row['NumeroExterno3'] ?? ''),
+            'banca' => $this->cleanCsvValue($row['Banca2'] ?? ''),
+            'grupo' => $this->cleanCsvValue($row['Grupo2'] ?? ''),
+            'region' => $this->cleanCsvValue($row['Region2'] ?? ''),
+            'ruta' => $this->cleanCsvValue($row['Ruta2'] ?? ''),
+            'cedula' => $this->cleanCsvValue($row['Cedula2'] ?? ''),
+            'descripcion' => $this->cleanCsvValue($row['Textbox56'] ?? ''),
+            'producto' => $this->cleanCsvValue($row['Producto'] ?? ''),
+            'primera_entrada' => $this->cleanCsvValue($row['PrimeraEntrada2'] ?? ''),
+            'ultima_entrada' => $this->cleanCsvValue($row['UltimaEntrada2'] ?? ''),
+            'turno' => $this->cleanCsvValue($row['Turno2'] ?? ''),
+            'tickets_tradicional' => (int) $this->parseCsvNumber($row['CntTicketTrad2'] ?? $row['DCntTicketTrad'] ?? 0),
+            'venta_tradicional_producto' => $this->parseCsvNumber($row['DVentaTrad3'] ?? 0),
+            'venta_tradicional_total' => $this->parseCsvNumber($row['DVentaTrad'] ?? 0),
+            'venta_no_tradicional_producto' => $this->parseCsvNumber($row['VentaNoTrad2'] ?? 0),
+            'venta_no_tradicional_total' => max(
+                $this->parseCsvNumber($row['DVentaNoTrad'] ?? 0),
+                $this->parseCsvNumber($row['VentaNoTrad2'] ?? 0)
+            ),
+            'venta_recarga' => $this->parseCsvNumber($row['VentaRecarga2'] ?? $row['DVentaRecarga3'] ?? $row['VentaRecarga'] ?? $row['DVentaRecarga'] ?? 0),
+            'venta_externa_producto' => $this->parseCsvNumber($row['DVentaExterna'] ?? 0),
+            'venta_externa_total' => $this->parseCsvNumber($row['DVentaExterna1'] ?? 0),
+            'total_general' => $this->parseCsvNumber($row['Textbox793'] ?? 0),
+        ];
+    }
+
+    private function cleanCsvValue(mixed $value): string
+    {
+        $value = preg_replace('/^\xEF\xBB\xBF/', '', (string) $value) ?? (string) $value;
+
+        return trim($value);
+    }
+
+    private function parseCsvNumber(mixed $value): float
+    {
+        $value = str_replace([',', 'RD$', '$', ' '], '', (string) $value);
+
+        if ($value === '' || !is_numeric($value)) {
+            return 0.0;
+        }
+
+        return (float) $value;
+    }
+
+    private function detectarSeparadorCsvGestionUsuarios(string $path): string
+    {
+        $linea = '';
+        $handle = fopen($path, 'rb');
+
+        if ($handle !== false) {
+            while (($lineaActual = fgets($handle)) !== false) {
+                if (trim($lineaActual) !== '') {
+                    $linea = $lineaActual;
+                    break;
+                }
+            }
+
+            fclose($handle);
+        }
+
+        $separadores = [',' => 0, ';' => 0, "\t" => 0, '|' => 0];
+
+        foreach (array_keys($separadores) as $separador) {
+            $separadores[$separador] = count(str_getcsv($linea, $separador));
+        }
+
+        arsort($separadores);
+
+        return (string) array_key_first($separadores);
     }
 }

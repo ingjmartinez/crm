@@ -18,6 +18,7 @@ use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\EntrevistaOnlineController;
 use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
+use App\Http\Controllers\GestionAgenciasReporteController;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\IncentivoConfiguracionController;
@@ -357,6 +358,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::get('/reportes-verificador-usuarios', [ReporteController::class, 'verificadorUsuarios']);
         Route::get('/reportes-verificador-usuarios/list', [ReporteController::class, 'listVerificadorUsuarios']);
         Route::get('/reportes-verificador-usuarios/excel', [ReporteController::class, 'excelVerificadorUsuarios']);
+
+        Route::get('/reportes-gestion-agencias', [GestionAgenciasReporteController::class, 'index'])->name('reportes.gestion-agencias');
+        Route::post('/reportes-gestion-agencias/procesar', [GestionAgenciasReporteController::class, 'procesar'])->name('reportes.gestion-agencias.procesar');
+        Route::get('/reportes-gestion-agencias/data', [GestionAgenciasReporteController::class, 'data'])->name('reportes.gestion-agencias.data');
     });
 
     Route::resource('agencias', AgenciaController::class);
@@ -417,6 +422,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/comercial/kpi-ventas-v', [ComercialController::class, 'kpiVentasV'])->name('comercial.kpi-ventas-v');
     Route::get('/comercial/agencia-plan', [ComercialController::class, 'agenciaPlan'])->name('comercial.agencia-plan');
     Route::get('/comercial/agencia-plan/export', [ComercialController::class, 'agenciaPlanExport'])->name('comercial.agencia-plan.export');
+    Route::get('/comercial/gestion-usuarios', [ComercialController::class, 'gestionUsuarios'])->name('comercial.gestion-usuarios');
+    Route::post('/comercial/gestion-usuarios/analizar', [ComercialController::class, 'analizarGestionUsuarios'])->name('comercial.gestion-usuarios.analizar');
     Route::get('/comercial/meta-incentivo', [MetaIncentivoController::class, 'index'])->name('comercial.meta-incentivo');
     Route::get('/comercial/meta-incentivo/export', [MetaIncentivoController::class, 'export'])->name('comercial.meta-incentivo.export');
     Route::post('/comercial/meta-incentivo/send-mail', [MetaIncentivoController::class, 'enviarMiniReporte'])->name('comercial.meta-incentivo.send-mail');
