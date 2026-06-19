@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Agencia;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Http\Request;
@@ -20,9 +21,13 @@ class GestionAgenciasReporteController extends Controller
         return view('reportes.gestion-agencias', [
             'filas' => collect(),
             'resumen' => $this->resumenDesdeTabla(),
+            'estatusResumen' => $this->conteoEstatusTerminales(),
+            'estatusDetalle' => $this->detalleEstatusTerminales(),
+            'horaServidor' => now()->toIso8601String(),
             'archivos' => [],
             'agenciasSinVentas' => $this->agenciasSinVentasDesdeTabla(),
             'ventasPorAgencia' => $this->ventasPorAgenciaDesdeTabla(),
+            'tendenciaVentasHora' => $this->tendenciaVentasPorHoraDesdeTabla(),
         ]);
     }
 
@@ -74,8 +79,12 @@ class GestionAgenciasReporteController extends Controller
         return view('reportes.gestion-agencias', [
             'filas' => collect(),
             'resumen' => $resumen,
+            'estatusResumen' => $this->conteoEstatusTerminales(),
+            'estatusDetalle' => $this->detalleEstatusTerminales(),
+            'horaServidor' => now()->toIso8601String(),
             'agenciasSinVentas' => $agenciasSinVentas,
             'ventasPorAgencia' => $ventasPorAgencia,
+            'tendenciaVentasHora' => $this->tendenciaVentasPorHoraDesdeTabla(),
             'archivos' => [
                 'tradicional' => $tradicional->getClientOriginalName(),
                 'no_tradicional' => $noTradicional->getClientOriginalName(),
@@ -85,61 +94,107 @@ class GestionAgenciasReporteController extends Controller
 
     public function data(Request $request)
     {
-        $columns = [
-            0 => 'tipo',
-            1 => 'fecha_transaccion',
-            2 => 'agencia',
-            3 => 'terminal',
-            4 => 'usuario_venta',
-            5 => 'estatus',
-            6 => 'total_apostado',
-        ];
-
         $draw = (int) $request->input('draw', 1);
         $start = max((int) $request->input('start', 0), 0);
         $length = (int) $request->input('length', 25);
         $length = $length > 0 ? min($length, 500) : 25;
         $search = trim((string) $request->input('search.value', ''));
-        $orderIndex = (int) $request->input('order.0.column', 1);
-        $orderColumn = $columns[$orderIndex] ?? 'fecha_transaccion';
-        $orderDir = strtolower((string) $request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $estatusFiltro = trim((string) $request->input('estatus_filter', ''));
+        $umbrales = $this->umbralesVenta($request);
+        $columns = [
+            0 => 'gav.tipo',
+            1 => 'gav.terminal',
+            2 => 'gav.fecha_transaccion',
+            3 => 'estatus_analisis',
+        ];
+        $orderIndex = (int) $request->input('order.0.column', 2);
+        $orderColumn = $columns[$orderIndex] ?? 'gav.fecha_transaccion';
+        $orderDir = strtolower((string) $request->input('order.0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $base = DB::table('gestion_agencias_ventas');
+        $ultimaVentaTerminalSubquery = DB::table('gestion_agencias_ventas')
+            ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
+            ->whereNotNull('terminal_clave')
+            ->where('terminal_clave', '<>', '');
+        $estatusSql = $this->estatusVentaSql($umbrales);
+        $base = DB::table('gestion_agencias_ventas as gav')
+            ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
+            ->where('uv.venta_rank', 1);
         $recordsTotal = (clone $base)->count();
 
         if ($search !== '') {
             $base->where(function ($query) use ($search) {
-                $query->where('tipo', 'like', "%{$search}%")
-                    ->orWhere('fecha_texto', 'like', "%{$search}%")
-                    ->orWhere('agencia', 'like', "%{$search}%")
-                    ->orWhere('terminal', 'like', "%{$search}%")
-                    ->orWhere('usuario_venta', 'like', "%{$search}%")
-                    ->orWhere('estatus', 'like', "%{$search}%");
+                $query->where('gav.tipo', 'like', "%{$search}%")
+                    ->orWhere('gav.fecha_texto', 'like', "%{$search}%")
+                    ->orWhere('gav.agencia', 'like', "%{$search}%")
+                    ->orWhere('gav.terminal', 'like', "%{$search}%")
+                    ->orWhere('gav.usuario_venta', 'like', "%{$search}%");
             });
         }
 
+        if (in_array($estatusFiltro, ['Al dia', 'Aviso', 'En Alerta', 'Requiere llamada'], true)) {
+            $base->whereRaw("{$estatusSql} = ?", [$estatusFiltro]);
+        }
+
         $recordsFiltered = (clone $base)->count();
+        $base->when($orderColumn === 'estatus_analisis',
+            fn ($query) => $query->orderByRaw("{$estatusSql} {$orderDir}"),
+            fn ($query) => $query->orderBy($orderColumn, $orderDir)
+        );
+
         $data = $base
-            ->orderBy($orderColumn, $orderDir)
             ->offset($start)
             ->limit($length)
-            ->get()
+            ->get([
+                'gav.tipo',
+                'gav.fecha_texto',
+                'gav.terminal',
+                DB::raw("{$estatusSql} as estatus_analisis"),
+            ])
             ->map(fn ($row) => [
                 'tipo' => $row->tipo,
-                'fecha' => $row->fecha_texto,
-                'agencia' => $row->agencia,
                 'terminal' => $row->terminal,
-                'usuario_venta' => $row->usuario_venta,
-                'estatus' => $row->estatus,
-                'total_apostado' => number_format((float) $row->total_apostado, 2),
+                'fecha' => $row->fecha_texto,
+                'estatus' => $row->estatus_analisis,
             ]);
 
         return response()->json([
             'draw' => $draw,
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
+            'estatusResumen' => $this->conteoEstatusTerminales($umbrales),
+            'estatusDetalle' => $this->detalleEstatusTerminales($umbrales),
             'data' => $data,
         ]);
+    }
+
+    public function pdf(Request $request)
+    {
+        ini_set('memory_limit', '1024M');
+        set_time_limit(180);
+
+        $umbrales = $this->umbralesVenta($request);
+        $resumen = $this->resumenDesdeTabla();
+        $estatusResumen = $this->conteoEstatusTerminales($umbrales);
+        $estatusDetalle = $this->detalleEstatusTerminales($umbrales);
+        $agenciasSinVentas = $this->agenciasSinVentasDesdeTabla();
+        $horaServidor = now();
+
+        $pdf = Pdf::loadView('reportes.gestion-agencias-pdf', [
+            'resumen' => $resumen,
+            'umbrales' => $umbrales,
+            'estatusResumen' => $estatusResumen,
+            'estatusDetalle' => $estatusDetalle,
+            'agenciasSinVentas' => $agenciasSinVentas,
+            'horaServidor' => $horaServidor,
+        ])
+            ->setPaper('letter', 'landscape')
+            ->setOptions([
+                'defaultFont' => 'DejaVu Sans',
+                'isRemoteEnabled' => false,
+                'isHtml5ParserEnabled' => true,
+            ]);
+
+        return $pdf->download('reporte_gestion_agencias_' . $horaServidor->format('Ymd_His') . '.pdf');
     }
 
     private function reemplazarTablaReporte($filas): void
@@ -170,6 +225,112 @@ class GestionAgenciasReporteController extends Controller
         });
     }
 
+    private function umbralesVenta(Request $request): array
+    {
+        $aviso = max((int) $request->input('umbral_aviso', 20), 1);
+        $alerta = max((int) $request->input('umbral_alerta', 30), $aviso + 1);
+        $llamada = max((int) $request->input('umbral_llamada', 60), $alerta + 1);
+
+        return [
+            'aviso' => $aviso,
+            'alerta' => $alerta,
+            'llamada' => $llamada,
+        ];
+    }
+
+    private function estatusVentaSql(array $umbrales): string
+    {
+        $aviso = (int) $umbrales['aviso'];
+        $alerta = (int) $umbrales['alerta'];
+        $llamada = (int) $umbrales['llamada'];
+
+        return "CASE
+            WHEN gav.fecha_transaccion IS NULL THEN 'Requiere llamada'
+            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, NOW()) >= {$llamada} THEN 'Requiere llamada'
+            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, NOW()) >= {$alerta} THEN 'En Alerta'
+            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, NOW()) >= {$aviso} THEN 'Aviso'
+            ELSE 'Al dia'
+        END";
+    }
+
+    private function conteoEstatusTerminales(?array $umbrales = null): array
+    {
+        $umbrales ??= [
+            'aviso' => 20,
+            'alerta' => 30,
+            'llamada' => 60,
+        ];
+
+        $ultimaVentaTerminalSubquery = DB::table('gestion_agencias_ventas')
+            ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
+            ->whereNotNull('terminal_clave')
+            ->where('terminal_clave', '<>', '');
+        $estatusSql = $this->estatusVentaSql($umbrales);
+        $conteos = DB::table('gestion_agencias_ventas as gav')
+            ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
+            ->where('uv.venta_rank', 1)
+            ->selectRaw("{$estatusSql} as estatus, COUNT(*) as total")
+            ->groupByRaw($estatusSql)
+            ->pluck('total', 'estatus');
+
+        return [
+            'Al dia' => (int) ($conteos['Al dia'] ?? 0),
+            'Aviso' => (int) ($conteos['Aviso'] ?? 0),
+            'En Alerta' => (int) ($conteos['En Alerta'] ?? 0),
+            'Requiere llamada' => (int) ($conteos['Requiere llamada'] ?? 0),
+        ];
+    }
+
+    private function detalleEstatusTerminales(?array $umbrales = null): array
+    {
+        $umbrales ??= [
+            'aviso' => 20,
+            'alerta' => 30,
+            'llamada' => 60,
+        ];
+
+        $ultimaVentaTerminalSubquery = DB::table('gestion_agencias_ventas')
+            ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
+            ->whereNotNull('terminal_clave')
+            ->where('terminal_clave', '<>', '');
+        $estatusSql = $this->estatusVentaSql($umbrales);
+        $rows = DB::table('gestion_agencias_ventas as gav')
+            ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
+            ->where('uv.venta_rank', 1)
+            ->orderBy('gav.fecha_transaccion', 'desc')
+            ->get([
+                'gav.tipo',
+                'gav.fecha_texto',
+                'gav.agencia',
+                'gav.terminal',
+                DB::raw("{$estatusSql} as estatus_analisis"),
+            ]);
+
+        $detalle = [
+            'Al dia' => [],
+            'Aviso' => [],
+            'En Alerta' => [],
+            'Requiere llamada' => [],
+        ];
+
+        foreach ($rows as $row) {
+            $estatus = (string) $row->estatus_analisis;
+
+            if (!array_key_exists($estatus, $detalle)) {
+                continue;
+            }
+
+            $detalle[$estatus][] = [
+                'agencia' => $row->agencia,
+                'terminal' => $row->terminal,
+                'tipo' => $row->tipo,
+                'fecha' => $row->fecha_texto,
+            ];
+        }
+
+        return $detalle;
+    }
+
     private function resumenDesdeTabla(?int $totalCargadas = null, ?int $tradicionalValidas = null, ?int $noTradicionalValidas = null): ?array
     {
         $query = DB::table('gestion_agencias_ventas');
@@ -185,13 +346,21 @@ class GestionAgenciasReporteController extends Controller
             ->count('terminal_clave');
 
         $agenciasSinVentas = $this->agenciasSinVentasDesdeTabla();
+        $totalVendido = (float) (clone $query)->sum('total_apostado');
+        $horasConVentas = (clone $query)
+            ->whereNotNull('fecha_transaccion')
+            ->selectRaw("COUNT(DISTINCT DATE_FORMAT(fecha_transaccion, '%Y-%m-%d %H:00:00')) as total")
+            ->value('total');
+        $ventaPorHora = $horasConVentas > 0 ? $totalVendido / $horasConVentas : 0;
 
         return [
             'total_cargadas' => $totalCargadas ?? (clone $query)->count(),
             'total_validas' => $agenciasConVentas,
             'total_eliminadas' => $agenciasSinVentas->count(),
             'filas_validas' => (clone $query)->count(),
-            'total_apostado' => (float) (clone $query)->sum('total_apostado'),
+            'total_apostado' => $totalVendido,
+            'venta_por_hora' => $ventaPorHora,
+            'horas_con_ventas' => (int) $horasConVentas,
             'tradicional_validas' => $tradicionalValidas ?? (clone $query)->where('tipo', 'Tradicional')->count(),
             'no_tradicional_validas' => $noTradicionalValidas ?? (clone $query)->where('tipo', 'No Tradicional')->count(),
         ];
@@ -244,6 +413,60 @@ class GestionAgenciasReporteController extends Controller
             })
             ->sortBy('label')
             ->values();
+    }
+
+    private function tendenciaVentasPorHoraDesdeTabla(): array
+    {
+        $rango = DB::table('gestion_agencias_ventas')
+            ->whereNotNull('fecha_transaccion')
+            ->selectRaw('MIN(fecha_transaccion) as primera_venta, MAX(fecha_transaccion) as ultima_venta')
+            ->first();
+
+        if (!$rango || !$rango->primera_venta || !$rango->ultima_venta) {
+            return [
+                'labels' => [],
+                'series' => [],
+                'primera_venta' => null,
+                'ultima_venta' => null,
+                'total' => 0,
+            ];
+        }
+
+        $inicio = Carbon::parse($rango->primera_venta)->startOfHour();
+        $fin = Carbon::parse($rango->ultima_venta)->startOfHour();
+
+        $ventasPorHora = DB::table('gestion_agencias_ventas')
+            ->whereNotNull('fecha_transaccion')
+            ->where('fecha_transaccion', '>=', $inicio->toDateTimeString())
+            ->where('fecha_transaccion', '<', $fin->copy()->addHour()->toDateTimeString())
+            ->selectRaw("DATE_FORMAT(fecha_transaccion, '%Y-%m-%d %H:00:00') as hora")
+            ->selectRaw('SUM(COALESCE(total_apostado, 0)) as total_ventas')
+            ->groupByRaw("DATE_FORMAT(fecha_transaccion, '%Y-%m-%d %H:00:00')")
+            ->pluck('total_ventas', 'hora')
+            ->map(fn ($total) => (float) $total)
+            ->all();
+
+        $labels = [];
+        $series = [];
+        $acumulado = 0.0;
+        $cursor = $inicio->copy();
+        $usarFechaEnLabel = !$inicio->isSameDay($fin);
+
+        while ($cursor->lessThanOrEqualTo($fin)) {
+            $key = $cursor->format('Y-m-d H:00:00');
+            $acumulado += (float) ($ventasPorHora[$key] ?? 0);
+            $labels[] = $cursor->format($usarFechaEnLabel ? 'd/m g A' : 'g A');
+            $series[] = round($acumulado, 2);
+            $cursor->addHour();
+        }
+
+        return [
+            'labels' => $labels,
+            'series' => $series,
+            'primera_venta' => Carbon::parse($rango->primera_venta)->format('d-m-Y g:i A'),
+            'ultima_venta' => Carbon::parse($rango->ultima_venta)->format('d-m-Y g:i A'),
+            'total' => round($acumulado, 2),
+        ];
     }
 
     private function ultimaTransaccionDb($filas): ?array

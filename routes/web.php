@@ -362,6 +362,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::get('/reportes-gestion-agencias', [GestionAgenciasReporteController::class, 'index'])->name('reportes.gestion-agencias');
         Route::post('/reportes-gestion-agencias/procesar', [GestionAgenciasReporteController::class, 'procesar'])->name('reportes.gestion-agencias.procesar');
         Route::get('/reportes-gestion-agencias/data', [GestionAgenciasReporteController::class, 'data'])->name('reportes.gestion-agencias.data');
+        Route::get('/reportes-gestion-agencias/pdf', [GestionAgenciasReporteController::class, 'pdf'])->name('reportes.gestion-agencias.pdf');
     });
 
     Route::resource('agencias', AgenciaController::class);

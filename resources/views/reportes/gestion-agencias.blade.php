@@ -1,6 +1,90 @@
 @extends('app')
 
 @section('content')
+    <style>
+        .gestion-summary-card {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(15, 23, 42, 0.07);
+            transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+            will-change: transform;
+        }
+
+        .gestion-summary-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .22s ease;
+            background:
+                linear-gradient(135deg, rgba(var(--gestion-card-rgb), .18), rgba(255, 255, 255, 0) 48%),
+                linear-gradient(90deg, rgba(var(--gestion-card-rgb), .95), rgba(var(--gestion-card-rgb), .18));
+            background-size: 100% 100%, 100% 3px;
+            background-repeat: no-repeat;
+            background-position: center, left top;
+        }
+
+        .gestion-summary-card:hover,
+        .gestion-summary-card:focus-within {
+            transform: translateY(-4px);
+            border-color: rgba(var(--gestion-card-rgb), .42);
+            box-shadow:
+                0 16px 34px rgba(15, 23, 42, .12),
+                0 10px 22px rgba(var(--gestion-card-rgb), .20);
+        }
+
+        .gestion-summary-card:hover::before,
+        .gestion-summary-card:focus-within::before {
+            opacity: 1;
+        }
+
+        .gestion-summary-card .card-body {
+            position: relative;
+            z-index: 1;
+        }
+
+        .gestion-card-slate { --gestion-card-rgb: 71, 85, 105; }
+        .gestion-card-success { --gestion-card-rgb: 0, 180, 137; }
+        .gestion-card-danger { --gestion-card-rgb: 255, 88, 72; }
+        .gestion-card-indigo { --gestion-card-rgb: 67, 90, 197; }
+        .gestion-card-warning { --gestion-card-rgb: 247, 184, 75; }
+        .gestion-card-dark { --gestion-card-rgb: 33, 37, 41; }
+
+        .gestion-server-time {
+            display: inline-flex;
+            align-items: center;
+            align-self: center;
+            gap: .5rem;
+            min-height: 38px;
+            padding: .45rem .75rem;
+            border: 1px solid rgba(0, 45, 114, .35);
+            border-top: 3px solid #ce1126;
+            border-bottom: 3px solid #002d72;
+            border-radius: .375rem;
+            color: #002d72;
+            background: #fff;
+            box-shadow: none;
+            white-space: nowrap;
+        }
+
+        .gestion-server-time i {
+            color: #ce1126;
+            font-size: 1rem;
+        }
+
+        .gestion-server-time-label {
+            color: #64748b;
+            font-size: .78rem;
+            line-height: 1;
+        }
+
+        .gestion-server-time-value {
+            color: #002d72;
+            font-weight: 700;
+            line-height: 1;
+        }
+    </style>
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -48,9 +132,22 @@
                                         <h5 class="card-title mb-1">Consulta por agencia</h5>
                                         <p class="text-muted mb-0">Busca por terminal o nombre de agencia usando la data cargada.</p>
                                     </div>
-                                    <div class="col-xl-4 col-lg-5 col-md-6">
-                                        <input type="search" class="form-control" id="consultaAgenciaInput" list="consultaAgenciaOptions" placeholder="Buscar agencia o terminal">
-                                        <datalist id="consultaAgenciaOptions"></datalist>
+                                    <div class="d-flex flex-wrap align-items-center gap-2 col-xl-6 col-lg-7 col-md-12">
+                                        <button type="button" class="btn btn-outline-primary" id="btnConfigurarTiempoVentas">
+                                            <i class="ri-time-line align-bottom me-1"></i>
+                                            Configurar tiempo de ventas
+                                        </button>
+                                        <div class="gestion-server-time" title="Hora usada por el servidor para calcular los estatus">
+                                            <i class="ri-time-line"></i>
+                                            <div>
+                                                <div class="gestion-server-time-label">Hora servidor</div>
+                                                <div class="gestion-server-time-value" id="gestionHoraServidor">--:--:--</div>
+                                            </div>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <input type="search" class="form-control" id="consultaAgenciaInput" list="consultaAgenciaOptions" placeholder="Buscar agencia o terminal">
+                                            <datalist id="consultaAgenciaOptions"></datalist>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="card-body">
@@ -130,17 +227,17 @@
                 </div>
 
                 @if (!empty($resumen))
-                    <div class="row">
+                    <div class="row g-3 mb-3">
                         <div class="col-md-3">
-                            <div class="card">
+                            <div class="card h-100 mb-0 gestion-summary-card gestion-card-slate">
                                 <div class="card-body">
-                                    <p class="text-muted mb-1">Filas cargadas</p>
-                                    <h4 class="mb-0">{{ number_format($resumen['total_cargadas'] ?? 0) }}</h4>
+                                    <p class="text-muted mb-1">Premio de venta por Hora</p>
+                                    <h4 class="mb-0">{{ number_format($resumen['venta_por_hora'] ?? 0, 0) }}</h4>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="card">
+                            <div class="card h-100 mb-0 gestion-summary-card gestion-card-success">
                                 <div class="card-body">
                                     <p class="text-muted mb-1">Agencias con ventas</p>
                                     <h4 class="mb-0 text-success">{{ number_format($resumen['total_validas'] ?? 0) }}</h4>
@@ -148,7 +245,7 @@
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="card cursor-pointer" id="cardAgenciasSinVentaGestion" role="button" tabindex="0" aria-label="Ver agencias sin ventas">
+                            <div class="card h-100 mb-0 cursor-pointer gestion-summary-card gestion-card-danger" id="cardAgenciasSinVentaGestion" role="button" tabindex="0" aria-label="Ver agencias sin ventas">
                                 <div class="card-body">
                                     <p class="text-muted mb-1">Agencias sin ventas <i class="ri-search-eye-line align-middle ms-1"></i></p>
                                     <h4 class="mb-0 text-danger">{{ number_format($resumen['total_eliminadas'] ?? 0) }}</h4>
@@ -156,10 +253,64 @@
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="card">
+                            <div class="card h-100 mb-0 gestion-summary-card gestion-card-indigo">
                                 <div class="card-body">
-                                    <p class="text-muted mb-1">Total apostado</p>
+                                    <p class="text-muted mb-1">Total vendido</p>
                                     <h4 class="mb-0">{{ number_format($resumen['total_apostado'] ?? 0, 2) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-xl-3 col-md-6">
+                            <div class="card h-100 mb-0 gestion-summary-card gestion-card-success">
+                                <div class="card-body py-3 d-flex flex-column justify-content-between">
+                                    <p class="text-muted mb-1">Al dia</p>
+                                    <h4 class="mb-0 text-success" data-estatus-resumen="Al dia">{{ number_format($estatusResumen['Al dia'] ?? 0) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-md-6">
+                            <div class="card h-100 mb-0 cursor-pointer gestion-summary-card gestion-card-warning" data-card-estatus="Aviso" role="button" tabindex="0" aria-label="Ver agencias en aviso">
+                                <div class="card-body py-3 d-flex flex-column justify-content-between">
+                                    <p class="text-muted mb-1">Aviso</p>
+                                    <h4 class="mb-0 text-warning" data-estatus-resumen="Aviso">{{ number_format($estatusResumen['Aviso'] ?? 0) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-md-6">
+                            <div class="card h-100 mb-0 cursor-pointer gestion-summary-card gestion-card-danger" data-card-estatus="En Alerta" role="button" tabindex="0" aria-label="Ver agencias en alerta">
+                                <div class="card-body py-3 d-flex flex-column justify-content-between">
+                                    <p class="text-muted mb-1">En Alerta</p>
+                                    <h4 class="mb-0 text-danger" data-estatus-resumen="En Alerta">{{ number_format($estatusResumen['En Alerta'] ?? 0) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-md-6">
+                            <div class="card h-100 mb-0 cursor-pointer gestion-summary-card gestion-card-dark" data-card-estatus="Requiere llamada" role="button" tabindex="0" aria-label="Ver agencias que requieren llamada">
+                                <div class="card-body py-3 d-flex flex-column justify-content-between">
+                                    <p class="text-muted mb-1">Requiere llamada</p>
+                                    <h4 class="mb-0 text-dark" data-estatus-resumen="Requiere llamada">{{ number_format($estatusResumen['Requiere llamada'] ?? 0) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-4">
+                        <div class="col-lg-12">
+                            <div class="card">
+                                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                    <div>
+                                        <h5 class="card-title mb-1">Tendencia de ventas por hora</h5>
+                                        <p class="text-muted mb-0">
+                                            Desde {{ $tendenciaVentasHora['primera_venta'] ?? 'N/D' }} hasta {{ $tendenciaVentasHora['ultima_venta'] ?? 'N/D' }}
+                                        </p>
+                                    </div>
+                                    <span class="badge bg-primary-subtle text-primary">
+                                        Acumulado RD$ {{ number_format((float) ($tendenciaVentasHora['total'] ?? 0), 2) }}
+                                    </span>
+                                </div>
+                                <div class="card-body py-2">
+                                    <div id="chart-gestion-ventas-hora" style="height: 240px;"></div>
                                 </div>
                             </div>
                         </div>
@@ -179,6 +330,24 @@
                                         </p>
                                     @endif
                                 </div>
+                                @if (!empty($resumen))
+                                    <div class="d-flex flex-wrap align-items-end justify-content-end gap-2 col-xl-5 col-lg-6 col-md-12">
+                                        <button type="button" class="btn btn-outline-danger" id="btnPdfGestionAgencias">
+                                            <i class="ri-file-pdf-2-line align-bottom me-1"></i>
+                                            Generar PDF
+                                        </button>
+                                        <div class="flex-grow-1">
+                                        <label for="filtroEstatusVentas" class="form-label mb-1">Filtrar por estatus</label>
+                                        <select class="form-select" id="filtroEstatusVentas">
+                                            <option value="">Todos</option>
+                                            <option value="Al dia">Al dia</option>
+                                            <option value="Aviso">Aviso</option>
+                                            <option value="En Alerta">En Alerta</option>
+                                            <option value="Requiere llamada">Requiere llamada</option>
+                                        </select>
+                                        </div>
+                                    </div>
+                                @endif
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
@@ -186,18 +355,15 @@
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Tipo</th>
-                                                <th>Fecha</th>
-                                                <th>Agencia</th>
                                                 <th>Terminal</th>
-                                                <th>Usr. Venta</th>
+                                                <th>Ultima transaccion</th>
                                                 <th>Estatus</th>
-                                                <th class="text-end">Total Apostado</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @if (empty($resumen))
                                                 <tr>
-                                                    <td colspan="7" class="text-center text-muted">Carga ambos archivos XLSX o CSV para ver la data limpia.</td>
+                                                    <td colspan="4" class="text-center text-muted">Carga ambos archivos XLSX o CSV para ver la data limpia.</td>
                                                 </tr>
                                             @endif
                                         </tbody>
@@ -242,29 +408,77 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="modalEstatusTerminalesGestion" tabindex="-1" aria-labelledby="modalEstatusTerminalesGestionLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header d-flex justify-content-between align-items-center">
+                    <h5 class="modal-title" id="modalEstatusTerminalesGestionLabel">Agencias por estatus</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-success btn-sm" id="btnDescargarEstatusTerminalesGestionExcel">
+                            <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
+                        </button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table id="tableModalEstatusTerminalesGestion" class="table table-striped table-bordered w-100">
+                            <thead>
+                                <tr>
+                                    <th>Agencia</th>
+                                    <th>Terminal</th>
+                                    <th>Tipo</th>
+                                    <th>Ultima transaccion</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
+    <script src="{{ asset('libs/apexcharts/apexcharts.min.js') }}"></script>
     <script>
         window.gestionAgenciasData = {
             agenciasSinVentas: @json($agenciasSinVentas ?? []),
             ventasPorAgencia: @json($ventasPorAgencia ?? []),
+            tendenciaVentasHora: @json($tendenciaVentasHora ?? ['labels' => [], 'series' => []]),
+            estatusResumen: @json($estatusResumen ?? []),
+            estatusDetalle: @json($estatusDetalle ?? []),
+            horaServidor: @json($horaServidor ?? now()->toIso8601String()),
             tieneResultado: @json(!empty($resumen)),
             dataUrl: @json(route('reportes.gestion-agencias.data')),
+            pdfUrl: @json(route('reportes.gestion-agencias.pdf')),
         };
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const table = $('#table-gestion-agencias');
             const form = document.getElementById('gestionAgenciasForm');
+            const filtroEstatusVentas = document.getElementById('filtroEstatusVentas');
+            const btnConfigurarTiempoVentas = document.getElementById('btnConfigurarTiempoVentas');
+            const btnPdfGestionAgencias = document.getElementById('btnPdfGestionAgencias');
+            const gestionHoraServidor = document.getElementById('gestionHoraServidor');
             const agenciasSinVentas = Array.isArray(window.gestionAgenciasData?.agenciasSinVentas)
                 ? window.gestionAgenciasData.agenciasSinVentas
                 : [];
             const ventasPorAgencia = Array.isArray(window.gestionAgenciasData?.ventasPorAgencia)
                 ? window.gestionAgenciasData.ventasPorAgencia
                 : [];
+            const tendenciaVentasHora = window.gestionAgenciasData?.tendenciaVentasHora || {};
+            let estatusDetalle = window.gestionAgenciasData?.estatusDetalle || {};
+            let estatusModalActual = '';
             let dtGestionAgencias = null;
             let dtModalAgenciasSinVentaGestion = null;
+            let dtModalEstatusTerminalesGestion = null;
 
             const escapeHtml = (value) => (value ?? '').toString()
                 .replace(/&/g, '&amp;')
@@ -276,11 +490,155 @@
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
             });
+            const number = (value) => Number(value || 0).toLocaleString('es-DO');
+
+            const renderTendenciaVentasHora = () => {
+                const chartElement = document.querySelector('#chart-gestion-ventas-hora');
+                const labels = Array.isArray(tendenciaVentasHora.labels) ? tendenciaVentasHora.labels : [];
+                const series = Array.isArray(tendenciaVentasHora.series) ? tendenciaVentasHora.series : [];
+
+                if (!chartElement || typeof ApexCharts === 'undefined') return;
+
+                if (!labels.length || !series.length) {
+                    chartElement.innerHTML = '<div class="text-muted text-center py-5">No hay ventas con hora valida para graficar.</div>';
+                    return;
+                }
+
+                const chart = new ApexCharts(chartElement, {
+                    series: [{
+                        name: 'Ventas acumuladas',
+                        data: series,
+                    }],
+                    chart: {
+                        type: 'area',
+                        height: 240,
+                        toolbar: { show: false },
+                        zoom: { enabled: false },
+                    },
+                    stroke: {
+                        curve: 'smooth',
+                        width: 3,
+                    },
+                    fill: {
+                        type: 'gradient',
+                        gradient: {
+                            shadeIntensity: 1,
+                            inverseColors: false,
+                            opacityFrom: 0.35,
+                            opacityTo: 0.05,
+                            stops: [0, 90, 100],
+                        },
+                    },
+                    dataLabels: { enabled: false },
+                    xaxis: {
+                        categories: labels,
+                        labels: { style: { colors: '#64748b' } },
+                    },
+                    yaxis: {
+                        labels: {
+                            formatter: function (value) {
+                                return 'RD$ ' + Number(value || 0).toLocaleString('en-US', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 0,
+                                });
+                            },
+                        },
+                    },
+                    colors: ['#0ab39c'],
+                    grid: {
+                        borderColor: '#e2e8f0',
+                        strokeDashArray: 4,
+                    },
+                    tooltip: {
+                        y: {
+                            formatter: function (value) {
+                                return 'RD$ ' + Number(value || 0).toLocaleString('en-US', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                });
+                            },
+                        },
+                    },
+                    legend: { show: false },
+                });
+
+                chart.render();
+            };
 
             const formatoUltimaTransaccion = (ultima) => {
                 if (!ultima) return 'Ult trans N/D';
 
                 return `Ult trans ${ultima.hora || 'N/D'} por ${money(ultima.monto)}`;
+            };
+
+            const getUmbralesVentas = () => {
+                try {
+                    const saved = JSON.parse(localStorage.getItem('gestionAgenciasUmbralesVentas') || '{}');
+
+                    return {
+                        aviso: Number(saved.aviso || 20),
+                        alerta: Number(saved.alerta || 30),
+                        llamada: Number(saved.llamada || 60),
+                    };
+                } catch (error) {
+                    return { aviso: 20, alerta: 30, llamada: 60 };
+                }
+            };
+
+            const setUmbralesVentas = (umbrales) => {
+                localStorage.setItem('gestionAgenciasUmbralesVentas', JSON.stringify(umbrales));
+            };
+
+            const iniciarHoraServidor = () => {
+                if (!gestionHoraServidor) return;
+
+                const timestamp = Date.parse(window.gestionAgenciasData?.horaServidor || '');
+
+                if (Number.isNaN(timestamp)) {
+                    gestionHoraServidor.textContent = 'N/D';
+                    return;
+                }
+
+                const inicioCliente = Date.now();
+                const formatter = new Intl.DateTimeFormat('es-DO', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true,
+                });
+                const render = () => {
+                    const fecha = new Date(timestamp + (Date.now() - inicioCliente));
+                    gestionHoraServidor.textContent = formatter.format(fecha);
+                };
+
+                render();
+                setInterval(render, 1000);
+            };
+
+            const renderEstatusBadge = (estatus) => {
+                const classes = {
+                    'Al dia': 'bg-success',
+                    'Aviso': 'bg-warning text-dark',
+                    'En Alerta': 'bg-danger',
+                    'Requiere llamada': 'bg-dark',
+                };
+
+                return `<span class="badge ${classes[estatus] || 'bg-secondary'}">${escapeHtml(estatus || 'N/D')}</span>`;
+            };
+
+            const actualizarTarjetasEstatus = (resumen) => {
+                if (!resumen || typeof resumen !== 'object') return;
+
+                document.querySelectorAll('[data-estatus-resumen]').forEach((element) => {
+                    const estatus = element.dataset.estatusResumen;
+                    element.textContent = number(resumen[estatus] || 0);
+                });
+            };
+
+            const actualizarDetalleEstatus = (detalle) => {
+                if (!detalle || typeof detalle !== 'object') return;
+
+                estatusDetalle = detalle;
             };
 
             const bootConsultaAgencia = () => {
@@ -366,7 +724,7 @@
 
                 const tbody = document.querySelector('#table-gestion-agencias tbody');
                 if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Limpiando vista y preparando nueva carga...</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Limpiando vista y preparando nueva carga...</td></tr>';
                 }
 
                 const input = document.getElementById('consultaAgenciaInput');
@@ -432,6 +790,60 @@
                         }
                     }
                 });
+            };
+
+            const abrirConfiguracionTiempoVentas = async () => {
+                if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') return;
+
+                const umbrales = getUmbralesVentas();
+                const result = await Swal.fire({
+                    title: 'Configurar tiempo de ventas',
+                    html: `
+                        <div class="text-start">
+                            <label class="form-label">Aviso desde minutos</label>
+                            <input type="number" min="1" class="form-control mb-3" id="swalUmbralAviso" value="${umbrales.aviso}">
+                            <label class="form-label">En Alerta desde minutos</label>
+                            <input type="number" min="1" class="form-control mb-3" id="swalUmbralAlerta" value="${umbrales.alerta}">
+                            <label class="form-label">Requiere llamada desde minutos</label>
+                            <input type="number" min="1" class="form-control" id="swalUmbralLlamada" value="${umbrales.llamada}">
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Guardar',
+                    cancelButtonText: 'Cancelar',
+                    preConfirm: () => {
+                        const aviso = Number(document.getElementById('swalUmbralAviso')?.value || 0);
+                        const alerta = Number(document.getElementById('swalUmbralAlerta')?.value || 0);
+                        const llamada = Number(document.getElementById('swalUmbralLlamada')?.value || 0);
+
+                        if (!aviso || !alerta || !llamada || aviso >= alerta || alerta >= llamada) {
+                            Swal.showValidationMessage('Debe cumplirse: Aviso < En Alerta < Requiere llamada.');
+                            return false;
+                        }
+
+                        return { aviso, alerta, llamada };
+                    }
+                });
+
+                if (!result.isConfirmed || !result.value) return;
+
+                    setUmbralesVentas(result.value);
+                    actualizarTarjetasEstatus({
+                        'Al dia': 0,
+                        'Aviso': 0,
+                        'En Alerta': 0,
+                        'Requiere llamada': 0,
+                    });
+                    actualizarDetalleEstatus({
+                        'Al dia': [],
+                        'Aviso': [],
+                        'En Alerta': [],
+                        'Requiere llamada': [],
+                    });
+
+                    if (dtGestionAgencias) {
+                        dtGestionAgencias.ajax.reload(null, true);
+                }
             };
 
             const prepararEnvioReporte = (event) => {
@@ -544,12 +956,24 @@
                         ajax: {
                             url: window.gestionAgenciasData.dataUrl,
                             type: 'GET',
+                            data: function (data) {
+                                const umbrales = getUmbralesVentas();
+                                data.estatus_filter = filtroEstatusVentas?.value || '';
+                                data.umbral_aviso = umbrales.aviso;
+                                data.umbral_alerta = umbrales.alerta;
+                                data.umbral_llamada = umbrales.llamada;
+                            },
+                            dataSrc: function (json) {
+                                actualizarTarjetasEstatus(json?.estatusResumen);
+                                actualizarDetalleEstatus(json?.estatusDetalle);
+                                return json?.data || [];
+                            },
                         },
                         responsive: true,
                         deferRender: true,
                         pageLength: 25,
                         lengthMenu: [[25, 50, 100, 250, 500], [25, 50, 100, 250, 500]],
-                        order: [[1, 'asc']],
+                        order: [[2, 'desc']],
                         columns: [
                             {
                                 data: 'tipo',
@@ -558,14 +982,13 @@
                                     return `<span class="badge ${badge}">${escapeHtml(data)}</span>`;
                                 }
                             },
-                            { data: 'fecha' },
-                            { data: 'agencia' },
                             { data: 'terminal' },
-                            { data: 'usuario_venta' },
-                            { data: 'estatus' },
+                            { data: 'fecha' },
                             {
-                                data: 'total_apostado',
-                                className: 'text-end',
+                                data: 'estatus',
+                                render: function (data) {
+                                    return renderEstatusBadge(data);
+                                }
                             },
                         ],
                         language: {
@@ -593,6 +1016,31 @@
                     .then(esperarDataTableVisible)
                     .then(esperarPintadoNavegador)
                     .then(finalizarCargaReporte);
+            }
+
+            if (filtroEstatusVentas) {
+                filtroEstatusVentas.addEventListener('change', () => {
+                    if (dtGestionAgencias) {
+                        dtGestionAgencias.ajax.reload(null, true);
+                    }
+                });
+            }
+
+            if (btnConfigurarTiempoVentas) {
+                btnConfigurarTiempoVentas.addEventListener('click', abrirConfiguracionTiempoVentas);
+            }
+
+            if (btnPdfGestionAgencias) {
+                btnPdfGestionAgencias.addEventListener('click', () => {
+                    const umbrales = getUmbralesVentas();
+                    const params = new URLSearchParams({
+                        umbral_aviso: umbrales.aviso,
+                        umbral_alerta: umbrales.alerta,
+                        umbral_llamada: umbrales.llamada,
+                    });
+
+                    window.open(`${window.gestionAgenciasData.pdfUrl}?${params.toString()}`, '_blank');
+                });
             }
 
             const descargarAgenciasSinVentaExcel = () => {
@@ -677,8 +1125,117 @@
                 modal.show();
             };
 
+            const filasEstatusActual = () => {
+                const filas = estatusDetalle?.[estatusModalActual];
+
+                return Array.isArray(filas) ? filas : [];
+            };
+
+            const descargarEstatusTerminalesExcel = () => {
+                const filas = filasEstatusActual();
+
+                if (!filas.length) {
+                    Swal.fire({ title: 'Sin datos', text: 'No hay agencias para descargar en este estatus.', icon: 'info' });
+                    return;
+                }
+
+                const filasHtml = filas.map((item) => {
+                    const agencia = escapeHtml(item?.agencia ?? 'SIN AGENCIA');
+                    const terminal = escapeHtml(item?.terminal ?? 'SIN TERMINAL');
+                    const tipo = escapeHtml(item?.tipo ?? 'N/D');
+                    const fecha = escapeHtml(item?.fecha ?? 'N/D');
+
+                    return `<tr><td>${agencia}</td><td>${terminal}</td><td>${tipo}</td><td>${fecha}</td></tr>`;
+                }).join('');
+
+                const tablaHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Agencia</th>
+                                <th>Terminal</th>
+                                <th>Tipo</th>
+                                <th>Ultima transaccion</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filasHtml}</tbody>
+                    </table>
+                `;
+
+                const nombre = estatusModalActual.toLowerCase().replace(/\s+/g, '_');
+                const blob = new Blob(['\ufeff', tablaHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const enlace = document.createElement('a');
+                enlace.href = url;
+                enlace.download = `agencias_${nombre}_gestion.xls`;
+                document.body.appendChild(enlace);
+                enlace.click();
+                document.body.removeChild(enlace);
+                URL.revokeObjectURL(url);
+            };
+
+            const abrirModalEstatusTerminales = (estatus) => {
+                estatusModalActual = estatus;
+                const filas = filasEstatusActual();
+
+                if (!filas.length) {
+                    Swal.fire({ title: 'Sin datos', text: `No hay agencias en ${estatus}.`, icon: 'info' });
+                    return;
+                }
+
+                if (dtModalEstatusTerminalesGestion) {
+                    dtModalEstatusTerminalesGestion.destroy();
+                    dtModalEstatusTerminalesGestion = null;
+                }
+
+                const title = document.getElementById('modalEstatusTerminalesGestionLabel');
+                const tbody = document.querySelector('#tableModalEstatusTerminalesGestion tbody');
+
+                if (title) {
+                    title.textContent = `Agencias en ${estatus}`;
+                }
+
+                if (!tbody) return;
+
+                tbody.innerHTML = '';
+
+                filas.forEach((item) => {
+                    const agencia = (item?.agencia ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
+                    const terminal = (item?.terminal ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
+                    const tipo = (item?.tipo ?? 'N/D').toString().trim() || 'N/D';
+                    const fecha = (item?.fecha ?? 'N/D').toString().trim() || 'N/D';
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${escapeHtml(agencia)}</td>
+                        <td>${escapeHtml(terminal)}</td>
+                        <td>${escapeHtml(tipo)}</td>
+                        <td>${escapeHtml(fecha)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                if (typeof $ === 'function' && $.fn?.DataTable) {
+                    dtModalEstatusTerminalesGestion = $('#tableModalEstatusTerminalesGestion').DataTable({
+                        destroy: true,
+                        responsive: true,
+                        language: {
+                            url: '/json/es-DO.json',
+                            search: 'Buscar:',
+                            lengthMenu: 'Mostrar _MENU_ registros',
+                            info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                            paginate: { first: 'Primera', last: 'Ultima', next: 'Siguiente', previous: 'Anterior' }
+                        },
+                        order: [[3, 'desc']],
+                    });
+                }
+
+                const modal = new bootstrap.Modal(document.getElementById('modalEstatusTerminalesGestion'));
+                modal.show();
+            };
+
             const cardAgenciasSinVenta = document.getElementById('cardAgenciasSinVentaGestion');
             const btnExcel = document.getElementById('btnDescargarAgenciasSinVentaGestionExcel');
+            const btnExcelEstatus = document.getElementById('btnDescargarEstatusTerminalesGestionExcel');
 
             if (cardAgenciasSinVenta) {
                 cardAgenciasSinVenta.addEventListener('click', abrirModalAgenciasSinVenta);
@@ -693,6 +1250,23 @@
                 btnExcel.addEventListener('click', descargarAgenciasSinVentaExcel);
             }
 
+            if (btnExcelEstatus) {
+                btnExcelEstatus.addEventListener('click', descargarEstatusTerminalesExcel);
+            }
+
+            document.querySelectorAll('[data-card-estatus]').forEach((card) => {
+                const abrir = () => abrirModalEstatusTerminales(card.dataset.cardEstatus);
+
+                card.addEventListener('click', abrir);
+                card.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    abrir();
+                });
+            });
+
+            iniciarHoraServidor();
+            renderTendenciaVentasHora();
             bootConsultaAgencia();
         });
     </script>
