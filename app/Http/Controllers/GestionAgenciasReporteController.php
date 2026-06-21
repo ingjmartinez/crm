@@ -6,6 +6,7 @@ use App\Models\Agencia;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use DateTimeInterface;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,8 @@ use ZipArchive;
 
 class GestionAgenciasReporteController extends Controller
 {
+    private const IMPORT_CHUNK_SIZE = 1000;
+
     public function index(): View
     {
         return view('reportes.gestion-agencias', [
@@ -24,15 +27,18 @@ class GestionAgenciasReporteController extends Controller
             'estatusResumen' => $this->conteoEstatusTerminales(),
             'estatusDetalle' => $this->detalleEstatusTerminales(),
             'horaServidor' => now()->toIso8601String(),
-            'archivos' => [],
+            'archivos' => session('gestion_agencias_archivos', []),
             'agenciasSinVentas' => $this->agenciasSinVentasDesdeTabla(),
             'ventasPorAgencia' => $this->ventasPorAgenciaDesdeTabla(),
             'tendenciaVentasHora' => $this->tendenciaVentasPorHoraDesdeTabla(),
         ]);
     }
 
-    public function procesar(Request $request): View
+    public function procesar(Request $request): RedirectResponse
     {
+        set_time_limit(300);
+        DB::connection()->disableQueryLog();
+
         $validated = $request->validate([
             'tradicional' => ['required', 'file', 'mimes:xlsx,csv,txt', 'max:51200'],
             'no_tradicional' => ['required', 'file', 'mimes:xlsx,csv,txt', 'max:51200'],
@@ -46,50 +52,32 @@ class GestionAgenciasReporteController extends Controller
         /** @var UploadedFile $noTradicional */
         $noTradicional = $validated['no_tradicional'];
 
-        $resultadoTradicional = $this->limpiarArchivo($tradicional, 'Tradicional', [
-            'fecha' => 'Fecha',
-            'agencia' => 'Agencia',
-            'total_apostado' => 'Total Apostado',
-            'estatus' => 'Estatus',
-            'terminal' => 'Terminal',
-            'usuario_venta' => 'Usr. Venta',
-        ]);
+        $this->reemplazarTablaReporte(function () use ($tradicional, $noTradicional) {
+            $this->limpiarArchivo($tradicional, 'Tradicional', [
+                'fecha' => 'Fecha',
+                'agencia' => 'Agencia',
+                'total_apostado' => 'Total Apostado',
+                'estatus' => 'Estatus',
+                'terminal' => 'Terminal',
+                'usuario_venta' => 'Usr. Venta',
+            ]);
 
-        $resultadoNoTradicional = $this->limpiarArchivo($noTradicional, 'No Tradicional', [
-            'agencia' => 'Agencia',
-            'estatus' => 'Estatus',
-            'fecha' => 'Fecha',
-            'terminal' => 'Id Terminal',
-            'usuario_venta' => 'Usr. Venta',
-            'total_apostado' => 'Total Apostado',
-        ]);
+            $this->limpiarArchivo($noTradicional, 'No Tradicional', [
+                'agencia' => 'Agencia',
+                'estatus' => 'Estatus',
+                'fecha' => 'Fecha',
+                'terminal' => 'Id Terminal',
+                'usuario_venta' => 'Usr. Venta',
+                'total_apostado' => 'Total Apostado',
+            ]);
+        });
 
-        $filas = $resultadoTradicional['filas']->merge($resultadoNoTradicional['filas'])->values();
-
-        $this->reemplazarTablaReporte($filas);
-
-        $resumen = $this->resumenDesdeTabla(
-            $resultadoTradicional['total_cargadas'] + $resultadoNoTradicional['total_cargadas'],
-            $resultadoTradicional['validas'],
-            $resultadoNoTradicional['validas']
-        );
-        $agenciasSinVentas = $this->agenciasSinVentasDesdeTabla();
-        $ventasPorAgencia = $this->ventasPorAgenciaDesdeTabla();
-
-        return view('reportes.gestion-agencias', [
-            'filas' => collect(),
-            'resumen' => $resumen,
-            'estatusResumen' => $this->conteoEstatusTerminales(),
-            'estatusDetalle' => $this->detalleEstatusTerminales(),
-            'horaServidor' => now()->toIso8601String(),
-            'agenciasSinVentas' => $agenciasSinVentas,
-            'ventasPorAgencia' => $ventasPorAgencia,
-            'tendenciaVentasHora' => $this->tendenciaVentasPorHoraDesdeTabla(),
-            'archivos' => [
+        return redirect()
+            ->route('reportes.gestion-agencias')
+            ->with('gestion_agencias_archivos', [
                 'tradicional' => $tradicional->getClientOriginalName(),
                 'no_tradicional' => $noTradicional->getClientOriginalName(),
-            ],
-        ]);
+            ]);
     }
 
     public function data(Request $request)
@@ -175,16 +163,14 @@ class GestionAgenciasReporteController extends Controller
         $umbrales = $this->umbralesVenta($request);
         $resumen = $this->resumenDesdeTabla();
         $estatusResumen = $this->conteoEstatusTerminales($umbrales);
-        $estatusDetalle = $this->detalleEstatusTerminales($umbrales);
-        $agenciasSinVentas = $this->agenciasSinVentasDesdeTabla();
+        $tendenciaVentasHora = $this->tendenciaVentasPorHoraDesdeTabla();
         $horaServidor = now();
 
         $pdf = Pdf::loadView('reportes.gestion-agencias-pdf', [
             'resumen' => $resumen,
             'umbrales' => $umbrales,
             'estatusResumen' => $estatusResumen,
-            'estatusDetalle' => $estatusDetalle,
-            'agenciasSinVentas' => $agenciasSinVentas,
+            'tendenciaVentasHora' => $tendenciaVentasHora,
             'horaServidor' => $horaServidor,
         ])
             ->setPaper('letter', 'landscape')
@@ -197,31 +183,11 @@ class GestionAgenciasReporteController extends Controller
         return $pdf->download('reporte_gestion_agencias_' . $horaServidor->format('Ymd_His') . '.pdf');
     }
 
-    private function reemplazarTablaReporte($filas): void
+    private function reemplazarTablaReporte(callable $importador): void
     {
-        $now = now();
-        $rows = $filas->map(function ($fila) use ($now) {
-            return [
-                'tipo' => $fila['tipo'],
-                'fecha_transaccion' => $this->fechaSql($fila['fecha_orden'] ?? null),
-                'fecha_texto' => $fila['fecha'],
-                'agencia' => $fila['agencia'],
-                'terminal' => $fila['terminal'],
-                'terminal_clave' => $this->claveAgenciaReporte((string) ($fila['terminal'] ?? ''), (string) ($fila['agencia'] ?? '')),
-                'usuario_venta' => $fila['usuario_venta'],
-                'total_apostado' => $fila['total_apostado'],
-                'estatus' => $fila['estatus'],
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        });
-
-        DB::transaction(function () use ($rows) {
+        DB::transaction(function () use ($importador) {
             DB::table('gestion_agencias_ventas')->delete();
-
-            $rows->chunk(1000)->each(function ($chunk) {
-                DB::table('gestion_agencias_ventas')->insert($chunk->all());
-            });
+            $importador();
         });
     }
 
@@ -381,19 +347,47 @@ class GestionAgenciasReporteController extends Controller
 
     private function ventasPorAgenciaDesdeTabla()
     {
-        $rows = DB::table('gestion_agencias_ventas')
+        $totales = DB::table('gestion_agencias_ventas')
+            ->whereNotNull('terminal_clave')
+            ->where('terminal_clave', '<>', '')
+            ->selectRaw('terminal_clave')
+            ->selectRaw('MAX(agencia) as agencia')
+            ->selectRaw('MAX(terminal) as terminal')
+            ->selectRaw('SUM(COALESCE(total_apostado, 0)) as total_general')
+            ->selectRaw("SUM(CASE WHEN tipo = 'Tradicional' THEN COALESCE(total_apostado, 0) ELSE 0 END) as total_tradicional")
+            ->selectRaw("SUM(CASE WHEN tipo = 'No Tradicional' THEN COALESCE(total_apostado, 0) ELSE 0 END) as total_no_tradicional")
+            ->groupBy('terminal_clave')
             ->orderBy('terminal')
             ->orderBy('agencia')
-            ->get(['tipo', 'fecha_transaccion', 'fecha_texto', 'agencia', 'terminal', 'terminal_clave', 'total_apostado']);
+            ->get();
 
-        return $rows
+        $ultimasVentasSubquery = DB::table('gestion_agencias_ventas')
+            ->whereNotNull('terminal_clave')
+            ->where('terminal_clave', '<>', '')
+            ->select([
+                'terminal_clave',
+                'tipo',
+                'fecha_transaccion',
+                'fecha_texto',
+                'total_apostado',
+            ])
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY terminal_clave, tipo ORDER BY fecha_transaccion DESC, id DESC) as venta_rank');
+
+        $ultimasVentas = DB::query()
+            ->fromSub($ultimasVentasSubquery, 'uv')
+            ->where('venta_rank', 1)
+            ->get()
             ->groupBy('terminal_clave')
-            ->map(function ($items) {
-                $primera = $items->first();
-                $tradicional = $items->where('tipo', 'Tradicional');
-                $noTradicional = $items->where('tipo', 'No Tradicional');
-                $terminal = (string) ($primera->terminal ?? '');
-                $agencia = (string) ($primera->agencia ?? '');
+            ->map(fn ($items) => $items->keyBy('tipo'));
+
+        return $totales
+            ->map(function ($row) use ($ultimasVentas) {
+                $terminalClave = (string) ($row->terminal_clave ?? '');
+                $terminal = (string) ($row->terminal ?? '');
+                $agencia = (string) ($row->agencia ?? '');
+                $ultimas = $ultimasVentas->get($terminalClave, collect());
+                $tradicional = $ultimas->get('Tradicional');
+                $noTradicional = $ultimas->get('No Tradicional');
 
                 return [
                     'agencia' => $agencia,
@@ -401,17 +395,16 @@ class GestionAgenciasReporteController extends Controller
                     'label' => trim($terminal . ' - ' . $agencia, ' -'),
                     'busqueda' => strtolower(trim($terminal . ' ' . $agencia)),
                     'tradicional' => [
-                        'total' => round((float) $tradicional->sum('total_apostado'), 2),
-                        'ultima' => $this->ultimaTransaccionDb($tradicional),
+                        'total' => round((float) ($row->total_tradicional ?? 0), 2),
+                        'ultima' => $this->ultimaTransaccionAgrupada($tradicional),
                     ],
                     'no_tradicional' => [
-                        'total' => round((float) $noTradicional->sum('total_apostado'), 2),
-                        'ultima' => $this->ultimaTransaccionDb($noTradicional),
+                        'total' => round((float) ($row->total_no_tradicional ?? 0), 2),
+                        'ultima' => $this->ultimaTransaccionAgrupada($noTradicional),
                     ],
-                    'total' => round((float) $items->sum('total_apostado'), 2),
+                    'total' => round((float) ($row->total_general ?? 0), 2),
                 ];
             })
-            ->sortBy('label')
             ->values();
     }
 
@@ -469,12 +462,8 @@ class GestionAgenciasReporteController extends Controller
         ];
     }
 
-    private function ultimaTransaccionDb($filas): ?array
+    private function ultimaTransaccionAgrupada($fila): ?array
     {
-        $fila = $filas
-            ->sortByDesc('fecha_transaccion')
-            ->first();
-
         if (!$fila) {
             return null;
         }
@@ -500,7 +489,7 @@ class GestionAgenciasReporteController extends Controller
         }
     }
 
-    private function limpiarArchivo(UploadedFile $archivo, string $tipo, array $columnasRequeridas): array
+    private function limpiarArchivo(UploadedFile $archivo, string $tipo, array $columnasRequeridas): void
     {
         $path = $archivo->getRealPath();
 
@@ -511,7 +500,8 @@ class GestionAgenciasReporteController extends Controller
         }
 
         if ($this->esCsv($archivo)) {
-            return $this->limpiarCsv($archivo, $tipo, $columnasRequeridas);
+            $this->limpiarCsv($archivo, $tipo, $columnasRequeridas);
+            return;
         }
 
         $zip = new ZipArchive();
@@ -522,73 +512,41 @@ class GestionAgenciasReporteController extends Controller
             ]);
         }
 
-        $sheetPath = $this->obtenerPrimeraHoja($zip);
-        $sharedStrings = $this->leerSharedStrings($zip);
-        $sheetXml = $zip->getFromName($sheetPath);
+        try {
+            $sheetPath = $this->obtenerPrimeraHoja($zip);
+            $sharedStrings = $this->leerSharedStrings($zip);
+            $sheetXml = $zip->getFromName($sheetPath);
 
-        if ($sheetXml === false) {
-            throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'No se pudo leer la hoja principal del archivo ' . $tipo . '.',
-            ]);
+            if ($sheetXml === false) {
+                throw ValidationException::withMessages([
+                    $this->campoArchivo($tipo) => 'No se pudo leer la hoja principal del archivo ' . $tipo . '.',
+                ]);
+            }
+
+            $headers = $this->leerPrimeraFila($sheetXml, $sharedStrings);
+            $mapa = $this->mapearColumnas($headers, $columnasRequeridas, $tipo);
+            $columnasPermitidas = array_flip(array_map(fn ($column) => $this->indiceColumna($column), array_values($mapa)));
+            $filas = [];
+
+            foreach ($this->iterarFilas($sheetXml) as $rowNumber => $rowXml) {
+                if ($rowNumber <= 1) {
+                    continue;
+                }
+
+                $row = $this->parsearFilaXml($rowXml, $sharedStrings, $columnasPermitidas);
+                $this->agregarFilaProcesada(
+                    $this->normalizarFilaReporte($row, $mapa, $tipo),
+                    $filas
+                );
+            }
+
+            $this->insertarFilasReporte($filas);
+        } finally {
+            $zip->close();
         }
-
-        $headers = $this->leerPrimeraFila($sheetXml, $sharedStrings);
-        $mapa = $this->mapearColumnas($headers, $columnasRequeridas, $tipo);
-        $columnasPermitidas = array_flip(array_map(fn ($column) => $this->indiceColumna($column), array_values($mapa)));
-        $filas = collect();
-        $totalCargadas = 0;
-        $eliminadas = 0;
-        foreach ($this->iterarFilas($sheetXml) as $rowNumber => $rowXml) {
-            if ($rowNumber <= 1) {
-                continue;
-            }
-
-            $totalCargadas++;
-            $row = $this->parsearFilaXml($rowXml, $sharedStrings, $columnasPermitidas);
-            $estatus = $this->limpiarTexto($row[$mapa['estatus']] ?? '');
-
-            if ($estatus === '') {
-                continue;
-            }
-
-            if (strcasecmp($estatus, 'Validos') !== 0) {
-                $eliminadas++;
-                continue;
-            }
-
-            $fecha = $this->normalizarFecha($row[$mapa['fecha']] ?? '');
-            $agencia = $this->limpiarTexto($row[$mapa['agencia']] ?? '');
-            $terminal = $this->formatearTerminalConsulta($row[$mapa['terminal']] ?? '');
-            $usuarioVenta = $this->limpiarTexto($row[$mapa['usuario_venta']] ?? '');
-            $totalApostado = $this->limpiarMonto($row[$mapa['total_apostado']] ?? 0);
-
-            if ($agencia === '' && $terminal === '' && $usuarioVenta === '' && $totalApostado == 0.0) {
-                continue;
-            }
-
-            $filas->push([
-                'tipo' => $tipo,
-                'fecha' => $fecha['texto'],
-                'fecha_orden' => $fecha['orden'],
-                'agencia' => $agencia,
-                'terminal' => $terminal,
-                'usuario_venta' => $usuarioVenta,
-                'total_apostado' => $totalApostado,
-                'estatus' => 'Validos',
-            ]);
-        }
-
-        $zip->close();
-
-        return [
-            'filas' => $filas,
-            'total_cargadas' => $totalCargadas,
-            'validas' => $filas->count(),
-            'total_eliminadas' => $eliminadas,
-        ];
     }
 
-    private function limpiarCsv(UploadedFile $archivo, string $tipo, array $columnasRequeridas): array
+    private function limpiarCsv(UploadedFile $archivo, string $tipo, array $columnasRequeridas): void
     {
         $path = $archivo->getRealPath();
 
@@ -607,56 +565,52 @@ class GestionAgenciasReporteController extends Controller
             ]);
         }
 
-        $primeraLinea = fgets($handle);
-        $headers = $primeraLinea !== false ? str_getcsv($primeraLinea, $delimiter) : false;
+        try {
+            $primeraLinea = fgets($handle);
+            $headers = $primeraLinea !== false ? str_getcsv($primeraLinea, $delimiter) : false;
 
-        if (!$headers) {
+            if (!$headers) {
+                throw ValidationException::withMessages([
+                    $this->campoArchivo($tipo) => 'El archivo ' . $tipo . ' no contiene encabezados validos.',
+                ]);
+            }
+
+            [$headers, $primeraFila] = $this->normalizarPrimeraLineaCsv($headers, $tipo);
+            $mapa = $this->mapearColumnasCsv($headers, $columnasRequeridas, $tipo);
+            $filas = [];
+
+            if ($primeraFila !== null) {
+                $this->agregarFilaCsv($primeraFila, $mapa, $tipo, $filas);
+            }
+
+            while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+                $this->agregarFilaCsv($row, $mapa, $tipo, $filas);
+            }
+
+            $this->insertarFilasReporte($filas);
+        } finally {
             fclose($handle);
-            throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'El archivo ' . $tipo . ' no contiene encabezados validos.',
-            ]);
         }
-
-        [$headers, $primeraFila] = $this->normalizarPrimeraLineaCsv($headers, $tipo);
-        $mapa = $this->mapearColumnasCsv($headers, $columnasRequeridas, $tipo);
-        $filas = collect();
-        $totalCargadas = 0;
-        $eliminadas = 0;
-
-        if ($primeraFila !== null) {
-            $this->agregarFilaCsv($primeraFila, $mapa, $tipo, $filas, $totalCargadas, $eliminadas);
-        }
-
-        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
-            $this->agregarFilaCsv($row, $mapa, $tipo, $filas, $totalCargadas, $eliminadas);
-        }
-
-        fclose($handle);
-
-        return [
-            'filas' => $filas,
-            'total_cargadas' => $totalCargadas,
-            'validas' => $filas->count(),
-            'total_eliminadas' => $eliminadas,
-        ];
     }
 
-    private function agregarFilaCsv(array $row, array $mapa, string $tipo, $filas, int &$totalCargadas, int &$eliminadas): void
+    private function agregarFilaCsv(array $row, array $mapa, string $tipo, array &$filas): void
     {
         if ($this->filaVacia($row)) {
             return;
         }
 
-        $totalCargadas++;
+        $this->agregarFilaProcesada(
+            $this->normalizarFilaReporte($row, $mapa, $tipo),
+            $filas
+        );
+    }
+
+    private function normalizarFilaReporte(array $row, array $mapa, string $tipo): ?array
+    {
         $estatus = $this->limpiarTexto($row[$mapa['estatus']] ?? '');
 
-        if ($estatus === '') {
-            return;
-        }
-
-        if (strcasecmp($estatus, 'Validos') !== 0) {
-            $eliminadas++;
-            return;
+        if ($estatus === '' || strcasecmp($estatus, 'Validos') !== 0) {
+            return null;
         }
 
         $fecha = $this->normalizarFecha($row[$mapa['fecha']] ?? '');
@@ -666,19 +620,51 @@ class GestionAgenciasReporteController extends Controller
         $totalApostado = $this->limpiarMonto($row[$mapa['total_apostado']] ?? 0);
 
         if ($agencia === '' && $terminal === '' && $usuarioVenta === '' && $totalApostado == 0.0) {
-            return;
+            return null;
         }
 
-        $filas->push([
+        return [
             'tipo' => $tipo,
-            'fecha' => $fecha['texto'],
-            'fecha_orden' => $fecha['orden'],
+            'fecha_transaccion' => $this->fechaSql($fecha['orden'] ?? null),
+            'fecha_texto' => $fecha['texto'],
             'agencia' => $agencia,
             'terminal' => $terminal,
+            'terminal_clave' => $this->claveAgenciaReporte($terminal, $agencia),
             'usuario_venta' => $usuarioVenta,
             'total_apostado' => $totalApostado,
             'estatus' => 'Validos',
-        ]);
+        ];
+    }
+
+    private function agregarFilaProcesada(?array $fila, array &$filas): void
+    {
+        if ($fila === null) {
+            return;
+        }
+
+        $filas[] = $fila;
+
+        if (count($filas) >= self::IMPORT_CHUNK_SIZE) {
+            $this->insertarFilasReporte($filas);
+            $filas = [];
+        }
+    }
+
+    private function insertarFilasReporte(array $filas): void
+    {
+        if ($filas === []) {
+            return;
+        }
+
+        $now = now();
+        $rows = array_map(function ($fila) use ($now) {
+            $fila['created_at'] = $now;
+            $fila['updated_at'] = $now;
+
+            return $fila;
+        }, $filas);
+
+        DB::table('gestion_agencias_ventas')->insert($rows);
     }
 
     private function formatearTerminalConsulta($valor): string
