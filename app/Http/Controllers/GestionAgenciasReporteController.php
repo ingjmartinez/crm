@@ -82,6 +82,7 @@ class GestionAgenciasReporteController extends Controller
 
     public function data(Request $request)
     {
+        $momentoCalculo = now();
         $draw = (int) $request->input('draw', 1);
         $start = max((int) $request->input('start', 0), 0);
         $length = (int) $request->input('length', 25);
@@ -103,7 +104,7 @@ class GestionAgenciasReporteController extends Controller
             ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
             ->whereNotNull('terminal_clave')
             ->where('terminal_clave', '<>', '');
-        $estatusSql = $this->estatusVentaSql($umbrales);
+        $estatusSql = $this->estatusVentaSql($umbrales, $momentoCalculo);
         $base = DB::table('gestion_agencias_ventas as gav')
             ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
             ->where('uv.venta_rank', 1);
@@ -149,10 +150,13 @@ class GestionAgenciasReporteController extends Controller
             'draw' => $draw,
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
-            'estatusResumen' => $this->conteoEstatusTerminales($umbrales),
-            'estatusDetalle' => $this->detalleEstatusTerminales($umbrales),
+            'estatusResumen' => $this->conteoEstatusTerminales($umbrales, $momentoCalculo),
+            'estatusDetalle' => $this->detalleEstatusTerminales($umbrales, $momentoCalculo),
+            'horaServidor' => $momentoCalculo->toIso8601String(),
             'data' => $data,
-        ]);
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     public function pdf(Request $request)
@@ -162,9 +166,9 @@ class GestionAgenciasReporteController extends Controller
 
         $umbrales = $this->umbralesVenta($request);
         $resumen = $this->resumenDesdeTabla();
-        $estatusResumen = $this->conteoEstatusTerminales($umbrales);
-        $tendenciaVentasHora = $this->tendenciaVentasPorHoraDesdeTabla();
         $horaServidor = now();
+        $estatusResumen = $this->conteoEstatusTerminales($umbrales, $horaServidor);
+        $tendenciaVentasHora = $this->tendenciaVentasPorHoraDesdeTabla();
 
         $pdf = Pdf::loadView('reportes.gestion-agencias-pdf', [
             'resumen' => $resumen,
@@ -204,22 +208,23 @@ class GestionAgenciasReporteController extends Controller
         ];
     }
 
-    private function estatusVentaSql(array $umbrales): string
+    private function estatusVentaSql(array $umbrales, $momentoCalculo = null): string
     {
         $aviso = (int) $umbrales['aviso'];
         $alerta = (int) $umbrales['alerta'];
         $llamada = (int) $umbrales['llamada'];
+        $momento = ($momentoCalculo instanceof Carbon ? $momentoCalculo : now())->format('Y-m-d H:i:s');
 
         return "CASE
             WHEN gav.fecha_transaccion IS NULL THEN 'Requiere llamada'
-            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, NOW()) >= {$llamada} THEN 'Requiere llamada'
-            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, NOW()) >= {$alerta} THEN 'En Alerta'
-            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, NOW()) >= {$aviso} THEN 'Aviso'
+            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, '{$momento}') >= {$llamada} THEN 'Requiere llamada'
+            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, '{$momento}') >= {$alerta} THEN 'En Alerta'
+            WHEN TIMESTAMPDIFF(MINUTE, gav.fecha_transaccion, '{$momento}') >= {$aviso} THEN 'Aviso'
             ELSE 'Al dia'
         END";
     }
 
-    private function conteoEstatusTerminales(?array $umbrales = null): array
+    private function conteoEstatusTerminales(?array $umbrales = null, $momentoCalculo = null): array
     {
         $umbrales ??= [
             'aviso' => 20,
@@ -231,7 +236,7 @@ class GestionAgenciasReporteController extends Controller
             ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
             ->whereNotNull('terminal_clave')
             ->where('terminal_clave', '<>', '');
-        $estatusSql = $this->estatusVentaSql($umbrales);
+        $estatusSql = $this->estatusVentaSql($umbrales, $momentoCalculo);
         $conteos = DB::table('gestion_agencias_ventas as gav')
             ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
             ->where('uv.venta_rank', 1)
@@ -247,7 +252,7 @@ class GestionAgenciasReporteController extends Controller
         ];
     }
 
-    private function detalleEstatusTerminales(?array $umbrales = null): array
+    private function detalleEstatusTerminales(?array $umbrales = null, $momentoCalculo = null): array
     {
         $umbrales ??= [
             'aviso' => 20,
@@ -259,7 +264,7 @@ class GestionAgenciasReporteController extends Controller
             ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
             ->whereNotNull('terminal_clave')
             ->where('terminal_clave', '<>', '');
-        $estatusSql = $this->estatusVentaSql($umbrales);
+        $estatusSql = $this->estatusVentaSql($umbrales, $momentoCalculo);
         $rows = DB::table('gestion_agencias_ventas as gav')
             ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
             ->where('uv.venta_rank', 1)

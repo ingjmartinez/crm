@@ -144,6 +144,9 @@
                                                 <div class="gestion-server-time-value" id="gestionHoraServidor">--:--:--</div>
                                             </div>
                                         </div>
+                                        <div class="text-muted small w-100 text-md-end" id="gestionHoraCalculoTexto">
+                                            Estatus calculados con la hora del servidor: --:--:--
+                                        </div>
                                         <div class="flex-grow-1">
                                             <input type="search" class="form-control" id="consultaAgenciaInput" list="consultaAgenciaOptions" placeholder="Buscar agencia o terminal">
                                             <datalist id="consultaAgenciaOptions"></datalist>
@@ -467,6 +470,12 @@
             const btnConfigurarTiempoVentas = document.getElementById('btnConfigurarTiempoVentas');
             const btnPdfGestionAgencias = document.getElementById('btnPdfGestionAgencias');
             const gestionHoraServidor = document.getElementById('gestionHoraServidor');
+            const gestionHoraCalculoTexto = document.getElementById('gestionHoraCalculoTexto');
+            const serverClockState = {
+                timerId: null,
+                serverTimestamp: null,
+                clientStartedAt: null,
+            };
             const agenciasSinVentas = Array.isArray(window.gestionAgenciasData?.agenciasSinVentas)
                 ? window.gestionAgenciasData.agenciasSinVentas
                 : [];
@@ -589,30 +598,57 @@
                 localStorage.setItem('gestionAgenciasUmbralesVentas', JSON.stringify(umbrales));
             };
 
-            const iniciarHoraServidor = () => {
+            const formatterHoraServidor = new Intl.DateTimeFormat('es-DO', {
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true,
+            });
+
+            const renderHoraServidor = () => {
                 if (!gestionHoraServidor) return;
 
-                const timestamp = Date.parse(window.gestionAgenciasData?.horaServidor || '');
-
-                if (Number.isNaN(timestamp)) {
+                if (!Number.isFinite(serverClockState.serverTimestamp) || !Number.isFinite(serverClockState.clientStartedAt)) {
                     gestionHoraServidor.textContent = 'N/D';
                     return;
                 }
 
-                const inicioCliente = Date.now();
-                const formatter = new Intl.DateTimeFormat('es-DO', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: true,
-                });
-                const render = () => {
-                    const fecha = new Date(timestamp + (Date.now() - inicioCliente));
-                    gestionHoraServidor.textContent = formatter.format(fecha);
-                };
+                const fecha = new Date(serverClockState.serverTimestamp + (Date.now() - serverClockState.clientStartedAt));
+                gestionHoraServidor.textContent = formatterHoraServidor.format(fecha);
+            };
 
-                render();
-                setInterval(render, 1000);
+            const sincronizarHoraServidor = (horaServidor) => {
+                if (!gestionHoraServidor) return;
+
+                const timestamp = Date.parse(horaServidor || '');
+
+                if (Number.isNaN(timestamp)) {
+                    serverClockState.serverTimestamp = null;
+                    serverClockState.clientStartedAt = null;
+                    gestionHoraServidor.textContent = 'N/D';
+                    if (gestionHoraCalculoTexto) {
+                        gestionHoraCalculoTexto.textContent = 'Estatus calculados con la hora del servidor: N/D';
+                    }
+                    return;
+                }
+
+                serverClockState.serverTimestamp = timestamp;
+                serverClockState.clientStartedAt = Date.now();
+                if (gestionHoraCalculoTexto) {
+                    gestionHoraCalculoTexto.textContent = `Estatus calculados con la hora del servidor: ${formatterHoraServidor.format(new Date(timestamp))}`;
+                }
+                renderHoraServidor();
+            };
+
+            const iniciarHoraServidor = () => {
+                if (!gestionHoraServidor) return;
+                sincronizarHoraServidor(window.gestionAgenciasData?.horaServidor || '');
+
+                if (serverClockState.timerId !== null) {
+                    clearInterval(serverClockState.timerId);
+                }
+
+                serverClockState.timerId = setInterval(renderHoraServidor, 1000);
             };
 
             const renderEstatusBadge = (estatus) => {
@@ -956,16 +992,22 @@
                         ajax: {
                             url: window.gestionAgenciasData.dataUrl,
                             type: 'GET',
+                            cache: false,
                             data: function (data) {
                                 const umbrales = getUmbralesVentas();
                                 data.estatus_filter = filtroEstatusVentas?.value || '';
                                 data.umbral_aviso = umbrales.aviso;
                                 data.umbral_alerta = umbrales.alerta;
                                 data.umbral_llamada = umbrales.llamada;
+                                data._ts = Date.now();
                             },
                             dataSrc: function (json) {
                                 actualizarTarjetasEstatus(json?.estatusResumen);
                                 actualizarDetalleEstatus(json?.estatusDetalle);
+                                if (json?.horaServidor) {
+                                    window.gestionAgenciasData.horaServidor = json.horaServidor;
+                                    sincronizarHoraServidor(json.horaServidor);
+                                }
                                 return json?.data || [];
                             },
                         },
