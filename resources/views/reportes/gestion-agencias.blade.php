@@ -84,6 +84,10 @@
             font-weight: 700;
             line-height: 1;
         }
+
+        .gestion-consulta-status {
+            min-height: 20px;
+        }
     </style>
     <div class="main-content">
         <div class="page-content">
@@ -150,6 +154,7 @@
                                         <div class="flex-grow-1">
                                             <input type="search" class="form-control" id="consultaAgenciaInput" list="consultaAgenciaOptions" placeholder="Buscar agencia o terminal">
                                             <datalist id="consultaAgenciaOptions"></datalist>
+                                            <div class="gestion-consulta-status small text-muted mt-1" id="consultaAgenciaStatus"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -680,6 +685,7 @@
             const bootConsultaAgencia = () => {
                 const input = document.getElementById('consultaAgenciaInput');
                 const options = document.getElementById('consultaAgenciaOptions');
+                const status = document.getElementById('consultaAgenciaStatus');
                 const nombre = document.getElementById('consultaAgenciaNombre');
                 const terminal = document.getElementById('consultaAgenciaTerminal');
                 const tradicionalTotal = document.getElementById('consultaTradicionalTotal');
@@ -687,6 +693,7 @@
                 const noTradicionalTotal = document.getElementById('consultaNoTradicionalTotal');
                 const noTradicionalUltima = document.getElementById('consultaNoTradicionalUltima');
                 const totalAgencia = document.getElementById('consultaTotalAgencia');
+                let consultaTimer = null;
 
                 if (!input || !options || !ventasPorAgencia.length) return;
 
@@ -694,6 +701,25 @@
                     .slice(0, 5000)
                     .map((item) => `<option value="${escapeHtml(item.label)}"></option>`)
                     .join('');
+
+                const setStatus = (message = '', loading = false) => {
+                    if (!status) return;
+
+                    status.innerHTML = loading
+                        ? `<span class="spinner-border spinner-border-sm me-1 align-middle" role="status" aria-hidden="true"></span>${escapeHtml(message)}`
+                        : escapeHtml(message);
+                };
+
+                const resetConsulta = () => {
+                    if (nombre) nombre.textContent = 'Selecciona una agencia';
+                    if (terminal) terminal.textContent = 'Terminal';
+                    if (tradicionalTotal) tradicionalTotal.textContent = '0.00';
+                    if (tradicionalUltima) tradicionalUltima.textContent = 'Ult trans N/D';
+                    if (noTradicionalTotal) noTradicionalTotal.textContent = '0.00';
+                    if (noTradicionalUltima) noTradicionalUltima.textContent = 'Ult trans N/D';
+                    if (totalAgencia) totalAgencia.textContent = '0.00';
+                    setStatus('Escribe una agencia o terminal para consultar.');
+                };
 
                 const render = (item) => {
                     if (!item) {
@@ -704,6 +730,7 @@
                         if (noTradicionalTotal) noTradicionalTotal.textContent = '0.00';
                         if (noTradicionalUltima) noTradicionalUltima.textContent = 'Ult trans N/D';
                         if (totalAgencia) totalAgencia.textContent = '0.00';
+                        setStatus('No encontramos una agencia con ese criterio.');
                         return;
                     }
 
@@ -714,12 +741,13 @@
                     if (noTradicionalTotal) noTradicionalTotal.textContent = money(item.no_tradicional?.total);
                     if (noTradicionalUltima) noTradicionalUltima.textContent = formatoUltimaTransaccion(item.no_tradicional?.ultima);
                     if (totalAgencia) totalAgencia.textContent = money(item.total);
+                    setStatus(`Consultando agencia: ${item.label || item.agencia || item.terminal || 'resultado encontrado'}.`);
                 };
 
-                const buscar = () => {
+                const ejecutarBusqueda = () => {
                     const query = input.value.trim().toLowerCase();
                     if (!query) {
-                        render(ventasPorAgencia[0] || null);
+                        resetConsulta();
                         return;
                     }
 
@@ -729,9 +757,24 @@
                     render(parcial || null);
                 };
 
+                const buscar = () => {
+                    if (consultaTimer) {
+                        clearTimeout(consultaTimer);
+                    }
+
+                    const query = input.value.trim();
+                    if (!query) {
+                        resetConsulta();
+                        return;
+                    }
+
+                    setStatus('Consultando agencia...', true);
+                    consultaTimer = setTimeout(ejecutarBusqueda, 220);
+                };
+
                 input.addEventListener('input', buscar);
                 input.addEventListener('change', buscar);
-                render(ventasPorAgencia[0] || null);
+                resetConsulta();
             };
 
             const limpiarCacheDataTable = () => {
