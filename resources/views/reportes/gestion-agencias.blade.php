@@ -235,6 +235,55 @@
                 </div>
 
                 @if (!empty($resumen))
+                    <div class="row mb-3" data-no-pdf="true">
+                        <div class="col-12">
+                            <div class="card mb-0">
+                                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                    <div>
+                                        <h5 class="card-title mb-1">Filtros por agencia</h5>
+                                        <p class="text-muted mb-0">Filtra la visualizacion por empresa, ruta y coordinador. Estos filtros no se toman en cuenta en el PDF.</p>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-xl-3 col-lg-4 col-md-6">
+                                            <label for="filtroEmpresaGestion" class="form-label">Empresa</label>
+                                            <select class="form-select" id="filtroEmpresaGestion">
+                                                <option value="">Todas las empresas</option>
+                                                @foreach (($filtrosCatalogo['empresas'] ?? []) as $empresa)
+                                                    <option value="{{ $empresa }}">{{ $empresa }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-xl-3 col-lg-4 col-md-6">
+                                            <label for="filtroRutaGestion" class="form-label">Ruta</label>
+                                            <select class="form-select" id="filtroRutaGestion">
+                                                <option value="">Todas las rutas</option>
+                                                @foreach (($filtrosCatalogo['rutas'] ?? []) as $ruta)
+                                                    <option value="{{ $ruta }}">{{ $ruta }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-xl-3 col-lg-4 col-md-6">
+                                            <label for="filtroCoordinadorGestion" class="form-label">Coordinador</label>
+                                            <select class="form-select" id="filtroCoordinadorGestion">
+                                                <option value="">Todos los coordinadores</option>
+                                                @foreach (($filtrosCatalogo['coordinadores'] ?? []) as $coordinador)
+                                                    <option value="{{ $coordinador }}">{{ $coordinador }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-xl-3 col-lg-12 col-md-6">
+                                            <button type="button" class="btn btn-light w-100" id="btnLimpiarFiltrosGestion">
+                                                <i class="ri-refresh-line align-bottom me-1"></i>
+                                                Limpiar filtros
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-3">
                             <div class="card h-100 mb-0 gestion-summary-card gestion-card-slate">
@@ -472,6 +521,10 @@
             const table = $('#table-gestion-agencias');
             const form = document.getElementById('gestionAgenciasForm');
             const filtroEstatusVentas = document.getElementById('filtroEstatusVentas');
+            const filtroEmpresaGestion = document.getElementById('filtroEmpresaGestion');
+            const filtroRutaGestion = document.getElementById('filtroRutaGestion');
+            const filtroCoordinadorGestion = document.getElementById('filtroCoordinadorGestion');
+            const btnLimpiarFiltrosGestion = document.getElementById('btnLimpiarFiltrosGestion');
             const btnConfigurarTiempoVentas = document.getElementById('btnConfigurarTiempoVentas');
             const btnPdfGestionAgencias = document.getElementById('btnPdfGestionAgencias');
             const gestionHoraServidor = document.getElementById('gestionHoraServidor');
@@ -493,6 +546,7 @@
             let dtGestionAgencias = null;
             let dtModalAgenciasSinVentaGestion = null;
             let dtModalEstatusTerminalesGestion = null;
+            let cargaFiltrosActiva = null;
 
             const escapeHtml = (value) => (value ?? '').toString()
                 .replace(/&/g, '&amp;')
@@ -1008,6 +1062,71 @@
                 });
             };
 
+            const mostrarCargaFiltroGestion = (tipo) => {
+                if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') return;
+
+                const textos = {
+                    ruta: {
+                        title: 'Cargando datos por ruta',
+                        detail: 'Actualizando la tabla y los indicadores del reporte...'
+                    },
+                    coordinador: {
+                        title: 'Cargando datos por coordinador',
+                        detail: 'Actualizando la tabla y los indicadores del reporte...'
+                    },
+                };
+
+                const config = textos[tipo];
+                if (!config) return;
+
+                cargaFiltrosActiva = tipo;
+                Swal.fire({
+                    title: config.title,
+                    html: `
+                        <div class="d-flex flex-column align-items-center gap-2">
+                            <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+                            <div class="text-muted">${config.detail}</div>
+                        </div>
+                    `,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                });
+            };
+
+            const cerrarCargaFiltroGestion = () => {
+                if (!cargaFiltrosActiva) return;
+
+                cargaFiltrosActiva = null;
+                if (typeof Swal !== 'undefined' && typeof Swal.close === 'function') {
+                    Swal.close();
+                }
+            };
+
+            const manejarErrorCargaFiltroGestion = () => {
+                if (!cargaFiltrosActiva || typeof Swal === 'undefined' || typeof Swal.fire !== 'function') {
+                    cargaFiltrosActiva = null;
+                    return;
+                }
+
+                cargaFiltrosActiva = null;
+                Swal.fire({
+                    title: 'No se pudieron cargar los datos',
+                    text: 'Intenta de nuevo con el filtro seleccionado.',
+                    icon: 'error',
+                });
+            };
+
+            const recargarGestionAgencias = (options = {}) => {
+                if (options.loader) {
+                    mostrarCargaFiltroGestion(options.loader);
+                }
+
+                if (dtGestionAgencias) {
+                    dtGestionAgencias.ajax.reload(null, true);
+                }
+            };
+
             if (form) {
                 form.addEventListener('submit', prepararEnvioReporte);
             }
@@ -1039,6 +1158,9 @@
                             data: function (data) {
                                 const umbrales = getUmbralesVentas();
                                 data.estatus_filter = filtroEstatusVentas?.value || '';
+                                data.empresa_filter = filtroEmpresaGestion?.value || '';
+                                data.ruta_filter = filtroRutaGestion?.value || '';
+                                data.coordinador_filter = filtroCoordinadorGestion?.value || '';
                                 data.umbral_aviso = umbrales.aviso;
                                 data.umbral_alerta = umbrales.alerta;
                                 data.umbral_llamada = umbrales.llamada;
@@ -1093,6 +1215,14 @@
                             resolveOnce();
                         }
                     });
+
+                    table.on('draw.dt', () => {
+                        cerrarCargaFiltroGestion();
+                    });
+
+                    table.on('error.dt', () => {
+                        manejarErrorCargaFiltroGestion();
+                    });
                 });
             }
 
@@ -1104,10 +1234,28 @@
             }
 
             if (filtroEstatusVentas) {
-                filtroEstatusVentas.addEventListener('change', () => {
-                    if (dtGestionAgencias) {
-                        dtGestionAgencias.ajax.reload(null, true);
-                    }
+                filtroEstatusVentas.addEventListener('change', recargarGestionAgencias);
+            }
+
+            [filtroEmpresaGestion, filtroRutaGestion, filtroCoordinadorGestion].forEach((select) => {
+                if (!select) return;
+                select.addEventListener('change', () => {
+                    const loader = select === filtroRutaGestion
+                        ? 'ruta'
+                        : select === filtroCoordinadorGestion
+                            ? 'coordinador'
+                            : null;
+
+                    recargarGestionAgencias({ loader });
+                });
+            });
+
+            if (btnLimpiarFiltrosGestion) {
+                btnLimpiarFiltrosGestion.addEventListener('click', () => {
+                    if (filtroEmpresaGestion) filtroEmpresaGestion.value = '';
+                    if (filtroRutaGestion) filtroRutaGestion.value = '';
+                    if (filtroCoordinadorGestion) filtroCoordinadorGestion.value = '';
+                    recargarGestionAgencias();
                 });
             }
 

@@ -18,12 +18,14 @@ use ZipArchive;
 class GestionAgenciasReporteController extends Controller
 {
     private const IMPORT_CHUNK_SIZE = 1000;
+    private const REPORT_TEXT_COLLATION = 'utf8mb4_unicode_ci';
 
     public function index(): View
     {
         return view('reportes.gestion-agencias', [
             'filas' => collect(),
             'resumen' => $this->resumenDesdeTabla(),
+            'filtrosCatalogo' => $this->filtrosDisponiblesDesdeTabla(),
             'estatusResumen' => $this->conteoEstatusTerminales(),
             'estatusDetalle' => $this->detalleEstatusTerminales(),
             'horaServidor' => now()->toIso8601String(),
@@ -89,6 +91,7 @@ class GestionAgenciasReporteController extends Controller
         $length = $length > 0 ? min($length, 500) : 25;
         $search = trim((string) $request->input('search.value', ''));
         $estatusFiltro = trim((string) $request->input('estatus_filter', ''));
+        $filtrosAgencia = $this->filtrosAgencia($request);
         $umbrales = $this->umbralesVenta($request);
         $columns = [
             0 => 'gav.tipo',
@@ -99,15 +102,8 @@ class GestionAgenciasReporteController extends Controller
         $orderIndex = (int) $request->input('order.0.column', 2);
         $orderColumn = $columns[$orderIndex] ?? 'gav.fecha_transaccion';
         $orderDir = strtolower((string) $request->input('order.0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        $ultimaVentaTerminalSubquery = DB::table('gestion_agencias_ventas')
-            ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
-            ->whereNotNull('terminal_clave')
-            ->where('terminal_clave', '<>', '');
         $estatusSql = $this->estatusVentaSql($umbrales, $momentoCalculo);
-        $base = DB::table('gestion_agencias_ventas as gav')
-            ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
-            ->where('uv.venta_rank', 1);
+        $base = $this->baseUltimasVentasQuery($filtrosAgencia);
         $recordsTotal = (clone $base)->count();
 
         if ($search !== '') {
@@ -116,7 +112,10 @@ class GestionAgenciasReporteController extends Controller
                     ->orWhere('gav.fecha_texto', 'like', "%{$search}%")
                     ->orWhere('gav.agencia', 'like', "%{$search}%")
                     ->orWhere('gav.terminal', 'like', "%{$search}%")
-                    ->orWhere('gav.usuario_venta', 'like', "%{$search}%");
+                    ->orWhere('gav.usuario_venta', 'like', "%{$search}%")
+                    ->orWhere('agl.empresa', 'like', "%{$search}%")
+                    ->orWhere('agl.ruta', 'like', "%{$search}%")
+                    ->orWhere('agl.coordinador', 'like', "%{$search}%");
             });
         }
 
@@ -150,8 +149,8 @@ class GestionAgenciasReporteController extends Controller
             'draw' => $draw,
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
-            'estatusResumen' => $this->conteoEstatusTerminales($umbrales, $momentoCalculo),
-            'estatusDetalle' => $this->detalleEstatusTerminales($umbrales, $momentoCalculo),
+            'estatusResumen' => $this->conteoEstatusTerminales($umbrales, $momentoCalculo, $filtrosAgencia),
+            'estatusDetalle' => $this->detalleEstatusTerminales($umbrales, $momentoCalculo, $filtrosAgencia),
             'horaServidor' => $momentoCalculo->toIso8601String(),
             'data' => $data,
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -208,6 +207,109 @@ class GestionAgenciasReporteController extends Controller
         ];
     }
 
+    private function filtrosAgencia(Request $request): array
+    {
+        return [
+            'empresa' => trim((string) $request->input('empresa_filter', '')),
+            'ruta' => trim((string) $request->input('ruta_filter', '')),
+            'coordinador' => trim((string) $request->input('coordinador_filter', '')),
+        ];
+    }
+
+    private function filtrosDisponiblesDesdeTabla(): array
+    {
+        $base = $this->baseUltimasVentasQuery();
+
+        return [
+            'empresas' => (clone $base)
+                ->whereNotNull('agl.empresa')
+                ->where('agl.empresa', '<>', '')
+                ->distinct()
+                ->orderBy('agl.empresa')
+                ->pluck('agl.empresa')
+                ->values()
+                ->all(),
+            'rutas' => (clone $base)
+                ->whereNotNull('agl.ruta')
+                ->where('agl.ruta', '<>', '')
+                ->distinct()
+                ->orderBy('agl.ruta')
+                ->pluck('agl.ruta')
+                ->values()
+                ->all(),
+            'coordinadores' => (clone $base)
+                ->whereNotNull('agl.coordinador')
+                ->where('agl.coordinador', '<>', '')
+                ->distinct()
+                ->orderBy('agl.coordinador')
+                ->pluck('agl.coordinador')
+                ->values()
+                ->all(),
+        ];
+    }
+
+    private function baseUltimasVentasQuery(array $filtros = [])
+    {
+        $ultimaVentaTerminalSubquery = DB::table('gestion_agencias_ventas')
+            ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
+            ->whereNotNull('terminal_clave')
+            ->where('terminal_clave', '<>', '');
+
+        $query = DB::table('gestion_agencias_ventas as gav')
+            ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
+            ->leftJoinSub($this->agenciasLookupSubquery(), 'agl', 'agl.terminal_clave', '=', 'gav.terminal_clave')
+            ->where('uv.venta_rank', 1);
+
+        return $this->aplicarFiltrosAgencia($query, $filtros);
+    }
+
+    private function agenciasLookupSubquery()
+    {
+        $terminalClaveSql = $this->collateSql(
+            $this->terminalClaveSql('a.terminal')
+        );
+
+        return DB::table('agencias as a')
+            ->selectRaw("{$terminalClaveSql} as terminal_clave")
+            ->selectRaw("MAX(NULLIF(TRIM(a.empresa), '')) as empresa")
+            ->selectRaw("MAX(NULLIF(TRIM(a.ruta), '')) as ruta")
+            ->selectRaw("MAX(NULLIF(TRIM(a.coordinador), '')) as coordinador")
+            ->whereNotNull('a.terminal')
+            ->where('a.terminal', '<>', '')
+            ->groupByRaw($terminalClaveSql);
+    }
+
+    private function aplicarFiltrosAgencia($query, array $filtros = [])
+    {
+        $mapa = [
+            'empresa' => 'agl.empresa',
+            'ruta' => 'agl.ruta',
+            'coordinador' => 'agl.coordinador',
+        ];
+
+        foreach ($mapa as $filtro => $columna) {
+            $valor = trim((string) ($filtros[$filtro] ?? ''));
+
+            if ($valor === '') {
+                continue;
+            }
+
+            $query->where($columna, $valor);
+        }
+
+        return $query;
+    }
+
+    private function terminalClaveSql(string $column): string
+    {
+        return "TRIM(LEADING '0' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE({$column}, ''), '-', ''), ' ', ''), '.', ''), ',', ''), '_', ''))";
+    }
+
+    private function collateSql(string $expression, string $collation = self::REPORT_TEXT_COLLATION): string
+    {
+        return "({$expression}) COLLATE {$collation}";
+    }
+
     private function estatusVentaSql(array $umbrales, $momentoCalculo = null): string
     {
         $aviso = (int) $umbrales['aviso'];
@@ -224,7 +326,7 @@ class GestionAgenciasReporteController extends Controller
         END";
     }
 
-    private function conteoEstatusTerminales(?array $umbrales = null, $momentoCalculo = null): array
+    private function conteoEstatusTerminales(?array $umbrales = null, $momentoCalculo = null, array $filtros = []): array
     {
         $umbrales ??= [
             'aviso' => 20,
@@ -232,14 +334,8 @@ class GestionAgenciasReporteController extends Controller
             'llamada' => 60,
         ];
 
-        $ultimaVentaTerminalSubquery = DB::table('gestion_agencias_ventas')
-            ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
-            ->whereNotNull('terminal_clave')
-            ->where('terminal_clave', '<>', '');
         $estatusSql = $this->estatusVentaSql($umbrales, $momentoCalculo);
-        $conteos = DB::table('gestion_agencias_ventas as gav')
-            ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
-            ->where('uv.venta_rank', 1)
+        $conteos = $this->baseUltimasVentasQuery($filtros)
             ->selectRaw("{$estatusSql} as estatus, COUNT(*) as total")
             ->groupByRaw($estatusSql)
             ->pluck('total', 'estatus');
@@ -252,7 +348,7 @@ class GestionAgenciasReporteController extends Controller
         ];
     }
 
-    private function detalleEstatusTerminales(?array $umbrales = null, $momentoCalculo = null): array
+    private function detalleEstatusTerminales(?array $umbrales = null, $momentoCalculo = null, array $filtros = []): array
     {
         $umbrales ??= [
             'aviso' => 20,
@@ -260,14 +356,8 @@ class GestionAgenciasReporteController extends Controller
             'llamada' => 60,
         ];
 
-        $ultimaVentaTerminalSubquery = DB::table('gestion_agencias_ventas')
-            ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
-            ->whereNotNull('terminal_clave')
-            ->where('terminal_clave', '<>', '');
         $estatusSql = $this->estatusVentaSql($umbrales, $momentoCalculo);
-        $rows = DB::table('gestion_agencias_ventas as gav')
-            ->joinSub($ultimaVentaTerminalSubquery, 'uv', 'uv.id', '=', 'gav.id')
-            ->where('uv.venta_rank', 1)
+        $rows = $this->baseUltimasVentasQuery($filtros)
             ->orderBy('gav.fecha_transaccion', 'desc')
             ->get([
                 'gav.tipo',
