@@ -289,7 +289,7 @@
                             <div class="card h-100 mb-0 gestion-summary-card gestion-card-slate">
                                 <div class="card-body">
                                     <p class="text-muted mb-1">Promedio de venta por hora</p>
-                                    <h4 class="mb-0">{{ number_format($resumen['venta_por_hora'] ?? 0, 0) }}</h4>
+                                    <h4 class="mb-0" id="resumenVentaPorHoraGestion">{{ number_format($resumen['venta_por_hora'] ?? 0, 0) }}</h4>
                                 </div>
                             </div>
                         </div>
@@ -297,7 +297,7 @@
                             <div class="card h-100 mb-0 gestion-summary-card gestion-card-success">
                                 <div class="card-body">
                                     <p class="text-muted mb-1">Agencias con ventas</p>
-                                    <h4 class="mb-0 text-success">{{ number_format($resumen['total_validas'] ?? 0) }}</h4>
+                                    <h4 class="mb-0 text-success" id="resumenTotalValidasGestion">{{ number_format($resumen['total_validas'] ?? 0) }}</h4>
                                 </div>
                             </div>
                         </div>
@@ -305,7 +305,7 @@
                             <div class="card h-100 mb-0 cursor-pointer gestion-summary-card gestion-card-danger" id="cardAgenciasSinVentaGestion" role="button" tabindex="0" aria-label="Ver agencias sin ventas">
                                 <div class="card-body">
                                     <p class="text-muted mb-1">Agencias sin ventas <i class="ri-search-eye-line align-middle ms-1"></i></p>
-                                    <h4 class="mb-0 text-danger">{{ number_format($resumen['total_eliminadas'] ?? 0) }}</h4>
+                                    <h4 class="mb-0 text-danger" id="resumenTotalEliminadasGestion">{{ number_format($resumen['total_eliminadas'] ?? 0) }}</h4>
                                 </div>
                             </div>
                         </div>
@@ -313,7 +313,7 @@
                             <div class="card h-100 mb-0 gestion-summary-card gestion-card-indigo">
                                 <div class="card-body">
                                     <p class="text-muted mb-1">Total vendido</p>
-                                    <h4 class="mb-0">{{ number_format($resumen['total_apostado'] ?? 0, 2) }}</h4>
+                                    <h4 class="mb-0" id="resumenTotalApostadoGestion">{{ number_format($resumen['total_apostado'] ?? 0, 2) }}</h4>
                                 </div>
                             </div>
                         </div>
@@ -358,11 +358,11 @@
                                 <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                                     <div>
                                         <h5 class="card-title mb-1">Tendencia de ventas por hora</h5>
-                                        <p class="text-muted mb-0">
+                                        <p class="text-muted mb-0" id="tendenciaRangoGestion">
                                             Desde {{ $tendenciaVentasHora['primera_venta'] ?? 'N/D' }} hasta {{ $tendenciaVentasHora['ultima_venta'] ?? 'N/D' }}
                                         </p>
                                     </div>
-                                    <span class="badge bg-primary-subtle text-primary">
+                                    <span class="badge bg-primary-subtle text-primary" id="tendenciaTotalGestion">
                                         Acumulado RD$ {{ number_format((float) ($tendenciaVentasHora['total'] ?? 0), 2) }}
                                     </span>
                                 </div>
@@ -382,8 +382,8 @@
                                     <h5 class="card-title mb-1">Datos limpios</h5>
                                     @if (!empty($resumen))
                                         <p class="text-muted mb-0">
-                                            Tradicional: {{ number_format($resumen['tradicional_validas'] ?? 0) }} |
-                                            No Tradicional: {{ number_format($resumen['no_tradicional_validas'] ?? 0) }}
+                                            Tradicional: <span id="resumenTradicionalValidasGestion">{{ number_format($resumen['tradicional_validas'] ?? 0) }}</span> |
+                                            No Tradicional: <span id="resumenNoTradicionalValidasGestion">{{ number_format($resumen['no_tradicional_validas'] ?? 0) }}</span>
                                         </p>
                                     @endif
                                 </div>
@@ -534,19 +534,20 @@
                 serverTimestamp: null,
                 clientStartedAt: null,
             };
-            const agenciasSinVentas = Array.isArray(window.gestionAgenciasData?.agenciasSinVentas)
+            let agenciasSinVentas = Array.isArray(window.gestionAgenciasData?.agenciasSinVentas)
                 ? window.gestionAgenciasData.agenciasSinVentas
                 : [];
-            const ventasPorAgencia = Array.isArray(window.gestionAgenciasData?.ventasPorAgencia)
+            let ventasPorAgencia = Array.isArray(window.gestionAgenciasData?.ventasPorAgencia)
                 ? window.gestionAgenciasData.ventasPorAgencia
                 : [];
-            const tendenciaVentasHora = window.gestionAgenciasData?.tendenciaVentasHora || {};
+            let tendenciaVentasHora = window.gestionAgenciasData?.tendenciaVentasHora || {};
             let estatusDetalle = window.gestionAgenciasData?.estatusDetalle || {};
             let estatusModalActual = '';
             let dtGestionAgencias = null;
             let dtModalAgenciasSinVentaGestion = null;
             let dtModalEstatusTerminalesGestion = null;
             let cargaFiltrosActiva = null;
+            let chartTendenciaVentasHora = null;
 
             const escapeHtml = (value) => (value ?? '').toString()
                 .replace(/&/g, '&amp;')
@@ -564,15 +565,32 @@
                 const chartElement = document.querySelector('#chart-gestion-ventas-hora');
                 const labels = Array.isArray(tendenciaVentasHora.labels) ? tendenciaVentasHora.labels : [];
                 const series = Array.isArray(tendenciaVentasHora.series) ? tendenciaVentasHora.series : [];
+                const rango = document.getElementById('tendenciaRangoGestion');
+                const total = document.getElementById('tendenciaTotalGestion');
 
                 if (!chartElement || typeof ApexCharts === 'undefined') return;
+
+                if (rango) {
+                    rango.textContent = `Desde ${tendenciaVentasHora?.primera_venta || 'N/D'} hasta ${tendenciaVentasHora?.ultima_venta || 'N/D'}`;
+                }
+
+                if (total) {
+                    total.textContent = `Acumulado RD$ ${money(tendenciaVentasHora?.total || 0)}`;
+                }
+
+                if (chartTendenciaVentasHora) {
+                    chartTendenciaVentasHora.destroy();
+                    chartTendenciaVentasHora = null;
+                }
 
                 if (!labels.length || !series.length) {
                     chartElement.innerHTML = '<div class="text-muted text-center py-5">No hay ventas con hora valida para graficar.</div>';
                     return;
                 }
 
-                const chart = new ApexCharts(chartElement, {
+                chartElement.innerHTML = '';
+
+                chartTendenciaVentasHora = new ApexCharts(chartElement, {
                     series: [{
                         name: 'Ventas acumuladas',
                         data: series,
@@ -630,7 +648,7 @@
                     legend: { show: false },
                 });
 
-                chart.render();
+                chartTendenciaVentasHora.render();
             };
 
             const formatoUltimaTransaccion = (ultima) => {
@@ -730,6 +748,32 @@
                 });
             };
 
+            const actualizarResumenGeneral = (resumen) => {
+                const setText = (id, value) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.textContent = value;
+                    }
+                };
+
+                const data = resumen && typeof resumen === 'object' ? resumen : {};
+
+                setText('resumenVentaPorHoraGestion', number(data.venta_por_hora || 0));
+                setText('resumenTotalValidasGestion', number(data.total_validas || 0));
+                setText('resumenTotalEliminadasGestion', number(data.total_eliminadas || 0));
+                setText('resumenTotalApostadoGestion', money(data.total_apostado || 0));
+                setText('resumenTradicionalValidasGestion', number(data.tradicional_validas || 0));
+                setText('resumenNoTradicionalValidasGestion', number(data.no_tradicional_validas || 0));
+            };
+
+            const actualizarDatasetsGestion = (payload) => {
+                agenciasSinVentas = Array.isArray(payload?.agenciasSinVentas) ? payload.agenciasSinVentas : [];
+                ventasPorAgencia = Array.isArray(payload?.ventasPorAgencia) ? payload.ventasPorAgencia : [];
+                tendenciaVentasHora = payload?.tendenciaVentasHora && typeof payload.tendenciaVentasHora === 'object'
+                    ? payload.tendenciaVentasHora
+                    : { labels: [], series: [], primera_venta: null, ultima_venta: null, total: 0 };
+            };
+
             const actualizarDetalleEstatus = (detalle) => {
                 if (!detalle || typeof detalle !== 'object') return;
 
@@ -749,7 +793,7 @@
                 const totalAgencia = document.getElementById('consultaTotalAgencia');
                 let consultaTimer = null;
 
-                if (!input || !options || !ventasPorAgencia.length) return;
+                if (!input || !options) return;
 
                 options.innerHTML = ventasPorAgencia
                     .slice(0, 5000)
@@ -826,6 +870,18 @@
                     consultaTimer = setTimeout(ejecutarBusqueda, 220);
                 };
 
+                if (input.dataset.gestionConsultaBooted === '1') {
+                    if (!ventasPorAgencia.length) {
+                        resetConsulta();
+                    } else if (input.value.trim()) {
+                        ejecutarBusqueda();
+                    } else {
+                        resetConsulta();
+                    }
+                    return;
+                }
+
+                input.dataset.gestionConsultaBooted = '1';
                 input.addEventListener('input', buscar);
                 input.addEventListener('change', buscar);
                 resetConsulta();
@@ -1171,8 +1227,12 @@
                                 data._ts = Date.now();
                             },
                             dataSrc: function (json) {
+                                actualizarResumenGeneral(json?.resumen);
                                 actualizarTarjetasEstatus(json?.estatusResumen);
                                 actualizarDetalleEstatus(json?.estatusDetalle);
+                                actualizarDatasetsGestion(json);
+                                renderTendenciaVentasHora();
+                                bootConsultaAgencia();
                                 if (json?.horaServidor) {
                                     window.gestionAgenciasData.horaServidor = json.horaServidor;
                                     sincronizarHoraServidor(json.horaServidor);

@@ -149,8 +149,12 @@ class GestionAgenciasReporteController extends Controller
             'draw' => $draw,
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
+            'resumen' => $this->resumenDesdeTabla(null, null, null, $filtrosAgencia),
             'estatusResumen' => $this->conteoEstatusTerminales($umbrales, $momentoCalculo, $filtrosAgencia),
             'estatusDetalle' => $this->detalleEstatusTerminales($umbrales, $momentoCalculo, $filtrosAgencia),
+            'agenciasSinVentas' => $this->agenciasSinVentasDesdeTabla($filtrosAgencia),
+            'ventasPorAgencia' => $this->ventasPorAgenciaDesdeTabla($filtrosAgencia),
+            'tendenciaVentasHora' => $this->tendenciaVentasPorHoraDesdeTabla($filtrosAgencia),
             'horaServidor' => $momentoCalculo->toIso8601String(),
             'data' => $data,
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -471,33 +475,33 @@ class GestionAgenciasReporteController extends Controller
         return $this->agenciasActivasSinVentas($clavesConVentas, $filtros);
     }
 
-    private function ventasPorAgenciaDesdeTabla()
+    private function ventasPorAgenciaDesdeTabla(array $filtros = [])
     {
-        $totales = DB::table('gestion_agencias_ventas')
-            ->whereNotNull('terminal_clave')
-            ->where('terminal_clave', '<>', '')
-            ->selectRaw('terminal_clave')
-            ->selectRaw('MAX(agencia) as agencia')
-            ->selectRaw('MAX(terminal) as terminal')
-            ->selectRaw('SUM(COALESCE(total_apostado, 0)) as total_general')
-            ->selectRaw("SUM(CASE WHEN tipo = 'Tradicional' THEN COALESCE(total_apostado, 0) ELSE 0 END) as total_tradicional")
-            ->selectRaw("SUM(CASE WHEN tipo = 'No Tradicional' THEN COALESCE(total_apostado, 0) ELSE 0 END) as total_no_tradicional")
-            ->groupBy('terminal_clave')
+        $totales = $this->baseVentasConAgenciaQuery($filtros)
+            ->whereNotNull('gav.terminal_clave')
+            ->where('gav.terminal_clave', '<>', '')
+            ->selectRaw('gav.terminal_clave as terminal_clave')
+            ->selectRaw('MAX(gav.agencia) as agencia')
+            ->selectRaw('MAX(gav.terminal) as terminal')
+            ->selectRaw('SUM(COALESCE(gav.total_apostado, 0)) as total_general')
+            ->selectRaw("SUM(CASE WHEN gav.tipo = 'Tradicional' THEN COALESCE(gav.total_apostado, 0) ELSE 0 END) as total_tradicional")
+            ->selectRaw("SUM(CASE WHEN gav.tipo = 'No Tradicional' THEN COALESCE(gav.total_apostado, 0) ELSE 0 END) as total_no_tradicional")
+            ->groupBy('gav.terminal_clave')
             ->orderBy('terminal')
             ->orderBy('agencia')
             ->get();
 
-        $ultimasVentasSubquery = DB::table('gestion_agencias_ventas')
-            ->whereNotNull('terminal_clave')
-            ->where('terminal_clave', '<>', '')
+        $ultimasVentasSubquery = $this->baseVentasConAgenciaQuery($filtros)
+            ->whereNotNull('gav.terminal_clave')
+            ->where('gav.terminal_clave', '<>', '')
             ->select([
-                'terminal_clave',
-                'tipo',
-                'fecha_transaccion',
-                'fecha_texto',
-                'total_apostado',
+                'gav.terminal_clave as terminal_clave',
+                'gav.tipo as tipo',
+                'gav.fecha_transaccion as fecha_transaccion',
+                'gav.fecha_texto as fecha_texto',
+                'gav.total_apostado as total_apostado',
             ])
-            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY terminal_clave, tipo ORDER BY fecha_transaccion DESC, id DESC) as venta_rank');
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY gav.terminal_clave, gav.tipo ORDER BY gav.fecha_transaccion DESC, gav.id DESC) as venta_rank');
 
         $ultimasVentas = DB::query()
             ->fromSub($ultimasVentasSubquery, 'uv')
