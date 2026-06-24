@@ -21,7 +21,16 @@ class IncentivoConfiguracionController extends Controller
             ->orderBy('posicion')
             ->get(['posicion', 'bono_pct']);
 
-        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones'));
+        $empresas = IncentivoAdministrativo::query()
+            ->selectRaw('TRIM(empresa) as empresa')
+            ->whereNotNull('empresa')
+            ->whereRaw("TRIM(empresa) <> ''")
+            ->distinct()
+            ->orderBy('empresa')
+            ->pluck('empresa')
+            ->values();
+
+        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas'));
     }
 
     public function incentivoAdministrativoStore(Request $request)

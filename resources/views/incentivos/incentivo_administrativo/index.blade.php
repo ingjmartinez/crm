@@ -62,7 +62,14 @@
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label mb-1">Empresa</label>
-                                        <input type="text" name="empresa" class="form-control" value="{{ old('empresa') }}" required>
+                                        <select name="empresa" class="form-select" required>
+                                            <option value="">Seleccione</option>
+                                            @foreach($empresas as $empresa)
+                                                <option value="{{ $empresa }}" {{ old('empresa') === $empresa ? 'selected' : '' }}>
+                                                    {{ $empresa }}
+                                                </option>
+                                            @endforeach
+                                        </select>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label mb-1">% Total</label>
@@ -133,7 +140,19 @@
                                                         <input type="text" name="nombre" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm" value="{{ $registro->nombre }}" required>
                                                     </td>
                                                     <td>
-                                                        <input type="text" name="empresa" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm" value="{{ $registro->empresa }}" required>
+                                                        <select name="empresa" form="form-adm-{{ $registro->id }}" class="form-select form-select-sm" required>
+                                                            @php
+                                                                $empresaExiste = $empresas->contains($registro->empresa);
+                                                            @endphp
+                                                            @if(!$empresaExiste)
+                                                                <option value="{{ $registro->empresa }}" selected>{{ $registro->empresa }}</option>
+                                                            @endif
+                                                            @foreach($empresas as $empresa)
+                                                                <option value="{{ $empresa }}" {{ $registro->empresa === $empresa ? 'selected' : '' }}>
+                                                                    {{ $empresa }}
+                                                                </option>
+                                                            @endforeach
+                                                        </select>
                                                     </td>
                                                     <td>
                                                         <div class="input-group input-group-sm">
