@@ -30,9 +30,19 @@ class IncentivoConfiguracionController extends Controller
     {
         $validated = $request->validate([
             'grupo' => ['required', 'string', 'max:70', Rule::exists('porcentaje_incentivos', 'posicion')],
-            'nombre' => ['required', 'string', 'max:120'],
+            'nombre' => [
+                'required',
+                'string',
+                'max:120',
+                Rule::unique('incentivo_administrativos', 'nombre')
+                    ->where(fn ($query) => $query
+                        ->where('grupo', $request->input('grupo'))
+                        ->where('empresa', $request->input('empresa'))),
+            ],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:100'],
+        ], [
+            'nombre.unique' => 'Ya existe un colaborador registrado con ese grupo y empresa.',
         ]);
 
         IncentivoAdministrativo::create($validated);
@@ -46,9 +56,20 @@ class IncentivoConfiguracionController extends Controller
     {
         $validated = $request->validate([
             'grupo' => ['required', 'string', 'max:70', Rule::exists('porcentaje_incentivos', 'posicion')],
-            'nombre' => ['required', 'string', 'max:120'],
+            'nombre' => [
+                'required',
+                'string',
+                'max:120',
+                Rule::unique('incentivo_administrativos', 'nombre')
+                    ->where(fn ($query) => $query
+                        ->where('grupo', $request->input('grupo'))
+                        ->where('empresa', $request->input('empresa')))
+                    ->ignore($incentivoAdministrativo->id),
+            ],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:100'],
+        ], [
+            'nombre.unique' => 'Ya existe un colaborador registrado con ese grupo y empresa.',
         ]);
 
         $incentivoAdministrativo->update($validated);
