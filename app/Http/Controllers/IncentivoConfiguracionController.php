@@ -21,14 +21,7 @@ class IncentivoConfiguracionController extends Controller
             ->orderBy('posicion')
             ->get(['posicion', 'bono_pct']);
 
-        $empresas = IncentivoAdministrativo::query()
-            ->selectRaw('TRIM(empresa) as empresa')
-            ->whereNotNull('empresa')
-            ->whereRaw("TRIM(empresa) <> ''")
-            ->distinct()
-            ->orderBy('empresa')
-            ->pluck('empresa')
-            ->values();
+        $empresas = collect(IncentivoAdministrativo::EMPRESAS_VALIDAS);
 
         return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas'));
     }
@@ -38,7 +31,7 @@ class IncentivoConfiguracionController extends Controller
         $validated = $request->validate([
             'grupo' => ['required', 'string', 'max:70', Rule::exists('porcentaje_incentivos', 'posicion')],
             'nombre' => ['required', 'string', 'max:120'],
-            'empresa' => ['required', 'string', 'max:50'],
+            'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
 
@@ -54,7 +47,7 @@ class IncentivoConfiguracionController extends Controller
         $validated = $request->validate([
             'grupo' => ['required', 'string', 'max:70', Rule::exists('porcentaje_incentivos', 'posicion')],
             'nombre' => ['required', 'string', 'max:120'],
-            'empresa' => ['required', 'string', 'max:50'],
+            'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
 

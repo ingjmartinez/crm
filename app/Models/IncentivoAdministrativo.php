@@ -9,6 +9,11 @@ class IncentivoAdministrativo extends Model
 {
     use HasFactory;
 
+    public const EMPRESAS_VALIDAS = [
+        'Consorcio Joselito',
+        'Negosur',
+    ];
+
     protected $fillable = [
         'grupo',
         'nombre',
