@@ -282,12 +282,18 @@ class GestionAgenciasReporteController extends Controller
         $terminalClaveSql = $this->collateSql(
             $this->terminalClaveSql('a.terminal')
         );
+        $coordinadorNombreSql = $this->coordinadorNombreSql('co');
 
         return DB::table('agencias as a')
+            ->leftJoin('coordinador_operador_agencia as coa', 'coa.agencia_id', '=', 'a.id')
+            ->leftJoin('coordinador_operador as co', function ($join) {
+                $join->on('co.id', '=', 'coa.coordinador_operador_id')
+                    ->where('co.puesto', '=', 'coordinador');
+            })
             ->selectRaw("{$terminalClaveSql} as terminal_clave")
             ->selectRaw("MAX(NULLIF(TRIM(a.empresa), '')) as empresa")
             ->selectRaw("MAX(NULLIF(TRIM(a.ruta), '')) as ruta")
-            ->selectRaw("MAX(NULLIF(TRIM(a.coordinador), '')) as coordinador")
+            ->selectRaw("MAX(NULLIF({$coordinadorNombreSql}, '')) as coordinador")
             ->whereNotNull('a.terminal')
             ->where('a.terminal', '<>', '')
             ->groupByRaw($terminalClaveSql);
@@ -316,20 +322,31 @@ class GestionAgenciasReporteController extends Controller
 
     private function aplicarFiltrosAgenciaTablaAgencias($query, array $filtros = [])
     {
-        $mapa = [
-            'empresa' => 'empresa',
-            'ruta' => 'ruta',
-            'coordinador' => 'coordinador',
-        ];
+        $empresa = trim((string) ($filtros['empresa'] ?? ''));
+        $ruta = trim((string) ($filtros['ruta'] ?? ''));
+        $coordinador = trim((string) ($filtros['coordinador'] ?? ''));
 
-        foreach ($mapa as $filtro => $columna) {
-            $valor = trim((string) ($filtros[$filtro] ?? ''));
+        if ($empresa !== '') {
+            $query->whereRaw("TRIM(COALESCE(empresa, '')) = ?", [$empresa]);
+        }
 
-            if ($valor === '') {
-                continue;
-            }
+        if ($ruta !== '') {
+            $query->whereRaw("TRIM(COALESCE(ruta, '')) = ?", [$ruta]);
+        }
 
-            $query->whereRaw("TRIM(COALESCE({$columna}, '')) = ?", [$valor]);
+        if ($coordinador !== '') {
+            $coordinadorNombreSql = $this->coordinadorNombreSql('co_filter');
+
+            $query->whereExists(function ($subQuery) use ($coordinador, $coordinadorNombreSql) {
+                $subQuery->selectRaw('1')
+                    ->from('coordinador_operador_agencia as coa_filter')
+                    ->join('coordinador_operador as co_filter', function ($join) {
+                        $join->on('co_filter.id', '=', 'coa_filter.coordinador_operador_id')
+                            ->where('co_filter.puesto', '=', 'coordinador');
+                    })
+                    ->whereColumn('coa_filter.agencia_id', 'agencias.id')
+                    ->whereRaw("{$coordinadorNombreSql} = ?", [$coordinador]);
+            });
         }
 
         return $query;
@@ -338,6 +355,11 @@ class GestionAgenciasReporteController extends Controller
     private function terminalClaveSql(string $column): string
     {
         return "TRIM(LEADING '0' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE({$column}, ''), '-', ''), ' ', ''), '.', ''), ',', ''), '_', ''))";
+    }
+
+    private function coordinadorNombreSql(string $alias): string
+    {
+        return "TRIM(CONCAT(COALESCE({$alias}.nombre, ''), ' ', COALESCE({$alias}.apellido, '')))";
     }
 
     private function collateSql(string $expression, string $collation = self::REPORT_TEXT_COLLATION): string
