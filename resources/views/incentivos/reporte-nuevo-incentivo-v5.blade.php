@@ -838,6 +838,8 @@
     let lastRecargasPaqueticosCedulas = new Set();
     let recargasPaqueticosDescuentos = new Map();
     let adminPctBruto = 0;
+    const ADMINISTRATIVE_SHARE = 0.40;
+    const COORDINATOR_SHARE = 0.60;
     let administrativeGroupFilter = 'todos';
     const ADMIN_GROUP_OPTIONS = [
         '1. Gtes. Y Encarg.',
@@ -960,7 +962,7 @@
             if (!acc[key]) {
                 acc[key] = 0;
             }
-            acc[key] += incentivo * (adminPctBruto / 100) * 0.45;
+            acc[key] += incentivo * (adminPctBruto / 100) * ADMINISTRATIVE_SHARE;
             return acc;
         }, {});
     }
@@ -2047,8 +2049,8 @@
         const totalVendido = data.reduce((sum, item) => sum + toNumber(item.ventas_mes_actual), 0);
         const totalIncentivo = data.reduce((sum, item) => sum + toNumber(item.nuevo_incentivo), 0);
         const adminValor = totalIncentivo * (adminPctBruto / 100);
-        const adminDistribucion = adminValor * 0.45;
-        const coordinadorDistribucion = adminValor * 0.55;
+        const adminDistribucion = adminValor * ADMINISTRATIVE_SHARE;
+        const coordinadorDistribucion = adminValor * COORDINATOR_SHARE;
         const totalConAdmin = totalIncentivo + adminValor;
         currentAdministrativePoolByEmpresa = buildAdministrativePoolByEmpresa(data);
         currentDistributionBase = adminValor;

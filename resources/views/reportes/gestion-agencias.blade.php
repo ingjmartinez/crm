@@ -413,6 +413,8 @@
                                             <tr>
                                                 <th>Tipo</th>
                                                 <th>Terminal</th>
+                                                <th>Cedula</th>
+                                                <th>Empleado</th>
                                                 <th>Ultima transaccion</th>
                                                 <th>Estatus</th>
                                             </tr>
@@ -420,7 +422,7 @@
                                         <tbody>
                                             @if (empty($resumen))
                                                 <tr>
-                                                    <td colspan="4" class="text-center text-muted">Carga ambos archivos XLSX o CSV para ver la data limpia.</td>
+                                                    <td colspan="6" class="text-center text-muted">Carga ambos archivos XLSX o CSV para ver la data limpia.</td>
                                                 </tr>
                                             @endif
                                         </tbody>
@@ -435,7 +437,7 @@
     </div>
 
     <div class="modal fade" id="modalAgenciasSinVentaGestion" tabindex="-1" aria-labelledby="modalAgenciasSinVentaGestionLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header d-flex justify-content-between align-items-center">
                     <h5 class="modal-title" id="modalAgenciasSinVentaGestionLabel">Agencias sin ventas</h5>
@@ -453,6 +455,9 @@
                                 <tr>
                                     <th>Agencia</th>
                                     <th>Terminal</th>
+                                    <th>Cedula</th>
+                                    <th>Nombre</th>
+                                    <th>Coordinador</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -485,6 +490,9 @@
                                 <tr>
                                     <th>Agencia</th>
                                     <th>Terminal</th>
+                                    <th>Cedula</th>
+                                    <th>Nombre</th>
+                                    <th>Coordinador</th>
                                     <th>Tipo</th>
                                     <th>Ultima transaccion</th>
                                 </tr>
@@ -1244,7 +1252,7 @@
                         deferRender: true,
                         pageLength: 25,
                         lengthMenu: [[25, 50, 100, 250, 500], [25, 50, 100, 250, 500]],
-                        order: [[2, 'desc']],
+                        order: [[4, 'desc']],
                         columns: [
                             {
                                 data: 'tipo',
@@ -1254,6 +1262,18 @@
                                 }
                             },
                             { data: 'terminal' },
+                            {
+                                data: 'cedula',
+                                render: function (data) {
+                                    return escapeHtml(data || 'Sin cedula');
+                                }
+                            },
+                            {
+                                data: 'empleado',
+                                render: function (data) {
+                                    return escapeHtml(data || 'Actualizar en la maestra de empleado');
+                                }
+                            },
                             { data: 'fecha' },
                             {
                                 data: 'estatus',
@@ -1354,8 +1374,11 @@
                 const filas = agenciasSinVentas.map((item) => {
                     const nombre = escapeHtml(item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA');
                     const terminal = escapeHtml(item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL');
+                    const cedula = escapeHtml(item?.cedula ?? '');
+                    const nombreEmpleado = escapeHtml(item?.nombre ?? 'Sin venta registrada');
+                    const coordinador = escapeHtml(item?.coordinador ?? 'Sin coordinador');
 
-                    return `<tr><td>${nombre}</td><td>${terminal}</td></tr>`;
+                    return `<tr><td>${nombre}</td><td>${terminal}</td><td>${cedula}</td><td>${nombreEmpleado}</td><td>${coordinador}</td></tr>`;
                 }).join('');
 
                 const tablaHtml = `
@@ -1364,6 +1387,9 @@
                             <tr>
                                 <th>Agencia</th>
                                 <th>Terminal</th>
+                                <th>Cedula</th>
+                                <th>Nombre</th>
+                                <th>Coordinador</th>
                             </tr>
                         </thead>
                         <tbody>${filas}</tbody>
@@ -1400,10 +1426,16 @@
                 agenciasSinVentas.forEach((item) => {
                     const nombre = (item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
                     const terminal = (item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
+                    const cedula = (item?.cedula ?? '').toString().trim();
+                    const nombreEmpleado = (item?.nombre ?? 'Sin venta registrada').toString().trim() || 'Sin venta registrada';
+                    const coordinador = (item?.coordinador ?? 'Sin coordinador').toString().trim() || 'Sin coordinador';
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${escapeHtml(nombre)}</td>
                         <td>${escapeHtml(terminal)}</td>
+                        <td>${escapeHtml(cedula)}</td>
+                        <td>${escapeHtml(nombreEmpleado)}</td>
+                        <td>${escapeHtml(coordinador)}</td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -1444,10 +1476,13 @@
                 const filasHtml = filas.map((item) => {
                     const agencia = escapeHtml(item?.agencia ?? 'SIN AGENCIA');
                     const terminal = escapeHtml(item?.terminal ?? 'SIN TERMINAL');
+                    const cedula = escapeHtml(item?.cedula ?? '');
+                    const nombreEmpleado = escapeHtml(item?.nombre ?? 'Actualizar en la maestra de empleado');
+                    const coordinador = escapeHtml(item?.coordinador ?? 'Sin coordinador');
                     const tipo = escapeHtml(item?.tipo ?? 'N/D');
                     const fecha = escapeHtml(item?.fecha ?? 'N/D');
 
-                    return `<tr><td>${agencia}</td><td>${terminal}</td><td>${tipo}</td><td>${fecha}</td></tr>`;
+                    return `<tr><td>${agencia}</td><td>${terminal}</td><td>${cedula}</td><td>${nombreEmpleado}</td><td>${coordinador}</td><td>${tipo}</td><td>${fecha}</td></tr>`;
                 }).join('');
 
                 const tablaHtml = `
@@ -1456,6 +1491,9 @@
                             <tr>
                                 <th>Agencia</th>
                                 <th>Terminal</th>
+                                <th>Cedula</th>
+                                <th>Nombre</th>
+                                <th>Coordinador</th>
                                 <th>Tipo</th>
                                 <th>Ultima transaccion</th>
                             </tr>
@@ -1504,12 +1542,18 @@
                 filas.forEach((item) => {
                     const agencia = (item?.agencia ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
                     const terminal = (item?.terminal ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
+                    const cedula = (item?.cedula ?? '').toString().trim();
+                    const nombreEmpleado = (item?.nombre ?? 'Actualizar en la maestra de empleado').toString().trim() || 'Actualizar en la maestra de empleado';
+                    const coordinador = (item?.coordinador ?? 'Sin coordinador').toString().trim() || 'Sin coordinador';
                     const tipo = (item?.tipo ?? 'N/D').toString().trim() || 'N/D';
                     const fecha = (item?.fecha ?? 'N/D').toString().trim() || 'N/D';
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${escapeHtml(agencia)}</td>
                         <td>${escapeHtml(terminal)}</td>
+                        <td>${escapeHtml(cedula)}</td>
+                        <td>${escapeHtml(nombreEmpleado)}</td>
+                        <td>${escapeHtml(coordinador)}</td>
                         <td>${escapeHtml(tipo)}</td>
                         <td>${escapeHtml(fecha)}</td>
                     `;
@@ -1527,7 +1571,7 @@
                             info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
                             paginate: { first: 'Primera', last: 'Ultima', next: 'Siguiente', previous: 'Anterior' }
                         },
-                        order: [[3, 'desc']],
+                        order: [[6, 'desc']],
                     });
                 }
 

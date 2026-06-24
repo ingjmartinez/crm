@@ -96,23 +96,27 @@ class GestionAgenciasReporteController extends Controller
         $columns = [
             0 => 'gav.tipo',
             1 => 'gav.terminal',
-            2 => 'gav.fecha_transaccion',
-            3 => 'estatus_analisis',
+            2 => 'gav.usuario_venta',
+            3 => 'emp.nombre_empleado',
+            4 => 'gav.fecha_transaccion',
+            5 => 'estatus_analisis',
         ];
-        $orderIndex = (int) $request->input('order.0.column', 2);
+        $orderIndex = (int) $request->input('order.0.column', 4);
         $orderColumn = $columns[$orderIndex] ?? 'gav.fecha_transaccion';
         $orderDir = strtolower((string) $request->input('order.0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
         $estatusSql = $this->estatusVentaSql($umbrales, $momentoCalculo);
         $base = $this->baseUltimasVentasQuery($filtrosAgencia);
+        $baseData = $this->baseUltimasVentasQuery($filtrosAgencia, true);
         $recordsTotal = (clone $base)->count();
 
         if ($search !== '') {
-            $base->where(function ($query) use ($search) {
+            $baseData->where(function ($query) use ($search) {
                 $query->where('gav.tipo', 'like', "%{$search}%")
                     ->orWhere('gav.fecha_texto', 'like', "%{$search}%")
                     ->orWhere('gav.agencia', 'like', "%{$search}%")
                     ->orWhere('gav.terminal', 'like', "%{$search}%")
                     ->orWhere('gav.usuario_venta', 'like', "%{$search}%")
+                    ->orWhere('emp.nombre_empleado', 'like', "%{$search}%")
                     ->orWhere('agl.empresa', 'like', "%{$search}%")
                     ->orWhere('agl.ruta', 'like', "%{$search}%")
                     ->orWhere('agl.coordinador', 'like', "%{$search}%");
@@ -121,26 +125,31 @@ class GestionAgenciasReporteController extends Controller
 
         if (in_array($estatusFiltro, ['Al dia', 'Aviso', 'En Alerta', 'Requiere llamada'], true)) {
             $base->whereRaw("{$estatusSql} = ?", [$estatusFiltro]);
+            $baseData->whereRaw("{$estatusSql} = ?", [$estatusFiltro]);
         }
 
-        $recordsFiltered = (clone $base)->count();
-        $base->when($orderColumn === 'estatus_analisis',
+        $recordsFiltered = (clone ($search !== '' ? $baseData : $base))->count();
+        $baseData->when($orderColumn === 'estatus_analisis',
             fn ($query) => $query->orderByRaw("{$estatusSql} {$orderDir}"),
             fn ($query) => $query->orderBy($orderColumn, $orderDir)
         );
 
-        $data = $base
+        $data = $baseData
             ->offset($start)
             ->limit($length)
             ->get([
                 'gav.tipo',
                 'gav.fecha_texto',
                 'gav.terminal',
+                'gav.usuario_venta',
+                'emp.nombre_empleado',
                 DB::raw("{$estatusSql} as estatus_analisis"),
             ])
             ->map(fn ($row) => [
                 'tipo' => $row->tipo,
                 'terminal' => $row->terminal,
+                'cedula' => $row->usuario_venta,
+                'empleado' => $row->nombre_empleado ?: 'Actualizar en la maestra de empleado',
                 'fecha' => $row->fecha_texto,
                 'estatus' => $row->estatus_analisis,
             ]);
@@ -254,7 +263,7 @@ class GestionAgenciasReporteController extends Controller
         ];
     }
 
-    private function baseUltimasVentasQuery(array $filtros = [])
+    private function baseUltimasVentasQuery(array $filtros = [], bool $incluirEmpleado = false)
     {
         $ultimaVentaTerminalSubquery = DB::table('gestion_agencias_ventas')
             ->select('id', DB::raw('ROW_NUMBER() OVER (PARTITION BY terminal_clave ORDER BY fecha_transaccion DESC, id DESC) as venta_rank'))
@@ -266,6 +275,10 @@ class GestionAgenciasReporteController extends Controller
             ->leftJoinSub($this->agenciasLookupSubquery(), 'agl', 'agl.terminal_clave', '=', 'gav.terminal_clave')
             ->where('uv.venta_rank', 1);
 
+        if ($incluirEmpleado) {
+            $query->leftJoinSub($this->empleadosLookupSubquery(), 'emp', 'emp.cedula_clave', '=', DB::raw($this->cedulaNormalizadaSql('gav.usuario_venta')));
+        }
+
         return $this->aplicarFiltrosAgencia($query, $filtros);
     }
 
@@ -275,6 +288,20 @@ class GestionAgenciasReporteController extends Controller
             ->leftJoinSub($this->agenciasLookupSubquery(), 'agl', 'agl.terminal_clave', '=', 'gav.terminal_clave');
 
         return $this->aplicarFiltrosAgencia($query, $filtros);
+    }
+
+    private function empleadosLookupSubquery()
+    {
+        $cedulaClaveSql = $this->collateSql(
+            $this->cedulaNormalizadaSql('e.cedula')
+        );
+
+        return DB::table('empleados as e')
+            ->selectRaw("{$cedulaClaveSql} as cedula_clave")
+            ->selectRaw("MAX(NULLIF(TRIM(CONCAT(COALESCE(e.nombres, ''), ' ', COALESCE(e.apellidos, ''))), '')) as nombre_empleado")
+            ->whereNotNull('e.cedula')
+            ->whereRaw("{$this->cedulaNormalizadaSql('e.cedula')} <> ''")
+            ->groupByRaw($cedulaClaveSql);
     }
 
     private function agenciasLookupSubquery()
@@ -357,6 +384,11 @@ class GestionAgenciasReporteController extends Controller
         return "TRIM(LEADING '0' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE({$column}, ''), '-', ''), ' ', ''), '.', ''), ',', ''), '_', ''))";
     }
 
+    private function cedulaNormalizadaSql(string $column): string
+    {
+        return "REPLACE(REPLACE(REPLACE(COALESCE({$column}, ''), '-', ''), ' ', ''), '.', '')";
+    }
+
     private function coordinadorNombreSql(string $alias): string
     {
         return "TRIM(CONCAT(COALESCE({$alias}.nombre, ''), ' ', COALESCE({$alias}.apellido, '')))";
@@ -414,13 +446,16 @@ class GestionAgenciasReporteController extends Controller
         ];
 
         $estatusSql = $this->estatusVentaSql($umbrales, $momentoCalculo);
-        $rows = $this->baseUltimasVentasQuery($filtros)
+        $rows = $this->baseUltimasVentasQuery($filtros, true)
             ->orderBy('gav.fecha_transaccion', 'desc')
             ->get([
                 'gav.tipo',
                 'gav.fecha_texto',
                 'gav.agencia',
                 'gav.terminal',
+                'gav.usuario_venta',
+                'emp.nombre_empleado',
+                'agl.coordinador',
                 DB::raw("{$estatusSql} as estatus_analisis"),
             ]);
 
@@ -441,6 +476,9 @@ class GestionAgenciasReporteController extends Controller
             $detalle[$estatus][] = [
                 'agencia' => $row->agencia,
                 'terminal' => $row->terminal,
+                'cedula' => $row->usuario_venta,
+                'nombre' => $row->nombre_empleado ?: 'Actualizar en la maestra de empleado',
+                'coordinador' => $row->coordinador ?: 'Sin coordinador',
                 'tipo' => $row->tipo,
                 'fecha' => $row->fecha_texto,
             ];
@@ -845,20 +883,32 @@ class GestionAgenciasReporteController extends Controller
     private function agenciasActivasSinVentas(array $clavesConVentas, array $filtros = [])
     {
         $query = Agencia::query()
+            ->with(['coordinadoresOperadores' => function ($query) {
+                $query->where('puesto', 'coordinador')
+                    ->select('coordinador_operador.id', 'nombre', 'apellido');
+            }])
             ->where('estatus', 1)
             ->whereNotNull('terminal');
 
         $this->aplicarFiltrosAgenciaTablaAgencias($query, $filtros);
 
         return $query
-            ->get(['agencia', 'nombre_agencia', 'terminal'])
+            ->get(['id', 'agencia', 'nombre_agencia', 'terminal'])
             ->map(function (Agencia $agencia) {
                 $terminal = $this->formatearTerminalConsulta($agencia->terminal);
+                $coordinador = $agencia->coordinadoresOperadores
+                    ->map(fn ($coordinador) => trim((string) ($coordinador->nombre ?? '') . ' ' . (string) ($coordinador->apellido ?? '')))
+                    ->filter()
+                    ->unique()
+                    ->implode(', ');
 
                 return [
                     'agencia_id' => $agencia->agencia,
                     'nombre_agencia' => $agencia->nombre_agencia,
                     'terminal' => $terminal,
+                    'cedula' => '',
+                    'nombre' => 'Sin venta registrada',
+                    'coordinador' => $coordinador !== '' ? $coordinador : 'Sin coordinador',
                     'clave' => $this->claveAgenciaReporte($terminal, (string) ($agencia->nombre_agencia ?? $agencia->agencia ?? '')),
                 ];
             })
@@ -869,6 +919,9 @@ class GestionAgenciasReporteController extends Controller
                 'agencia_id' => $agencia['agencia_id'],
                 'nombre_agencia' => $agencia['nombre_agencia'],
                 'terminal' => $agencia['terminal'],
+                'cedula' => $agencia['cedula'],
+                'nombre' => $agencia['nombre'],
+                'coordinador' => $agencia['coordinador'],
             ])
             ->values();
     }
