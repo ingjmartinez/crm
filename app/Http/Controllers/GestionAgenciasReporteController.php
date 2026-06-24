@@ -164,16 +164,18 @@ class GestionAgenciasReporteController extends Controller
         set_time_limit(180);
 
         $umbrales = $this->umbralesVenta($request);
-        $resumen = $this->resumenDesdeTabla();
+        $filtrosAgencia = $this->filtrosAgencia($request);
+        $resumen = $this->resumenDesdeTabla(null, null, null, $filtrosAgencia);
         $horaServidor = now();
-        $estatusResumen = $this->conteoEstatusTerminales($umbrales, $horaServidor);
-        $tendenciaVentasHora = $this->tendenciaVentasPorHoraDesdeTabla();
+        $estatusResumen = $this->conteoEstatusTerminales($umbrales, $horaServidor, $filtrosAgencia);
+        $tendenciaVentasHora = $this->tendenciaVentasPorHoraDesdeTabla($filtrosAgencia);
 
         $pdf = Pdf::loadView('reportes.gestion-agencias-pdf', [
             'resumen' => $resumen,
             'umbrales' => $umbrales,
             'estatusResumen' => $estatusResumen,
             'tendenciaVentasHora' => $tendenciaVentasHora,
+            'filtrosAgencia' => $filtrosAgencia,
             'horaServidor' => $horaServidor,
         ])
             ->setPaper('letter', 'landscape')
@@ -263,6 +265,14 @@ class GestionAgenciasReporteController extends Controller
         return $this->aplicarFiltrosAgencia($query, $filtros);
     }
 
+    private function baseVentasConAgenciaQuery(array $filtros = [])
+    {
+        $query = DB::table('gestion_agencias_ventas as gav')
+            ->leftJoinSub($this->agenciasLookupSubquery(), 'agl', 'agl.terminal_clave', '=', 'gav.terminal_clave');
+
+        return $this->aplicarFiltrosAgencia($query, $filtros);
+    }
+
     private function agenciasLookupSubquery()
     {
         $terminalClaveSql = $this->collateSql(
@@ -295,6 +305,27 @@ class GestionAgenciasReporteController extends Controller
             }
 
             $query->where($columna, $valor);
+        }
+
+        return $query;
+    }
+
+    private function aplicarFiltrosAgenciaTablaAgencias($query, array $filtros = [])
+    {
+        $mapa = [
+            'empresa' => 'empresa',
+            'ruta' => 'ruta',
+            'coordinador' => 'coordinador',
+        ];
+
+        foreach ($mapa as $filtro => $columna) {
+            $valor = trim((string) ($filtros[$filtro] ?? ''));
+
+            if ($valor === '') {
+                continue;
+            }
+
+            $query->whereRaw("TRIM(COALESCE({$columna}, '')) = ?", [$valor]);
         }
 
         return $query;
@@ -392,25 +423,25 @@ class GestionAgenciasReporteController extends Controller
         return $detalle;
     }
 
-    private function resumenDesdeTabla(?int $totalCargadas = null, ?int $tradicionalValidas = null, ?int $noTradicionalValidas = null): ?array
+    private function resumenDesdeTabla(?int $totalCargadas = null, ?int $tradicionalValidas = null, ?int $noTradicionalValidas = null, array $filtros = []): ?array
     {
-        $query = DB::table('gestion_agencias_ventas');
+        $query = $this->baseVentasConAgenciaQuery($filtros);
 
         if (!(clone $query)->exists()) {
             return null;
         }
 
         $agenciasConVentas = (clone $query)
-            ->whereNotNull('terminal_clave')
-            ->where('terminal_clave', '<>', '')
-            ->distinct('terminal_clave')
-            ->count('terminal_clave');
+            ->whereNotNull('gav.terminal_clave')
+            ->where('gav.terminal_clave', '<>', '')
+            ->distinct('gav.terminal_clave')
+            ->count('gav.terminal_clave');
 
-        $agenciasSinVentas = $this->agenciasSinVentasDesdeTabla();
-        $totalVendido = (float) (clone $query)->sum('total_apostado');
+        $agenciasSinVentas = $this->agenciasSinVentasDesdeTabla($filtros);
+        $totalVendido = (float) (clone $query)->sum('gav.total_apostado');
         $horasConVentas = (clone $query)
-            ->whereNotNull('fecha_transaccion')
-            ->selectRaw("COUNT(DISTINCT DATE_FORMAT(fecha_transaccion, '%Y-%m-%d %H:00:00')) as total")
+            ->whereNotNull('gav.fecha_transaccion')
+            ->selectRaw("COUNT(DISTINCT DATE_FORMAT(gav.fecha_transaccion, '%Y-%m-%d %H:00:00')) as total")
             ->value('total');
         $ventaPorHora = $horasConVentas > 0 ? $totalVendido / $horasConVentas : 0;
 
@@ -422,22 +453,22 @@ class GestionAgenciasReporteController extends Controller
             'total_apostado' => $totalVendido,
             'venta_por_hora' => $ventaPorHora,
             'horas_con_ventas' => (int) $horasConVentas,
-            'tradicional_validas' => $tradicionalValidas ?? (clone $query)->where('tipo', 'Tradicional')->count(),
-            'no_tradicional_validas' => $noTradicionalValidas ?? (clone $query)->where('tipo', 'No Tradicional')->count(),
+            'tradicional_validas' => $tradicionalValidas ?? (clone $query)->where('gav.tipo', 'Tradicional')->count(),
+            'no_tradicional_validas' => $noTradicionalValidas ?? (clone $query)->where('gav.tipo', 'No Tradicional')->count(),
         ];
     }
 
-    private function agenciasSinVentasDesdeTabla()
+    private function agenciasSinVentasDesdeTabla(array $filtros = [])
     {
-        $clavesConVentas = DB::table('gestion_agencias_ventas')
-            ->whereNotNull('terminal_clave')
-            ->where('terminal_clave', '<>', '')
+        $clavesConVentas = $this->baseVentasConAgenciaQuery($filtros)
+            ->whereNotNull('gav.terminal_clave')
+            ->where('gav.terminal_clave', '<>', '')
             ->distinct()
-            ->pluck('terminal_clave')
+            ->pluck('gav.terminal_clave')
             ->flip()
             ->all();
 
-        return $this->agenciasActivasSinVentas($clavesConVentas);
+        return $this->agenciasActivasSinVentas($clavesConVentas, $filtros);
     }
 
     private function ventasPorAgenciaDesdeTabla()
@@ -503,11 +534,11 @@ class GestionAgenciasReporteController extends Controller
             ->values();
     }
 
-    private function tendenciaVentasPorHoraDesdeTabla(): array
+    private function tendenciaVentasPorHoraDesdeTabla(array $filtros = []): array
     {
-        $rango = DB::table('gestion_agencias_ventas')
-            ->whereNotNull('fecha_transaccion')
-            ->selectRaw('MIN(fecha_transaccion) as primera_venta, MAX(fecha_transaccion) as ultima_venta')
+        $rango = $this->baseVentasConAgenciaQuery($filtros)
+            ->whereNotNull('gav.fecha_transaccion')
+            ->selectRaw('MIN(gav.fecha_transaccion) as primera_venta, MAX(gav.fecha_transaccion) as ultima_venta')
             ->first();
 
         if (!$rango || !$rango->primera_venta || !$rango->ultima_venta) {
@@ -523,13 +554,13 @@ class GestionAgenciasReporteController extends Controller
         $inicio = Carbon::parse($rango->primera_venta)->startOfHour();
         $fin = Carbon::parse($rango->ultima_venta)->startOfHour();
 
-        $ventasPorHora = DB::table('gestion_agencias_ventas')
-            ->whereNotNull('fecha_transaccion')
-            ->where('fecha_transaccion', '>=', $inicio->toDateTimeString())
-            ->where('fecha_transaccion', '<', $fin->copy()->addHour()->toDateTimeString())
-            ->selectRaw("DATE_FORMAT(fecha_transaccion, '%Y-%m-%d %H:00:00') as hora")
-            ->selectRaw('SUM(COALESCE(total_apostado, 0)) as total_ventas')
-            ->groupByRaw("DATE_FORMAT(fecha_transaccion, '%Y-%m-%d %H:00:00')")
+        $ventasPorHora = $this->baseVentasConAgenciaQuery($filtros)
+            ->whereNotNull('gav.fecha_transaccion')
+            ->where('gav.fecha_transaccion', '>=', $inicio->toDateTimeString())
+            ->where('gav.fecha_transaccion', '<', $fin->copy()->addHour()->toDateTimeString())
+            ->selectRaw("DATE_FORMAT(gav.fecha_transaccion, '%Y-%m-%d %H:00:00') as hora")
+            ->selectRaw('SUM(COALESCE(gav.total_apostado, 0)) as total_ventas')
+            ->groupByRaw("DATE_FORMAT(gav.fecha_transaccion, '%Y-%m-%d %H:00:00')")
             ->pluck('total_ventas', 'hora')
             ->map(fn ($total) => (float) $total)
             ->all();
@@ -785,11 +816,15 @@ class GestionAgenciasReporteController extends Controller
         return $this->normalizarEncabezado($agencia);
     }
 
-    private function agenciasActivasSinVentas(array $clavesConVentas)
+    private function agenciasActivasSinVentas(array $clavesConVentas, array $filtros = [])
     {
-        return Agencia::query()
+        $query = Agencia::query()
             ->where('estatus', 1)
-            ->whereNotNull('terminal')
+            ->whereNotNull('terminal');
+
+        $this->aplicarFiltrosAgenciaTablaAgencias($query, $filtros);
+
+        return $query
             ->get(['agencia', 'nombre_agencia', 'terminal'])
             ->map(function (Agencia $agencia) {
                 $terminal = $this->formatearTerminalConsulta($agencia->terminal);

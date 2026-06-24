@@ -168,9 +168,17 @@
         .muted {
             color: #6b7280;
         }
+
+        .filters {
+            margin-top: 6px;
+            color: #374151;
+        }
     </style>
 </head>
 <body>
+    @php
+        $filtrosActivos = array_filter($filtrosAgencia ?? [], fn ($value) => trim((string) $value) !== '');
+    @endphp
     <div class="header">
         <h1 class="title">Reporte gestion de agencias</h1>
         <p class="subtitle">Tarjetas resumen y grafico de tendencia de ventas por hora.</p>
@@ -181,6 +189,12 @@
             En Alerta: {{ $umbrales['alerta'] }} min,
             Requiere llamada: {{ $umbrales['llamada'] }} min
         </p>
+        <p class="filters">
+            Filtros:
+            Empresa: {{ $filtrosActivos['empresa'] ?? 'Todas' }} |
+            Ruta: {{ $filtrosActivos['ruta'] ?? 'Todas' }} |
+            Coordinador: {{ $filtrosActivos['coordinador'] ?? 'Todos' }}
+        </p>
     </div>
 
     @if (empty($resumen))
@@ -189,7 +203,7 @@
         <table class="grid">
             <tr>
                 <td class="card" width="25%">
-                    <p class="label">Premio de venta por hora</p>
+                    <p class="label">Promedio de venta por hora</p>
                     <p class="value">{{ number_format($resumen['venta_por_hora'] ?? 0, 0) }}</p>
                 </td>
                 <td class="card green" width="25%">

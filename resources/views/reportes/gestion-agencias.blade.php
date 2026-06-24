@@ -241,7 +241,7 @@
                                 <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                                     <div>
                                         <h5 class="card-title mb-1">Filtros por agencia</h5>
-                                        <p class="text-muted mb-0">Filtra la visualizacion por empresa, ruta y coordinador. Estos filtros no se toman en cuenta en el PDF.</p>
+                                        <p class="text-muted mb-0">Filtra la visualizacion por empresa, ruta y coordinador. El PDF respetara los filtros de agencia activos.</p>
                                     </div>
                                 </div>
                                 <div class="card-body">
@@ -288,7 +288,7 @@
                         <div class="col-md-3">
                             <div class="card h-100 mb-0 gestion-summary-card gestion-card-slate">
                                 <div class="card-body">
-                                    <p class="text-muted mb-1">Premio de venta por Hora</p>
+                                    <p class="text-muted mb-1">Promedio de venta por hora</p>
                                     <h4 class="mb-0">{{ number_format($resumen['venta_por_hora'] ?? 0, 0) }}</h4>
                                 </div>
                             </div>
@@ -1066,6 +1066,10 @@
                 if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') return;
 
                 const textos = {
+                    empresa: {
+                        title: 'Cargando datos por empresa',
+                        detail: 'Actualizando la tabla y los indicadores del reporte...'
+                    },
                     ruta: {
                         title: 'Cargando datos por ruta',
                         detail: 'Actualizando la tabla y los indicadores del reporte...'
@@ -1240,11 +1244,13 @@
             [filtroEmpresaGestion, filtroRutaGestion, filtroCoordinadorGestion].forEach((select) => {
                 if (!select) return;
                 select.addEventListener('change', () => {
-                    const loader = select === filtroRutaGestion
-                        ? 'ruta'
-                        : select === filtroCoordinadorGestion
-                            ? 'coordinador'
-                            : null;
+                    const loader = select === filtroEmpresaGestion
+                        ? 'empresa'
+                        : select === filtroRutaGestion
+                            ? 'ruta'
+                            : select === filtroCoordinadorGestion
+                                ? 'coordinador'
+                                : null;
 
                     recargarGestionAgencias({ loader });
                 });
@@ -1270,6 +1276,9 @@
                         umbral_aviso: umbrales.aviso,
                         umbral_alerta: umbrales.alerta,
                         umbral_llamada: umbrales.llamada,
+                        empresa_filter: filtroEmpresaGestion?.value || '',
+                        ruta_filter: filtroRutaGestion?.value || '',
+                        coordinador_filter: filtroCoordinadorGestion?.value || '',
                     });
 
                     window.open(`${window.gestionAgenciasData.pdfUrl}?${params.toString()}`, '_blank');
