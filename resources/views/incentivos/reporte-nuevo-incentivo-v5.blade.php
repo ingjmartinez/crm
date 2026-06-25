@@ -246,7 +246,7 @@
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
                                     <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
                                     <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
-                                    <button type="button" class="btn btn-success" id="btnConsultarRecargasPaqueticos">Recargas/Paqueticos</button>
+                                    <button type="button" class="btn btn-success" id="btnConsultarDesvinculados">Usu. Desvinculados</button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -610,13 +610,13 @@
         </div>
     </div>
 
-    <div id="modalRecargasPaqueticosIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div id="modalDesvinculadosIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <div>
-                        <h5 class="modal-title">Ventas por recargas y paqueticos</h5>
-                        <small class="text-muted" id="recargasPaqueticosIncentivoRango">Consulta basada en las cedulas del reporte actual.</small>
+                        <h5 class="modal-title">Usuarios desvinculados en maestra</h5>
+                        <small class="text-muted" id="desvinculadosIncentivoRango">Consulta basada en las cedulas del reporte actual.</small>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -624,55 +624,38 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-3">
                             <div class="border rounded p-3 h-100 bg-light">
-                                <small class="text-muted d-block text-uppercase fw-semibold">Total ventas</small>
-                                <strong class="fs-4 text-success" id="recargasPaqueticosTotalVentas">0.00</strong>
+                                <small class="text-muted d-block text-uppercase fw-semibold">Total desvinculados</small>
+                                <strong class="fs-4 text-danger" id="desvinculadosIncentivoTotalUsuarios">0</strong>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="border rounded p-3 h-100 bg-light">
-                                <small class="text-muted d-block text-uppercase fw-semibold">Recargas</small>
-                                <strong class="fs-4" id="recargasPaqueticosTotalRecargas">0.00</strong>
+                                <small class="text-muted d-block text-uppercase fw-semibold">Desactivados</small>
+                                <strong class="fs-4" id="desvinculadosIncentivoTotalDesactivados">0</strong>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="border rounded p-3 h-100 bg-light">
-                                <small class="text-muted d-block text-uppercase fw-semibold">Paqueticos</small>
-                                <strong class="fs-4" id="recargasPaqueticosTotalPaqueticos">0.00</strong>
+                                <small class="text-muted d-block text-uppercase fw-semibold">Con fecha de salida</small>
+                                <strong class="fs-4" id="desvinculadosIncentivoTotalFechaSalida">0</strong>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="border rounded p-3 h-100 bg-light">
-                                <small class="text-muted d-block text-uppercase fw-semibold">Monto incentivos con ventas</small>
-                                <strong class="fs-4 text-warning" id="recargasPaqueticosMontoIncentivos">0.00</strong>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <div class="border rounded p-3 h-100 bg-light">
-                                <small class="text-muted d-block text-uppercase fw-semibold">Cantidad de ventas</small>
-                                <strong class="fs-5" id="recargasPaqueticosCantidadVentas">0</strong>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="border rounded p-3 h-100 bg-light">
-                                <small class="text-muted d-block text-uppercase fw-semibold">Cedulas consultadas</small>
-                                <strong class="fs-5" id="recargasPaqueticosTotalCedulas">0</strong>
+                                <small class="text-muted d-block text-uppercase fw-semibold">Monto incentivos desvinculados</small>
+                                <strong class="fs-4 text-warning" id="desvinculadosIncentivoMontoIncentivos">0.00</strong>
                             </div>
                         </div>
                     </div>
 
                     <div class="table-responsive">
-                        <table id="tableRecargasPaqueticosIncentivo" class="table table-bordered table-striped align-middle" style="width:100%">
+                        <table id="tableDesvinculadosIncentivo" class="table table-bordered table-striped align-middle" style="width:100%">
                             <thead>
                                 <tr>
                                     <th>Cedula</th>
                                     <th>Nombre</th>
-                                    <th class="text-end">Recargas</th>
-                                    <th class="text-end">Paqueticos</th>
-                                    <th class="text-end">Total ventas</th>
-                                    <th class="text-center">Cantidad</th>
+                                    <th>Estatus</th>
+                                    <th>Fecha salida</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -680,7 +663,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-warning" id="btnAplicarRecargasPaqueticosIncentivo">Aplicar</button>
+                    <button type="button" class="btn btn-warning" id="btnAplicarDesvinculadosIncentivo">Aplicar</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -830,13 +813,13 @@
     let cachedTipoPago = null;
     let cachedModoCalculo = null;
     let tableFaltantesIncentivo = null;
-    let tableRecargasPaqueticosIncentivo = null;
+    let tableDesvinculadosIncentivo = null;
     let tableUsuariosActualizar = null;
     let tableAgenciasSinEmpresa = null;
     let lastFaltantesCedulas = new Set();
     let excludedFaltantesCedulas = new Set();
-    let lastRecargasPaqueticosCedulas = new Set();
-    let recargasPaqueticosDescuentos = new Map();
+    let lastDesvinculadosCedulas = new Set();
+    let excludedDesvinculadosCedulas = new Set();
     let adminPctBruto = 0;
     const ADMINISTRATIVE_SHARE = 0.40;
     const COORDINATOR_SHARE = 0.60;
@@ -965,57 +948,6 @@
             acc[key] += incentivo * (adminPctBruto / 100) * ADMINISTRATIVE_SHARE;
             return acc;
         }, {});
-    }
-
-    function calcularIncentivoPorVenta(ventasMesActual, diasVentas) {
-        const minDias = toNumber(document.getElementById('ni_min_dias')?.value || 1);
-        const tipoPago = document.getElementById('ni_tipo_pago')?.value || cachedTipoPago || 'tramos_60';
-        const rangosPago = payoutRangesByType[tipoPago] || [];
-        const ventas = Math.max(0, toNumber(ventasMesActual));
-
-        if (toNumber(diasVentas) < minDias) {
-            return 0;
-        }
-
-        for (const rango of rangosPago) {
-            const desde = toNumber(rango.desde);
-            const hasta = rango.hasta === null || rango.hasta === undefined ? null : toNumber(rango.hasta);
-            if (ventas >= desde && (hasta === null || ventas <= hasta)) {
-                return rango.tipo === 'porcentaje'
-                    ? ventas * (toNumber(rango.pago) / 100)
-                    : toNumber(rango.pago);
-            }
-        }
-
-        const ultimoRango = rangosPago[rangosPago.length - 1];
-        if (ultimoRango && ventas >= toNumber(ultimoRango.desde)) {
-            return ultimoRango.tipo === 'porcentaje'
-                ? ventas * (toNumber(ultimoRango.pago) / 100)
-                : toNumber(ultimoRango.pago);
-        }
-
-        return 0;
-    }
-
-    function aplicarDescuentoRecargasPaqueticos(row) {
-        const cedula = String(row?.cedula ?? '').replace(/\D+/g, '');
-        const descuento = toNumber(recargasPaqueticosDescuentos.get(cedula) || 0);
-
-        if (!descuento) {
-            return row;
-        }
-
-        const ventasAjustadas = Math.max(0, toNumber(row?.ventas_mes_actual) - descuento);
-        const incentivoAjustado = calcularIncentivoPorVenta(ventasAjustadas, row?.dias_ventas_mes_actual);
-
-        return {
-            ...row,
-            ventas_mes_actual_original: row?.ventas_mes_actual_original ?? row?.ventas_mes_actual,
-            nuevo_incentivo_original: row?.nuevo_incentivo_original ?? row?.nuevo_incentivo,
-            descuento_recargas_paqueticos: descuento,
-            ventas_mes_actual: ventasAjustadas,
-            nuevo_incentivo: incentivoAjustado,
-        };
     }
 
     function normalizeEmpresaValue(value) {
@@ -2300,15 +2232,15 @@
         });
     }
 
-    function renderRecargasPaqueticosIncentivoTable(rows) {
+    function renderDesvinculadosIncentivoTable(rows) {
         const data = Array.isArray(rows) ? rows : [];
 
-        if (tableRecargasPaqueticosIncentivo) {
-            tableRecargasPaqueticosIncentivo.destroy();
-            $('#tableRecargasPaqueticosIncentivo tbody').empty();
+        if (tableDesvinculadosIncentivo) {
+            tableDesvinculadosIncentivo.destroy();
+            $('#tableDesvinculadosIncentivo tbody').empty();
         }
 
-        tableRecargasPaqueticosIncentivo = $('#tableRecargasPaqueticosIncentivo').DataTable({
+        tableDesvinculadosIncentivo = $('#tableDesvinculadosIncentivo').DataTable({
             data: data,
             columns: [
                 { data: 'cedula' },
@@ -2319,35 +2251,17 @@
                     }
                 },
                 {
-                    data: 'total_recargas',
-                    className: 'text-end',
+                    data: 'estatus',
                     render: function(data, type) {
-                        const value = Number(data || 0);
-                        return type === 'display' ? formatMoney(value) : value;
+                        const value = String(data || '').trim();
+                        return type === 'display' ? escapeHtml(value || 'Desvinculado') : value;
                     }
                 },
                 {
-                    data: 'total_paqueticos',
-                    className: 'text-end',
+                    data: 'fecha_salida',
                     render: function(data, type) {
-                        const value = Number(data || 0);
-                        return type === 'display' ? formatMoney(value) : value;
-                    }
-                },
-                {
-                    data: 'total_ventas',
-                    className: 'text-end',
-                    render: function(data, type) {
-                        const value = Number(data || 0);
-                        return type === 'display' ? formatMoney(value) : value;
-                    }
-                },
-                {
-                    data: 'cantidad_ventas',
-                    className: 'text-center',
-                    render: function(data, type) {
-                        const value = Number(data || 0);
-                        return type === 'display' ? value.toLocaleString('en-US') : value;
+                        const value = String(data || '').trim();
+                        return type === 'display' ? escapeHtml(value || '-') : value;
                     }
                 }
             ],
@@ -2355,14 +2269,14 @@
             responsive: true,
             pageLength: 10,
             lengthMenu: [10, 25, 50],
-            order: [[4, 'desc']],
+            order: [[1, 'asc']],
             language: {
                 lengthMenu: 'Mostrar _MENU_ registros por pagina',
                 info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
                 infoEmpty: 'No hay registros disponibles',
                 infoFiltered: '(filtrado de _MAX_ registros totales)',
                 search: 'Buscar:',
-                zeroRecords: 'No hay ventas de recargas o paqueticos para las cedulas consultadas',
+                zeroRecords: 'No hay usuarios desvinculados para las cedulas consultadas',
                 paginate: {
                     first: 'Primero',
                     last: 'Ultimo',
@@ -2730,15 +2644,15 @@
             });
     }
 
-    function aplicarRecargasPaqueticosIncentivo() {
-        if (!lastRecargasPaqueticosCedulas.size) {
-            Swal.fire({ title: 'Sin ventas', text: 'No hay cedulas con ventas de recargas o paqueticos para aplicar.', icon: 'info' });
+    function aplicarDesvinculadosIncentivo() {
+        if (!lastDesvinculadosCedulas.size) {
+            Swal.fire({ title: 'Sin desvinculados', text: 'No hay cedulas desvinculadas para aplicar.', icon: 'info' });
             return;
         }
 
         Swal.fire({
-            title: 'Aplicando recargas y paqueticos...',
-            text: 'Estamos ocultando las cedulas con esas ventas y recalculando el reporte.',
+            title: 'Aplicando usuarios desvinculados...',
+            text: 'Estamos ocultando las cedulas desvinculadas y recalculando el reporte.',
             icon: 'info',
             allowOutsideClick: false,
             showConfirmButton: false,
@@ -2746,40 +2660,25 @@
         });
 
         setTimeout(() => {
-            const rows = tableRecargasPaqueticosIncentivo?.rows?.().data?.().toArray?.() || [];
-            rows.forEach(row => {
-                const cedula = String(row?.cedula ?? '').replace(/\D+/g, '');
-                const monto = toNumber(row?.total_ventas);
-                if (cedula && monto > 0) {
-                    recargasPaqueticosDescuentos.set(cedula, monto);
-                }
-            });
+            excludedDesvinculadosCedulas = new Set([...excludedDesvinculadosCedulas, ...lastDesvinculadosCedulas]);
             applyLocalFilters(false);
-            bootstrap.Modal.getInstance(document.getElementById('modalRecargasPaqueticosIncentivo'))?.hide();
+            bootstrap.Modal.getInstance(document.getElementById('modalDesvinculadosIncentivo'))?.hide();
 
             Swal.fire({
-                title: 'Recargas y paqueticos aplicados',
-                text: `Se desconto el monto de recargas y paqueticos a ${lastRecargasPaqueticosCedulas.size} cedulas sin ocultarlas.`,
+                title: 'Desvinculados aplicados',
+                text: `${lastDesvinculadosCedulas.size} cedulas fueron ocultadas del reporte principal.`,
                 icon: 'success'
             });
         }, 120);
     }
 
-    function consultarRecargasPaqueticosIncentivo() {
+    function consultarDesvinculadosIncentivo() {
         if (!cachedRows.length) {
             Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
             return;
         }
 
-        const fechaIni = document.getElementById('ni_fecha_ini').value;
-        const fechaFin = document.getElementById('ni_fecha_fin').value;
-        const sistema = document.getElementById('ni_sistema').value;
         const cedulas = getCedulasReporteActual();
-
-        if (!fechaIni || !fechaFin) {
-            Swal.fire({ title: 'Informacion', text: 'Debe seleccionar fecha inicio y fecha fin.', icon: 'warning' });
-            return;
-        }
 
         if (!cedulas.length) {
             Swal.fire({ title: 'Sin cedulas', text: 'No hay cedulas disponibles en el reporte actual.', icon: 'warning' });
@@ -2787,14 +2686,14 @@
         }
 
         Swal.fire({
-            title: 'Consultando recargas y paqueticos...',
+            title: 'Consultando usuarios desvinculados...',
             icon: 'info',
             allowOutsideClick: false,
             showConfirmButton: false,
             didOpen: () => Swal.showLoading()
         });
 
-        fetch('/incentivos/reporte-nuevo-incentivo-v5/recargas-paqueticos', {
+        fetch('/incentivos/reporte-nuevo-incentivo-v5/desvinculados', {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
@@ -2804,30 +2703,25 @@
             },
             body: JSON.stringify({
                 cedulas: cedulas,
-                fecha_ini: fechaIni,
-                fecha_fin: fechaFin,
-                sistema: sistema,
             }),
         })
-            .then(response => parseResponseAsJson(response, 'Error consultando recargas y paqueticos del incentivo'))
+            .then(response => parseResponseAsJson(response, 'Error consultando usuarios desvinculados del incentivo'))
             .then(resp => {
                 Swal.close();
                 const rows = Array.isArray(resp.data) ? resp.data : [];
-                lastRecargasPaqueticosCedulas = new Set(rows
+                lastDesvinculadosCedulas = new Set(rows
                     .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
                     .filter(Boolean));
-                const montoIncentivosConVentas = calcularMontoIncentivosPorCedulas([...lastRecargasPaqueticosCedulas]);
+                const montoIncentivosConDesvinculados = calcularMontoIncentivosPorCedulas([...lastDesvinculadosCedulas]);
 
-                document.getElementById('recargasPaqueticosTotalVentas').textContent = formatMoney(resp.total_ventas || 0);
-                document.getElementById('recargasPaqueticosTotalRecargas').textContent = formatMoney(resp.total_recargas || 0);
-                document.getElementById('recargasPaqueticosTotalPaqueticos').textContent = formatMoney(resp.total_paqueticos || 0);
-                document.getElementById('recargasPaqueticosCantidadVentas').textContent = Number(resp.cantidad_ventas || 0).toLocaleString('en-US');
-                document.getElementById('recargasPaqueticosTotalCedulas').textContent = cedulas.length.toLocaleString('en-US');
-                document.getElementById('recargasPaqueticosMontoIncentivos').textContent = formatMoney(montoIncentivosConVentas);
-                document.getElementById('recargasPaqueticosIncentivoRango').textContent = `Rango consultado: ${fechaIni} al ${fechaFin}`;
-                renderRecargasPaqueticosIncentivoTable(rows);
+                document.getElementById('desvinculadosIncentivoTotalUsuarios').textContent = Number(resp.total_desvinculados || 0).toLocaleString('en-US');
+                document.getElementById('desvinculadosIncentivoTotalDesactivados').textContent = Number(resp.total_desactivados || 0).toLocaleString('en-US');
+                document.getElementById('desvinculadosIncentivoTotalFechaSalida').textContent = Number(resp.total_con_fecha_salida || 0).toLocaleString('en-US');
+                document.getElementById('desvinculadosIncentivoMontoIncentivos').textContent = formatMoney(montoIncentivosConDesvinculados);
+                document.getElementById('desvinculadosIncentivoRango').textContent = `Cedulas consultadas: ${cedulas.length.toLocaleString('en-US')}`;
+                renderDesvinculadosIncentivoTable(rows);
 
-                const modal = new bootstrap.Modal(document.getElementById('modalRecargasPaqueticosIncentivo'));
+                const modal = new bootstrap.Modal(document.getElementById('modalDesvinculadosIncentivo'));
                 modal.show();
             })
             .catch(error => {
@@ -2856,8 +2750,8 @@
             filtered = filtered.filter(item => !excludedFaltantesCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
         }
 
-        if (recargasPaqueticosDescuentos.size) {
-            filtered = filtered.map(item => aplicarDescuentoRecargasPaqueticos(item));
+        if (excludedDesvinculadosCedulas.size) {
+            filtered = filtered.filter(item => !excludedDesvinculadosCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
         }
 
         currentFilteredRows = filtered;
@@ -2947,16 +2841,16 @@
             consultarFaltantesIncentivo();
         });
 
-        document.querySelector('#btnConsultarRecargasPaqueticos').addEventListener('click', function() {
-            consultarRecargasPaqueticosIncentivo();
+        document.querySelector('#btnConsultarDesvinculados').addEventListener('click', function() {
+            consultarDesvinculadosIncentivo();
         });
 
         document.querySelector('#btnAplicarFaltantesIncentivo').addEventListener('click', function() {
             aplicarFaltantesIncentivo();
         });
 
-        document.querySelector('#btnAplicarRecargasPaqueticosIncentivo').addEventListener('click', function() {
-            aplicarRecargasPaqueticosIncentivo();
+        document.querySelector('#btnAplicarDesvinculadosIncentivo').addEventListener('click', function() {
+            aplicarDesvinculadosIncentivo();
         });
 
         document.querySelector('#ni_count_por_actualizar').addEventListener('click', function() {
@@ -2973,9 +2867,9 @@
             }
         });
 
-        document.getElementById('modalRecargasPaqueticosIncentivo').addEventListener('shown.bs.modal', function() {
-            if (tableRecargasPaqueticosIncentivo) {
-                tableRecargasPaqueticosIncentivo.columns.adjust().responsive.recalc();
+        document.getElementById('modalDesvinculadosIncentivo').addEventListener('shown.bs.modal', function() {
+            if (tableDesvinculadosIncentivo) {
+                tableDesvinculadosIncentivo.columns.adjust().responsive.recalc();
             }
         });
 
@@ -3236,8 +3130,8 @@
         currentFilteredRows = [];
         lastFaltantesCedulas = new Set();
         excludedFaltantesCedulas = new Set();
-        lastRecargasPaqueticosCedulas = new Set();
-        recargasPaqueticosDescuentos = new Map();
+        lastDesvinculadosCedulas = new Set();
+        excludedDesvinculadosCedulas = new Set();
 
         const params = new URLSearchParams({
             sistema: sistema,

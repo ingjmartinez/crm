@@ -2617,9 +2617,106 @@ class IncentivosController extends Controller
         return $this->faltantesReporteNuevoIncentivoV4($request);
     }
 
-    public function recargasPaqueticosReporteNuevoIncentivoV5(Request $request)
+    public function desvinculadosReporteNuevoIncentivoV5(Request $request)
     {
-        return $this->recargasPaqueticosReporteNuevoIncentivoV4($request);
+        $validated = $request->validate([
+            'cedulas' => 'required|array|min:1',
+            'cedulas.*' => 'nullable|string|max:50',
+        ]);
+
+        $cedulas = collect($validated['cedulas'])
+            ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($cedulas->isEmpty()) {
+            return response()->json([
+                'total_desvinculados' => 0,
+                'total_desactivados' => 0,
+                'total_con_fecha_salida' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $hasActivo = Schema::hasColumn('empleados', 'activo');
+        $hasFechaSalida = Schema::hasColumn('empleados', 'fechasalida');
+        $hasFechaSalidaAlt = Schema::hasColumn('empleados', 'fecha_salida');
+
+        if (!$hasActivo && !$hasFechaSalida && !$hasFechaSalidaAlt) {
+            return response()->json([
+                'total_desvinculados' => 0,
+                'total_desactivados' => 0,
+                'total_con_fecha_salida' => 0,
+                'data' => [],
+            ]);
+        }
+
+        $rows = DB::table('empleados')
+            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulas->all())
+            ->where(function ($query) use ($hasActivo, $hasFechaSalida, $hasFechaSalidaAlt) {
+                if ($hasActivo) {
+                    $query->orWhereRaw('COALESCE(activo, 1) = 0');
+                }
+
+                if ($hasFechaSalida) {
+                    $query->orWhereRaw("fechasalida IS NOT NULL AND TRIM(CAST(fechasalida AS CHAR)) <> '' AND TRIM(CAST(fechasalida AS CHAR)) <> '0000-00-00'");
+                }
+
+                if ($hasFechaSalidaAlt) {
+                    $query->orWhereRaw("fecha_salida IS NOT NULL AND TRIM(CAST(fecha_salida AS CHAR)) <> '' AND TRIM(CAST(fecha_salida AS CHAR)) <> '0000-00-00'");
+                }
+            })
+            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
+            ->selectRaw($hasActivo ? 'MIN(COALESCE(activo, 1)) AS activo' : '1 AS activo')
+            ->selectRaw(
+                $hasFechaSalida && $hasFechaSalidaAlt
+                    ? "MAX(COALESCE(NULLIF(TRIM(CAST(fecha_salida AS CHAR)), ''), NULLIF(TRIM(CAST(fechasalida AS CHAR)), ''))) AS fecha_salida"
+                    : ($hasFechaSalidaAlt
+                        ? "MAX(NULLIF(TRIM(CAST(fecha_salida AS CHAR)), '')) AS fecha_salida"
+                        : ($hasFechaSalida
+                            ? "MAX(NULLIF(TRIM(CAST(fechasalida AS CHAR)), '')) AS fecha_salida"
+                            : "'' AS fecha_salida"))
+            )
+            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->orderBy('nombre')
+            ->get()
+            ->map(function ($row) {
+                $fechaSalida = trim((string) ($row->fecha_salida ?? ''));
+                if ($fechaSalida === '0000-00-00') {
+                    $fechaSalida = '';
+                }
+
+                $estaDesactivado = (int) ($row->activo ?? 1) === 0;
+                $motivos = [];
+
+                if ($estaDesactivado) {
+                    $motivos[] = 'Desactivado';
+                }
+
+                if ($fechaSalida !== '') {
+                    $motivos[] = 'Fecha de salida registrada';
+                }
+
+                $nombre = trim((string) ($row->nombre ?? ''));
+
+                return [
+                    'cedula' => (string) $row->cedula,
+                    'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
+                    'estatus' => $motivos ? implode(' / ', $motivos) : 'Desvinculado',
+                    'desactivado' => $estaDesactivado,
+                    'fecha_salida' => $fechaSalida,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'total_desvinculados' => $rows->count(),
+            'total_desactivados' => $rows->where('desactivado', true)->count(),
+            'total_con_fecha_salida' => $rows->filter(fn ($row) => trim((string) ($row['fecha_salida'] ?? '')) !== '')->count(),
+            'data' => $rows,
+        ]);
     }
 
     public function reportePagoIncentivos(Request $request)
