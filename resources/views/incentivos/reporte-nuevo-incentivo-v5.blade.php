@@ -1135,6 +1135,108 @@
         return String(row?.nombre || '').trim() === 'Actualizar en maestro de empleados';
     }
 
+    function normalizeCedulaValue(value) {
+        return String(value ?? '').replace(/\D+/g, '');
+    }
+
+    function getUsuariosPorActualizarRows(sourceRows = currentFilteredRows) {
+        const rows = Array.isArray(sourceRows) ? sourceRows : [];
+        const grouped = new Map();
+
+        rows
+            .filter(row => esNombrePendiente(row))
+            .forEach((row) => {
+                const cedulaNormalizada = normalizeCedulaValue(row?.cedula);
+                const cedulaOriginal = String(row?.cedula ?? '').trim();
+                const key = cedulaNormalizada || cedulaOriginal;
+
+                if (!key) {
+                    return;
+                }
+
+                const empresa = normalizeEmpresaLabel(row?.empresa);
+                const fecha = String(row?.ultimo_dia_venta || '').trim();
+                const current = grouped.get(key) || {
+                    cedula: cedulaOriginal || cedulaNormalizada,
+                    nombre: 'Actualizar en maestro de empleados',
+                    empresaSet: new Set(),
+                    ultima_terminal: String(row?.ultima_terminal || '').trim(),
+                    ultima_agencia_nombre: String(row?.ultima_agencia_nombre || 'SIN AGENCIA').trim() || 'SIN AGENCIA',
+                    ultimo_dia_venta: fecha,
+                };
+
+                if (empresa) {
+                    current.empresaSet.add(empresa);
+                }
+
+                if (!current.ultimo_dia_venta || (fecha && fecha > current.ultimo_dia_venta)) {
+                    current.ultimo_dia_venta = fecha;
+                    current.ultima_terminal = String(row?.ultima_terminal || '').trim();
+                    current.ultima_agencia_nombre = String(row?.ultima_agencia_nombre || 'SIN AGENCIA').trim() || 'SIN AGENCIA';
+                }
+
+                grouped.set(key, current);
+            });
+
+        return Array.from(grouped.values())
+            .map((row) => ({
+                cedula: row.cedula,
+                nombre: row.nombre,
+                empresa: Array.from(row.empresaSet).join(' | '),
+                ultima_terminal: row.ultima_terminal,
+                ultima_agencia_nombre: row.ultima_agencia_nombre,
+                ultimo_dia_venta: row.ultimo_dia_venta,
+            }))
+            .sort((a, b) => String(b.ultimo_dia_venta || '').localeCompare(String(a.ultimo_dia_venta || '')));
+    }
+
+    function getUsuariosCumplimientoSummary(sourceRows = currentFilteredRows) {
+        const rows = Array.isArray(sourceRows) ? sourceRows : [];
+        const grouped = new Map();
+
+        rows.forEach((row) => {
+            const cedulaNormalizada = normalizeCedulaValue(row?.cedula);
+            const cedulaOriginal = String(row?.cedula ?? '').trim();
+            const key = cedulaNormalizada || cedulaOriginal;
+
+            if (!key) {
+                return;
+            }
+
+            const current = grouped.get(key) || {
+                cumplio: false,
+                tieneFila: false,
+            };
+
+            current.tieneFila = true;
+            if (evaluateMetaMinima(row).cumplio) {
+                current.cumplio = true;
+            }
+
+            grouped.set(key, current);
+        });
+
+        let cumplen = 0;
+        let noCumplen = 0;
+
+        grouped.forEach((row) => {
+            if (!row.tieneFila) {
+                return;
+            }
+
+            if (row.cumplio) {
+                cumplen += 1;
+            } else {
+                noCumplen += 1;
+            }
+        });
+
+        return {
+            cumplen,
+            noCumplen,
+        };
+    }
+
     function formatDateDisplay(value) {
         const text = String(value || '').trim();
         if (!text) return '-';
@@ -2042,9 +2144,10 @@
     }
 
     function updateCardsFromData(data) {
-        const totalCumplen = data.filter(item => evaluateMetaMinima(item).cumplio).length;
-        const totalNoCumplen = data.length - totalCumplen;
-        const totalPorActualizar = data.filter(item => esNombrePendiente(item)).length;
+        const cumplimientoSummary = getUsuariosCumplimientoSummary(data);
+        const totalCumplen = cumplimientoSummary.cumplen;
+        const totalNoCumplen = cumplimientoSummary.noCumplen;
+        const totalPorActualizar = getUsuariosPorActualizarRows(data).length;
         const totalAgenciasSinEmpresa = getAgenciasSinEmpresaRows(data).length;
         const totalVendido = data.reduce((sum, item) => sum + toNumber(item.ventas_mes_actual), 0);
         const totalIncentivo = data.reduce((sum, item) => sum + toNumber(item.nuevo_incentivo), 0);
@@ -2330,7 +2433,7 @@
     }
 
     function abrirUsuariosActualizarModal() {
-        const pendientes = currentFilteredRows.filter(item => esNombrePendiente(item));
+        const pendientes = getUsuariosPorActualizarRows();
 
         if (!pendientes.length) {
             Swal.fire({
@@ -2461,7 +2564,7 @@
     }
 
     function exportUsuariosActualizarExcel() {
-        const pendientes = currentFilteredRows.filter(item => esNombrePendiente(item));
+        const pendientes = getUsuariosPorActualizarRows();
 
         exportRowsToCsv(
             pendientes,
