@@ -1160,7 +1160,7 @@ class ReporteController extends Controller
         $resultados = array_values($resultados); // Reindexar el array
         $this->anexarSeguimientoCruceUsuarios($resultados);
 
-        if ($estatus === 'No activo') {
+        if (in_array($estatus, ['No activo', 'No registrado'], true)) {
             $resultados = array_values(array_filter($resultados, function ($item) {
                 return $item->Seguimiento_Estado !== 'finalizado';
             }));
