@@ -442,6 +442,9 @@
                 <div class="modal-header d-flex justify-content-between align-items-center">
                     <h5 class="modal-title" id="modalAgenciasSinVentaGestionLabel">Agencias sin ventas</h5>
                     <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-danger btn-sm" id="btnPdfAgenciasSinVentaGestion">
+                            <i class="ri-file-pdf-2-line me-1"></i>PDF
+                        </button>
                         <button type="button" class="btn btn-success btn-sm" id="btnDescargarAgenciasSinVentaGestionExcel">
                             <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
                         </button>
@@ -449,14 +452,32 @@
                     </div>
                 </div>
                 <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-5">
+                            <label for="modalFiltroRutaAgenciasSinVentaGestion" class="form-label">Ruta</label>
+                            <select class="form-select" id="modalFiltroRutaAgenciasSinVentaGestion">
+                                <option value="">Todas las rutas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="modalFiltroCoordinadorAgenciasSinVentaGestion" class="form-label">Coordinador</label>
+                            <select class="form-select" id="modalFiltroCoordinadorAgenciasSinVentaGestion">
+                                <option value="">Todos los coordinadores</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" class="btn btn-light w-100" id="btnLimpiarFiltrosAgenciasSinVentaGestion">
+                                <i class="ri-refresh-line align-bottom me-1"></i>Limpiar
+                            </button>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table id="tableModalAgenciasSinVentaGestion" class="table table-striped table-bordered w-100">
                             <thead>
                                 <tr>
                                     <th>Agencia</th>
                                     <th>Terminal</th>
-                                    <th>Cedula</th>
-                                    <th>Nombre</th>
+                                    <th>Ruta</th>
                                     <th>Coordinador</th>
                                 </tr>
                             </thead>
@@ -477,6 +498,9 @@
                 <div class="modal-header d-flex justify-content-between align-items-center">
                     <h5 class="modal-title" id="modalEstatusTerminalesGestionLabel">Agencias por estatus</h5>
                     <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-danger btn-sm" id="btnPdfEstatusTerminalesGestion">
+                            <i class="ri-file-pdf-2-line me-1"></i>PDF
+                        </button>
                         <button type="button" class="btn btn-success btn-sm" id="btnDescargarEstatusTerminalesGestionExcel">
                             <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
                         </button>
@@ -484,12 +508,32 @@
                     </div>
                 </div>
                 <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-5">
+                            <label for="modalFiltroRutaEstatusGestion" class="form-label">Ruta</label>
+                            <select class="form-select" id="modalFiltroRutaEstatusGestion">
+                                <option value="">Todas las rutas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="modalFiltroCoordinadorEstatusGestion" class="form-label">Coordinador</label>
+                            <select class="form-select" id="modalFiltroCoordinadorEstatusGestion">
+                                <option value="">Todos los coordinadores</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" class="btn btn-light w-100" id="btnLimpiarFiltrosEstatusGestion">
+                                <i class="ri-refresh-line align-bottom me-1"></i>Limpiar
+                            </button>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table id="tableModalEstatusTerminalesGestion" class="table table-striped table-bordered w-100">
                             <thead>
                                 <tr>
                                     <th>Agencia</th>
                                     <th>Terminal</th>
+                                    <th>Ruta</th>
                                     <th>Cedula</th>
                                     <th>Nombre</th>
                                     <th>Coordinador</th>
@@ -535,6 +579,14 @@
             const btnLimpiarFiltrosGestion = document.getElementById('btnLimpiarFiltrosGestion');
             const btnConfigurarTiempoVentas = document.getElementById('btnConfigurarTiempoVentas');
             const btnPdfGestionAgencias = document.getElementById('btnPdfGestionAgencias');
+            const btnPdfAgenciasSinVentaGestion = document.getElementById('btnPdfAgenciasSinVentaGestion');
+            const btnPdfEstatusTerminalesGestion = document.getElementById('btnPdfEstatusTerminalesGestion');
+            const modalFiltroRutaAgenciasSinVentaGestion = document.getElementById('modalFiltroRutaAgenciasSinVentaGestion');
+            const modalFiltroCoordinadorAgenciasSinVentaGestion = document.getElementById('modalFiltroCoordinadorAgenciasSinVentaGestion');
+            const btnLimpiarFiltrosAgenciasSinVentaGestion = document.getElementById('btnLimpiarFiltrosAgenciasSinVentaGestion');
+            const modalFiltroRutaEstatusGestion = document.getElementById('modalFiltroRutaEstatusGestion');
+            const modalFiltroCoordinadorEstatusGestion = document.getElementById('modalFiltroCoordinadorEstatusGestion');
+            const btnLimpiarFiltrosEstatusGestion = document.getElementById('btnLimpiarFiltrosEstatusGestion');
             const gestionHoraServidor = document.getElementById('gestionHoraServidor');
             const gestionHoraCalculoTexto = document.getElementById('gestionHoraCalculoTexto');
             const serverClockState = {
@@ -556,6 +608,14 @@
             let dtModalEstatusTerminalesGestion = null;
             let cargaFiltrosActiva = null;
             let chartTendenciaVentasHora = null;
+            let modalAgenciasSinVentaFiltros = {
+                ruta: '',
+                coordinador: '',
+            };
+            let modalEstatusFiltros = {
+                ruta: '',
+                coordinador: '',
+            };
 
             const escapeHtml = (value) => (value ?? '').toString()
                 .replace(/&/g, '&amp;')
@@ -568,6 +628,54 @@
                 maximumFractionDigits: 2,
             });
             const number = (value) => Number(value || 0).toLocaleString('es-DO');
+            const normalizeText = (value, fallback = '') => {
+                const text = (value ?? '').toString().trim();
+                return text !== '' ? text : fallback;
+            };
+            const buildFilterOptions = (rows, key, emptyLabel, selectedValue = '') => {
+                const options = [...new Set((Array.isArray(rows) ? rows : [])
+                    .map((item) => normalizeText(item?.[key], ''))
+                    .filter((value) => value !== ''))]
+                    .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+                return [`<option value="">${escapeHtml(emptyLabel)}</option>`]
+                    .concat(options.map((value) => {
+                        const selected = value === selectedValue ? ' selected' : '';
+                        return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(value)}</option>`;
+                    }))
+                    .join('');
+            };
+            const filterRowsByRouteAndCoordinator = (rows, filters) => {
+                const ruta = normalizeText(filters?.ruta, '');
+                const coordinador = normalizeText(filters?.coordinador, '');
+
+                return (Array.isArray(rows) ? rows : []).filter((item) => {
+                    const itemRuta = normalizeText(item?.ruta, 'Sin ruta');
+                    const itemCoordinador = normalizeText(item?.coordinador, 'Sin coordinador');
+
+                    if (ruta !== '' && itemRuta !== ruta) {
+                        return false;
+                    }
+
+                    if (coordinador !== '' && itemCoordinador !== coordinador) {
+                        return false;
+                    }
+
+                    return true;
+                });
+            };
+            const getPdfBaseParams = () => {
+                const umbrales = getUmbralesVentas();
+
+                return new URLSearchParams({
+                    umbral_aviso: umbrales.aviso,
+                    umbral_alerta: umbrales.alerta,
+                    umbral_llamada: umbrales.llamada,
+                    empresa_filter: filtroEmpresaGestion?.value || '',
+                    ruta_filter: filtroRutaGestion?.value || '',
+                    coordinador_filter: filtroCoordinadorGestion?.value || '',
+                });
+            };
 
             const renderTendenciaVentasHora = () => {
                 const chartElement = document.querySelector('#chart-gestion-ventas-hora');
@@ -1351,34 +1459,27 @@
 
             if (btnPdfGestionAgencias) {
                 btnPdfGestionAgencias.addEventListener('click', () => {
-                    const umbrales = getUmbralesVentas();
-                    const params = new URLSearchParams({
-                        umbral_aviso: umbrales.aviso,
-                        umbral_alerta: umbrales.alerta,
-                        umbral_llamada: umbrales.llamada,
-                        empresa_filter: filtroEmpresaGestion?.value || '',
-                        ruta_filter: filtroRutaGestion?.value || '',
-                        coordinador_filter: filtroCoordinadorGestion?.value || '',
-                    });
+                    const params = getPdfBaseParams();
 
                     window.open(`${window.gestionAgenciasData.pdfUrl}?${params.toString()}`, '_blank');
                 });
             }
 
             const descargarAgenciasSinVentaExcel = () => {
-                if (!agenciasSinVentas.length) {
+                const rows = filterRowsByRouteAndCoordinator(agenciasSinVentas, modalAgenciasSinVentaFiltros);
+
+                if (!rows.length) {
                     Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para descargar.', icon: 'info' });
                     return;
                 }
 
-                const filas = agenciasSinVentas.map((item) => {
+                const filas = rows.map((item) => {
                     const nombre = escapeHtml(item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA');
                     const terminal = escapeHtml(item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL');
-                    const cedula = escapeHtml(item?.cedula ?? '');
-                    const nombreEmpleado = escapeHtml(item?.nombre ?? 'Sin venta registrada');
+                    const ruta = escapeHtml(item?.ruta ?? 'Sin ruta');
                     const coordinador = escapeHtml(item?.coordinador ?? 'Sin coordinador');
 
-                    return `<tr><td>${nombre}</td><td>${terminal}</td><td>${cedula}</td><td>${nombreEmpleado}</td><td>${coordinador}</td></tr>`;
+                    return `<tr><td>${nombre}</td><td>${terminal}</td><td>${ruta}</td><td>${coordinador}</td></tr>`;
                 }).join('');
 
                 const tablaHtml = `
@@ -1387,8 +1488,7 @@
                             <tr>
                                 <th>Agencia</th>
                                 <th>Terminal</th>
-                                <th>Cedula</th>
-                                <th>Nombre</th>
+                                <th>Ruta</th>
                                 <th>Coordinador</th>
                             </tr>
                         </thead>
@@ -1407,15 +1507,45 @@
                 URL.revokeObjectURL(url);
             };
 
-            const abrirModalAgenciasSinVenta = () => {
-                if (!agenciasSinVentas.length) {
-                    Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para mostrar.', icon: 'info' });
+            const descargarAgenciasSinVentaPdf = () => {
+                const rows = filterRowsByRouteAndCoordinator(agenciasSinVentas, modalAgenciasSinVentaFiltros);
+                if (!rows.length) {
+                    Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para exportar en PDF.', icon: 'info' });
                     return;
                 }
+
+                const params = getPdfBaseParams();
+                params.set('modal_scope', 'agencias_sin_ventas');
+                params.set('modal_ruta_filter', modalAgenciasSinVentaFiltros.ruta || '');
+                params.set('modal_coordinador_filter', modalAgenciasSinVentaFiltros.coordinador || '');
+                window.open(`${window.gestionAgenciasData.pdfUrl}?${params.toString()}`, '_blank');
+            };
+
+            const renderModalAgenciasSinVenta = () => {
+                const sourceRows = Array.isArray(agenciasSinVentas) ? agenciasSinVentas : [];
+                const rows = filterRowsByRouteAndCoordinator(sourceRows, modalAgenciasSinVentaFiltros);
 
                 if (dtModalAgenciasSinVentaGestion) {
                     dtModalAgenciasSinVentaGestion.destroy();
                     dtModalAgenciasSinVentaGestion = null;
+                }
+
+                if (modalFiltroRutaAgenciasSinVentaGestion) {
+                    modalFiltroRutaAgenciasSinVentaGestion.innerHTML = buildFilterOptions(
+                        sourceRows,
+                        'ruta',
+                        'Todas las rutas',
+                        modalAgenciasSinVentaFiltros.ruta
+                    );
+                }
+
+                if (modalFiltroCoordinadorAgenciasSinVentaGestion) {
+                    modalFiltroCoordinadorAgenciasSinVentaGestion.innerHTML = buildFilterOptions(
+                        sourceRows,
+                        'coordinador',
+                        'Todos los coordinadores',
+                        modalAgenciasSinVentaFiltros.coordinador
+                    );
                 }
 
                 const tbody = document.querySelector('#tableModalAgenciasSinVentaGestion tbody');
@@ -1423,18 +1553,16 @@
 
                 tbody.innerHTML = '';
 
-                agenciasSinVentas.forEach((item) => {
-                    const nombre = (item?.nombre_agencia ?? item?.agencia_id ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
-                    const terminal = (item?.terminal ?? item?.agencia_id ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
-                    const cedula = (item?.cedula ?? '').toString().trim();
-                    const nombreEmpleado = (item?.nombre ?? 'Sin venta registrada').toString().trim() || 'Sin venta registrada';
-                    const coordinador = (item?.coordinador ?? 'Sin coordinador').toString().trim() || 'Sin coordinador';
+                rows.forEach((item) => {
+                    const nombre = normalizeText(item?.nombre_agencia ?? item?.agencia_id, 'SIN AGENCIA');
+                    const terminal = normalizeText(item?.terminal ?? item?.agencia_id, 'SIN TERMINAL');
+                    const ruta = normalizeText(item?.ruta, 'Sin ruta');
+                    const coordinador = normalizeText(item?.coordinador, 'Sin coordinador');
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${escapeHtml(nombre)}</td>
                         <td>${escapeHtml(terminal)}</td>
-                        <td>${escapeHtml(cedula)}</td>
-                        <td>${escapeHtml(nombreEmpleado)}</td>
+                        <td>${escapeHtml(ruta)}</td>
                         <td>${escapeHtml(coordinador)}</td>
                     `;
                     tbody.appendChild(tr);
@@ -1454,6 +1582,16 @@
                         order: [[0, 'asc']],
                     });
                 }
+            };
+
+            const abrirModalAgenciasSinVenta = () => {
+                if (!agenciasSinVentas.length) {
+                    Swal.fire({ title: 'Sin datos', text: 'No hay agencias sin venta para mostrar.', icon: 'info' });
+                    return;
+                }
+
+                modalAgenciasSinVentaFiltros = { ruta: '', coordinador: '' };
+                renderModalAgenciasSinVenta();
 
                 const modal = new bootstrap.Modal(document.getElementById('modalAgenciasSinVentaGestion'));
                 modal.show();
@@ -1466,7 +1604,7 @@
             };
 
             const descargarEstatusTerminalesExcel = () => {
-                const filas = filasEstatusActual();
+                const filas = filterRowsByRouteAndCoordinator(filasEstatusActual(), modalEstatusFiltros);
 
                 if (!filas.length) {
                     Swal.fire({ title: 'Sin datos', text: 'No hay agencias para descargar en este estatus.', icon: 'info' });
@@ -1476,13 +1614,14 @@
                 const filasHtml = filas.map((item) => {
                     const agencia = escapeHtml(item?.agencia ?? 'SIN AGENCIA');
                     const terminal = escapeHtml(item?.terminal ?? 'SIN TERMINAL');
+                    const ruta = escapeHtml(item?.ruta ?? 'Sin ruta');
                     const cedula = escapeHtml(item?.cedula ?? '');
                     const nombreEmpleado = escapeHtml(item?.nombre ?? 'Actualizar en la maestra de empleado');
                     const coordinador = escapeHtml(item?.coordinador ?? 'Sin coordinador');
                     const tipo = escapeHtml(item?.tipo ?? 'N/D');
                     const fecha = escapeHtml(item?.fecha ?? 'N/D');
 
-                    return `<tr><td>${agencia}</td><td>${terminal}</td><td>${cedula}</td><td>${nombreEmpleado}</td><td>${coordinador}</td><td>${tipo}</td><td>${fecha}</td></tr>`;
+                    return `<tr><td>${agencia}</td><td>${terminal}</td><td>${ruta}</td><td>${cedula}</td><td>${nombreEmpleado}</td><td>${coordinador}</td><td>${tipo}</td><td>${fecha}</td></tr>`;
                 }).join('');
 
                 const tablaHtml = `
@@ -1491,6 +1630,7 @@
                             <tr>
                                 <th>Agencia</th>
                                 <th>Terminal</th>
+                                <th>Ruta</th>
                                 <th>Cedula</th>
                                 <th>Nombre</th>
                                 <th>Coordinador</th>
@@ -1514,43 +1654,72 @@
                 URL.revokeObjectURL(url);
             };
 
-            const abrirModalEstatusTerminales = (estatus) => {
-                estatusModalActual = estatus;
-                const filas = filasEstatusActual();
-
+            const descargarEstatusTerminalesPdf = () => {
+                const filas = filterRowsByRouteAndCoordinator(filasEstatusActual(), modalEstatusFiltros);
                 if (!filas.length) {
-                    Swal.fire({ title: 'Sin datos', text: `No hay agencias en ${estatus}.`, icon: 'info' });
+                    Swal.fire({ title: 'Sin datos', text: 'No hay agencias para exportar en PDF en este estatus.', icon: 'info' });
                     return;
                 }
+
+                const params = getPdfBaseParams();
+                params.set('modal_scope', 'estatus');
+                params.set('modal_status', estatusModalActual || '');
+                params.set('modal_ruta_filter', modalEstatusFiltros.ruta || '');
+                params.set('modal_coordinador_filter', modalEstatusFiltros.coordinador || '');
+                window.open(`${window.gestionAgenciasData.pdfUrl}?${params.toString()}`, '_blank');
+            };
+
+            const renderModalEstatusTerminales = () => {
+                const sourceRows = filasEstatusActual();
+                const filas = filterRowsByRouteAndCoordinator(sourceRows, modalEstatusFiltros);
+                const title = document.getElementById('modalEstatusTerminalesGestionLabel');
+                const tbody = document.querySelector('#tableModalEstatusTerminalesGestion tbody');
+
+                if (title) {
+                    title.textContent = `Agencias en ${estatusModalActual}`;
+                }
+
+                if (!tbody) return;
 
                 if (dtModalEstatusTerminalesGestion) {
                     dtModalEstatusTerminalesGestion.destroy();
                     dtModalEstatusTerminalesGestion = null;
                 }
 
-                const title = document.getElementById('modalEstatusTerminalesGestionLabel');
-                const tbody = document.querySelector('#tableModalEstatusTerminalesGestion tbody');
-
-                if (title) {
-                    title.textContent = `Agencias en ${estatus}`;
+                if (modalFiltroRutaEstatusGestion) {
+                    modalFiltroRutaEstatusGestion.innerHTML = buildFilterOptions(
+                        sourceRows,
+                        'ruta',
+                        'Todas las rutas',
+                        modalEstatusFiltros.ruta
+                    );
                 }
 
-                if (!tbody) return;
+                if (modalFiltroCoordinadorEstatusGestion) {
+                    modalFiltroCoordinadorEstatusGestion.innerHTML = buildFilterOptions(
+                        sourceRows,
+                        'coordinador',
+                        'Todos los coordinadores',
+                        modalEstatusFiltros.coordinador
+                    );
+                }
 
                 tbody.innerHTML = '';
 
                 filas.forEach((item) => {
-                    const agencia = (item?.agencia ?? 'SIN AGENCIA').toString().trim() || 'SIN AGENCIA';
-                    const terminal = (item?.terminal ?? 'SIN TERMINAL').toString().trim() || 'SIN TERMINAL';
-                    const cedula = (item?.cedula ?? '').toString().trim();
-                    const nombreEmpleado = (item?.nombre ?? 'Actualizar en la maestra de empleado').toString().trim() || 'Actualizar en la maestra de empleado';
-                    const coordinador = (item?.coordinador ?? 'Sin coordinador').toString().trim() || 'Sin coordinador';
-                    const tipo = (item?.tipo ?? 'N/D').toString().trim() || 'N/D';
-                    const fecha = (item?.fecha ?? 'N/D').toString().trim() || 'N/D';
+                    const agencia = normalizeText(item?.agencia, 'SIN AGENCIA');
+                    const terminal = normalizeText(item?.terminal, 'SIN TERMINAL');
+                    const ruta = normalizeText(item?.ruta, 'Sin ruta');
+                    const cedula = normalizeText(item?.cedula, '');
+                    const nombreEmpleado = normalizeText(item?.nombre, 'Actualizar en la maestra de empleado');
+                    const coordinador = normalizeText(item?.coordinador, 'Sin coordinador');
+                    const tipo = normalizeText(item?.tipo, 'N/D');
+                    const fecha = normalizeText(item?.fecha, 'N/D');
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${escapeHtml(agencia)}</td>
                         <td>${escapeHtml(terminal)}</td>
+                        <td>${escapeHtml(ruta)}</td>
                         <td>${escapeHtml(cedula)}</td>
                         <td>${escapeHtml(nombreEmpleado)}</td>
                         <td>${escapeHtml(coordinador)}</td>
@@ -1571,9 +1740,22 @@
                             info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
                             paginate: { first: 'Primera', last: 'Ultima', next: 'Siguiente', previous: 'Anterior' }
                         },
-                        order: [[6, 'desc']],
+                        order: [[7, 'desc']],
                     });
                 }
+            };
+
+            const abrirModalEstatusTerminales = (estatus) => {
+                estatusModalActual = estatus;
+                const filas = filasEstatusActual();
+
+                if (!filas.length) {
+                    Swal.fire({ title: 'Sin datos', text: `No hay agencias en ${estatus}.`, icon: 'info' });
+                    return;
+                }
+
+                modalEstatusFiltros = { ruta: '', coordinador: '' };
+                renderModalEstatusTerminales();
 
                 const modal = new bootstrap.Modal(document.getElementById('modalEstatusTerminalesGestion'));
                 modal.show();
@@ -1596,8 +1778,58 @@
                 btnExcel.addEventListener('click', descargarAgenciasSinVentaExcel);
             }
 
+            if (btnPdfAgenciasSinVentaGestion) {
+                btnPdfAgenciasSinVentaGestion.addEventListener('click', descargarAgenciasSinVentaPdf);
+            }
+
             if (btnExcelEstatus) {
                 btnExcelEstatus.addEventListener('click', descargarEstatusTerminalesExcel);
+            }
+
+            if (btnPdfEstatusTerminalesGestion) {
+                btnPdfEstatusTerminalesGestion.addEventListener('click', descargarEstatusTerminalesPdf);
+            }
+
+            if (modalFiltroRutaAgenciasSinVentaGestion) {
+                modalFiltroRutaAgenciasSinVentaGestion.addEventListener('change', () => {
+                    modalAgenciasSinVentaFiltros.ruta = modalFiltroRutaAgenciasSinVentaGestion.value || '';
+                    renderModalAgenciasSinVenta();
+                });
+            }
+
+            if (modalFiltroCoordinadorAgenciasSinVentaGestion) {
+                modalFiltroCoordinadorAgenciasSinVentaGestion.addEventListener('change', () => {
+                    modalAgenciasSinVentaFiltros.coordinador = modalFiltroCoordinadorAgenciasSinVentaGestion.value || '';
+                    renderModalAgenciasSinVenta();
+                });
+            }
+
+            if (btnLimpiarFiltrosAgenciasSinVentaGestion) {
+                btnLimpiarFiltrosAgenciasSinVentaGestion.addEventListener('click', () => {
+                    modalAgenciasSinVentaFiltros = { ruta: '', coordinador: '' };
+                    renderModalAgenciasSinVenta();
+                });
+            }
+
+            if (modalFiltroRutaEstatusGestion) {
+                modalFiltroRutaEstatusGestion.addEventListener('change', () => {
+                    modalEstatusFiltros.ruta = modalFiltroRutaEstatusGestion.value || '';
+                    renderModalEstatusTerminales();
+                });
+            }
+
+            if (modalFiltroCoordinadorEstatusGestion) {
+                modalFiltroCoordinadorEstatusGestion.addEventListener('change', () => {
+                    modalEstatusFiltros.coordinador = modalFiltroCoordinadorEstatusGestion.value || '';
+                    renderModalEstatusTerminales();
+                });
+            }
+
+            if (btnLimpiarFiltrosEstatusGestion) {
+                btnLimpiarFiltrosEstatusGestion.addEventListener('click', () => {
+                    modalEstatusFiltros = { ruta: '', coordinador: '' };
+                    renderModalEstatusTerminales();
+                });
             }
 
             document.querySelectorAll('[data-card-estatus]').forEach((card) => {

@@ -26,17 +26,6 @@
             position: relative;
         }
 
-        .header:after {
-            content: "";
-            display: block;
-            height: 4px;
-            width: 42%;
-            background: #ce1126;
-            position: absolute;
-            bottom: -4px;
-            left: 0;
-        }
-
         .title {
             color: #002d72;
             font-size: 22px;

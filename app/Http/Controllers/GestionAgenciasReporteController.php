@@ -178,8 +178,14 @@ class GestionAgenciasReporteController extends Controller
 
         $umbrales = $this->umbralesVenta($request);
         $filtrosAgencia = $this->filtrosAgencia($request);
-        $resumen = $this->resumenDesdeTabla(null, null, null, $filtrosAgencia);
+        $modalScope = trim((string) $request->input('modal_scope', ''));
         $horaServidor = now();
+
+        if ($modalScope !== '') {
+            return $this->pdfDetalleModal($request, $filtrosAgencia, $umbrales, $horaServidor);
+        }
+
+        $resumen = $this->resumenDesdeTabla(null, null, null, $filtrosAgencia);
         $estatusResumen = $this->conteoEstatusTerminales($umbrales, $horaServidor, $filtrosAgencia);
         $tendenciaVentasHora = $this->tendenciaVentasPorHoraDesdeTabla($filtrosAgencia);
 
@@ -199,6 +205,69 @@ class GestionAgenciasReporteController extends Controller
             ]);
 
         return $pdf->download('reporte_gestion_agencias_' . $horaServidor->format('Ymd_His') . '.pdf');
+    }
+
+    private function pdfDetalleModal(Request $request, array $filtrosAgencia, array $umbrales, Carbon $horaServidor)
+    {
+        $modalScope = trim((string) $request->input('modal_scope', ''));
+        $modalRuta = trim((string) $request->input('modal_ruta_filter', ''));
+        $modalCoordinador = trim((string) $request->input('modal_coordinador_filter', ''));
+        $modalFiltros = [
+            'ruta' => $modalRuta,
+            'coordinador' => $modalCoordinador,
+        ];
+
+        $columnas = [];
+        $rows = collect();
+        $titulo = 'Detalle de agencias';
+        $subtitulo = 'Listado filtrado desde el modal.';
+
+        if ($modalScope === 'agencias_sin_ventas') {
+            $titulo = 'Agencias sin ventas';
+            $subtitulo = 'Agencias activas sin ventas en el rango actual del reporte.';
+            $columnas = ['Agencia', 'Terminal', 'Ruta', 'Coordinador'];
+            $rows = $this->filtrarDetalleModalRows(
+                $this->agenciasSinVentasDesdeTabla($filtrosAgencia),
+                $modalFiltros
+            );
+        } elseif ($modalScope === 'estatus') {
+            $estatus = trim((string) $request->input('modal_status', ''));
+
+            if (!in_array($estatus, ['Aviso', 'En Alerta', 'Requiere llamada', 'Al dia'], true)) {
+                abort(404);
+            }
+
+            $detalle = $this->detalleEstatusTerminales($umbrales, $horaServidor, $filtrosAgencia);
+            $titulo = 'Agencias en ' . $estatus;
+            $subtitulo = 'Terminales agrupadas por estatus de ultima transaccion.';
+            $columnas = ['Agencia', 'Terminal', 'Ruta', 'Cedula', 'Nombre', 'Coordinador', 'Tipo', 'Ultima transaccion'];
+            $rows = $this->filtrarDetalleModalRows(
+                collect($detalle[$estatus] ?? []),
+                $modalFiltros
+            );
+        } else {
+            abort(404);
+        }
+
+        $pdf = Pdf::loadView('reportes.gestion-agencias-modal-pdf', [
+            'titulo' => $titulo,
+            'subtitulo' => $subtitulo,
+            'scope' => $modalScope,
+            'columnas' => $columnas,
+            'rows' => $rows,
+            'umbrales' => $umbrales,
+            'filtrosAgencia' => $filtrosAgencia,
+            'modalFiltros' => $modalFiltros,
+            'horaServidor' => $horaServidor,
+        ])
+            ->setPaper('letter', 'landscape')
+            ->setOptions([
+                'defaultFont' => 'DejaVu Sans',
+                'isRemoteEnabled' => false,
+                'isHtml5ParserEnabled' => true,
+            ]);
+
+        return $pdf->download('reporte_gestion_agencias_detalle_' . $horaServidor->format('Ymd_His') . '.pdf');
     }
 
     private function reemplazarTablaReporte(callable $importador): void
@@ -455,6 +524,7 @@ class GestionAgenciasReporteController extends Controller
                 'gav.terminal',
                 'gav.usuario_venta',
                 'emp.nombre_empleado',
+                'agl.ruta',
                 'agl.coordinador',
                 DB::raw("{$estatusSql} as estatus_analisis"),
             ]);
@@ -476,6 +546,7 @@ class GestionAgenciasReporteController extends Controller
             $detalle[$estatus][] = [
                 'agencia' => $row->agencia,
                 'terminal' => $row->terminal,
+                'ruta' => $row->ruta ?: 'Sin ruta',
                 'cedula' => $row->usuario_venta,
                 'nombre' => $row->nombre_empleado ?: 'Actualizar en la maestra de empleado',
                 'coordinador' => $row->coordinador ?: 'Sin coordinador',
@@ -893,9 +964,10 @@ class GestionAgenciasReporteController extends Controller
         $this->aplicarFiltrosAgenciaTablaAgencias($query, $filtros);
 
         return $query
-            ->get(['id', 'agencia', 'nombre_agencia', 'terminal'])
+            ->get(['id', 'agencia', 'nombre_agencia', 'terminal', 'ruta'])
             ->map(function (Agencia $agencia) {
                 $terminal = $this->formatearTerminalConsulta($agencia->terminal);
+                $ruta = trim((string) ($agencia->ruta ?? ''));
                 $coordinador = $agencia->coordinadoresOperadores
                     ->map(fn ($coordinador) => trim((string) ($coordinador->nombre ?? '') . ' ' . (string) ($coordinador->apellido ?? '')))
                     ->filter()
@@ -906,6 +978,7 @@ class GestionAgenciasReporteController extends Controller
                     'agencia_id' => $agencia->agencia,
                     'nombre_agencia' => $agencia->nombre_agencia,
                     'terminal' => $terminal,
+                    'ruta' => $ruta !== '' ? $ruta : 'Sin ruta',
                     'cedula' => '',
                     'nombre' => 'Sin venta registrada',
                     'coordinador' => $coordinador !== '' ? $coordinador : 'Sin coordinador',
@@ -919,10 +992,34 @@ class GestionAgenciasReporteController extends Controller
                 'agencia_id' => $agencia['agencia_id'],
                 'nombre_agencia' => $agencia['nombre_agencia'],
                 'terminal' => $agencia['terminal'],
+                'ruta' => $agencia['ruta'],
                 'cedula' => $agencia['cedula'],
                 'nombre' => $agencia['nombre'],
                 'coordinador' => $agencia['coordinador'],
             ])
+            ->values();
+    }
+
+    private function filtrarDetalleModalRows($rows, array $filtros = [])
+    {
+        $ruta = trim((string) ($filtros['ruta'] ?? ''));
+        $coordinador = trim((string) ($filtros['coordinador'] ?? ''));
+
+        return collect($rows)
+            ->filter(function ($row) use ($ruta, $coordinador) {
+                $rowRuta = trim((string) data_get($row, 'ruta', ''));
+                $rowCoordinador = trim((string) data_get($row, 'coordinador', ''));
+
+                if ($ruta !== '' && $rowRuta !== $ruta) {
+                    return false;
+                }
+
+                if ($coordinador !== '' && $rowCoordinador !== $coordinador) {
+                    return false;
+                }
+
+                return true;
+            })
             ->values();
     }
 
