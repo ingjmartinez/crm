@@ -1290,6 +1290,12 @@ class IncentivosController extends Controller
             ->filter()
             ->unique()
             ->values();
+        $cedulaLookupKey = function ($cedula) {
+            $digits = preg_replace('/\D+/', '', (string) $cedula);
+            $normalized = ltrim($digits, '0');
+
+            return $normalized === '' ? '0' : $normalized;
+        };
         $empleadosPorCedula = DB::table('empleados')
             ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasNormalizadas->all())
             ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
@@ -1297,7 +1303,9 @@ class IncentivosController extends Controller
             ->selectRaw('MAX(empleadoid) AS empleadoid')
             ->groupByRaw('CAST(cedula AS UNSIGNED)')
             ->get()
-            ->keyBy('cedula');
+            ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
+                return [$cedulaLookupKey($row->cedula) => $row];
+            });
 
         $ultimaVentaPorCedula = [];
         if ($cedulasNormalizadas->isNotEmpty()) {
@@ -1345,7 +1353,7 @@ class IncentivosController extends Controller
             }
 
             foreach ($ultimaVentaRows as $venta) {
-                $cedulaKey = (string) $venta->cedula;
+                $cedulaKey = $cedulaLookupKey($venta->cedula);
                 if (isset($ultimaVentaPorCedula[$cedulaKey])) {
                     continue;
                 }
@@ -1360,8 +1368,8 @@ class IncentivosController extends Controller
             }
         }
 
-        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorCedula) {
-            $cedulaKey = preg_replace('/\D+/', '', (string) ($row['cedula'] ?? ''));
+        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorCedula, $cedulaLookupKey) {
+            $cedulaKey = $cedulaLookupKey($row['cedula'] ?? '');
             $empleado = $empleadosPorCedula->get($cedulaKey);
             $nombre = trim((string) ($empleado->nombre ?? ''));
             $ultimaVenta = $ultimaVentaPorCedula[$cedulaKey] ?? [];
@@ -2259,6 +2267,12 @@ class IncentivosController extends Controller
             ->filter()
             ->unique()
             ->values();
+        $cedulaLookupKey = function ($cedula) {
+            $digits = preg_replace('/\D+/', '', (string) $cedula);
+            $normalized = ltrim($digits, '0');
+
+            return $normalized === '' ? '0' : $normalized;
+        };
         $empleadosPorCedula = collect();
         if ($cedulasNormalizadas->isNotEmpty()) {
             $empleadosPorCedula = DB::table('empleados')
@@ -2268,12 +2282,15 @@ class IncentivosController extends Controller
                 ->selectRaw('MAX(empleadoid) AS empleadoid')
                 ->groupByRaw('CAST(cedula AS UNSIGNED)')
                 ->get()
-                ->keyBy('cedula');
+                ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
+                    return [$cedulaLookupKey($row->cedula) => $row];
+                });
         }
 
-        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorKey, $rowKey) {
+        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorKey, $rowKey, $cedulaLookupKey) {
+            $cedulaLookup = $cedulaLookupKey($row['cedula'] ?? '');
             $cedulaKey = preg_replace('/\D+/', '', (string) ($row['cedula'] ?? ''));
-            $empleado = $empleadosPorCedula->get($cedulaKey);
+            $empleado = $empleadosPorCedula->get($cedulaLookup);
             $nombre = trim((string) ($empleado->nombre ?? ''));
             $ultimaVenta = $ultimaVentaPorKey[$rowKey($cedulaKey, $row['empresa'] ?? 'Agencias por asignar empresa')] ?? [];
 
@@ -2308,7 +2325,10 @@ class IncentivosController extends Controller
                 ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
                 ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
                 ->groupByRaw('CAST(cedula AS UNSIGNED)')
-                ->pluck('nombre', 'cedula');
+                ->get()
+                ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
+                    return [$cedulaLookupKey($row->cedula) => (string) $row->nombre];
+                });
         }
 
         $coordinatorValidAgencies = [];
@@ -2369,10 +2389,12 @@ class IncentivosController extends Controller
                         ->map(function ($item, $key) use ($incentiveByKey, $employeeNamesByCedula) {
                             $cedulaString = (string) ($item['cedula'] ?? '');
                             $empresa = (string) ($item['empresa'] ?? 'Agencias por asignar empresa');
+                            $cedulaLookup = ltrim(preg_replace('/\D+/', '', $cedulaString), '0');
+                            $cedulaLookup = $cedulaLookup === '' ? '0' : $cedulaLookup;
 
                             return [
                                 'cedula' => $cedulaString,
-                                'usuario' => trim(($employeeNamesByCedula[$cedulaString] ?? '') . ' | ' . $empresa),
+                                'usuario' => trim(($employeeNamesByCedula[$cedulaLookup] ?? '') . ' | ' . $empresa),
                                 'incentivo' => (float) ($incentiveByKey[$key] ?? 0),
                             ];
                         })

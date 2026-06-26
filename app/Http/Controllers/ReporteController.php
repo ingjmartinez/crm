@@ -788,6 +788,11 @@ class ReporteController extends Controller
         return view('reportes.cruce-usuarios');
     }
 
+    public function diferenciasIncentivosCruceUsuarios(Request $request)
+    {
+        return view('reportes.diferencias-incentivos-cruce');
+    }
+
     public function ventasAgenciaPeriodo(Request $request)
     {
         return view('reportes.ventas-agencia-periodo');
@@ -1179,6 +1184,149 @@ class ReporteController extends Controller
         ]);
     }
 
+    public function listDiferenciasIncentivosCruceUsuarios(Request $request)
+    {
+        $validated = $request->validate([
+            'sistema' => 'nullable|in:Todos,Lotobet,Lotonet',
+            'empresa' => 'nullable|in:todos,grupo_joselito,negosur',
+            'fecha_inicio' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
+            'filtro_cumplimiento' => 'nullable|in:todos,cumplidos,no_cumplidos',
+            'modo_calculo' => 'nullable|in:general,separado_empresa',
+            'diferencia' => 'nullable|in:todas,solo_incentivos,solo_cruce,ambos',
+        ]);
+
+        $sistemaIncentivo = $validated['sistema'] ?? 'Todos';
+        $sistemaCruce = strtolower($sistemaIncentivo === 'Todos' ? 'todos' : $sistemaIncentivo);
+        $empresa = $validated['empresa'] ?? 'todos';
+        $fechaInicio = $validated['fecha_inicio'];
+        $fechaFin = $validated['fecha_fin'];
+        $filtroCumplimiento = $validated['filtro_cumplimiento'] ?? 'todos';
+        $modoCalculo = $validated['modo_calculo'] ?? 'general';
+        $filtroDiferencia = $validated['diferencia'] ?? 'todas';
+
+        $pendientesIncentivos = collect($this->obtenerPendientesIncentivosV5([
+            'sistema' => $sistemaIncentivo,
+            'empresa' => $empresa,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'filtro_cumplimiento' => $filtroCumplimiento,
+            'modo_calculo' => $modoCalculo,
+        ]));
+
+        $cruceBase = $this->obtenerCruceUsuariosBase($sistemaCruce, $empresa, $fechaInicio, $fechaFin);
+        $cruceRows = collect($cruceBase['resultados'] ?? []);
+
+        $cruceAllByCedula = $cruceRows
+            ->map(function ($row) {
+                $cedula = preg_replace('/\D+/', '', (string) ($row->Identificacion ?? ''));
+                if ($cedula === '') {
+                    return null;
+                }
+
+                return [
+                    'cedula' => $cedula,
+                    'estatus_cruce' => (string) ($row->Estatus ?? ''),
+                    'detalle_cruce' => trim((string) ($row->Detalle ?? '')),
+                    'ultima_fecha_venta_cruce' => trim((string) ($row->Ultima_Fecha_Venta ?? '')),
+                ];
+            })
+            ->filter()
+            ->keyBy('cedula');
+
+        $cruceVisibleByCedula = $cruceAllByCedula
+            ->filter(fn ($row) => ($row['estatus_cruce'] ?? '') !== 'Activo')
+            ->all();
+
+        $allCedulas = $pendientesIncentivos->keys()
+            ->merge(collect(array_keys($cruceVisibleByCedula)))
+            ->merge(collect(array_keys($cruceAllByCedula->all())))
+            ->unique()
+            ->values();
+
+        $empleadosMaestra = $this->obtenerEstadoMaestraPorCedulas($allCedulas->all());
+
+        $rows = $allCedulas->map(function ($cedula) use ($pendientesIncentivos, $cruceVisibleByCedula, $cruceAllByCedula, $empleadosMaestra) {
+            $incentivo = $pendientesIncentivos->get($cedula);
+            $cruceVisible = $cruceVisibleByCedula[$cedula] ?? null;
+            $cruceRegistro = $cruceAllByCedula->get($cedula);
+            $maestra = $empleadosMaestra[$cedula] ?? [
+                'empleadoid' => '',
+                'nombre' => 'Actualizar en maestro de empleados',
+                'estado' => 'No registrado',
+                'nombre_vacio' => true,
+            ];
+
+            $estaEnIncentivos = $incentivo !== null;
+            $estaEnCruceVisible = $cruceVisible !== null;
+            $estaEnCruceBase = $cruceRegistro !== null;
+
+            if ($estaEnIncentivos && $estaEnCruceVisible) {
+                $clasificacion = 'ambos';
+                $clasificacionLabel = 'Ambos';
+            } elseif ($estaEnIncentivos) {
+                $clasificacion = 'solo_incentivos';
+                $clasificacionLabel = 'Solo Incentivos';
+            } else {
+                $clasificacion = 'solo_cruce';
+                $clasificacionLabel = 'Solo Cruce';
+            }
+
+            return [
+                'cedula' => $cedula,
+                'clasificacion' => $clasificacion,
+                'clasificacion_label' => $clasificacionLabel,
+                'en_incentivos' => $estaEnIncentivos,
+                'en_cruce' => $estaEnCruceVisible,
+                'aparece_cruce_base' => $estaEnCruceBase,
+                'estatus_cruce' => (string) ($cruceRegistro['estatus_cruce'] ?? ''),
+                'empleadoid_maestra' => (string) ($maestra['empleadoid'] ?? ''),
+                'nombre_maestra' => (string) ($maestra['nombre'] ?? 'Actualizar en maestro de empleados'),
+                'estado_maestra' => (string) ($maestra['estado'] ?? 'No registrado'),
+                'empresa_incentivo' => (string) ($incentivo['empresa'] ?? ''),
+                'agencia_incentivo' => (string) ($incentivo['ultima_agencia_nombre'] ?? ''),
+                'terminal_incentivo' => (string) ($incentivo['ultima_terminal'] ?? ''),
+                'ultima_fecha_venta' => (string) (($incentivo['ultimo_dia_venta'] ?? '') ?: ($cruceRegistro['ultima_fecha_venta_cruce'] ?? '')),
+                'detalle_cruce' => (string) ($cruceRegistro['detalle_cruce'] ?? ''),
+                'motivo' => $this->resolverMotivoDiferenciaIncentivosCruce(
+                    $estaEnIncentivos,
+                    $estaEnCruceVisible,
+                    $estaEnCruceBase,
+                    (string) ($cruceRegistro['estatus_cruce'] ?? ''),
+                    $maestra
+                ),
+            ];
+        });
+
+        $rows = $rows
+            ->filter(fn ($row) => $row['en_incentivos'] || $row['en_cruce'])
+            ->values();
+
+        $summary = [
+            'total_incentivos' => $pendientesIncentivos->count(),
+            'total_cruce_visible' => count($cruceVisibleByCedula),
+            'solo_incentivos' => $rows->where('clasificacion', 'solo_incentivos')->count(),
+            'solo_cruce' => $rows->where('clasificacion', 'solo_cruce')->count(),
+            'ambos' => $rows->where('clasificacion', 'ambos')->count(),
+            'activos_ocultos_en_cruce' => $rows->filter(function ($row) {
+                return $row['clasificacion'] === 'solo_incentivos'
+                    && $row['aparece_cruce_base']
+                    && $row['estatus_cruce'] === 'Activo';
+            })->count(),
+        ];
+
+        if ($filtroDiferencia !== 'todas') {
+            $rows = $rows->where('clasificacion', $filtroDiferencia)->values();
+        } else {
+            $rows = $rows->values();
+        }
+
+        return response()->json([
+            'summary' => $summary,
+            'rows' => $rows->all(),
+        ]);
+    }
+
     private function anexarSeguimientoCruceUsuarios(array &$resultados): void
     {
         foreach ($resultados as $item) {
@@ -1278,6 +1426,328 @@ class ReporteController extends Controller
             'agencia' => $agenciaId,
             'fechas' => $fechas,
         ]);
+    }
+
+    private function obtenerCruceUsuariosBase(string $sistema, string $empresa, string $fechaInicio, string $fechaFin): array
+    {
+        $ventasSql = $this->cruceUsuariosVentasSql($sistema);
+        $empresaWhereSql = '';
+        $empresaBindings = [];
+
+        if ($empresa === 'grupo_joselito') {
+            $empresaWhereSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $empresaBindings[] = '%joselito%';
+        } elseif ($empresa === 'negosur') {
+            $empresaWhereSql = ' AND LOWER(COALESCE(a.empresa, "")) LIKE ?';
+            $empresaBindings[] = '%negosur%';
+        }
+
+        DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'STRICT_TRANS_TABLES',''))");
+        DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'NO_ZERO_DATE',''))");
+
+        $resultados = DB::select("
+            SELECT
+                CAST(REPLACE(REPLACE(v.cedula,'-',''),' ','') AS CHAR(11)) AS Identificacion,
+                COALESCE(
+                    MAX(CASE
+                        WHEN e.empleadoid IS NOT NULL
+                         AND (
+                            e.fechasalida IS NULL
+                            OR e.fechasalida = '0000-00-00'
+                            OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                         )
+                        THEN e.empleadoid
+                    END),
+                    MAX(e.empleadoid)
+                ) AS Empleado_ID,
+                CASE
+                    WHEN MAX(e.empleadoid) IS NULL THEN 'ACTUALIZAR EN MAESTRA DE EMPLEADOS'
+                    ELSE CONCAT(
+                        COALESCE(
+                            MAX(CASE
+                                WHEN e.empleadoid IS NOT NULL
+                                 AND (
+                                    e.fechasalida IS NULL
+                                    OR e.fechasalida = '0000-00-00'
+                                    OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                                 )
+                                THEN e.nombres
+                            END),
+                            MAX(e.nombres)
+                        ),
+                        ' ',
+                        COALESCE(
+                            MAX(CASE
+                                WHEN e.empleadoid IS NOT NULL
+                                 AND (
+                                    e.fechasalida IS NULL
+                                    OR e.fechasalida = '0000-00-00'
+                                    OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                                 )
+                                THEN e.apellidos
+                            END),
+                            MAX(e.apellidos)
+                        )
+                    )
+                END AS NombreCompleto,
+                CASE
+                    WHEN MAX(e.empleadoid) IS NULL
+                      OR SUM(CASE
+                            WHEN e.empleadoid IS NOT NULL
+                             AND (
+                                e.fechasalida IS NULL
+                                OR e.fechasalida = '0000-00-00'
+                                OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                             )
+                            THEN 1
+                            ELSE 0
+                        END) = 0
+                    THEN CONCAT(
+                        'Agencia(s): ',
+                        GROUP_CONCAT(DISTINCT v.agencia_id ORDER BY v.agencia_id SEPARATOR ', ')
+                    )
+                    ELSE ''
+                END AS Detalle,
+                CASE
+                    WHEN MAX(e.empleadoid) IS NULL THEN 'No registrado'
+                    WHEN SUM(CASE
+                            WHEN e.empleadoid IS NOT NULL
+                             AND (
+                                e.fechasalida IS NULL
+                                OR e.fechasalida = '0000-00-00'
+                                OR TRIM(CAST(e.fechasalida AS CHAR)) = ''
+                             )
+                            THEN 1
+                            ELSE 0
+                        END) > 0
+                        THEN 'Activo'
+                    ELSE CONCAT('No Activo - ', MAX(NULLIF(e.fechasalida, '0000-00-00')))
+                END AS Estatus,
+                DATE(MAX(v.fecha)) AS Ultima_Fecha_Venta
+            FROM ({$ventasSql}) v
+            LEFT JOIN agencias a
+                ON COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(a.terminal AS CHAR))), ''), '0')
+                 = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(v.agencia_id AS CHAR))), ''), '0')
+            LEFT JOIN empleados e
+                ON REPLACE(REPLACE(v.cedula,'-',''),' ','')
+                 = REPLACE(REPLACE(e.cedula,'-',''),' ','')
+            WHERE v.fecha >= ?
+              AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+              AND NULLIF(REPLACE(REPLACE(v.cedula,'-',''),' ',''), '') IS NOT NULL
+              AND REPLACE(REPLACE(v.cedula,'-',''),' ','') <> '00000000000'
+              {$empresaWhereSql}
+            GROUP BY CAST(REPLACE(REPLACE(v.cedula,'-',''),' ','') AS CHAR(11))
+            ORDER BY Ultima_Fecha_Venta DESC, Identificacion
+        ", array_merge([$fechaInicio, $fechaFin], $empresaBindings));
+
+        $agenciasSinCedula = DB::select("
+            SELECT
+                v.agencia_id AS Agencia,
+                COUNT(DISTINCT DATE(v.fecha)) AS Dias_Sin_Cedula_Con_Ventas
+            FROM ({$ventasSql}) v
+            LEFT JOIN agencias a
+                ON COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(a.terminal AS CHAR))), ''), '0')
+                 = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(v.agencia_id AS CHAR))), ''), '0')
+            WHERE v.fecha >= ?
+              AND v.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+              AND (
+                    NULLIF(REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ',''), '') IS NULL
+                    OR REPLACE(REPLACE(COALESCE(v.cedula, ''),'-',''),' ','') = '00000000000'
+                  )
+              {$empresaWhereSql}
+            GROUP BY v.agencia_id
+            ORDER BY Dias_Sin_Cedula_Con_Ventas DESC, v.agencia_id
+        ", array_merge([$fechaInicio, $fechaFin], $empresaBindings));
+
+        DB::statement("SET SESSION sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
+
+        return [
+            'resultados' => $resultados,
+            'agencias_sin_cedula' => $agenciasSinCedula,
+        ];
+    }
+
+    private function obtenerPendientesIncentivosV5(array $params): array
+    {
+        $request = Request::create('/incentivos/reporte-nuevo-incentivo-v5', 'GET', [
+            'sistema' => $params['sistema'] ?? 'Todos',
+            'fecha_ini' => $params['fecha_inicio'] ?? null,
+            'fecha_fin' => $params['fecha_fin'] ?? null,
+            'min_dias_venta' => 1,
+            'filtro_cumplimiento' => $params['filtro_cumplimiento'] ?? 'todos',
+            'modo_calculo' => $params['modo_calculo'] ?? 'general',
+        ]);
+
+        $response = app(IncentivosController::class)->reporteNuevoIncentivoV5($request);
+        $payload = $response->getData(true);
+        $rows = collect($payload['data'] ?? []);
+        $empresa = $params['empresa'] ?? 'todos';
+
+        $rows = $rows->filter(function ($row) use ($empresa) {
+            $ventasMesActual = (float) str_replace(',', '', (string) ($row['ventas_mes_actual'] ?? 0));
+            if ($ventasMesActual <= 0) {
+                return false;
+            }
+
+            if ($empresa === 'grupo_joselito') {
+                return str_contains(strtolower((string) ($row['empresa'] ?? '')), 'joselito');
+            }
+
+            if ($empresa === 'negosur') {
+                return str_contains(strtolower((string) ($row['empresa'] ?? '')), 'negosur');
+            }
+
+            return true;
+        });
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            if (trim((string) ($row['nombre'] ?? '')) !== 'Actualizar en maestro de empleados') {
+                continue;
+            }
+
+            $cedulaNormalizada = preg_replace('/\D+/', '', (string) ($row['cedula'] ?? ''));
+            $cedulaOriginal = trim((string) ($row['cedula'] ?? ''));
+            $key = $cedulaNormalizada !== '' ? $cedulaNormalizada : $cedulaOriginal;
+
+            if ($key === '') {
+                continue;
+            }
+
+            $empresaLabel = trim((string) ($row['empresa'] ?? ''));
+            $fecha = trim((string) ($row['ultimo_dia_venta'] ?? ''));
+
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'cedula' => $cedulaOriginal !== '' ? $cedulaOriginal : $cedulaNormalizada,
+                    'empresa_set' => [],
+                    'ultima_terminal' => trim((string) ($row['ultima_terminal'] ?? '')),
+                    'ultima_agencia_nombre' => trim((string) ($row['ultima_agencia_nombre'] ?? 'SIN AGENCIA')) ?: 'SIN AGENCIA',
+                    'ultimo_dia_venta' => $fecha,
+                ];
+            }
+
+            if ($empresaLabel !== '') {
+                $grouped[$key]['empresa_set'][mb_strtolower($empresaLabel)] = $empresaLabel;
+            }
+
+            if ($grouped[$key]['ultimo_dia_venta'] === '' || ($fecha !== '' && $fecha > $grouped[$key]['ultimo_dia_venta'])) {
+                $grouped[$key]['ultimo_dia_venta'] = $fecha;
+                $grouped[$key]['ultima_terminal'] = trim((string) ($row['ultima_terminal'] ?? ''));
+                $grouped[$key]['ultima_agencia_nombre'] = trim((string) ($row['ultima_agencia_nombre'] ?? 'SIN AGENCIA')) ?: 'SIN AGENCIA';
+            }
+        }
+
+        return collect($grouped)
+            ->mapWithKeys(function ($row, $cedula) {
+                return [$cedula => [
+                    'cedula' => $row['cedula'],
+                    'empresa' => implode(' | ', array_values($row['empresa_set'])),
+                    'ultima_terminal' => $row['ultima_terminal'],
+                    'ultima_agencia_nombre' => $row['ultima_agencia_nombre'],
+                    'ultimo_dia_venta' => $row['ultimo_dia_venta'],
+                ]];
+            })
+            ->all();
+    }
+
+    private function obtenerEstadoMaestraPorCedulas(array $cedulas): array
+    {
+        $cedulas = collect($cedulas)
+            ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($cedulas->isEmpty()) {
+            return [];
+        }
+
+        $hasActivo = Schema::hasColumn('empleados', 'activo');
+        $hasFechaSalida = Schema::hasColumn('empleados', 'fechasalida');
+
+        return DB::table('empleados')
+            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulas->all())
+            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw('MAX(empleadoid) AS empleadoid')
+            ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
+            ->selectRaw($hasActivo ? 'MIN(COALESCE(activo, 1)) AS activo' : '1 AS activo')
+            ->selectRaw($hasFechaSalida ? "MAX(NULLIF(TRIM(CAST(fechasalida AS CHAR)), '')) AS fechasalida" : "'' AS fechasalida")
+            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->get()
+            ->mapWithKeys(function ($row) {
+                $fechaSalida = trim((string) ($row->fechasalida ?? ''));
+                if ($fechaSalida === '0000-00-00') {
+                    $fechaSalida = '';
+                }
+
+                $nombre = trim((string) ($row->nombre ?? ''));
+                $empleadoid = trim((string) ($row->empleadoid ?? ''));
+                $activo = (int) ($row->activo ?? 1) === 1;
+
+                $estado = 'Activo';
+                if ($empleadoid === '') {
+                    $estado = 'No registrado';
+                } elseif ($fechaSalida !== '' || !$activo) {
+                    $estado = $fechaSalida !== '' ? 'No activo - ' . $fechaSalida : 'No activo';
+                } elseif ($nombre === '') {
+                    $estado = 'Activo con nombre vacio';
+                }
+
+                return [preg_replace('/\D+/', '', (string) ($row->cedula ?? '')) => [
+                    'empleadoid' => $empleadoid,
+                    'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
+                    'estado' => $estado,
+                    'nombre_vacio' => $nombre === '',
+                ]];
+            })
+            ->all();
+    }
+
+    private function resolverMotivoDiferenciaIncentivosCruce(
+        bool $estaEnIncentivos,
+        bool $estaEnCruceVisible,
+        bool $estaEnCruceBase,
+        string $estatusCruce,
+        array $maestra
+    ): string {
+        $empleadoid = trim((string) ($maestra['empleadoid'] ?? ''));
+        $estadoMaestra = trim((string) ($maestra['estado'] ?? ''));
+        $nombreVacio = (bool) ($maestra['nombre_vacio'] ?? false);
+
+        if ($estaEnIncentivos && $estaEnCruceVisible) {
+            return 'La cedula aparece como pendiente en Incentivos y tambien queda visible en Cruce.';
+        }
+
+        if ($estaEnIncentivos && !$estaEnCruceVisible) {
+            if ($estaEnCruceBase && $estatusCruce === 'Activo') {
+                return 'Cruce la detecta, pero como Activo no se muestra por defecto.';
+            }
+
+            if ($empleadoid !== '' && $nombreVacio) {
+                return 'Tiene empleadoid en maestra, pero nombre vacio; Incentivos la marca pendiente y Cruce no la toma como No registrado.';
+            }
+
+            if ($estadoMaestra !== '' && $estadoMaestra !== 'No registrado') {
+                return 'Incentivos la considera pendiente por nombre, pero no cae en el conjunto visible actual de Cruce.';
+            }
+
+            return 'Aparece en Incentivos, pero no en el conjunto visible de Cruce para estos filtros.';
+        }
+
+        if (!$estaEnIncentivos && $estaEnCruceVisible) {
+            if (str_starts_with($estatusCruce, 'No Activo')) {
+                return 'Cruce la muestra como No activa; Incentivos no la cuenta por actualizar porque si encontro nombre en maestra.';
+            }
+
+            if ($estatusCruce === 'No registrado') {
+                return 'Cruce la marca como No registrada, pero no quedo en el subconjunto pendiente de Incentivos.';
+            }
+
+            return 'Cruce la muestra como diferencia visible y Incentivos no la cuenta como pendiente.';
+        }
+
+        return 'Cedula fuera del cruce visible por defecto.';
     }
 
     private function cruceUsuariosVentasSql(string $sistema): string

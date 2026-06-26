@@ -83,6 +83,15 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Diferencias Incentivos vs Cruce',
+        'descripcion' => 'Compara usuarios por actualizar en Incentivos V5 contra los casos visibles en Cruce de Usuarios.',
+        'url' => '/reportes-diferencias-incentivos-cruce',
+        'icono' => 'ri-git-merge-line',
+        'categoria' => 'Auditoria',
+        'tags' => ['incentivos', 'cruce', 'usuarios', 'maestra', 'diferencias'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Compensacion',
         'descripcion' => 'Consulta pagos a otra empresa y pagos por otra empresa por sistema.',
         'url' => '/reportes-compensacion',

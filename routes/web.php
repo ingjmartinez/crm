@@ -350,6 +350,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::get('/reportes-cruce-usuarios/sin-cedula-fechas', [ReporteController::class, 'listCruceUsuariosSinCedulaFechas']);
         Route::post('/reportes-cruce-usuarios/seguimiento', [CruceUsuarioSeguimientoController::class, 'storeFromReporte'])
             ->name('reportes.cruce-usuarios.seguimiento.store');
+        Route::get('/reportes-diferencias-incentivos-cruce', [ReporteController::class, 'diferenciasIncentivosCruceUsuarios']);
+        Route::get('/reportes-diferencias-incentivos-cruce/list', [ReporteController::class, 'listDiferenciasIncentivosCruceUsuarios']);
 
         Route::get('/reportes-compensacion', [ReporteController::class, 'compensacion']);
         Route::get('/reportes-compensacion/list', [ReporteController::class, 'listCompensacion']);
