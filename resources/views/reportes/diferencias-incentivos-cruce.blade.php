@@ -87,7 +87,7 @@
                                     </div>
                                     <div class="col-md-2 d-flex align-items-end">
                                         <button type="button" class="btn btn-primary w-100" id="btnBuscar">
-                                            <i class="ri-search-line"></i> Buscar
+                                            <i class="ri-search-line"></i> Consultar
                                         </button>
                                     </div>
                                 </div>
@@ -345,6 +345,5 @@
         }
 
         document.getElementById('btnBuscar').addEventListener('click', cargarDatos);
-        document.addEventListener('DOMContentLoaded', cargarDatos);
     </script>
 @endsection
