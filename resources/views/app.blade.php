@@ -834,6 +834,11 @@
                     <div id="two-column-menu"></div>
                     @php
                         $sidebarUser = auth()->user();
+                        $isContaRepOnlyRole = $sidebarUser
+                            && method_exists($sidebarUser, 'hasRole')
+                            && $sidebarUser->hasRole('Conta_Rep')
+                            && !$sidebarUser->hasRole('superadmin')
+                            && !$sidebarUser->hasRole('admin');
                         $isContabilidadOnlyRole = $sidebarUser
                             && method_exists($sidebarUser, 'hasRole')
                             && $sidebarUser->hasRole('contabilidad')
@@ -857,7 +862,7 @@
                             </a>
                         </li>
 
-                        @unless($isRecursosHumanosOnlyRole)
+                        @unless($isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('dashboard.index') }}"
                                     class="nav-link menu-link {{ request()->routeIs('inicio.index') || request()->is('dashboard*') || request()->is('ventas-lotobet-dashboard*') || request()->is('ventas-lotonet-dashboard*') || request()->is('ventas-lotobet-flash-dashboard*') || request()->is('ventas-mar-dashboard*') || request()->is('kpi-lotobet*') ? 'active' : '' }}">
@@ -866,7 +871,7 @@
                             </li>
                         @endunless
 
-                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('procesos.index') }}"
                                     class="nav-link menu-link {{ request()->is('procesos*') ? 'active' : '' }}">
@@ -890,7 +895,7 @@
                                 </a>
                             </li>
                         @endunless
-                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ url('/tareas') }}" class="nav-link menu-link">
                                     <i class="ri-task-line"></i> <span data-key="t-tareas">Tareas</span>
@@ -912,7 +917,7 @@
                             </li>
                             @endunless
                         @endcan
-                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('tecnologia.index') }}"
                                     class="nav-link menu-link {{ request()->is('tecnologia*') ? 'active' : '' }}">
@@ -927,7 +932,7 @@
                             </li>
                         @endunless
 
-                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarApps" data-bs-toggle="collapse"
                                 role="button" aria-expanded="true" aria-controls="sidebarApps">
@@ -1093,7 +1098,7 @@
                                 </a>
                             </li>
                         @endif
-                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
                             <li class="nav-item">
                                 <a href="{{ route('incentivos.index') }}"
                                     class="nav-link menu-link {{ request()->is('incentivos*') ? 'active' : '' }}">
