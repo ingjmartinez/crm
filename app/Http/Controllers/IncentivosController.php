@@ -12,6 +12,20 @@ use Illuminate\Validation\Rule;
 
 class IncentivosController extends Controller
 {
+    private const GRUPOS_ADMINISTRATIVOS_V5 = [
+        '1. Gtes. Y Encarg.',
+        '2. Monitoreo',
+        '4. Operadores',
+        '5. Servs. Tecnicos',
+        '6. Seguridad',
+    ];
+
+    private const GRUPOS_ADMINISTRATIVOS_FIJOS_V5 = [
+        '4. Operadores',
+        '5. Servs. Tecnicos',
+        '6. Seguridad',
+    ];
+
     public function index()
     {
         $productosExcluidos = DB::table('catalogo_juegos')
@@ -1899,24 +1913,38 @@ class IncentivosController extends Controller
                 'required',
                 'string',
                 'max:70',
-                Rule::in(['1. Gtes. Y Encarg.', '2. Monitoreo', '4. Operadores', '5. Servs. Tecnicos']),
+                Rule::in(self::GRUPOS_ADMINISTRATIVOS_V5),
             ],
             'rows.*.nombre' => 'required|string|max:120',
             'rows.*.empresa' => ['required', 'string', 'max:50', Rule::in(['Consorcio Joselito', 'Negosur'])],
-            'rows.*.pct_total' => 'required|numeric|min:0|max:100',
+            'rows.*.pct_total' => 'required|numeric|min:0|max:9999999',
         ]);
 
         $rows = collect($validated['rows'])
             ->map(function ($row) {
+                $grupo = trim((string) $row['grupo']);
+                $pctTotal = round((float) $row['pct_total'], 4);
+
                 return [
                     'id' => isset($row['id']) ? (int) $row['id'] : null,
-                    'grupo' => trim((string) $row['grupo']),
+                    'grupo' => $grupo,
                     'nombre' => trim((string) $row['nombre']),
                     'empresa' => trim((string) $row['empresa']),
-                    'pct_total' => round((float) $row['pct_total'], 4),
+                    'pct_total' => $pctTotal,
                 ];
             })
             ->values();
+
+        $porcentajesInvalidos = $rows
+            ->filter(fn ($row) => !in_array($row['grupo'], self::GRUPOS_ADMINISTRATIVOS_FIJOS_V5, true))
+            ->filter(fn ($row) => (float) $row['pct_total'] > 100)
+            ->values();
+
+        if ($porcentajesInvalidos->isNotEmpty()) {
+            return response()->json([
+                'message' => 'El % Total no puede ser mayor que 100 para gerentes, encargados o monitoreo.',
+            ], 422);
+        }
 
         $duplicados = $rows
             ->groupBy(fn ($row) => strtolower($row['grupo'] . '|' . $row['nombre'] . '|' . $row['empresa']))
@@ -2005,6 +2033,8 @@ class IncentivosController extends Controller
                 $payload['meta']['resumen_empresas'] = $this->resumenEmpresasReporteNuevoIncentivoV5($request);
             }
 
+            $payload = $this->normalizarPayloadEnteroReporteNuevoIncentivoV5($payload);
+
             return response()->json($payload, $response->status());
         }
 
@@ -2031,9 +2061,9 @@ class IncentivosController extends Controller
                             return null;
                         }
 
-                        $desde = isset($row['desde']) ? (float) $row['desde'] : 0;
+                        $desde = isset($row['desde']) ? (int) round((float) $row['desde']) : 0;
                         $hasta = array_key_exists('hasta', $row) && $row['hasta'] !== null && $row['hasta'] !== ''
-                            ? (float) $row['hasta']
+                            ? (int) round((float) $row['hasta'])
                             : null;
                         $pago = isset($row['pago']) ? (float) $row['pago'] : 0;
                         $tipo = ($row['tipo'] ?? 'fijo') === 'porcentaje' ? 'porcentaje' : 'fijo';
@@ -2085,24 +2115,28 @@ class IncentivosController extends Controller
 
             return $texto;
         };
-        $calcularIncentivo = function (float $ventas, int $dias) use ($rangosPago, $minDiasVenta) {
+        $enteroMonto = fn ($value): int => (int) round((float) $value);
+
+        $calcularIncentivo = function (int $ventas, int $dias) use ($rangosPago, $minDiasVenta) {
             if ($dias < $minDiasVenta) {
-                return 0.0;
+                return 0;
             }
 
             foreach ($rangosPago as $rango) {
-                $desde = (float) ($rango['desde'] ?? 0);
+                $desde = (int) round((float) ($rango['desde'] ?? 0));
                 $hasta = $rango['hasta'] ?? null;
 
-                if ($ventas >= $desde && ($hasta === null || $ventas <= (float) $hasta)) {
+                if ($ventas >= $desde && ($hasta === null || $ventas <= (int) round((float) $hasta))) {
                     $pago = (float) ($rango['pago'] ?? 0);
-                    return ($rango['tipo'] ?? 'fijo') === 'porcentaje'
+                    $monto = ($rango['tipo'] ?? 'fijo') === 'porcentaje'
                         ? $ventas * ($pago / 100)
                         : $pago;
+
+                    return (int) round($monto);
                 }
             }
 
-            return 0.0;
+            return 0;
         };
 
         $buildVentasTerminalQuery = function (string $tabla, string $sistemaLabel, string $desde, string $hasta) {
@@ -2183,11 +2217,11 @@ class IncentivosController extends Controller
                 $ultimoAgrupado[$key] = [
                     'cedula' => (string) $row->cedula,
                     'empresa' => $empresa,
-                    'ventas_ultimo_mes' => 0.0,
+                    'ventas_ultimo_mes' => 0,
                 ];
             }
 
-            $ultimoAgrupado[$key]['ventas_ultimo_mes'] += (float) $row->ventas_ultimo_mes;
+            $ultimoAgrupado[$key]['ventas_ultimo_mes'] += $enteroMonto($row->ventas_ultimo_mes);
         }
 
         $mesActualAgrupado = [];
@@ -2199,12 +2233,12 @@ class IncentivosController extends Controller
                 $mesActualAgrupado[$key] = [
                     'cedula' => (string) $row->cedula,
                     'empresa' => $empresa,
-                    'ventas_mes_actual' => 0.0,
+                    'ventas_mes_actual' => 0,
                     'dias' => [],
                 ];
             }
 
-            $mesActualAgrupado[$key]['ventas_mes_actual'] += (float) $row->ventas_mes_actual;
+            $mesActualAgrupado[$key]['ventas_mes_actual'] += $enteroMonto($row->ventas_mes_actual);
             $mesActualAgrupado[$key]['dias'][(string) $row->fecha_venta] = true;
 
             if (
@@ -2239,8 +2273,8 @@ class IncentivosController extends Controller
             $rowUltimoMes = $ultimoMesByKey->get($key);
             $rowMesActual = $mesActualByKey->get($key);
             $baseRow = $rowMesActual ?: $rowUltimoMes;
-            $ventas = $rowUltimoMes ? (float) $rowUltimoMes->ventas_ultimo_mes : 0;
-            $ventasMesActual = $rowMesActual ? (float) $rowMesActual->ventas_mes_actual : 0;
+            $ventas = $rowUltimoMes ? (int) $rowUltimoMes->ventas_ultimo_mes : 0;
+            $ventasMesActual = $rowMesActual ? (int) $rowMesActual->ventas_mes_actual : 0;
             $diasMesActual = $rowMesActual ? (int) $rowMesActual->dias_ventas_mes_actual : 0;
             $pagoEscala = $calcularIncentivo($ventasMesActual, $diasMesActual);
 
@@ -2302,12 +2336,12 @@ class IncentivosController extends Controller
                 'ultima_agencia_nombre' => $ultimaVenta['nombre_agencia'] ?? 'SIN AGENCIA',
                 'ultimo_dia_venta' => $ultimaVenta['ultimo_dia_venta'] ?? '',
                 'empresa' => $row['empresa'] ?? 'Agencias por asignar empresa',
-                'ventas_ultimo_mes' => number_format($row['ventas_num'], 2, '.', ','),
-                'ventas_mes_actual' => number_format($row['ventas_mes_actual_num'], 2, '.', ','),
+                'ventas_ultimo_mes' => number_format($row['ventas_num'], 0, '.', ','),
+                'ventas_mes_actual' => number_format($row['ventas_mes_actual_num'], 0, '.', ','),
                 'dias_ventas_mes_actual' => $row['dias_ventas_mes_actual'],
                 'cumple_minimo' => $row['cumple_bool'] ? 'SI' : 'NO',
-                'pago_escala' => number_format($row['pago_escala_num'], 2, '.', ','),
-                'nuevo_incentivo' => number_format($row['nuevo_incentivo_num'], 2, '.', ','),
+                'pago_escala' => number_format($row['pago_escala_num'], 0, '.', ','),
+                'nuevo_incentivo' => number_format($row['nuevo_incentivo_num'], 0, '.', ','),
             ];
         })->values();
 
@@ -2410,16 +2444,16 @@ class IncentivosController extends Controller
             ->map(function ($rows, $empresa) {
                 return [
                     'empresa' => (string) $empresa,
-                    'total_vendido' => round((float) $rows->sum('ventas_mes_actual_num'), 2),
-                    'total_incentivo' => round((float) $rows->sum('nuevo_incentivo_num'), 2),
+                    'total_vendido' => (int) round((float) $rows->sum('ventas_mes_actual_num')),
+                    'total_incentivo' => (int) round((float) $rows->sum('nuevo_incentivo_num')),
                     'usuarios' => $rows->pluck('cedula')->unique()->count(),
                 ];
             })
             ->values()
             ->all();
 
-        $totalVendido = (float) $rawData->sum('ventas_mes_actual_num');
-        $totalIncentivo = (float) $rawData->sum('nuevo_incentivo_num');
+        $totalVendido = (int) round((float) $rawData->sum('ventas_mes_actual_num'));
+        $totalIncentivo = (int) round((float) $rawData->sum('nuevo_incentivo_num'));
         $agenciasPorAsignar = collect($resumenEmpresas)
             ->firstWhere('empresa', 'Agencias por asignar empresa');
 
@@ -2437,13 +2471,13 @@ class IncentivosController extends Controller
                 'modo_calculo_label' => 'Separado por empresa',
                 'rangos_pago' => $rangosPago,
                 'total_vendido' => $totalVendido,
-                'total_vendido_ultimo_mes' => (float) $rawData->sum('ventas_num'),
+                'total_vendido_ultimo_mes' => (int) round((float) $rawData->sum('ventas_num')),
                 'total_vendido_mes_actual' => $totalVendido,
                 'total_incentivo' => $totalIncentivo,
-                'total_vendido_format' => number_format($totalVendido, 2, '.', ','),
-                'total_vendido_ultimo_mes_format' => number_format((float) $rawData->sum('ventas_num'), 2, '.', ','),
-                'total_vendido_mes_actual_format' => number_format($totalVendido, 2, '.', ','),
-                'total_incentivo_format' => number_format($totalIncentivo, 2, '.', ','),
+                'total_vendido_format' => number_format($totalVendido, 0, '.', ','),
+                'total_vendido_ultimo_mes_format' => number_format((int) round((float) $rawData->sum('ventas_num')), 0, '.', ','),
+                'total_vendido_mes_actual_format' => number_format($totalVendido, 0, '.', ','),
+                'total_incentivo_format' => number_format($totalIncentivo, 0, '.', ','),
                 'resumen_empresas' => $resumenEmpresas,
                 'aviso_agencias_por_asignar_empresa' => $agenciasPorAsignar
                     ? 'Hay ventas en agencias sin empresa asignada. Filtra "Agencias por asignar empresa" y actualiza la columna empresa en agencias.'
@@ -2474,9 +2508,9 @@ class IncentivosController extends Controller
                             return null;
                         }
 
-                        $desde = isset($row['desde']) ? (float) $row['desde'] : 0;
+                        $desde = isset($row['desde']) ? (int) round((float) $row['desde']) : 0;
                         $hasta = array_key_exists('hasta', $row) && $row['hasta'] !== null && $row['hasta'] !== ''
-                            ? (float) $row['hasta']
+                            ? (int) round((float) $row['hasta'])
                             : null;
                         $pago = isset($row['pago']) ? (float) $row['pago'] : 0;
                         $tipo = ($row['tipo'] ?? 'fijo') === 'porcentaje' ? 'porcentaje' : 'fijo';
@@ -2523,24 +2557,28 @@ class IncentivosController extends Controller
             return $texto;
         };
 
-        $calcularIncentivo = function (float $ventas, int $dias) use ($rangosPago, $minDiasVenta) {
+        $enteroMonto = fn ($value): int => (int) round((float) $value);
+
+        $calcularIncentivo = function (int $ventas, int $dias) use ($rangosPago, $minDiasVenta) {
             if ($dias < $minDiasVenta) {
-                return 0.0;
+                return 0;
             }
 
             foreach ($rangosPago as $rango) {
-                $desde = (float) ($rango['desde'] ?? 0);
+                $desde = (int) round((float) ($rango['desde'] ?? 0));
                 $hasta = $rango['hasta'] ?? null;
 
-                if ($ventas >= $desde && ($hasta === null || $ventas <= (float) $hasta)) {
+                if ($ventas >= $desde && ($hasta === null || $ventas <= (int) round((float) $hasta))) {
                     $pago = (float) ($rango['pago'] ?? 0);
-                    return ($rango['tipo'] ?? 'fijo') === 'porcentaje'
+                    $monto = ($rango['tipo'] ?? 'fijo') === 'porcentaje'
                         ? $ventas * ($pago / 100)
                         : $pago;
+
+                    return (int) round($monto);
                 }
             }
 
-            return 0.0;
+            return 0;
         };
 
         $buildVentasTerminalQuery = function (string $tabla, string $sistemaLabel) use ($fechaIniSeleccionada, $fechaFinSeleccionada) {
@@ -2603,12 +2641,12 @@ class IncentivosController extends Controller
                 $rowsByCedulaEmpresa[$key] = [
                     'cedula' => trim((string) $row->cedula),
                     'empresa' => $empresa,
-                    'ventas' => 0.0,
+                    'ventas' => 0,
                     'dias' => [],
                 ];
             }
 
-            $rowsByCedulaEmpresa[$key]['ventas'] += (float) $row->monto;
+            $rowsByCedulaEmpresa[$key]['ventas'] += $enteroMonto($row->monto);
             $rowsByCedulaEmpresa[$key]['dias'][(string) $row->fecha_venta] = true;
         }
 
@@ -2617,21 +2655,125 @@ class IncentivosController extends Controller
                 return [
                     'empresa' => $row['empresa'],
                     'cedula' => $row['cedula'],
-                    'ventas' => (float) $row['ventas'],
-                    'incentivo' => $calcularIncentivo((float) $row['ventas'], count($row['dias'])),
+                    'ventas' => (int) $row['ventas'],
+                    'incentivo' => $calcularIncentivo((int) $row['ventas'], count($row['dias'])),
                 ];
             })
             ->groupBy('empresa')
             ->map(function ($rows, $empresa) {
                 return [
                     'empresa' => (string) $empresa,
-                    'total_vendido' => round((float) $rows->sum('ventas'), 2),
-                    'total_incentivo' => round((float) $rows->sum('incentivo'), 2),
+                    'total_vendido' => (int) round((float) $rows->sum('ventas')),
+                    'total_incentivo' => (int) round((float) $rows->sum('incentivo')),
                     'usuarios' => $rows->pluck('cedula')->unique()->count(),
                 ];
             })
             ->values()
             ->all();
+    }
+
+    private function normalizarPayloadEnteroReporteNuevoIncentivoV5(array $payload): array
+    {
+        $camposData = [
+            'ventas_ultimo_mes',
+            'ventas_mes_actual',
+            'pago_escala',
+            'nuevo_incentivo',
+            'total_incentivo',
+            'total_a_pagar',
+        ];
+
+        if (isset($payload['data']) && is_array($payload['data'])) {
+            foreach ($payload['data'] as &$row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                foreach ($camposData as $campo) {
+                    if (array_key_exists($campo, $row)) {
+                        $monto = $this->enteroMontoReporteNuevoIncentivoV5($row[$campo]);
+                        $row[$campo] = number_format($monto, 0, '.', ',');
+                    }
+                }
+            }
+            unset($row);
+        }
+
+        if (isset($payload['meta']) && is_array($payload['meta'])) {
+            $camposMeta = [
+                'total_vendido',
+                'total_vendido_ultimo_mes',
+                'total_vendido_mes_actual',
+                'total_incentivo',
+            ];
+
+            foreach ($camposMeta as $campo) {
+                if (array_key_exists($campo, $payload['meta'])) {
+                    $payload['meta'][$campo] = $this->enteroMontoReporteNuevoIncentivoV5($payload['meta'][$campo]);
+                }
+            }
+
+            $camposMetaFormato = [
+                'total_vendido_format' => 'total_vendido',
+                'total_vendido_ultimo_mes_format' => 'total_vendido_ultimo_mes',
+                'total_vendido_mes_actual_format' => 'total_vendido_mes_actual',
+                'total_incentivo_format' => 'total_incentivo',
+            ];
+
+            foreach ($camposMetaFormato as $campoFormato => $campoBase) {
+                if (array_key_exists($campoBase, $payload['meta'])) {
+                    $payload['meta'][$campoFormato] = number_format((int) $payload['meta'][$campoBase], 0, '.', ',');
+                }
+            }
+
+            if (isset($payload['meta']['resumen_empresas']) && is_array($payload['meta']['resumen_empresas'])) {
+                foreach ($payload['meta']['resumen_empresas'] as &$row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+
+                    foreach (['total_vendido', 'total_incentivo'] as $campo) {
+                        if (array_key_exists($campo, $row)) {
+                            $row[$campo] = $this->enteroMontoReporteNuevoIncentivoV5($row[$campo]);
+                        }
+                    }
+                }
+                unset($row);
+            }
+
+            if (isset($payload['meta']['coordinador_monto_usuarios']) && is_array($payload['meta']['coordinador_monto_usuarios'])) {
+                foreach ($payload['meta']['coordinador_monto_usuarios'] as $key => $value) {
+                    $payload['meta']['coordinador_monto_usuarios'][$key] = $this->enteroMontoReporteNuevoIncentivoV5($value);
+                }
+            }
+
+            if (isset($payload['meta']['coordinador_detalle_usuarios']) && is_array($payload['meta']['coordinador_detalle_usuarios'])) {
+                foreach ($payload['meta']['coordinador_detalle_usuarios'] as &$usuarios) {
+                    if (!is_array($usuarios)) {
+                        continue;
+                    }
+
+                    foreach ($usuarios as &$usuario) {
+                        if (is_array($usuario) && array_key_exists('incentivo', $usuario)) {
+                            $usuario['incentivo'] = $this->enteroMontoReporteNuevoIncentivoV5($usuario['incentivo']);
+                        }
+                    }
+                    unset($usuario);
+                }
+                unset($usuarios);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function enteroMontoReporteNuevoIncentivoV5($value): int
+    {
+        if (is_string($value)) {
+            $value = str_replace(',', '', $value);
+        }
+
+        return (int) round((float) $value);
     }
 
     public function faltantesReporteNuevoIncentivoV5(Request $request)

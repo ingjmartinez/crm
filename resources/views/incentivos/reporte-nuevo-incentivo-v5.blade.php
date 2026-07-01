@@ -104,7 +104,7 @@
                         <div class="card card-animate">
                             <div class="card-body">
                                 <p class="text-uppercase fw-medium text-muted mb-1">Total Vendido</p>
-                                <h4 class="mb-0" id="ni_total_vendido">0.00</h4>
+                                <h4 class="mb-0" id="ni_total_vendido">0</h4>
                             </div>
                         </div>
                         <div class="card card-animate mt-3">
@@ -146,17 +146,17 @@
                                             <tr>
                                                 <td>1 Gtes. y Encarg.</td>
                                                 <td class="text-end">0.00%</td>
-                                                <td class="text-end">0.00</td>
+                                                <td class="text-end">0</td>
                                             </tr>
                                             <tr>
                                                 <td>2 Monitoreo</td>
                                                 <td class="text-end">0.00%</td>
-                                                <td class="text-end">0.00</td>
+                                                <td class="text-end">0</td>
                                             </tr>
                                             <tr>
-                                                <td>4 Operadores + 5 Servs. Tecnicos</td>
+                                                <td>4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</td>
                                                 <td class="text-end">0.00%</td>
-                                                <td class="text-end">0.00</td>
+                                                <td class="text-end">0</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -169,13 +169,13 @@
                         <div class="card card-animate">
                             <div class="card-body text-start" style="min-height: 178px;">
                                 <p class="text-uppercase fw-medium text-muted mb-1">Total Incentivo a Pagar</p>
-                                <h4 class="mb-0" id="ni_total_incentivo">0.00</h4>
+                                <h4 class="mb-0" id="ni_total_incentivo">0</h4>
                                 <div class="d-block mt-1 fw-semibold fs-5 text-primary text-start" id="ni_admin_resumen">
-                                    <div>Porcentaje (0%): 0.00</div>
-                                    <div>Administrativo: 0.00</div>
-                                    <div>Coordinador: 0.00</div>
+                                    <div>Porcentaje (0%): 0</div>
+                                    <div>Administrativo: 0</div>
+                                    <div>Coordinador: 0</div>
                                 </div>
-                                <div class="mt-2 fw-bold fs-4 text-success text-start" id="ni_total_con_admin">Total a Pagar Final: 0.00</div>
+                                <div class="mt-2 fw-bold fs-4 text-success text-start" id="ni_total_con_admin">Total a Pagar Final: 0</div>
                             </div>
                         </div>
                     </div>
@@ -337,19 +337,19 @@
                         <div class="col-md-4">
                             <div class="border rounded p-2">
                                 <small class="text-muted d-block">Bolsa administrativa total</small>
-                                <strong id="admin_base_total">0.00</strong>
+                                <strong id="admin_base_total">0</strong>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="border rounded p-2">
                                 <small class="text-muted d-block" id="admin_distribuido_label">Monto por filtro activo</small>
-                                <strong id="admin_distribuido_total">0.00</strong>
+                                <strong id="admin_distribuido_total">0</strong>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="border rounded p-2">
                                 <small class="text-muted d-block">Total distribuido en tabla</small>
-                                <strong id="admin_tabla_total">0.00</strong>
+                                <strong id="admin_tabla_total">0</strong>
                             </div>
                         </div>
                         <div class="col-md-12">
@@ -357,19 +357,19 @@
                                 <div class="col-md-4">
                                     <div class="border rounded p-2 h-100">
                                         <small class="text-muted d-block">1 Gtes. y Encarg.</small>
-                                        <div class="fw-semibold" id="admin_cat_g1">27.00% | 0.00</div>
+                                        <div class="fw-semibold" id="admin_cat_g1">27.00% | 0</div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="border rounded p-2 h-100">
                                         <small class="text-muted d-block">2 Monitoreo</small>
-                                        <div class="fw-semibold" id="admin_cat_g2">13.00% | 0.00</div>
+                                        <div class="fw-semibold" id="admin_cat_g2">13.00% | 0</div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="border rounded p-2 h-100">
-                                        <small class="text-muted d-block">4 Operadores + 5 Servs. Tecnicos</small>
-                                        <div class="fw-semibold" id="admin_cat_g45">60.00% | 0.00</div>
+                                        <small class="text-muted d-block">4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</small>
+                                        <div class="fw-semibold" id="admin_cat_g45">60.00% | 0</div>
                                     </div>
                                 </div>
                             </div>
@@ -380,7 +380,7 @@
                                 <button type="button" class="btn btn-primary" id="btnAdminFiltroTodos">Todo</button>
                                 <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG1">1 Gtes. y Encarg.</button>
                                 <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG2">2 Monitoreo</button>
-                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG45">4 Operadores + 5 Servs. Tecnicos</button>
+                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG45">4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</button>
                             </div>
                         </div>
                     </div>
@@ -391,7 +391,7 @@
                                     <th style="min-width: 180px;">Grupo</th>
                                     <th style="min-width: 260px;">Nombre</th>
                                     <th style="min-width: 140px;">Empresa</th>
-                                    <th style="min-width: 120px;">% Total</th>
+                                    <th style="min-width: 150px;" id="admin_valor_col_label">% Total / Monto fijo</th>
                                     <th style="min-width: 160px;" id="admin_monto_col_label">Monto</th>
                                     <th style="min-width: 110px;">Accion</th>
                                 </tr>
@@ -400,7 +400,7 @@
                             <tfoot class="table-light">
                                 <tr>
                                     <th colspan="4" class="text-end">Total</th>
-                                    <th class="text-end" id="admin_col_total">0.00</th>
+                                    <th class="text-end" id="admin_col_total">0</th>
                                     <th></th>
                                 </tr>
                             </tfoot>
@@ -454,7 +454,7 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td>4 Operadores + 5 Servs. Tecnicos</td>
+                                    <td>4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</td>
                                     <td>
                                         <div class="input-group input-group-sm">
                                             <input type="number" id="puesto_pct_g45" class="form-control" value="60" min="0" step="0.01">
@@ -486,13 +486,13 @@
                         <div class="col-md-6">
                             <div class="border rounded p-2">
                                 <small class="text-muted d-block">Monto administrativo base</small>
-                                <strong id="coord_base_total">0.00</strong>
+                                <strong id="coord_base_total">0</strong>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="border rounded p-2">
                                 <small class="text-muted d-block">Total distribuido</small>
-                                <strong id="coord_distribuido_total">0.00</strong>
+                                <strong id="coord_distribuido_total">0</strong>
                             </div>
                         </div>
                     </div>
@@ -565,7 +565,7 @@
                         <div class="col-md-3">
                             <div class="border rounded p-3 h-100 bg-light">
                                 <small class="text-muted d-block text-uppercase fw-semibold">Total monto faltantes</small>
-                                <strong class="fs-4 text-danger" id="faltantesIncentivoTotalMonto">0.00</strong>
+                                <strong class="fs-4 text-danger" id="faltantesIncentivoTotalMonto">0</strong>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -583,7 +583,7 @@
                         <div class="col-md-3">
                             <div class="border rounded p-3 h-100 bg-light">
                                 <small class="text-muted d-block text-uppercase fw-semibold">Monto incentivos con faltantes</small>
-                                <strong class="fs-4 text-warning" id="faltantesIncentivoMontoIncentivos">0.00</strong>
+                                <strong class="fs-4 text-warning" id="faltantesIncentivoMontoIncentivos">0</strong>
                             </div>
                         </div>
                     </div>
@@ -643,7 +643,7 @@
                         <div class="col-md-3">
                             <div class="border rounded p-3 h-100 bg-light">
                                 <small class="text-muted d-block text-uppercase fw-semibold">Monto incentivos desvinculados</small>
-                                <strong class="fs-4 text-warning" id="desvinculadosIncentivoMontoIncentivos">0.00</strong>
+                                <strong class="fs-4 text-warning" id="desvinculadosIncentivoMontoIncentivos">0</strong>
                             </div>
                         </div>
                     </div>
@@ -768,10 +768,12 @@
         return (Array.isArray(rows) ? rows : []).map(function (row) {
             return {
                 id: row?.id ?? null,
-                grupo: String(row?.grupo ?? '').trim(),
+                grupo: normalizeAdministrativeGroup(row?.grupo),
                 nombre: String(row?.nombre ?? '').trim(),
                 empresa: String(row?.empresa ?? '').trim(),
-                pct: Math.max(0, toNumber(row?.pct) / 100),
+                pct: isFixedAdministrativeGroup(row?.grupo)
+                    ? Math.max(0, toNumber(row?.pct))
+                    : Math.max(0, toNumber(row?.pct) / 100),
             };
         });
     }
@@ -786,8 +788,8 @@
         const allRows = Array.isArray(rows) ? rows : [];
 
         return {
-            administrativos: allRows.filter((row) => normalizeAdministrativeGroup(row.grupo) !== '4. Operadores'),
-            operadores: allRows.filter((row) => normalizeAdministrativeGroup(row.grupo) === '4. Operadores'),
+            administrativos: allRows.filter((row) => !isFixedAdministrativeGroup(row.grupo)),
+            operadores: allRows.filter((row) => isFixedAdministrativeGroup(row.grupo)),
         };
     }
 
@@ -822,13 +824,13 @@
     let excludedDesvinculadosCedulas = new Set();
     let adminPctBruto = 0;
     const ADMINISTRATIVE_SHARE = 0.40;
-    const COORDINATOR_SHARE = 0.60;
     let administrativeGroupFilter = 'todos';
     const ADMIN_GROUP_OPTIONS = [
         '1. Gtes. Y Encarg.',
         '2. Monitoreo',
         '4. Operadores',
         '5. Servs. Tecnicos',
+        '6. Seguridad',
     ];
     const ADMIN_EMPRESA_OPTIONS = [
         'Consorcio Joselito',
@@ -845,12 +847,27 @@
     let currentAdministrativeBase = 0;
     let currentOperatorBase = 0;
     let currentCoordinatorBase = 0;
+    let currentFixedBagTopUp = 0;
+    let currentExcludedApplication = {
+        faltantesDisponible: 0,
+        desvinculadosDisponible: 0,
+        aplicadoFaltantes: 0,
+        aplicadoDesvinculados: 0,
+        rebajadoFaltantes: 0,
+        rebajadoDesvinculados: 0,
+        totalAplicado: 0,
+        totalRebajado: 0,
+    };
     let coordinatorUserDetailsByCoordinator = {};
     const META_MINIMA_VENTA = 100001;
 
     function toNumber(value) {
         if (value === null || value === undefined) return 0;
         return parseFloat(String(value).replace(/,/g, '')) || 0;
+    }
+
+    function toIntegerAmount(value) {
+        return Math.round(toNumber(value));
     }
 
     async function parseResponseAsJson(response, contexto) {
@@ -889,7 +906,86 @@
     }
 
     function formatMoney(value) {
-        return toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return toIntegerAmount(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+
+    function normalizeIntegerReportRows(rows) {
+        return (Array.isArray(rows) ? rows : []).map((row) => ({
+            ...row,
+            ventas_ultimo_mes: toIntegerAmount(row?.ventas_ultimo_mes),
+            ventas_mes_actual: toIntegerAmount(row?.ventas_mes_actual),
+            pago_escala: toIntegerAmount(row?.pago_escala),
+            nuevo_incentivo: toIntegerAmount(row?.nuevo_incentivo),
+        }));
+    }
+
+    function calculateAdministrativeDistribution(totalIncentivo) {
+        const base = toIntegerAmount(totalIncentivo);
+        const totalAdministrativoCoordinador = toIntegerAmount(base * (adminPctBruto / 100));
+        const administrativo = toIntegerAmount(totalAdministrativoCoordinador * ADMINISTRATIVE_SHARE);
+
+        return {
+            totalAdministrativoCoordinador,
+            administrativo,
+            coordinador: totalAdministrativoCoordinador - administrativo,
+        };
+    }
+
+    function getEmptyExcludedApplication() {
+        return {
+            faltantesDisponible: 0,
+            desvinculadosDisponible: 0,
+            aplicadoFaltantes: 0,
+            aplicadoDesvinculados: 0,
+            rebajadoFaltantes: 0,
+            rebajadoDesvinculados: 0,
+            totalAplicado: 0,
+            totalRebajado: 0,
+        };
+    }
+
+    function getCedulaKey(value) {
+        return String(value ?? '').replace(/\D+/g, '');
+    }
+
+    function getFixedBagBaseBudget(administrativePoolBase) {
+        return toIntegerAmount(toIntegerAmount(administrativePoolBase) * (getPuestoPctByCategoryKey('g45') / 100));
+    }
+
+    function getFixedBagMissingBeforeTopUp(administrativePoolBase) {
+        const fixedTotal = getFixedAdministrativeAmountTotal();
+        const baseBudget = getFixedBagBaseBudget(administrativePoolBase);
+
+        return Math.max(fixedTotal - baseBudget, 0);
+    }
+
+    function sumIncentivesByCedulas(rows, cedulasSet) {
+        return (Array.isArray(rows) ? rows : [])
+            .filter((row) => cedulasSet.has(getCedulaKey(row?.cedula)))
+            .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+    }
+
+    function calculateExcludedApplication(shortage) {
+        const baseRows = getBaseFilteredRows();
+        const faltantesCedulas = new Set([...excludedFaltantesCedulas].map(getCedulaKey).filter(Boolean));
+        const desvinculadosCedulas = new Set([...excludedDesvinculadosCedulas].map(getCedulaKey).filter(Boolean));
+        const desvinculadosSoloCedulas = new Set([...desvinculadosCedulas].filter((cedula) => !faltantesCedulas.has(cedula)));
+        const faltantesDisponible = sumIncentivesByCedulas(baseRows, faltantesCedulas);
+        const desvinculadosDisponible = sumIncentivesByCedulas(baseRows, desvinculadosSoloCedulas);
+        const faltantesUsados = Math.min(toIntegerAmount(shortage), faltantesDisponible);
+        const restante = Math.max(toIntegerAmount(shortage) - faltantesUsados, 0);
+        const desvinculadosUsados = Math.min(restante, desvinculadosDisponible);
+
+        return {
+            faltantesDisponible,
+            desvinculadosDisponible,
+            aplicadoFaltantes: faltantesUsados,
+            aplicadoDesvinculados: desvinculadosUsados,
+            rebajadoFaltantes: Math.max(faltantesDisponible - faltantesUsados, 0),
+            rebajadoDesvinculados: Math.max(desvinculadosDisponible - desvinculadosUsados, 0),
+            totalAplicado: faltantesUsados + desvinculadosUsados,
+            totalRebajado: Math.max(faltantesDisponible - faltantesUsados, 0) + Math.max(desvinculadosDisponible - desvinculadosUsados, 0),
+        };
     }
 
     function renderResumenEmpresas(meta) {
@@ -912,7 +1008,7 @@
     }
 
     function evaluateMetaMinima(row) {
-        const ventasMesActual = toNumber(row?.ventas_mes_actual);
+        const ventasMesActual = toIntegerAmount(row?.ventas_mes_actual);
         const cumplio = ventasMesActual >= META_MINIMA_VENTA;
         const faltante = cumplio ? 0 : (META_MINIMA_VENTA - ventasMesActual);
         const faltantePct = META_MINIMA_VENTA > 0
@@ -941,11 +1037,11 @@
 
         return source.reduce((acc, item) => {
             const key = normalizeAdministrativeEmpresaKey(item?.empresa);
-            const incentivo = toNumber(item?.incentivo);
+            const incentivo = toIntegerAmount(item?.incentivo);
             if (!acc[key]) {
                 acc[key] = 0;
             }
-            acc[key] += incentivo * (adminPctBruto / 100) * ADMINISTRATIVE_SHARE;
+            acc[key] += calculateAdministrativeDistribution(incentivo).administrativo;
             return acc;
         }, {});
     }
@@ -1020,10 +1116,14 @@
             return;
         }
 
-        const montoBase = toNumber(currentAdministrativePoolBase);
-        const montoG1 = montoBase * (toNumber(puestoPctConfig.g1) / 100);
-        const montoG2 = montoBase * (toNumber(puestoPctConfig.g2) / 100);
-        const montoG45 = montoBase * (toNumber(puestoPctConfig.g45) / 100);
+        const montoBase = toIntegerAmount(currentAdministrativePoolBase);
+        const montoG1 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g1) / 100));
+        const montoG2 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g2) / 100));
+        const montoG45 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g45) / 100));
+        const fixedBalance = getFixedAdministrativeBalance();
+        const fixedBalanceText = fixedBalance.missing > 0
+            ? `Faltan ${formatMoney(fixedBalance.missing)}`
+            : `Restante ${formatMoney(fixedBalance.remaining)}`;
 
         target.innerHTML = `
             <tr>
@@ -1037,9 +1137,9 @@
                 <td class="text-end">${formatMoney(montoG2)}</td>
             </tr>
             <tr>
-                <td>4 Operadores + 5 Servs. Tecnicos</td>
+                <td>4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</td>
                 <td class="text-end">${toNumber(puestoPctConfig.g45).toFixed(2)}%</td>
-                <td class="text-end">${formatMoney(montoG45)}</td>
+                <td class="text-end">${formatMoney(montoG45)}<br><small class="${fixedBalance.missing > 0 ? 'text-danger' : 'text-muted'}">${fixedBalanceText}</small></td>
             </tr>
         `;
     }
@@ -1259,7 +1359,7 @@
         const rows = currentFilteredRows
             .map((row) => ({
                 ...row,
-                __importe: toNumber(row?.nuevo_incentivo),
+                __importe: toIntegerAmount(row?.nuevo_incentivo),
                 __idEmpleado: String(row?.empleadoid ?? '').trim(),
             }))
             .filter((row) => row.__importe > 0);
@@ -1277,7 +1377,7 @@
             rows: rows.map((row) => [
                 row.__idEmpleado,
                 'INC',
-                row.__importe.toFixed(2),
+                String(row.__importe),
                 '',
                 '',
                 '',
@@ -1400,13 +1500,13 @@
             row.grupo,
             row.nombre,
             row.empresa,
-            formatAdministrativePct(row.pct),
+            formatAdministrativeConfigValue(row),
             formatMoney(getAdministrativeDisplayAmount(row)),
         ]);
 
         exportRowsToExcelCsv(
             'administrativos_v5_validacion.csv',
-            ['Grupo', 'Nombre', 'Empresa', '% Total', 'Monto'],
+            ['Grupo', 'Nombre', 'Empresa', '% Total / Monto fijo', 'Monto'],
             rows
         );
     }
@@ -1433,8 +1533,16 @@
         if (group.includes('Servs. Tecnicos') || group.includes('Servs Tecnicos')) {
             return '5. Servs. Tecnicos';
         }
+        if (group.toLowerCase() === 'seguridad' || group.toLowerCase() === '6 seguridad') {
+            return '6. Seguridad';
+        }
 
         return group;
+    }
+
+    function isFixedAdministrativeGroup(value) {
+        const group = normalizeAdministrativeGroup(value);
+        return group === '4. Operadores' || group === '5. Servs. Tecnicos' || group === '6. Seguridad';
     }
 
     function updateAdministrativeFilterButtons() {
@@ -1486,17 +1594,20 @@
 
     function getPuestoCategoryBudget(categoryKey, empresaValue = null) {
         const base = empresaValue === null
-            ? toNumber(currentAdministrativePoolBase)
-            : getAdministrativePoolForEmpresa(empresaValue);
+            ? toIntegerAmount(currentAdministrativePoolBase)
+            : toIntegerAmount(getAdministrativePoolForEmpresa(empresaValue));
+        const topUp = categoryKey === 'g45' && empresaValue === null
+            ? toIntegerAmount(currentFixedBagTopUp)
+            : 0;
 
-        return base * (getPuestoPctByCategoryKey(categoryKey) / 100);
+        return toIntegerAmount(base * (getPuestoPctByCategoryKey(categoryKey) / 100)) + topUp;
     }
 
     function getAdministrativeCategoryKeyByGroup(groupValue) {
         const group = normalizeAdministrativeGroup(groupValue);
         if (group === '1. Gtes. Y Encarg.') return 'g1';
         if (group === '2. Monitoreo') return 'g2';
-        if (group === '4. Operadores' || group === '5. Servs. Tecnicos') return 'g45';
+        if (group === '4. Operadores' || group === '5. Servs. Tecnicos' || group === '6. Seguridad') return 'g45';
         return null;
     }
 
@@ -1518,13 +1629,43 @@
         return allRows
             .filter((row) => getAdministrativeCategoryKeyByGroup(row.grupo) === categoryKey)
             .filter((row) => empresaKey === null || row.__empresaKey === empresaKey)
-            .reduce((sum, row) => sum + toNumber(row.pct), 0);
+            .reduce((sum, row) => sum + (isFixedAdministrativeGroup(row.grupo) ? toIntegerAmount(row.pct) : toNumber(row.pct)), 0);
+    }
+
+    function getFixedAdministrativeAmountTotal(empresaValue = null) {
+        const empresaKey = empresaValue === null ? null : normalizeAdministrativeEmpresaKey(empresaValue);
+
+        return operatorRows
+            .map((row) => ({
+                ...row,
+                grupo: normalizeAdministrativeGroup(row.grupo),
+                __empresaKey: normalizeAdministrativeEmpresaKey(row.empresa),
+            }))
+            .filter((row) => isFixedAdministrativeGroup(row.grupo))
+            .filter((row) => empresaKey === null || row.__empresaKey === empresaKey)
+            .reduce((sum, row) => sum + toIntegerAmount(row.pct), 0);
+    }
+
+    function getFixedAdministrativeBalance(empresaValue = null) {
+        const budget = getPuestoCategoryBudget('g45', empresaValue);
+        const fixedTotal = getFixedAdministrativeAmountTotal(empresaValue);
+
+        return {
+            budget,
+            fixedTotal,
+            remaining: Math.max(budget - fixedTotal, 0),
+            missing: Math.max(fixedTotal - budget, 0),
+        };
     }
 
     function getAdministrativeAmountByRow(row) {
         const categoryKey = getAdministrativeCategoryKeyByGroup(row?.grupo);
         if (!categoryKey) {
             return 0;
+        }
+
+        if (isFixedAdministrativeGroup(row?.grupo)) {
+            return toIntegerAmount(row?.pct);
         }
 
         const empresa = normalizeAdministrativeEmpresaLabel(row?.empresa);
@@ -1534,7 +1675,7 @@
         }
 
         const categoryBudget = getPuestoCategoryBudget(categoryKey, empresa);
-        return categoryBudget * (toNumber(row.pct) / categoryPctTotal);
+        return toIntegerAmount(categoryBudget * (toNumber(row.pct) / categoryPctTotal));
     }
 
     function getAdministrativeAmount(row) {
@@ -1565,7 +1706,7 @@
         let filteredRows = allRows;
 
         if (administrativeGroupFilter === '4_5') {
-            filteredRows = filteredRows.filter((row) => row.grupo === '4. Operadores' || row.grupo === '5. Servs. Tecnicos');
+            filteredRows = filteredRows.filter((row) => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45');
         } else if (administrativeGroupFilter !== 'todos') {
             filteredRows = filteredRows.filter((row) => row.grupo === administrativeGroupFilter);
         }
@@ -1595,7 +1736,7 @@
             return 0;
         }
 
-        return currentCoordinatorBase * (toNumber(row.monto_usuarios) / pctTotal);
+        return toIntegerAmount(currentCoordinatorBase * (toIntegerAmount(row.monto_usuarios) / pctTotal));
     }
 
     function formatCoordinatorPct(row) {
@@ -1608,7 +1749,7 @@
     }
 
     function getCoordinatorMontoUsuariosTotal() {
-        return coordinatorRows.reduce((sum, row) => sum + toNumber(row.monto_usuarios), 0);
+        return coordinatorRows.reduce((sum, row) => sum + toIntegerAmount(row.monto_usuarios), 0);
     }
 
     function getCoordinatorDetailUsers(row) {
@@ -1621,6 +1762,21 @@
 
     function formatAdministrativePct(value) {
         return (toNumber(value) * 100).toFixed(2);
+    }
+
+    function formatAdministrativeConfigValue(row) {
+        return isFixedAdministrativeGroup(row?.grupo)
+            ? toNumber(row?.pct).toFixed(2)
+            : formatAdministrativePct(row?.pct);
+    }
+
+    function readAdministrativeConfigInputValue(row, field, inputValue) {
+        if (field !== 'pct') {
+            return inputValue;
+        }
+
+        const value = Math.max(0, parseFloat(inputValue || 0) || 0);
+        return isFixedAdministrativeGroup(row?.grupo) ? value : value / 100;
     }
 
     function getAdministrativeFilteredBudget() {
@@ -1654,7 +1810,7 @@
             .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
         const montoFiltro = totalDistribuido;
 
-        document.getElementById('admin_base_total').textContent = formatMoney(currentAdministrativePoolBase);
+        document.getElementById('admin_base_total').textContent = formatMoney(toIntegerAmount(currentAdministrativePoolBase) + toIntegerAmount(currentFixedBagTopUp));
         document.getElementById('admin_distribuido_total').textContent = formatMoney(montoFiltro);
         const tablaTotal = document.getElementById('admin_tabla_total');
         if (tablaTotal) {
@@ -1670,7 +1826,12 @@
         }
         const catG45 = document.getElementById('admin_cat_g45');
         if (catG45) {
-            catG45.textContent = `${toNumber(puestoPctConfig.g45).toFixed(2)}% | ${formatMoney(montoG45)}`;
+            const balanceG45 = getFixedAdministrativeBalance();
+            const balanceText = balanceG45.missing > 0
+                ? ` | Faltan ${formatMoney(balanceG45.missing)}`
+                : ` | Restante ${formatMoney(balanceG45.remaining)}`;
+            catG45.textContent = `${toNumber(puestoPctConfig.g45).toFixed(2)}% | ${formatMoney(montoG45)}${balanceText}`;
+            catG45.classList.toggle('text-danger', balanceG45.missing > 0);
         }
         const totalCol = document.getElementById('admin_col_total');
         if (totalCol) {
@@ -1778,7 +1939,7 @@
             pct: 0,
         };
 
-        if (normalizeAdministrativeGroup(grupo) === '4. Operadores') {
+        if (isFixedAdministrativeGroup(grupo)) {
             operatorRows.push(row);
         } else {
             administrativeRows.push(row);
@@ -1814,7 +1975,9 @@
             grupo: normalizeAdministrativeGroup(row?.grupo),
             nombre: String(row?.nombre || '').trim(),
             empresa: normalizeAdministrativeEmpresaLabel(row?.empresa),
-            pct_total: toNumber(row?.pct) * 100,
+            pct_total: isFixedAdministrativeGroup(row?.grupo)
+                ? toNumber(row?.pct)
+                : toNumber(row?.pct) * 100,
         }));
     }
 
@@ -1830,6 +1993,10 @@
 
         const keys = new Set();
         for (const row of rows) {
+            if (!isFixedAdministrativeGroup(row.grupo) && toNumber(row.pct_total) > 100) {
+                return 'El % Total no puede ser mayor que 100 para gerentes, encargados o monitoreo.';
+            }
+
             const key = `${row.grupo}|${row.nombre}|${row.empresa}`.toLowerCase();
             if (keys.has(key)) {
                 return 'Hay filas duplicadas por grupo, nombre y empresa. Ajustalas antes de guardar.';
@@ -1916,9 +2083,12 @@
         }
 
         rows.forEach((row) => {
+            const isFixedGroup = isFixedAdministrativeGroup(row.grupo);
             const inputClass = row.__tipo === 'operador' ? 'op-input op-pct-input' : 'admin-input admin-pct-input';
             const rowClass = row.__tipo === 'operador' ? 'op-input' : 'admin-input';
             const amount = getAdministrativeDisplayAmount(row);
+            const suffix = isFixedGroup ? 'RD$' : '%';
+            const max = isFixedGroup ? '9999999' : '100';
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -1935,8 +2105,8 @@
                 </td>
                 <td>
                     <div class="input-group input-group-sm">
-                        <input type="number" class="form-control ${inputClass}" data-field="pct" data-idx="${row.__idx}" min="0" step="0.01" value="${formatAdministrativePct(row.pct)}">
-                        <span class="input-group-text">%</span>
+                        <input type="number" class="form-control ${inputClass}" data-field="pct" data-idx="${row.__idx}" min="0" max="${max}" step="0.01" value="${formatAdministrativeConfigValue(row)}">
+                        <span class="input-group-text">${suffix}</span>
                     </div>
                 </td>
                 <td class="text-end fw-semibold admin-display-monto" data-tipo="${row.__tipo}" data-idx="${row.__idx}">${formatMoney(amount)}</td>
@@ -2081,12 +2251,16 @@
         const totalNoCumplen = cumplimientoSummary.noCumplen;
         const totalPorActualizar = getUsuariosPorActualizarRows(data).length;
         const totalAgenciasSinEmpresa = getAgenciasSinEmpresaRows(data).length;
-        const totalVendido = data.reduce((sum, item) => sum + toNumber(item.ventas_mes_actual), 0);
-        const totalIncentivo = data.reduce((sum, item) => sum + toNumber(item.nuevo_incentivo), 0);
-        const adminValor = totalIncentivo * (adminPctBruto / 100);
-        const adminDistribucion = adminValor * ADMINISTRATIVE_SHARE;
-        const coordinadorDistribucion = adminValor * COORDINATOR_SHARE;
-        const totalConAdmin = totalIncentivo + adminValor;
+        const totalVendido = data.reduce((sum, item) => sum + toIntegerAmount(item.ventas_mes_actual), 0);
+        const totalIncentivo = data.reduce((sum, item) => sum + toIntegerAmount(item.nuevo_incentivo), 0);
+        const distribution = calculateAdministrativeDistribution(totalIncentivo);
+        const adminValor = distribution.totalAdministrativoCoordinador;
+        const adminDistribucion = distribution.administrativo;
+        const coordinadorDistribucion = distribution.coordinador;
+        const fixedBagMissing = getFixedBagMissingBeforeTopUp(adminDistribucion);
+        currentExcludedApplication = calculateExcludedApplication(fixedBagMissing);
+        currentFixedBagTopUp = currentExcludedApplication.totalAplicado;
+        const totalConAdmin = toIntegerAmount(totalIncentivo + adminValor + currentFixedBagTopUp);
         currentAdministrativePoolByEmpresa = buildAdministrativePoolByEmpresa(data);
         currentDistributionBase = adminValor;
         currentAdministrativePoolBase = adminDistribucion;
@@ -2096,16 +2270,18 @@
         document.getElementById('ni_count_no_cumplen').textContent = totalNoCumplen;
         document.getElementById('ni_count_por_actualizar').textContent = totalPorActualizar;
         document.getElementById('ni_count_agencias_sin_empresa').textContent = totalAgenciasSinEmpresa;
-        document.getElementById('ni_total_vendido').textContent = totalVendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        document.getElementById('ni_total_incentivo').textContent = totalIncentivo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('ni_total_vendido').textContent = formatMoney(totalVendido);
+        document.getElementById('ni_total_incentivo').textContent = formatMoney(totalIncentivo);
         document.getElementById('ni_admin_resumen').textContent =
             '';
         document.getElementById('ni_admin_resumen').innerHTML =
             `<div>Porcentaje (${formatPercentDisplay(adminPctBruto)}%): ${formatMoney(adminValor)}</div>
             <div>Administrativo: ${formatMoney(adminDistribucion)}</div>
-            <div>Coordinador: ${formatMoney(coordinadorDistribucion)}</div>`;
+            <div>Coordinador: ${formatMoney(coordinadorDistribucion)}</div>
+            <div>Reasignado a Operadores/Seguridad: ${formatMoney(currentFixedBagTopUp)}</div>
+            <div>Rebajado por faltantes/desvinculados: ${formatMoney(currentExcludedApplication.totalRebajado)}</div>`;
         document.getElementById('ni_total_con_admin').textContent =
-            `Total a Pagar Final: ${totalConAdmin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            `Total a Pagar Final: ${formatMoney(totalConAdmin)}`;
         updateAdministrativeAndOperatorAmounts();
         updateCoordinatorAmounts();
         updatePuestoPctSummaryCard();
@@ -2382,7 +2558,7 @@
                 if (cedula) {
                     current.usuariosSet.add(cedula);
                 }
-                current.ventas += toNumber(row?.ventas_mes_actual);
+                current.ventas += toIntegerAmount(row?.ventas_mes_actual);
                 const fecha = String(row?.ultimo_dia_venta || '').trim();
                 if (fecha && (!current.ultimo_dia_venta || fecha > current.ultimo_dia_venta)) {
                     current.ultimo_dia_venta = fecha;
@@ -2400,7 +2576,7 @@
                 ventas: row.ventas,
                 ultimo_dia_venta: row.ultimo_dia_venta,
             }))
-            .sort((a, b) => toNumber(b.ventas) - toNumber(a.ventas));
+            .sort((a, b) => toIntegerAmount(b.ventas) - toIntegerAmount(a.ventas));
     }
 
     function renderAgenciasSinEmpresaTable(rows) {
@@ -2428,7 +2604,7 @@
                     data: 'ventas',
                     className: 'text-end',
                     render: function(data, type) {
-                        return type === 'display' ? formatMoney(data) : toNumber(data);
+                        return type === 'display' ? formatMoney(data) : toIntegerAmount(data);
                     }
                 },
                 {
@@ -2516,7 +2692,7 @@
         const filtroCumplimiento = document.getElementById('ni_filtro_cumplimiento').value;
         const filtroEmpresa = document.getElementById('ni_filtro_empresa').value;
 
-        let filtered = cachedRows.filter(item => toNumber(item?.ventas_mes_actual) > 0);
+        let filtered = cachedRows.filter(item => toIntegerAmount(item?.ventas_mes_actual) > 0);
         if (filtroCumplimiento === 'cumplidos') {
             filtered = filtered.filter(item => evaluateMetaMinima(item).cumplio);
         } else if (filtroCumplimiento === 'no_cumplidos') {
@@ -2534,7 +2710,7 @@
         const sourceRows = currentFilteredRows;
 
         return [...new Set(sourceRows
-            .filter(row => toNumber(row?.ventas_mes_actual) > 0)
+            .filter(row => toIntegerAmount(row?.ventas_mes_actual) > 0)
             .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
             .filter(Boolean)
         )];
@@ -2547,7 +2723,7 @@
 
         return currentFilteredRows
             .filter(row => cedulasSet.has(String(row?.cedula ?? '').replace(/\D+/g, '')))
-            .reduce((sum, row) => sum + toNumber(row?.nuevo_incentivo), 0);
+            .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
     }
 
     function aplicarFaltantesIncentivo() {
@@ -2572,7 +2748,7 @@
 
             Swal.fire({
                 title: 'Faltantes aplicados',
-                text: `${lastFaltantesCedulas.size} cedulas fueron ocultadas del reporte principal.`,
+                text: `${lastFaltantesCedulas.size} cedulas fueron ocultadas. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoFaltantes)}. Rebajado: ${formatMoney(currentExcludedApplication.rebajadoFaltantes)}.`,
                 icon: 'success'
             });
         }, 120);
@@ -2666,7 +2842,7 @@
 
             Swal.fire({
                 title: 'Desvinculados aplicados',
-                text: `${lastDesvinculadosCedulas.size} cedulas fueron ocultadas del reporte principal.`,
+                text: `${lastDesvinculadosCedulas.size} cedulas fueron ocultadas. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoDesvinculados)}. Rebajado: ${formatMoney(currentExcludedApplication.rebajadoDesvinculados)}.`,
                 icon: 'success'
             });
         }, 120);
@@ -2929,18 +3105,14 @@
 
             if (input.classList.contains('admin-input')) {
                 if (!administrativeRows[idx]) return;
-                administrativeRows[idx][field] = field === 'pct'
-                    ? (Math.max(0, parseFloat(input.value || 0) || 0) / 100)
-                    : input.value;
+                administrativeRows[idx][field] = readAdministrativeConfigInputValue(administrativeRows[idx], field, input.value);
                 updateAdministrativeAndOperatorAmounts();
                 return;
             }
 
             if (input.classList.contains('op-input')) {
                 if (!operatorRows[idx]) return;
-                operatorRows[idx][field] = field === 'pct'
-                    ? (Math.max(0, parseFloat(input.value || 0) || 0) / 100)
-                    : input.value;
+                operatorRows[idx][field] = readAdministrativeConfigInputValue(operatorRows[idx], field, input.value);
                 updateAdministrativeAndOperatorAmounts();
             }
         });
@@ -2954,11 +3126,15 @@
                 const rows = input.classList.contains('op-input') ? operatorRows : administrativeRows;
                 if (!rows[idx]) return;
 
-                rows[idx][field] = field === 'pct'
-                    ? (Math.max(0, parseFloat(input.value || 0) || 0) / 100)
-                    : input.value;
+                const wasFixedGroup = isFixedAdministrativeGroup(rows[idx].grupo);
+                rows[idx][field] = readAdministrativeConfigInputValue(rows[idx], field, input.value);
 
                 if (field === 'grupo') {
+                    const isNowFixedGroup = isFixedAdministrativeGroup(rows[idx].grupo);
+                    if (wasFixedGroup !== isNowFixedGroup) {
+                        rows[idx].pct = 0;
+                    }
+
                     rebalanceAdministrativeRows();
                     renderAdministrativeCategoryTable();
                 }
@@ -2967,7 +3143,8 @@
             }
 
             if (input.classList.contains('admin-pct-input') || input.classList.contains('op-pct-input')) {
-                input.value = (parseFloat(input.value || 0) || 0).toFixed(2);
+                const rows = input.classList.contains('op-input') ? operatorRows : administrativeRows;
+                input.value = rows[idx] ? formatAdministrativeConfigValue(rows[idx]) : (parseFloat(input.value || 0) || 0).toFixed(2);
             }
         });
 
@@ -3073,11 +3250,13 @@
                 currentAdministrativeBase = 0;
                 currentOperatorBase = 0;
                 currentCoordinatorBase = 0;
+                currentFixedBagTopUp = 0;
+                currentExcludedApplication = getEmptyExcludedApplication();
                 document.getElementById('ni_admin_resumen').innerHTML =
-                    `<div>Porcentaje (${formatPercentDisplay(adminPctBruto)}%): 0.00</div>
-                    <div>Administrativo: 0.00</div>
-                    <div>Coordinador: 0.00</div>`;
-                document.getElementById('ni_total_con_admin').textContent = 'Total a Pagar Final: 0.00';
+                    `<div>Porcentaje (${formatPercentDisplay(adminPctBruto)}%): 0</div>
+                    <div>Administrativo: 0</div>
+                    <div>Coordinador: 0</div>`;
+                document.getElementById('ni_total_con_admin').textContent = 'Total a Pagar Final: 0';
                 updateAdministrativeAndOperatorAmounts();
                 updateCoordinatorAmounts();
                 updatePuestoPctSummaryCard();
@@ -3132,6 +3311,8 @@
         excludedFaltantesCedulas = new Set();
         lastDesvinculadosCedulas = new Set();
         excludedDesvinculadosCedulas = new Set();
+        currentFixedBagTopUp = 0;
+        currentExcludedApplication = getEmptyExcludedApplication();
 
         const params = new URLSearchParams({
             sistema: sistema,
@@ -3157,7 +3338,7 @@
                     return;
                 }
 
-                const data = resp.data || [];
+                const data = normalizeIntegerReportRows(resp.data || []);
                 cachedRows = data;
                 cachedMeta = resp.meta || {};
                 updateCoordinatorValidAgencies(cachedMeta);

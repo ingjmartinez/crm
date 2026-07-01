@@ -26,10 +26,6 @@
                                 <h5 class="card-title mb-0">Crear registro</h5>
                             </div>
                             <div class="card-body">
-                                @if (session('success'))
-                                    <div class="alert alert-success">{{ session('success') }}</div>
-                                @endif
-
                                 @if ($errors->any())
                                     <div class="alert alert-danger">
                                         <ul class="mb-0">
@@ -72,10 +68,10 @@
                                         </select>
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label mb-1">% Total</label>
+                                        <label class="form-label mb-1">% Total / Monto fijo</label>
                                         <div class="input-group">
-                                            <input type="number" id="pct_total_create" name="pct_total" min="0" max="100" step="0.01" class="form-control" value="{{ old('pct_total', 0) }}" required>
-                                            <span class="input-group-text">%</span>
+                                            <input type="number" id="pct_total_create" name="pct_total" min="0" max="9999999" step="0.01" class="form-control" value="{{ old('pct_total', 0) }}" required>
+                                            <span class="input-group-text js-pct-suffix" data-target="pct_total_create">%</span>
                                         </div>
                                     </div>
                                     <div class="col-md-1 d-grid">
@@ -102,7 +98,7 @@
                                                 <th style="min-width: 180px;">Grupo</th>
                                                 <th style="min-width: 260px;">Nombre</th>
                                                 <th style="min-width: 160px;">Empresa</th>
-                                                <th style="min-width: 140px;">% Total</th>
+                                                <th style="min-width: 160px;">% Total / Monto fijo</th>
                                                 <th style="min-width: 180px;">Acciones</th>
                                             </tr>
                                         </thead>
@@ -156,14 +152,14 @@
                                                     </td>
                                                     <td>
                                                         <div class="input-group input-group-sm">
-                                                            <input type="number" id="pct_total_{{ $registro->id }}" name="pct_total" form="form-adm-{{ $registro->id }}" min="0" max="100" step="0.01" class="form-control" value="{{ number_format((float) $registro->pct_total, 2, '.', '') }}" required>
-                                                            <span class="input-group-text">%</span>
+                                                            <input type="number" id="pct_total_{{ $registro->id }}" name="pct_total" form="form-adm-{{ $registro->id }}" min="0" max="9999999" step="0.01" class="form-control" value="{{ number_format((float) $registro->pct_total, 2, '.', '') }}" required>
+                                                            <span class="input-group-text js-pct-suffix" data-target="pct_total_{{ $registro->id }}">%</span>
                                                         </div>
                                                     </td>
                                                     <td>
                                                         <div class="d-flex gap-1">
-                                                            <button type="submit" form="form-adm-{{ $registro->id }}" class="btn btn-success btn-sm">Actualizar</button>
-                                                            <form action="{{ route('incentivos.incentivo-administrativo.destroy', $registro->id) }}" method="POST" onsubmit="return confirm('Seguro que deseas eliminar este registro?');">
+                                                            <button type="button" data-form-id="form-adm-{{ $registro->id }}" data-nombre="{{ $registro->nombre }}" class="btn btn-success btn-sm js-confirm-update">Actualizar</button>
+                                                            <form action="{{ route('incentivos.incentivo-administrativo.destroy', $registro->id) }}" method="POST" class="js-confirm-delete" data-nombre="{{ $registro->nombre }}">
                                                                 @csrf
                                                                 @method('DELETE')
                                                                 <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
@@ -195,6 +191,46 @@
 @section('script')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const successMessage = @json(session('success'));
+
+        const showActionSuccess = successMessage
+            && (successMessage.includes('actualizado') || successMessage.includes('eliminado'));
+
+        if (showActionSuccess && typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Listo',
+                text: successMessage,
+                timer: 2200,
+                showConfirmButton: false
+            });
+        }
+
+        function isMontoFijoGroup(value) {
+            return ['4. Operadores', '5. Servs. Tecnicos', '6. Seguridad'].includes(String(value || '').trim());
+        }
+
+        function updatePctInputMode(selectEl) {
+            const targetId = selectEl.dataset.pctTarget;
+            if (!targetId) {
+                return false;
+            }
+
+            const targetInput = document.getElementById(targetId);
+            const suffix = document.querySelector(`.js-pct-suffix[data-target="${targetId}"]`);
+            const isMontoFijo = isMontoFijoGroup(selectEl.value);
+
+            if (targetInput) {
+                targetInput.max = isMontoFijo ? '9999999' : '100';
+            }
+
+            if (suffix) {
+                suffix.textContent = isMontoFijo ? 'RD$' : '%';
+            }
+
+            return isMontoFijo;
+        }
+
         function syncPctFromGrupo(selectEl) {
             const targetId = selectEl.dataset.pctTarget;
             if (!targetId) {
@@ -203,6 +239,10 @@
 
             const targetInput = document.getElementById(targetId);
             if (!targetInput) {
+                return;
+            }
+
+            if (updatePctInputMode(selectEl)) {
                 return;
             }
 
@@ -217,8 +257,70 @@
         }
 
         document.querySelectorAll('.js-grupo-select').forEach(function (selectEl) {
+            updatePctInputMode(selectEl);
             selectEl.addEventListener('change', function () {
                 syncPctFromGrupo(selectEl);
+            });
+        });
+
+        document.querySelectorAll('.js-confirm-update').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const form = document.getElementById(button.dataset.formId);
+                if (!form) {
+                    return;
+                }
+
+                if (typeof Swal === 'undefined') {
+                    form.submit();
+                    return;
+                }
+
+                Swal.fire({
+                    icon: 'question',
+                    title: 'Actualizar registro',
+                    text: `Seguro que deseas actualizar a ${button.dataset.nombre || 'este usuario'}?`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Si, actualizar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#0ab39c',
+                    cancelButtonColor: '#74788d'
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('.js-confirm-delete').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                if (form.dataset.confirmed === '1') {
+                    return;
+                }
+
+                event.preventDefault();
+
+                if (typeof Swal === 'undefined') {
+                    form.dataset.confirmed = '1';
+                    form.submit();
+                    return;
+                }
+
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Eliminar registro',
+                    text: `Seguro que deseas eliminar a ${form.dataset.nombre || 'este usuario'}?`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Si, eliminar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#f06548',
+                    cancelButtonColor: '#74788d'
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        form.dataset.confirmed = '1';
+                        form.submit();
+                    }
+                });
             });
         });
     });
