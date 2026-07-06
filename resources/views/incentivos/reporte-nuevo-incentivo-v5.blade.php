@@ -103,7 +103,7 @@
                     <div class="col-lg-4 col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Total Vendido</p>
+                                <p class="text-uppercase fw-medium text-muted mb-1">Total Vendido Bruto</p>
                                 <h4 class="mb-0" id="ni_total_vendido">0</h4>
                             </div>
                         </div>
@@ -168,7 +168,7 @@
                     <div class="col-lg-4 col-md-6">
                         <div class="card card-animate">
                             <div class="card-body text-start" style="min-height: 178px;">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Total Incentivo a Pagar</p>
+                                <p class="text-uppercase fw-medium text-muted mb-1">Total Incentivo Bruto</p>
                                 <h4 class="mb-0" id="ni_total_incentivo">0</h4>
                                 <div class="d-block mt-1 fw-semibold fs-5 text-primary text-start" id="ni_admin_resumen">
                                     <div>Porcentaje (0%): 0</div>
@@ -2246,22 +2246,23 @@
     }
 
     function updateCardsFromData(data) {
+        const grossRows = getBaseFilteredRows();
         const cumplimientoSummary = getUsuariosCumplimientoSummary(data);
         const totalCumplen = cumplimientoSummary.cumplen;
         const totalNoCumplen = cumplimientoSummary.noCumplen;
         const totalPorActualizar = getUsuariosPorActualizarRows(data).length;
         const totalAgenciasSinEmpresa = getAgenciasSinEmpresaRows(data).length;
-        const totalVendido = data.reduce((sum, item) => sum + toIntegerAmount(item.ventas_mes_actual), 0);
-        const totalIncentivo = data.reduce((sum, item) => sum + toIntegerAmount(item.nuevo_incentivo), 0);
-        const distribution = calculateAdministrativeDistribution(totalIncentivo);
+        const totalVendidoBruto = grossRows.reduce((sum, item) => sum + toIntegerAmount(item.ventas_mes_actual), 0);
+        const totalIncentivoBruto = grossRows.reduce((sum, item) => sum + toIntegerAmount(item.nuevo_incentivo), 0);
+        const distribution = calculateAdministrativeDistribution(totalIncentivoBruto);
         const adminValor = distribution.totalAdministrativoCoordinador;
         const adminDistribucion = distribution.administrativo;
         const coordinadorDistribucion = distribution.coordinador;
         const fixedBagMissing = getFixedBagMissingBeforeTopUp(adminDistribucion);
         currentExcludedApplication = calculateExcludedApplication(fixedBagMissing);
         currentFixedBagTopUp = currentExcludedApplication.totalAplicado;
-        const totalConAdmin = toIntegerAmount(totalIncentivo + adminValor + currentFixedBagTopUp);
-        currentAdministrativePoolByEmpresa = buildAdministrativePoolByEmpresa(data);
+        const totalConAdmin = toIntegerAmount(totalIncentivoBruto + adminValor - currentExcludedApplication.totalRebajado);
+        currentAdministrativePoolByEmpresa = buildAdministrativePoolByEmpresa(grossRows);
         currentDistributionBase = adminValor;
         currentAdministrativePoolBase = adminDistribucion;
         currentCoordinatorBase = coordinadorDistribucion;
@@ -2270,8 +2271,8 @@
         document.getElementById('ni_count_no_cumplen').textContent = totalNoCumplen;
         document.getElementById('ni_count_por_actualizar').textContent = totalPorActualizar;
         document.getElementById('ni_count_agencias_sin_empresa').textContent = totalAgenciasSinEmpresa;
-        document.getElementById('ni_total_vendido').textContent = formatMoney(totalVendido);
-        document.getElementById('ni_total_incentivo').textContent = formatMoney(totalIncentivo);
+        document.getElementById('ni_total_vendido').textContent = formatMoney(totalVendidoBruto);
+        document.getElementById('ni_total_incentivo').textContent = formatMoney(totalIncentivoBruto);
         document.getElementById('ni_admin_resumen').textContent =
             '';
         document.getElementById('ni_admin_resumen').innerHTML =
@@ -2279,7 +2280,8 @@
             <div>Administrativo: ${formatMoney(adminDistribucion)}</div>
             <div>Coordinador: ${formatMoney(coordinadorDistribucion)}</div>
             <div>Reasignado a Operadores/Seguridad: ${formatMoney(currentFixedBagTopUp)}</div>
-            <div>Rebajado por faltantes/desvinculados: ${formatMoney(currentExcludedApplication.totalRebajado)}</div>`;
+            <div>Deducciones detectadas: ${formatMoney(currentExcludedApplication.faltantesDisponible + currentExcludedApplication.desvinculadosDisponible)}</div>
+            <div>Rebaja neta por faltantes/desvinculados: ${formatMoney(currentExcludedApplication.totalRebajado)}</div>`;
         document.getElementById('ni_total_con_admin').textContent =
             `Total a Pagar Final: ${formatMoney(totalConAdmin)}`;
         updateAdministrativeAndOperatorAmounts();
@@ -2748,7 +2750,7 @@
 
             Swal.fire({
                 title: 'Faltantes aplicados',
-                text: `${lastFaltantesCedulas.size} cedulas fueron ocultadas. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoFaltantes)}. Rebajado: ${formatMoney(currentExcludedApplication.rebajadoFaltantes)}.`,
+                text: `${lastFaltantesCedulas.size} cedulas fueron ocultadas. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoFaltantes)}. Rebaja neta: ${formatMoney(currentExcludedApplication.rebajadoFaltantes)}.`,
                 icon: 'success'
             });
         }, 120);
@@ -2842,7 +2844,7 @@
 
             Swal.fire({
                 title: 'Desvinculados aplicados',
-                text: `${lastDesvinculadosCedulas.size} cedulas fueron ocultadas. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoDesvinculados)}. Rebajado: ${formatMoney(currentExcludedApplication.rebajadoDesvinculados)}.`,
+                text: `${lastDesvinculadosCedulas.size} cedulas fueron ocultadas. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoDesvinculados)}. Rebaja neta: ${formatMoney(currentExcludedApplication.rebajadoDesvinculados)}.`,
                 icon: 'success'
             });
         }, 120);
