@@ -90,17 +90,41 @@
                             <div class="card-header">
                                 <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
                                     <h5 class="card-title mb-0">Listado</h5>
-                                    <form action="{{ route('incentivos.incentivo-administrativo.index') }}" method="GET" class="d-flex gap-2" style="max-width: 420px; width: 100%;">
-                                        <input
-                                            type="text"
-                                            name="buscar_nombre"
-                                            class="form-control form-control-sm"
-                                            value="{{ $buscarNombre }}"
-                                            placeholder="Buscar por nombre">
-                                        <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
-                                        @if($buscarNombre !== '')
-                                            <a href="{{ route('incentivos.incentivo-administrativo.index') }}" class="btn btn-light btn-sm">Limpiar</a>
-                                        @endif
+                                    <form action="{{ route('incentivos.incentivo-administrativo.index') }}" method="GET" class="row g-2" style="max-width: 860px; width: 100%;">
+                                        <div class="col-md-4">
+                                            <input
+                                                type="text"
+                                                name="buscar_nombre"
+                                                class="form-control form-control-sm"
+                                                value="{{ $buscarNombre }}"
+                                                placeholder="Buscar por nombre">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select name="grupo_filter" class="form-select form-select-sm">
+                                                <option value="">Todos los grupos</option>
+                                                @foreach($posiciones as $posicion)
+                                                    <option value="{{ $posicion->posicion }}" {{ $grupoFilter === $posicion->posicion ? 'selected' : '' }}>
+                                                        {{ $posicion->posicion }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select name="empresa_filter" class="form-select form-select-sm">
+                                                <option value="">Todas las empresas</option>
+                                                @foreach($empresas as $empresa)
+                                                    <option value="{{ $empresa }}" {{ $empresaFilter === $empresa ? 'selected' : '' }}>
+                                                        {{ $empresa }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2 d-flex gap-2">
+                                            <button type="submit" class="btn btn-primary btn-sm flex-fill">Buscar</button>
+                                            @if($buscarNombre !== '' || $grupoFilter !== '' || $empresaFilter !== '')
+                                                <a href="{{ route('incentivos.incentivo-administrativo.index') }}" class="btn btn-light btn-sm">Limpiar</a>
+                                            @endif
+                                        </div>
                                     </form>
                                 </div>
                             </div>
@@ -116,7 +140,7 @@
                                                 <th style="min-width: 180px;">Acciones</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody id="incentivoAdministrativoTableBody">
                                             @forelse($registros as $registro)
                                                 <tr>
                                                     <td>
@@ -184,8 +208,8 @@
                                             @empty
                                                 <tr>
                                                     <td colspan="5" class="text-center text-muted">
-                                                        @if($buscarNombre !== '')
-                                                            No hay registros para "{{ $buscarNombre }}".
+                                                        @if($buscarNombre !== '' || $grupoFilter !== '' || $empresaFilter !== '')
+                                                            No hay registros para los filtros seleccionados.
                                                         @else
                                                             No hay registros disponibles.
                                                         @endif
@@ -312,17 +336,86 @@
             });
         });
 
+        function showEmptyRowIfNeeded() {
+            const tbody = document.getElementById('incentivoAdministrativoTableBody');
+            if (!tbody || tbody.querySelector('tr')) {
+                return;
+            }
+
+            const row = document.createElement('tr');
+            row.innerHTML = '<td colspan="5" class="text-center text-muted">No hay registros para los filtros seleccionados.</td>';
+            tbody.appendChild(row);
+        }
+
+        function deleteRegistro(form) {
+            const button = form.querySelector('button[type="submit"]');
+            const row = form.closest('tr');
+            const formData = new FormData(form);
+
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Eliminando...';
+            }
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('No se pudo eliminar el registro.');
+                    }
+
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (row) {
+                        row.remove();
+                        showEmptyRowIfNeeded();
+                    }
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Listo',
+                            text: data.message || 'Registro eliminado correctamente.',
+                            timer: 1800,
+                            showConfirmButton: false
+                        });
+                    }
+                })
+                .catch(function (error) {
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = 'Eliminar';
+                    }
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: error.message || 'No se pudo eliminar el registro.'
+                        });
+                        return;
+                    }
+
+                    alert(error.message || 'No se pudo eliminar el registro.');
+                });
+        }
+
         document.querySelectorAll('.js-confirm-delete').forEach(function (form) {
             form.addEventListener('submit', function (event) {
-                if (form.dataset.confirmed === '1') {
-                    return;
-                }
-
                 event.preventDefault();
 
                 if (typeof Swal === 'undefined') {
-                    form.dataset.confirmed = '1';
-                    form.submit();
+                    if (confirm(`Seguro que deseas eliminar a ${form.dataset.nombre || 'este usuario'}?`)) {
+                        deleteRegistro(form);
+                    }
+
                     return;
                 }
 
@@ -337,8 +430,7 @@
                     cancelButtonColor: '#74788d'
                 }).then(function (result) {
                     if (result.isConfirmed) {
-                        form.dataset.confirmed = '1';
-                        form.submit();
+                        deleteRegistro(form);
                     }
                 });
             });

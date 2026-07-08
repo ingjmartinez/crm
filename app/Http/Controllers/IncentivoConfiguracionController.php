@@ -15,10 +15,18 @@ class IncentivoConfiguracionController extends Controller
     public function incentivoAdministrativoIndex(Request $request)
     {
         $buscarNombre = trim((string) $request->query('buscar_nombre', ''));
+        $grupoFilter = trim((string) $request->query('grupo_filter', ''));
+        $empresaFilter = trim((string) $request->query('empresa_filter', ''));
 
         $registros = IncentivoAdministrativo::query()
             ->when($buscarNombre !== '', function ($query) use ($buscarNombre) {
                 $query->where('nombre', 'like', '%' . $buscarNombre . '%');
+            })
+            ->when($grupoFilter !== '', function ($query) use ($grupoFilter) {
+                $query->where('grupo', $grupoFilter);
+            })
+            ->when($empresaFilter !== '', function ($query) use ($empresaFilter) {
+                $query->where('empresa', $empresaFilter);
             })
             ->orderBy('grupo')
             ->orderBy('empresa')
@@ -39,7 +47,7 @@ class IncentivoConfiguracionController extends Controller
 
         $empresas = collect(IncentivoAdministrativo::EMPRESAS_VALIDAS);
 
-        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas', 'buscarNombre'));
+        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas', 'buscarNombre', 'grupoFilter', 'empresaFilter'));
     }
 
     public function incentivoAdministrativoStore(Request $request)
@@ -95,9 +103,13 @@ class IncentivoConfiguracionController extends Controller
             ->with('success', 'Registro actualizado correctamente.');
     }
 
-    public function incentivoAdministrativoDestroy(IncentivoAdministrativo $incentivoAdministrativo)
+    public function incentivoAdministrativoDestroy(Request $request, IncentivoAdministrativo $incentivoAdministrativo)
     {
         $incentivoAdministrativo->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Registro eliminado correctamente.']);
+        }
 
         return redirect()
             ->route('incentivos.incentivo-administrativo.index')
