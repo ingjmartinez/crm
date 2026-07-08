@@ -12,13 +12,19 @@ class IncentivoConfiguracionController extends Controller
     private const GRUPO_SEGURIDAD = '6. Seguridad';
     private const GRUPOS_MONTO_FIJO = ['4. Operadores', '5. Servs. Tecnicos', self::GRUPO_SEGURIDAD];
 
-    public function incentivoAdministrativoIndex()
+    public function incentivoAdministrativoIndex(Request $request)
     {
+        $buscarNombre = trim((string) $request->query('buscar_nombre', ''));
+
         $registros = IncentivoAdministrativo::query()
+            ->when($buscarNombre !== '', function ($query) use ($buscarNombre) {
+                $query->where('nombre', 'like', '%' . $buscarNombre . '%');
+            })
             ->orderBy('grupo')
             ->orderBy('empresa')
             ->orderBy('nombre')
-            ->paginate(30);
+            ->paginate(30)
+            ->withQueryString();
 
         $posiciones = PorcentajeIncentivo::query()
             ->orderBy('posicion')
@@ -33,7 +39,7 @@ class IncentivoConfiguracionController extends Controller
 
         $empresas = collect(IncentivoAdministrativo::EMPRESAS_VALIDAS);
 
-        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas'));
+        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas', 'buscarNombre'));
     }
 
     public function incentivoAdministrativoStore(Request $request)

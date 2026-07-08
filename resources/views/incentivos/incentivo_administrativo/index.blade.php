@@ -88,7 +88,21 @@
                     <div class="col-lg-12">
                         <div class="card">
                             <div class="card-header">
-                                <h5 class="card-title mb-0">Listado</h5>
+                                <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
+                                    <h5 class="card-title mb-0">Listado</h5>
+                                    <form action="{{ route('incentivos.incentivo-administrativo.index') }}" method="GET" class="d-flex gap-2" style="max-width: 420px; width: 100%;">
+                                        <input
+                                            type="text"
+                                            name="buscar_nombre"
+                                            class="form-control form-control-sm"
+                                            value="{{ $buscarNombre }}"
+                                            placeholder="Buscar por nombre">
+                                        <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
+                                        @if($buscarNombre !== '')
+                                            <a href="{{ route('incentivos.incentivo-administrativo.index') }}" class="btn btn-light btn-sm">Limpiar</a>
+                                        @endif
+                                    </form>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
@@ -169,7 +183,13 @@
                                                 </tr>
                                             @empty
                                                 <tr>
-                                                    <td colspan="5" class="text-center text-muted">No hay registros disponibles.</td>
+                                                    <td colspan="5" class="text-center text-muted">
+                                                        @if($buscarNombre !== '')
+                                                            No hay registros para "{{ $buscarNombre }}".
+                                                        @else
+                                                            No hay registros disponibles.
+                                                        @endif
+                                                    </td>
                                                 </tr>
                                             @endforelse
                                         </tbody>
