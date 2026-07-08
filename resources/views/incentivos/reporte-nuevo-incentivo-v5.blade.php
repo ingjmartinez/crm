@@ -1,6 +1,12 @@
 @extends('app')
 
 @section('content')
+    @php
+        $canConfigAdminPct = auth()->check()
+            && method_exists(auth()->user(), 'hasRole')
+            && auth()->user()->hasRole('superadmin');
+    @endphp
+
     <style>
         .empleado-maestro-pendiente {
             background: #fff7df;
@@ -171,7 +177,7 @@
                                 <p class="text-uppercase fw-medium text-muted mb-1">Total Incentivo Bruto</p>
                                 <h4 class="mb-0" id="ni_total_incentivo">0</h4>
                                 <div class="d-block mt-1 fw-semibold fs-5 text-primary text-start" id="ni_admin_resumen">
-                                    <div>Porcentaje (0%): 0</div>
+                                    <div>Porcentaje (10%): 0</div>
                                     <div>Administrativo: 0</div>
                                     <div>Coordinador: 0</div>
                                 </div>
@@ -240,11 +246,18 @@
                                     </div>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigPct">Configurar Tipo de Pago</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigPuestoPct">Configurar % de puesto</button>
-                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigAdminPct">Porcentaje</button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-soft-secondary"
+                                        id="btnConfigAdminPct"
+                                        @if(!$canConfigAdminPct) disabled title="Solo superadmin puede modificar este porcentaje" @endif>
+                                        Porcentaje
+                                    </button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
                                     <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
+                                    <button type="button" class="btn btn-info" id="btnValidacionGerencial">Validacion Gerencial</button>
                                     <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
                                     <button type="button" class="btn btn-success" id="btnConsultarDesvinculados">Usu. Desvinculados</button>
                                 </div>
@@ -315,11 +328,14 @@
                 </div>
                 <div class="modal-body">
                     <label class="form-label" for="admin_pct_bruto">% bruto (ejemplo: 9 = 9%)</label>
-                    <input type="number" id="admin_pct_bruto" class="form-control" value="0" min="0" step="0.01">
+                    <input type="number" id="admin_pct_bruto" class="form-control" value="10" min="0" step="0.01" @if(!$canConfigAdminPct) disabled @endif>
+                    @if(!$canConfigAdminPct)
+                        <small class="text-muted d-block mt-2">Solo superadmin puede modificar este porcentaje.</small>
+                    @endif
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="btnGuardarAdminPct">Guardar</button>
+                    <button type="button" class="btn btn-primary" id="btnGuardarAdminPct" @if(!$canConfigAdminPct) disabled @endif>Guardar</button>
                 </div>
             </div>
         </div>
@@ -380,7 +396,7 @@
                                 <button type="button" class="btn btn-primary" id="btnAdminFiltroTodos">Todo</button>
                                 <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG1">1 Gtes. y Encarg.</button>
                                 <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG2">2 Monitoreo</button>
-                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG45">4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</button>
+                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG45">4 Operadores + Seguridad / 5 Servs. Tecnicos</button>
                             </div>
                         </div>
                     </div>
@@ -742,6 +758,7 @@
 @section('script')
 <script>
     const XML_DECL = '<' + '?xml version="1.0" encoding="UTF-8" standalone="yes"?' + '>';
+    const CAN_CONFIG_ADMIN_PCT = @json($canConfigAdminPct);
 
     function buildRanges(percent, pagos) {
         return [
@@ -766,14 +783,17 @@
 
     function normalizeAdministrativeRowsFromPayload(rows) {
         return (Array.isArray(rows) ? rows : []).map(function (row) {
+            const grupo = normalizeAdministrativeGroup(row?.grupo);
+            const rawPct = toNumber(row?.pct);
+
             return {
                 id: row?.id ?? null,
-                grupo: normalizeAdministrativeGroup(row?.grupo),
+                grupo,
                 nombre: String(row?.nombre ?? '').trim(),
                 empresa: String(row?.empresa ?? '').trim(),
-                pct: isFixedAdministrativeGroup(row?.grupo)
-                    ? Math.max(0, toNumber(row?.pct))
-                    : Math.max(0, toNumber(row?.pct) / 100),
+                pct: isFixedAdministrativeGroup(grupo)
+                    ? Math.max(0, rawPct)
+                    : Math.max(0, isServsTecnicosGroup(grupo) && rawPct <= 1 ? rawPct : rawPct / 100),
             };
         });
     }
@@ -822,7 +842,7 @@
     let excludedFaltantesCedulas = new Set();
     let lastDesvinculadosCedulas = new Set();
     let excludedDesvinculadosCedulas = new Set();
-    let adminPctBruto = 0;
+    let adminPctBruto = 10;
     const ADMINISTRATIVE_SHARE = 0.40;
     let administrativeGroupFilter = 'todos';
     const ADMIN_GROUP_OPTIONS = [
@@ -949,7 +969,7 @@
     }
 
     function getFixedBagBaseBudget(administrativePoolBase) {
-        return toIntegerAmount(toIntegerAmount(administrativePoolBase) * (getPuestoPctByCategoryKey('g45') / 100));
+        return toIntegerAmount(toIntegerAmount(administrativePoolBase) * (getPuestoPctByCategoryKey('g45_ops') / 100));
     }
 
     function getFixedBagMissingBeforeTopUp(administrativePoolBase) {
@@ -1120,6 +1140,8 @@
         const montoG1 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g1) / 100));
         const montoG2 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g2) / 100));
         const montoG45 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g45) / 100));
+        const montoG45Ops = getPuestoCategoryBudget('g45_ops');
+        const montoG45Servs = getPuestoCategoryBudget('g45_servs');
         const fixedBalance = getFixedAdministrativeBalance();
         const fixedBalanceText = fixedBalance.missing > 0
             ? `Faltan ${formatMoney(fixedBalance.missing)}`
@@ -1139,7 +1161,12 @@
             <tr>
                 <td>4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</td>
                 <td class="text-end">${toNumber(puestoPctConfig.g45).toFixed(2)}%</td>
-                <td class="text-end">${formatMoney(montoG45)}<br><small class="${fixedBalance.missing > 0 ? 'text-danger' : 'text-muted'}">${fixedBalanceText}</small></td>
+                <td class="text-end">
+                    ${formatMoney(montoG45)}
+                    <br><small class="text-muted">50% Ops/Seg: ${formatMoney(montoG45Ops)}</small>
+                    <br><small class="text-muted">10% Servs: ${formatMoney(montoG45Servs)}</small>
+                    <br><small class="${fixedBalance.missing > 0 ? 'text-danger' : 'text-muted'}">${fixedBalanceText}</small>
+                </td>
             </tr>
         `;
     }
@@ -1355,8 +1382,22 @@
         return document.getElementById('ni_fecha_fin')?.value || new Date().toISOString().slice(0, 10);
     }
 
+    function getPagoIncentivoExportRows() {
+        let rows = getBaseFilteredRows({ includeEmpresaFilter: false });
+
+        if (excludedFaltantesCedulas.size) {
+            rows = rows.filter(item => !excludedFaltantesCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
+        }
+
+        if (excludedDesvinculadosCedulas.size) {
+            rows = rows.filter(item => !excludedDesvinculadosCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
+        }
+
+        return rows;
+    }
+
     function getPagoIncentivoExportData() {
-        const rows = currentFilteredRows
+        const rows = getPagoIncentivoExportRows()
             .map((row) => ({
                 ...row,
                 __importe: toIntegerAmount(row?.nuevo_incentivo),
@@ -1511,6 +1552,182 @@
         );
     }
 
+    function getValidacionGerencialRows() {
+        const departmentOrder = {
+            '1. Gtes. Y Encarg.': 1,
+            '2. Monitoreo': 2,
+            '4. Operadores': 3,
+            '5. Servs. Tecnicos': 4,
+            '6. Seguridad': 5,
+        };
+
+        return [
+            ...administrativeRows.map((row) => ({
+                ...row,
+                grupo: normalizeAdministrativeGroup(row.grupo),
+                empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
+                __tipo: 'admin',
+            })),
+            ...operatorRows.map((row) => ({
+                ...row,
+                grupo: normalizeAdministrativeGroup(row.grupo),
+                empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
+                __tipo: 'operador',
+            })),
+        ]
+            .filter((row) => getAdministrativeCategoryKeyByGroup(row.grupo) !== null)
+            .sort((a, b) => {
+                const groupCompare = (departmentOrder[a.grupo] || 99) - (departmentOrder[b.grupo] || 99);
+                if (groupCompare !== 0) return groupCompare;
+
+                const empresaCompare = String(a.empresa || '').localeCompare(String(b.empresa || ''));
+                if (empresaCompare !== 0) return empresaCompare;
+
+                return String(a.nombre || '').localeCompare(String(b.nombre || ''));
+            });
+    }
+
+    function formatValidacionGerencialConfigValue(row) {
+        return isFixedAdministrativeGroup(row?.grupo)
+            ? `RD$ ${formatMoney(row?.pct)}`
+            : `${formatAdministrativePct(row?.pct)}%`;
+    }
+
+    function generarPdfValidacionGerencial() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        if (typeof pdfMake === 'undefined') {
+            Swal.fire({ title: 'Error', text: 'No se encontro la libreria para generar PDF.', icon: 'error' });
+            return;
+        }
+
+        const rows = getValidacionGerencialRows();
+        if (!rows.length) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay categorias administrativas para validar.', icon: 'warning' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Generando datos',
+            text: 'Preparando validacion gerencial por departamento...',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        setTimeout(() => {
+            try {
+                const fechaIni = document.getElementById('ni_fecha_ini')?.value || '';
+                const fechaFin = document.getElementById('ni_fecha_fin')?.value || '';
+                const sistema = document.getElementById('ni_sistema')?.value || '';
+                const tipoPago = document.getElementById('ni_tipo_pago')?.selectedOptions?.[0]?.textContent || '';
+                const total = rows.reduce((sum, row) => sum + getAdministrativeAmountByRow(row), 0);
+
+                const tableBody = [
+                    [
+                        { text: 'Departamento', style: 'tableHeader' },
+                        { text: 'Empresa', style: 'tableHeader' },
+                        { text: 'Nombre', style: 'tableHeader' },
+                        { text: '% / Monto fijo', style: 'tableHeader', alignment: 'right' },
+                        { text: 'Monto a pagar', style: 'tableHeader', alignment: 'right' },
+                    ],
+                    ...rows.map((row) => [
+                        row.grupo || '',
+                        row.empresa || '',
+                        row.nombre || '',
+                        { text: formatValidacionGerencialConfigValue(row), alignment: 'right' },
+                        { text: formatMoney(getAdministrativeAmountByRow(row)), alignment: 'right' },
+                    ]),
+                    [
+                        { text: 'Total', colSpan: 4, alignment: 'right', bold: true },
+                        {},
+                        {},
+                        {},
+                        { text: formatMoney(total), alignment: 'right', bold: true },
+                    ],
+                ];
+
+                const docDefinition = {
+                    pageSize: 'LETTER',
+                    pageOrientation: 'landscape',
+                    pageMargins: [28, 34, 28, 40],
+                    footer: function (currentPage, pageCount) {
+                        return {
+                            text: `Pagina ${currentPage} de ${pageCount}`,
+                            alignment: 'right',
+                            margin: [0, 0, 28, 0],
+                            fontSize: 8,
+                            color: '#6c757d',
+                        };
+                    },
+                    content: [
+                        { text: 'Validacion Gerencial', style: 'title' },
+                        { text: 'Categorias administrativas sin agentes de venta', style: 'subtitle' },
+                        {
+                            columns: [
+                                { text: `Periodo: ${formatDateDisplay(fechaIni)} al ${formatDateDisplay(fechaFin)}` },
+                                { text: `Sistema: ${sistema || 'Todos'}` },
+                                { text: `Tipo de pago: ${tipoPago}` },
+                            ],
+                            margin: [0, 8, 0, 8],
+                            fontSize: 9,
+                        },
+                        {
+                            columns: [
+                                { text: `Total administrativo: ${formatMoney(total)}`, bold: true },
+                                { text: `Registros: ${rows.length}`, alignment: 'center' },
+                                { text: `Generado: ${new Date().toLocaleString('es-DO')}`, alignment: 'right' },
+                            ],
+                            margin: [0, 0, 0, 12],
+                            fontSize: 9,
+                        },
+                        {
+                            table: {
+                                headerRows: 1,
+                                dontBreakRows: true,
+                                keepWithHeaderRows: 1,
+                                widths: ['18%', '13%', '*', '14%', '14%'],
+                                body: tableBody,
+                            },
+                            layout: {
+                                fillColor: function (rowIndex) {
+                                    if (rowIndex === 0) return '#eef2f7';
+                                    if (rowIndex === tableBody.length - 1) return '#f8f9fa';
+                                    return rowIndex % 2 === 0 ? '#fbfcfd' : null;
+                                },
+                                hLineColor: function () { return '#d9dee3'; },
+                                vLineColor: function () { return '#d9dee3'; },
+                            },
+                        },
+                    ],
+                    styles: {
+                        title: { fontSize: 16, bold: true },
+                        subtitle: { fontSize: 10, color: '#495057' },
+                        tableHeader: { bold: true, fontSize: 9, color: '#212529' },
+                    },
+                    defaultStyle: {
+                        fontSize: 8,
+                    },
+                };
+
+                const pdf = pdfMake.createPdf(docDefinition);
+                Swal.close();
+                pdf.download(`validacion_gerencial_${fechaFin || 'incentivos'}.pdf`);
+            } catch (error) {
+                console.error('Error generando validacion gerencial:', error);
+                Swal.fire({
+                    title: 'Error',
+                    text: error?.message || String(error) || 'No se pudo generar la validacion gerencial.',
+                    icon: 'error'
+                });
+            }
+        }, 150);
+    }
+
     function exportCoordinadoresExcel() {
         const rows = coordinatorRows.map((row) => [
             row.nombre,
@@ -1542,7 +1759,15 @@
 
     function isFixedAdministrativeGroup(value) {
         const group = normalizeAdministrativeGroup(value);
-        return group === '4. Operadores' || group === '5. Servs. Tecnicos' || group === '6. Seguridad';
+        return group === '4. Operadores' || group === '6. Seguridad';
+    }
+
+    function isServsTecnicosGroup(value) {
+        return normalizeAdministrativeGroup(value) === '5. Servs. Tecnicos';
+    }
+
+    function isG45CategoryKey(categoryKey) {
+        return categoryKey === 'g45' || categoryKey === 'g45_ops' || categoryKey === 'g45_servs';
     }
 
     function updateAdministrativeFilterButtons() {
@@ -1583,6 +1808,8 @@
     function getPuestoPctByCategoryKey(categoryKey) {
         if (categoryKey === 'g1') return toNumber(puestoPctConfig.g1);
         if (categoryKey === 'g2') return toNumber(puestoPctConfig.g2);
+        if (categoryKey === 'g45_ops') return 50;
+        if (categoryKey === 'g45_servs') return 10;
         if (categoryKey === 'g45') return toNumber(puestoPctConfig.g45);
         return 0;
     }
@@ -1596,7 +1823,7 @@
         const base = empresaValue === null
             ? toIntegerAmount(currentAdministrativePoolBase)
             : toIntegerAmount(getAdministrativePoolForEmpresa(empresaValue));
-        const topUp = categoryKey === 'g45' && empresaValue === null
+        const topUp = categoryKey === 'g45_ops' && empresaValue === null
             ? toIntegerAmount(currentFixedBagTopUp)
             : 0;
 
@@ -1607,7 +1834,8 @@
         const group = normalizeAdministrativeGroup(groupValue);
         if (group === '1. Gtes. Y Encarg.') return 'g1';
         if (group === '2. Monitoreo') return 'g2';
-        if (group === '4. Operadores' || group === '5. Servs. Tecnicos' || group === '6. Seguridad') return 'g45';
+        if (group === '5. Servs. Tecnicos') return 'g45_servs';
+        if (group === '4. Operadores' || group === '6. Seguridad') return 'g45_ops';
         return null;
     }
 
@@ -1647,7 +1875,7 @@
     }
 
     function getFixedAdministrativeBalance(empresaValue = null) {
-        const budget = getPuestoCategoryBudget('g45', empresaValue);
+        const budget = getPuestoCategoryBudget('g45_ops', empresaValue);
         const fixedTotal = getFixedAdministrativeAmountTotal(empresaValue);
 
         return {
@@ -1706,7 +1934,7 @@
         let filteredRows = allRows;
 
         if (administrativeGroupFilter === '4_5') {
-            filteredRows = filteredRows.filter((row) => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45');
+            filteredRows = filteredRows.filter((row) => isG45CategoryKey(getAdministrativeCategoryKeyByGroup(row.grupo)));
         } else if (administrativeGroupFilter !== 'todos') {
             filteredRows = filteredRows.filter((row) => row.grupo === administrativeGroupFilter);
         }
@@ -1724,6 +1952,34 @@
         }
 
         return getAdministrativeAmountByRow(administrativeRows[row.__idx] || row);
+    }
+
+    function getAdministrativeAmountSource(row) {
+        const sourceRow = row.__tipo === 'operador'
+            ? (operatorRows[row.__idx] || row)
+            : (administrativeRows[row.__idx] || row);
+        const group = normalizeAdministrativeGroup(sourceRow?.grupo);
+        const categoryKey = getAdministrativeCategoryKeyByGroup(group);
+
+        if (isFixedAdministrativeGroup(group)) {
+            return 'Monto fijo configurado. Bolsa referencia Ops/Seg: 50% del administrativo.';
+        }
+
+        const empresa = normalizeAdministrativeEmpresaLabel(sourceRow?.empresa);
+        const categoryBudget = getPuestoCategoryBudget(categoryKey, empresa);
+        const categoryPctTotal = getAdministrativeCategoryPctTotal(categoryKey, empresa);
+        const rowPct = toNumber(sourceRow?.pct);
+        const rowPctLabel = formatAdministrativePct(rowPct);
+        const totalPctLabel = formatAdministrativePct(categoryPctTotal);
+        const pctBase = categoryKey === 'g45_servs'
+            ? '10% Servs. Tecnicos'
+            : categoryKey === 'g2'
+                ? `${toNumber(puestoPctConfig.g2).toFixed(2)}% Monitoreo`
+                : categoryKey === 'g1'
+                    ? `${toNumber(puestoPctConfig.g1).toFixed(2)}% Gtes./Encarg.`
+                    : 'Bolsa administrativa';
+
+        return `${pctBase}: ${formatMoney(categoryBudget)}; participacion ${rowPctLabel}% de ${totalPctLabel}%.`;
     }
 
     function getCoordinatorPctTotal() {
@@ -1782,14 +2038,14 @@
     function getAdministrativeFilteredBudget() {
         if (administrativeGroupFilter === '1. Gtes. Y Encarg.') return getPuestoCategoryBudget('g1');
         if (administrativeGroupFilter === '2. Monitoreo') return getPuestoCategoryBudget('g2');
-        if (administrativeGroupFilter === '4_5') return getPuestoCategoryBudget('g45');
+        if (administrativeGroupFilter === '4_5') return getPuestoCategoryBudget('g45_ops') + getPuestoCategoryBudget('g45_servs');
 
-        return getPuestoCategoryBudget('g1') + getPuestoCategoryBudget('g2') + getPuestoCategoryBudget('g45');
+        return getPuestoCategoryBudget('g1') + getPuestoCategoryBudget('g2') + getPuestoCategoryBudget('g45_ops') + getPuestoCategoryBudget('g45_servs');
     }
 
     function recalculateAdministrativeOperatorBases() {
         currentAdministrativeBase = getPuestoCategoryBudget('g1') + getPuestoCategoryBudget('g2');
-        currentOperatorBase = getPuestoCategoryBudget('g45');
+        currentOperatorBase = getPuestoCategoryBudget('g45_ops') + getPuestoCategoryBudget('g45_servs');
     }
 
     function getOperatorAmount(row) {
@@ -1806,7 +2062,13 @@
             .filter(row => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g2')
             .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
         const montoG45 = visibleRows
-            .filter(row => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45')
+            .filter(row => isG45CategoryKey(getAdministrativeCategoryKeyByGroup(row.grupo)))
+            .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
+        const montoG45Ops = visibleRows
+            .filter(row => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45_ops')
+            .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
+        const montoG45Servs = visibleRows
+            .filter(row => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45_servs')
             .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
         const montoFiltro = totalDistribuido;
 
@@ -1830,7 +2092,7 @@
             const balanceText = balanceG45.missing > 0
                 ? ` | Faltan ${formatMoney(balanceG45.missing)}`
                 : ` | Restante ${formatMoney(balanceG45.remaining)}`;
-            catG45.textContent = `${toNumber(puestoPctConfig.g45).toFixed(2)}% | ${formatMoney(montoG45)}${balanceText}`;
+            catG45.innerHTML = `${toNumber(puestoPctConfig.g45).toFixed(2)}% | ${formatMoney(montoG45)}${balanceText}<br><small class="text-muted">50% Ops/Seg: ${formatMoney(montoG45Ops)} | 10% Servs: ${formatMoney(montoG45Servs)}</small>`;
             catG45.classList.toggle('text-danger', balanceG45.missing > 0);
         }
         const totalCol = document.getElementById('admin_col_total');
@@ -1859,6 +2121,23 @@
                 : getAdministrativeAmount(administrativeRows[idx] || {});
 
             cell.textContent = formatMoney(amount);
+        });
+        document.querySelectorAll('.admin-monto-source').forEach((cell) => {
+            const idx = parseInt(cell.dataset.idx, 10);
+            const tipo = cell.dataset.tipo;
+            if (Number.isNaN(idx)) {
+                return;
+            }
+
+            const row = tipo === 'operador'
+                ? operatorRows[idx] || {}
+                : administrativeRows[idx] || {};
+
+            cell.textContent = getAdministrativeAmountSource({
+                ...row,
+                __tipo: tipo,
+                __idx: idx,
+            });
         });
         updateAdministrativeSummary();
     }
@@ -1994,7 +2273,7 @@
         const keys = new Set();
         for (const row of rows) {
             if (!isFixedAdministrativeGroup(row.grupo) && toNumber(row.pct_total) > 100) {
-                return 'El % Total no puede ser mayor que 100 para gerentes, encargados o monitoreo.';
+                return 'El % Total no puede ser mayor que 100 para gerentes, encargados, monitoreo o servs. tecnicos.';
             }
 
             const key = `${row.grupo}|${row.nombre}|${row.empresa}`.toLowerCase();
@@ -2087,6 +2366,7 @@
             const inputClass = row.__tipo === 'operador' ? 'op-input op-pct-input' : 'admin-input admin-pct-input';
             const rowClass = row.__tipo === 'operador' ? 'op-input' : 'admin-input';
             const amount = getAdministrativeDisplayAmount(row);
+            const amountSource = getAdministrativeAmountSource(row);
             const suffix = isFixedGroup ? 'RD$' : '%';
             const max = isFixedGroup ? '9999999' : '100';
 
@@ -2109,7 +2389,10 @@
                         <span class="input-group-text">${suffix}</span>
                     </div>
                 </td>
-                <td class="text-end fw-semibold admin-display-monto" data-tipo="${row.__tipo}" data-idx="${row.__idx}">${formatMoney(amount)}</td>
+                <td class="text-end">
+                    <div class="fw-semibold admin-display-monto" data-tipo="${row.__tipo}" data-idx="${row.__idx}">${formatMoney(amount)}</div>
+                    <small class="text-muted admin-monto-source" data-tipo="${row.__tipo}" data-idx="${row.__idx}">${escapeHtml(amountSource)}</small>
+                </td>
                 <td class="text-center">
                     <button type="button" class="btn btn-sm btn-soft-danger btn-delete-admin-row" data-tipo="${row.__tipo}" data-idx="${row.__idx}">Eliminar</button>
                 </td>
@@ -2690,7 +2973,8 @@
         );
     }
 
-    function getBaseFilteredRows() {
+    function getBaseFilteredRows(options = {}) {
+        const includeEmpresaFilter = options.includeEmpresaFilter !== false;
         const filtroCumplimiento = document.getElementById('ni_filtro_cumplimiento').value;
         const filtroEmpresa = document.getElementById('ni_filtro_empresa').value;
 
@@ -2701,7 +2985,7 @@
             filtered = filtered.filter(item => !evaluateMetaMinima(item).cumplio);
         }
 
-        if (filtroEmpresa !== 'todos') {
+        if (includeEmpresaFilter && filtroEmpresa !== 'todos') {
             filtered = filtered.filter(item => normalizeEmpresaValue(item?.empresa) === filtroEmpresa);
         }
 
@@ -2978,6 +3262,15 @@
             modal.show();
         });
         document.querySelector('#btnConfigAdminPct').addEventListener('click', function() {
+            if (!CAN_CONFIG_ADMIN_PCT) {
+                Swal.fire({
+                    title: 'Acceso restringido',
+                    text: 'Solo superadmin puede modificar este porcentaje.',
+                    icon: 'warning'
+                });
+                return;
+            }
+
             document.getElementById('admin_pct_bruto').value = adminPctBruto;
             const modal = new bootstrap.Modal(document.getElementById('modalConfigAdminPct'));
             modal.show();
@@ -3211,6 +3504,10 @@
             exportAdministrativosExcel();
         });
 
+        document.querySelector('#btnValidacionGerencial').addEventListener('click', function() {
+            generarPdfValidacionGerencial();
+        });
+
         document.querySelector('#btnExportCoordinadoresExcel').addEventListener('click', function() {
             exportCoordinadoresExcel();
         });
@@ -3235,6 +3532,15 @@
         });
 
         document.querySelector('#btnGuardarAdminPct').addEventListener('click', function() {
+            if (!CAN_CONFIG_ADMIN_PCT) {
+                Swal.fire({
+                    title: 'Acceso restringido',
+                    text: 'Solo superadmin puede guardar este porcentaje.',
+                    icon: 'warning'
+                });
+                return;
+            }
+
             adminPctBruto = parseFloat(document.getElementById('admin_pct_bruto').value || 0);
             bootstrap.Modal.getInstance(document.getElementById('modalConfigAdminPct'))?.hide();
 
