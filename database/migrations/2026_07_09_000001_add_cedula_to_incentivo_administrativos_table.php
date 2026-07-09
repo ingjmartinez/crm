@@ -13,7 +13,7 @@ return new class extends Migration
         }
 
         Schema::table('incentivo_administrativos', function (Blueprint $table) {
-            $table->string('cedula', 25)->nullable()->after('nombre')->index();
+            $table->string('cedula', 11)->nullable()->after('nombre')->index();
         });
     }
 

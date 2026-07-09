@@ -58,7 +58,7 @@
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label mb-1">Cedula</label>
-                                        <input type="text" name="cedula" class="form-control" value="{{ old('cedula') }}" maxlength="25" inputmode="numeric">
+                                        <input type="text" name="cedula" class="form-control js-cedula-input" value="{{ old('cedula') }}" maxlength="11" pattern="\d{11}" inputmode="numeric">
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label mb-1">Empresa</label>
@@ -182,7 +182,7 @@
                                                         <input type="text" name="nombre" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm" value="{{ $registro->nombre }}" required>
                                                     </td>
                                                     <td>
-                                                        <input type="text" name="cedula" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm" value="{{ $registro->cedula }}" maxlength="25" inputmode="numeric">
+                                                        <input type="text" name="cedula" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm js-cedula-input" value="{{ $registro->cedula }}" maxlength="11" pattern="\d{11}" inputmode="numeric">
                                                     </td>
                                                     <td>
                                                         <select name="empresa" form="form-adm-{{ $registro->id }}" class="form-select form-select-sm" required>
@@ -315,6 +315,12 @@
             updatePctInputMode(selectEl);
             selectEl.addEventListener('change', function () {
                 syncPctFromGrupo(selectEl);
+            });
+        });
+
+        document.querySelectorAll('.js-cedula-input').forEach(function (input) {
+            input.addEventListener('input', function () {
+                input.value = input.value.replace(/\D/g, '').slice(0, 11);
             });
         });
 

@@ -55,7 +55,7 @@ class IncentivoConfiguracionController extends Controller
                         ->where('grupo', $request->input('grupo'))
                         ->where('empresa', $request->input('empresa'))),
             ],
-            'cedula' => ['nullable', 'string', 'max:25'],
+            'cedula' => ['nullable', 'string', 'regex:/^\d{11}$/'],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:9999999'],
         ], [
@@ -83,7 +83,7 @@ class IncentivoConfiguracionController extends Controller
                         ->where('empresa', $request->input('empresa')))
                     ->ignore($incentivoAdministrativo->id),
             ],
-            'cedula' => ['nullable', 'string', 'max:25'],
+            'cedula' => ['nullable', 'string', 'regex:/^\d{11}$/'],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:9999999'],
         ], [
@@ -180,7 +180,7 @@ class IncentivoConfiguracionController extends Controller
                 ->selectSub(function ($subquery) {
                     $subquery->from('empleados')
                         ->select('empleadoid')
-                        ->whereRaw("REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') = REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '')")
+                        ->whereRaw("BINARY REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') = BINARY REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '')")
                         ->whereRaw("NULLIF(REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', ''), '') IS NOT NULL")
                         ->orderByDesc('empleadoid')
                         ->limit(1);
@@ -199,14 +199,20 @@ class IncentivoConfiguracionController extends Controller
         }
 
         return (string) (DB::table('empleados')
-            ->whereRaw("REPLACE(REPLACE(COALESCE(cedula, ''), '-', ''), ' ', '') = ?", [$cedula])
+            ->whereRaw("BINARY REPLACE(REPLACE(COALESCE(cedula, ''), '-', ''), ' ', '') = ?", [$cedula])
             ->orderByDesc('empleadoid')
             ->value('empleadoid') ?? '');
     }
 
     private function validateIncentivoAdministrativo(Request $request, array $rules, array $messages = []): array
     {
-        $validator = validator($request->all(), $rules, $messages);
+        $request->merge([
+            'cedula' => preg_replace('/\D+/', '', (string) $request->input('cedula', '')) ?: null,
+        ]);
+
+        $validator = validator($request->all(), $rules, array_merge([
+            'cedula.regex' => 'La cedula debe tener exactamente 11 digitos numericos.',
+        ], $messages));
 
         $validator->after(function ($validator) use ($request) {
             $grupo = trim((string) $request->input('grupo'));
@@ -219,8 +225,6 @@ class IncentivoConfiguracionController extends Controller
         });
 
         $validated = $validator->validate();
-        $validated['cedula'] = preg_replace('/\D+/', '', (string) ($validated['cedula'] ?? '')) ?: null;
-
         return $validated;
     }
 
