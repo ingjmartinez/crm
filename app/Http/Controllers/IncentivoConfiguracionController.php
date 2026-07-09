@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\IncentivoAdministrativo;
 use App\Models\PorcentajeIncentivo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class IncentivoConfiguracionController extends Controller
@@ -18,16 +19,7 @@ class IncentivoConfiguracionController extends Controller
         $grupoFilter = trim((string) $request->query('grupo_filter', ''));
         $empresaFilter = trim((string) $request->query('empresa_filter', ''));
 
-        $registros = IncentivoAdministrativo::query()
-            ->when($buscarNombre !== '', function ($query) use ($buscarNombre) {
-                $query->where('nombre', 'like', '%' . $buscarNombre . '%');
-            })
-            ->when($grupoFilter !== '', function ($query) use ($grupoFilter) {
-                $query->where('grupo', $grupoFilter);
-            })
-            ->when($empresaFilter !== '', function ($query) use ($empresaFilter) {
-                $query->where('empresa', $empresaFilter);
-            })
+        $registros = $this->queryIncentivosAdministrativos($request)
             ->orderBy('grupo')
             ->orderBy('empresa')
             ->orderBy('nombre')
@@ -63,6 +55,7 @@ class IncentivoConfiguracionController extends Controller
                         ->where('grupo', $request->input('grupo'))
                         ->where('empresa', $request->input('empresa'))),
             ],
+            'cedula' => ['nullable', 'string', 'max:25'],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:9999999'],
         ], [
@@ -90,6 +83,7 @@ class IncentivoConfiguracionController extends Controller
                         ->where('empresa', $request->input('empresa')))
                     ->ignore($incentivoAdministrativo->id),
             ],
+            'cedula' => ['nullable', 'string', 'max:25'],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:9999999'],
         ], [
@@ -105,6 +99,8 @@ class IncentivoConfiguracionController extends Controller
                     'id' => $incentivoAdministrativo->id,
                     'grupo' => $incentivoAdministrativo->grupo,
                     'nombre' => $incentivoAdministrativo->nombre,
+                    'cedula' => $incentivoAdministrativo->cedula,
+                    'empleadoid' => $this->findEmpleadoIdByCedula($incentivoAdministrativo->cedula),
                     'empresa' => $incentivoAdministrativo->empresa,
                     'pct_total' => number_format((float) $incentivoAdministrativo->pct_total, 2, '.', ''),
                 ],
@@ -114,6 +110,39 @@ class IncentivoConfiguracionController extends Controller
         return redirect()
             ->route('incentivos.incentivo-administrativo.index')
             ->with('success', 'Registro actualizado correctamente.');
+    }
+
+    public function incentivoAdministrativoExport(Request $request)
+    {
+        $rows = $this->queryIncentivosAdministrativos($request, true)
+            ->orderBy('grupo')
+            ->orderBy('empresa')
+            ->orderBy('nombre')
+            ->get();
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="incentivo_administrativo.csv"',
+        ];
+
+        return response()->stream(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['Grupo', 'Nombre', 'Cedula', 'IdEmpleado', 'Empresa', '% Total / Monto fijo']);
+
+            foreach ($rows as $row) {
+                fputcsv($handle, [
+                    $row->grupo,
+                    $row->nombre,
+                    $row->cedula,
+                    $row->empleadoid,
+                    $row->empresa,
+                    number_format((float) $row->pct_total, 2, '.', ''),
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
     }
 
     public function incentivoAdministrativoDestroy(Request $request, IncentivoAdministrativo $incentivoAdministrativo)
@@ -127,6 +156,52 @@ class IncentivoConfiguracionController extends Controller
         return redirect()
             ->route('incentivos.incentivo-administrativo.index')
             ->with('success', 'Registro eliminado correctamente.');
+    }
+
+    private function queryIncentivosAdministrativos(Request $request, bool $withEmpleadoId = false)
+    {
+        $buscarNombre = trim((string) $request->query('buscar_nombre', ''));
+        $grupoFilter = trim((string) $request->query('grupo_filter', ''));
+        $empresaFilter = trim((string) $request->query('empresa_filter', ''));
+
+        $query = IncentivoAdministrativo::query()
+            ->when($buscarNombre !== '', function ($query) use ($buscarNombre) {
+                $query->where('nombre', 'like', '%' . $buscarNombre . '%');
+            })
+            ->when($grupoFilter !== '', function ($query) use ($grupoFilter) {
+                $query->where('grupo', $grupoFilter);
+            })
+            ->when($empresaFilter !== '', function ($query) use ($empresaFilter) {
+                $query->where('empresa', $empresaFilter);
+            });
+
+        if ($withEmpleadoId) {
+            $query->addSelect('incentivo_administrativos.*')
+                ->selectSub(function ($subquery) {
+                    $subquery->from('empleados')
+                        ->select('empleadoid')
+                        ->whereRaw("REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') = REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '')")
+                        ->whereRaw("NULLIF(REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', ''), '') IS NOT NULL")
+                        ->orderByDesc('empleadoid')
+                        ->limit(1);
+                }, 'empleadoid');
+        }
+
+        return $query;
+    }
+
+    private function findEmpleadoIdByCedula(?string $cedula): string
+    {
+        $cedula = preg_replace('/\D+/', '', (string) $cedula);
+
+        if ($cedula === '') {
+            return '';
+        }
+
+        return (string) (DB::table('empleados')
+            ->whereRaw("REPLACE(REPLACE(COALESCE(cedula, ''), '-', ''), ' ', '') = ?", [$cedula])
+            ->orderByDesc('empleadoid')
+            ->value('empleadoid') ?? '');
     }
 
     private function validateIncentivoAdministrativo(Request $request, array $rules, array $messages = []): array
@@ -143,7 +218,10 @@ class IncentivoConfiguracionController extends Controller
             }
         });
 
-        return $validator->validate();
+        $validated = $validator->validate();
+        $validated['cedula'] = preg_replace('/\D+/', '', (string) ($validated['cedula'] ?? '')) ?: null;
+
+        return $validated;
     }
 
     private function grupoAdministrativoRule(): \Closure

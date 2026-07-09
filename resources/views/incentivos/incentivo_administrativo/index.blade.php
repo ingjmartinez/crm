@@ -52,9 +52,13 @@
                                             @endforeach
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <label class="form-label mb-1">Nombre</label>
                                         <input type="text" name="nombre" class="form-control" value="{{ old('nombre') }}" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1">Cedula</label>
+                                        <input type="text" name="cedula" class="form-control" value="{{ old('cedula') }}" maxlength="25" inputmode="numeric">
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label mb-1">Empresa</label>
@@ -67,7 +71,7 @@
                                             @endforeach
                                         </select>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-1">
                                         <label class="form-label mb-1">% Total / Monto fijo</label>
                                         <div class="input-group">
                                             <input type="number" id="pct_total_create" name="pct_total" min="0" max="9999999" step="0.01" class="form-control" value="{{ old('pct_total', 0) }}" required>
@@ -89,7 +93,10 @@
                         <div class="card">
                             <div class="card-header">
                                 <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
-                                    <h5 class="card-title mb-0">Listado</h5>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <h5 class="card-title mb-0">Listado</h5>
+                                        <a href="{{ route('incentivos.incentivo-administrativo.export', request()->only(['buscar_nombre', 'grupo_filter', 'empresa_filter'])) }}" class="btn btn-success btn-sm">Excel</a>
+                                    </div>
                                     <form action="{{ route('incentivos.incentivo-administrativo.index') }}" method="GET" class="row g-2" style="max-width: 860px; width: 100%;">
                                         <div class="col-md-4">
                                             <input
@@ -135,6 +142,7 @@
                                             <tr>
                                                 <th style="min-width: 180px;">Grupo</th>
                                                 <th style="min-width: 260px;">Nombre</th>
+                                                <th style="min-width: 160px;">Cedula</th>
                                                 <th style="min-width: 160px;">Empresa</th>
                                                 <th style="min-width: 160px;">% Total / Monto fijo</th>
                                                 <th style="min-width: 180px;">Acciones</th>
@@ -174,6 +182,9 @@
                                                         <input type="text" name="nombre" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm" value="{{ $registro->nombre }}" required>
                                                     </td>
                                                     <td>
+                                                        <input type="text" name="cedula" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm" value="{{ $registro->cedula }}" maxlength="25" inputmode="numeric">
+                                                    </td>
+                                                    <td>
                                                         <select name="empresa" form="form-adm-{{ $registro->id }}" class="form-select form-select-sm" required>
                                                             @php
                                                                 $empresaExiste = $empresas->contains($registro->empresa);
@@ -207,7 +218,7 @@
                                                 </tr>
                                             @empty
                                                 <tr>
-                                                    <td colspan="5" class="text-center text-muted">
+                                                    <td colspan="6" class="text-center text-muted">
                                                         @if($buscarNombre !== '' || $grupoFilter !== '' || $empresaFilter !== '')
                                                             No hay registros para los filtros seleccionados.
                                                         @else
@@ -423,7 +434,7 @@
             }
 
             const row = document.createElement('tr');
-            row.innerHTML = '<td colspan="5" class="text-center text-muted">No hay registros para los filtros seleccionados.</td>';
+            row.innerHTML = '<td colspan="6" class="text-center text-muted">No hay registros para los filtros seleccionados.</td>';
             tbody.appendChild(row);
         }
 

@@ -506,6 +506,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/incentivos/reporte-nuevo-incentivo-v5/administrativos/sincronizar', [IncentivosController::class, 'sincronizarAdministrativosReporteNuevoIncentivoV5']);
     Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
     Route::get('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoIndex'])->name('incentivos.incentivo-administrativo.index');
+    Route::get('/incentivos/incentivo-administrativo/export', [IncentivoConfiguracionController::class, 'incentivoAdministrativoExport'])->name('incentivos.incentivo-administrativo.export');
     Route::post('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoStore'])->name('incentivos.incentivo-administrativo.store');
     Route::put('/incentivos/incentivo-administrativo/{incentivoAdministrativo}', [IncentivoConfiguracionController::class, 'incentivoAdministrativoUpdate'])->name('incentivos.incentivo-administrativo.update');
     Route::delete('/incentivos/incentivo-administrativo/{incentivoAdministrativo}', [IncentivoConfiguracionController::class, 'incentivoAdministrativoDestroy'])->name('incentivos.incentivo-administrativo.destroy');

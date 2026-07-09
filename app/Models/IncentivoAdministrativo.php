@@ -17,6 +17,7 @@ class IncentivoAdministrativo extends Model
     protected $fillable = [
         'grupo',
         'nombre',
+        'cedula',
         'empresa',
         'pct_total',
     ];
