@@ -121,27 +121,32 @@ class IncentivoConfiguracionController extends Controller
             ->get();
 
         $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="incentivo_administrativo.csv"',
+            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="incentivo_administrativo.xls"',
         ];
 
         return response()->stream(function () use ($rows) {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, ['Grupo', 'Nombre', 'Cedula', 'IdEmpleado', 'Empresa', '% Total / Monto fijo']);
+            echo "\xEF\xBB\xBF";
+            echo '<html><head><meta charset="UTF-8"></head><body>';
+            echo '<table border="1">';
+            echo '<thead><tr>';
+            foreach (['Grupo', 'Nombre', 'Cedula', 'IdEmpleado', 'Empresa', '% Total / Monto fijo'] as $heading) {
+                echo '<th>' . e($heading) . '</th>';
+            }
+            echo '</tr></thead><tbody>';
 
             foreach ($rows as $row) {
-                fputcsv($handle, [
-                    $row->grupo,
-                    $row->nombre,
-                    $row->cedula,
-                    $row->empleadoid,
-                    $row->empresa,
-                    number_format((float) $row->pct_total, 2, '.', ''),
-                ]);
+                echo '<tr>';
+                echo '<td>' . e($row->grupo) . '</td>';
+                echo '<td>' . e($row->nombre) . '</td>';
+                echo '<td style="mso-number-format:\'@\';">' . e((string) $row->cedula) . '</td>';
+                echo '<td style="mso-number-format:\'@\';">' . e((string) $row->empleadoid) . '</td>';
+                echo '<td>' . e($row->empresa) . '</td>';
+                echo '<td>' . e(number_format((float) $row->pct_total, 2, '.', '')) . '</td>';
+                echo '</tr>';
             }
 
-            fclose($handle);
+            echo '</tbody></table></body></html>';
         }, 200, $headers);
     }
 
