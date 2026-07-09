@@ -1935,32 +1935,6 @@
         return getAdministrativeAmountByRow(administrativeRows[row.__idx] || row);
     }
 
-    function getAdministrativeAmountSource(row) {
-        const sourceRow = row.__tipo === 'operador'
-            ? (operatorRows[row.__idx] || row)
-            : (administrativeRows[row.__idx] || row);
-        const group = normalizeAdministrativeGroup(sourceRow?.grupo);
-        const categoryKey = getAdministrativeCategoryKeyByGroup(group);
-
-        if (isFixedAdministrativeGroup(group)) {
-            return 'Monto fijo configurado.';
-        }
-
-        const empresa = normalizeAdministrativeEmpresaLabel(sourceRow?.empresa);
-        const categoryBudget = getPuestoCategoryBudget(categoryKey, empresa);
-        const categoryPctTotal = getAdministrativeCategoryPctTotal(categoryKey, empresa);
-        const rowPct = toNumber(sourceRow?.pct);
-        const rowPctLabel = formatAdministrativePct(rowPct);
-        const totalPctLabel = formatAdministrativePct(categoryPctTotal);
-        const pctBase = categoryKey === 'g2'
-                ? `${toNumber(puestoPctConfig.g2).toFixed(2)}% Monitoreo`
-                : categoryKey === 'g1'
-                    ? `${toNumber(puestoPctConfig.g1).toFixed(2)}% Gtes./Encarg.`
-                    : 'Bolsa administrativa';
-
-        return `${pctBase}: ${formatMoney(categoryBudget)}; participacion ${rowPctLabel}% de ${totalPctLabel}%.`;
-    }
-
     function getCoordinatorPctTotal() {
         return getCoordinatorMontoUsuariosTotal();
     }
@@ -2094,23 +2068,6 @@
                 : getAdministrativeAmount(administrativeRows[idx] || {});
 
             cell.textContent = formatMoney(amount);
-        });
-        document.querySelectorAll('.admin-monto-source').forEach((cell) => {
-            const idx = parseInt(cell.dataset.idx, 10);
-            const tipo = cell.dataset.tipo;
-            if (Number.isNaN(idx)) {
-                return;
-            }
-
-            const row = tipo === 'operador'
-                ? operatorRows[idx] || {}
-                : administrativeRows[idx] || {};
-
-            cell.textContent = getAdministrativeAmountSource({
-                ...row,
-                __tipo: tipo,
-                __idx: idx,
-            });
         });
         updateAdministrativeSummary();
     }
@@ -2339,7 +2296,6 @@
             const inputClass = row.__tipo === 'operador' ? 'op-input op-pct-input' : 'admin-input admin-pct-input';
             const rowClass = row.__tipo === 'operador' ? 'op-input' : 'admin-input';
             const amount = getAdministrativeDisplayAmount(row);
-            const amountSource = getAdministrativeAmountSource(row);
             const suffix = isFixedGroup ? 'RD$' : '%';
             const max = isFixedGroup ? '9999999' : '100';
 
@@ -2362,10 +2318,7 @@
                         <span class="input-group-text">${suffix}</span>
                     </div>
                 </td>
-                <td class="text-end">
-                    <div class="fw-semibold admin-display-monto" data-tipo="${row.__tipo}" data-idx="${row.__idx}">${formatMoney(amount)}</div>
-                    <small class="text-muted admin-monto-source" data-tipo="${row.__tipo}" data-idx="${row.__idx}">${escapeHtml(amountSource)}</small>
-                </td>
+                <td class="text-end fw-semibold admin-display-monto" data-tipo="${row.__tipo}" data-idx="${row.__idx}">${formatMoney(amount)}</td>
                 <td class="text-center">
                     <button type="button" class="btn btn-sm btn-soft-danger btn-delete-admin-row" data-tipo="${row.__tipo}" data-idx="${row.__idx}">Eliminar</button>
                 </td>
