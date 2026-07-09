@@ -2022,6 +2022,10 @@ class IncentivosController extends Controller
         ]);
 
         $modoCalculo = $request->input('modo_calculo', 'general');
+        $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
+        $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
+        $sistema = $request->input('sistema', 'Todos');
+
         if ($modoCalculo === 'general') {
             $response = $this->reporteNuevoIncentivoV4($request);
             $payload = $response->getData(true);
@@ -2034,6 +2038,12 @@ class IncentivosController extends Controller
             }
 
             $payload = $this->normalizarPayloadEnteroReporteNuevoIncentivoV5($payload);
+            $payload = $this->agregarHorasTotalesPayloadReporteNuevoIncentivoV5(
+                $payload,
+                $fechaIniSeleccionada,
+                $fechaFinSeleccionada,
+                $sistema
+            );
 
             return response()->json($payload, $response->status());
         }
@@ -2041,12 +2051,9 @@ class IncentivosController extends Controller
         ini_set('max_execution_time', 600);
         ini_set('memory_limit', '1G');
 
-        $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
-        $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
         $mesAnterior = Carbon::parse($fechaFinSeleccionada)->subMonthNoOverflow();
         $evalIni = $mesAnterior->copy()->startOfMonth()->toDateString();
         $evalFin = $mesAnterior->copy()->endOfMonth()->toDateString();
-        $sistema = $request->input('sistema', 'Todos');
         $minDiasVenta = (int) $request->input('min_dias_venta', 1);
         $filtroCumplimiento = $request->input('filtro_cumplimiento', 'todos');
 
@@ -2321,7 +2328,14 @@ class IncentivosController extends Controller
                 });
         }
 
-        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorKey, $rowKey, $cedulaLookupKey) {
+        $horasTotalesPorCedula = $this->obtenerHorasTotalesReporteNuevoIncentivoV5(
+            $fechaIniSeleccionada,
+            $fechaFinSeleccionada,
+            $sistema,
+            $cedulasNormalizadas
+        );
+
+        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorKey, $rowKey, $cedulaLookupKey, $horasTotalesPorCedula) {
             $cedulaLookup = $cedulaLookupKey($row['cedula'] ?? '');
             $cedulaKey = preg_replace('/\D+/', '', (string) ($row['cedula'] ?? ''));
             $empleado = $empleadosPorCedula->get($cedulaLookup);
@@ -2339,6 +2353,7 @@ class IncentivosController extends Controller
                 'ventas_ultimo_mes' => number_format($row['ventas_num'], 0, '.', ','),
                 'ventas_mes_actual' => number_format($row['ventas_mes_actual_num'], 0, '.', ','),
                 'dias_ventas_mes_actual' => $row['dias_ventas_mes_actual'],
+                'horas_total' => number_format((float) ($horasTotalesPorCedula[$cedulaLookup] ?? 0), 2, '.', ''),
                 'cumple_minimo' => $row['cumple_bool'] ? 'SI' : 'NO',
                 'pago_escala' => number_format($row['pago_escala_num'], 0, '.', ','),
                 'nuevo_incentivo' => number_format($row['nuevo_incentivo_num'], 0, '.', ','),
@@ -2765,6 +2780,99 @@ class IncentivosController extends Controller
         }
 
         return $payload;
+    }
+
+    private function agregarHorasTotalesPayloadReporteNuevoIncentivoV5(array $payload, string $fechaIni, string $fechaFin, string $sistema): array
+    {
+        if (!isset($payload['data']) || !is_array($payload['data']) || empty($payload['data'])) {
+            return $payload;
+        }
+
+        $cedulas = collect($payload['data'])
+            ->map(fn ($row) => preg_replace('/\D+/', '', (string) ($row['cedula'] ?? '')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $horasTotalesPorCedula = $this->obtenerHorasTotalesReporteNuevoIncentivoV5(
+            $fechaIni,
+            $fechaFin,
+            $sistema,
+            $cedulas
+        );
+
+        foreach ($payload['data'] as &$row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $cedula = preg_replace('/\D+/', '', (string) ($row['cedula'] ?? ''));
+            $cedulaLookup = ltrim($cedula, '0');
+            $cedulaLookup = $cedulaLookup === '' ? '0' : $cedulaLookup;
+            $row['horas_total'] = number_format((float) ($horasTotalesPorCedula[$cedulaLookup] ?? 0), 2, '.', '');
+        }
+        unset($row);
+
+        return $payload;
+    }
+
+    private function obtenerHorasTotalesReporteNuevoIncentivoV5(string $fechaIni, string $fechaFin, string $sistema, $cedulas)
+    {
+        $cedulas = collect($cedulas)
+            ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($cedulas->isEmpty()) {
+            return collect();
+        }
+
+        $queries = [];
+
+        if ($sistema === 'Todos' || $sistema === 'Lotonet') {
+            $queries[] = DB::table('asistencias_net')
+                ->selectRaw("REPLACE(identificacion, '-', '') AS cedula")
+                ->selectRaw('SUM(GREATEST(TIMESTAMPDIFF(SECOND, entrada, salida), 0)) / 3600 AS horas')
+                ->where('entrada', '>=', $fechaIni)
+                ->whereRaw('entrada < DATE_ADD(?, INTERVAL 1 DAY)', [$fechaFin])
+                ->whereNotNull('salida')
+                ->whereIn(DB::raw('CAST(REPLACE(identificacion, "-", "") AS UNSIGNED)'), $cedulas->all())
+                ->groupByRaw("REPLACE(identificacion, '-', '')");
+        }
+
+        if ($sistema === 'Todos' || $sistema === 'Lotobet') {
+            $queries[] = DB::table('asistencias_bet')
+                ->selectRaw("REPLACE(cedula, '-', '') AS cedula")
+                ->selectRaw('SUM(GREATEST(TIMESTAMPDIFF(SECOND, primer_login, ultimo_login), 0)) / 3600 AS horas')
+                ->whereBetween('fecha', [$fechaIni, $fechaFin])
+                ->whereNotNull('primer_login')
+                ->whereNotNull('ultimo_login')
+                ->whereIn(DB::raw('CAST(REPLACE(cedula, "-", "") AS UNSIGNED)'), $cedulas->all())
+                ->groupByRaw("REPLACE(cedula, '-', '')");
+        }
+
+        if (empty($queries)) {
+            return collect();
+        }
+
+        $query = array_shift($queries);
+        foreach ($queries as $unionQuery) {
+            $query->unionAll($unionQuery);
+        }
+
+        return DB::query()
+            ->fromSub($query, 'horas')
+            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw('ROUND(SUM(COALESCE(horas, 0)), 2) AS horas_total')
+            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->get()
+            ->mapWithKeys(function ($row) {
+                $cedula = ltrim(preg_replace('/\D+/', '', (string) $row->cedula), '0');
+                $cedula = $cedula === '' ? '0' : $cedula;
+
+                return [$cedula => (float) $row->horas_total];
+            });
     }
 
     private function enteroMontoReporteNuevoIncentivoV5($value): int

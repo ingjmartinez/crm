@@ -54,6 +54,10 @@
             min-width: 68px;
         }
 
+        #tableNuevoIncentivo .col-horas {
+            min-width: 82px;
+        }
+
         #tableNuevoIncentivo .col-regla {
             min-width: 145px;
         }
@@ -84,6 +88,24 @@
             display: block;
             font-size: .78rem;
             margin-top: .15rem;
+        }
+
+        .hora-total-badge {
+            border-radius: 999px;
+            display: inline-block;
+            font-weight: 700;
+            min-width: 74px;
+            padding: .22rem .55rem;
+        }
+
+        .hora-total-cumple {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .hora-total-no-cumple {
+            background: #fee2e2;
+            color: #991b1b;
         }
     </style>
 
@@ -255,6 +277,7 @@
                                     </button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigHorasTotal">Configurar Horas</button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
                                     <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
                                     <button type="button" class="btn btn-info" id="btnValidacionGerencial">Validacion Gerencial</button>
@@ -274,6 +297,7 @@
                                             <th class="col-monto text-end">Ventas Ult. Mes</th>
                                             <th class="col-monto text-end">Ventas Mes Actual</th>
                                             <th class="col-dias text-center">Dias</th>
+                                            <th class="col-horas text-center">Hora Total</th>
                                             <th class="col-regla">Cumple Regla</th>
                                             <th class="col-monto text-end">Total a Pagar</th>
                                         </tr>
@@ -283,6 +307,29 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalConfigHorasTotal" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Configurar Hora Total</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label" for="horas_total_minimo">Minimo de horas total</label>
+                    <div class="input-group">
+                        <input type="number" id="horas_total_minimo" class="form-control" value="0" min="0" step="0.01">
+                        <span class="input-group-text">horas</span>
+                    </div>
+                    <small class="text-muted d-block mt-2">Las cedulas que lleguen o pasen este minimo se marcaran en verde; las demas en rojo.</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnGuardarHorasTotal">Guardar</button>
                 </div>
             </div>
         </div>
@@ -867,6 +914,7 @@
     let currentOperatorBase = 0;
     let currentCoordinatorBase = 0;
     let currentFixedBagTopUp = 0;
+    let horasTotalMinimo = toNumber(localStorage.getItem('incentivo_v5_horas_total_minimo') || 0);
     let currentExcludedApplication = {
         faltantesDisponible: 0,
         desvinculadosDisponible: 0,
@@ -926,6 +974,21 @@
 
     function formatMoney(value) {
         return toIntegerAmount(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+
+    function formatHours(value) {
+        return toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderHorasTotal(value) {
+        const horas = toNumber(value);
+        const cumple = horas >= horasTotalMinimo;
+        const className = cumple ? 'hora-total-cumple' : 'hora-total-no-cumple';
+        const title = cumple
+            ? `Cumple minimo de ${formatHours(horasTotalMinimo)} horas`
+            : `No cumple minimo de ${formatHours(horasTotalMinimo)} horas`;
+
+        return `<span class="hora-total-badge ${className}" title="${escapeHtml(title)}">${formatHours(horas)}</span>`;
     }
 
     function normalizeIntegerReportRows(rows) {
@@ -2521,6 +2584,7 @@
                 <td class="text-end">${formatMoney(item.ventas_ultimo_mes)}</td>
                 <td class="text-end">${formatMoney(item.ventas_mes_actual)}</td>
                 <td class="text-center">${item.dias_ventas_mes_actual ?? 0}</td>
+                <td class="text-center">${renderHorasTotal(item.horas_total)}</td>
                 <td>${cumpleBadge}</td>
                 <td class="text-end">${formatMoney(item.nuevo_incentivo)}</td>
             `;
@@ -2538,9 +2602,10 @@
                 { targets: 1, width: '7rem' },
                 { targets: 2, width: '13rem' },
                 { targets: 3, width: '8rem' },
-                { targets: [4, 5, 8], width: '8.4rem', className: 'text-end' },
+                { targets: [4, 5, 9], width: '8.4rem', className: 'text-end' },
                 { targets: 6, width: '4.4rem', className: 'text-center' },
-                { targets: 7, width: '9rem' },
+                { targets: 7, width: '5.2rem', className: 'text-center' },
+                { targets: 8, width: '9rem' },
             ],
             pageLength: 10000,
             scrollY: '500px',
@@ -3234,6 +3299,12 @@
             modal.show();
         });
 
+        document.querySelector('#btnConfigHorasTotal').addEventListener('click', function() {
+            document.getElementById('horas_total_minimo').value = horasTotalMinimo;
+            const modal = new bootstrap.Modal(document.getElementById('modalConfigHorasTotal'));
+            modal.show();
+        });
+
         document.querySelector('#btnConsultarFaltantes').addEventListener('click', function() {
             consultarFaltantesIncentivo();
         });
@@ -3512,6 +3583,28 @@
             Swal.fire({
                 title: 'Configuracion guardada',
                 text: '% por categoria guardado correctamente.',
+                icon: 'success'
+            });
+        });
+
+        document.querySelector('#btnGuardarHorasTotal').addEventListener('click', function() {
+            const nuevoMinimo = toNumber(document.getElementById('horas_total_minimo').value);
+            if (nuevoMinimo < 0) {
+                Swal.fire({ title: 'Validacion', text: 'El minimo de horas no puede ser negativo.', icon: 'warning' });
+                return;
+            }
+
+            horasTotalMinimo = nuevoMinimo;
+            localStorage.setItem('incentivo_v5_horas_total_minimo', String(horasTotalMinimo));
+            bootstrap.Modal.getInstance(document.getElementById('modalConfigHorasTotal'))?.hide();
+
+            if (currentFilteredRows.length) {
+                renderTableFromData(currentFilteredRows);
+            }
+
+            Swal.fire({
+                title: 'Configuracion guardada',
+                text: `Minimo de horas configurado en ${formatHours(horasTotalMinimo)}.`,
                 icon: 'success'
             });
         });
