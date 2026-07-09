@@ -307,6 +307,83 @@
             });
         });
 
+        function getJsonErrorMessage(data, fallback) {
+            if (data && data.message) {
+                return data.message;
+            }
+
+            if (data && data.errors) {
+                return Object.values(data.errors).flat().join('\n');
+            }
+
+            return fallback;
+        }
+
+        function updateRegistro(button, form) {
+            const formData = new FormData(form);
+            const originalText = button.textContent;
+
+            button.disabled = true;
+            button.textContent = 'Actualizando...';
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(function (response) {
+                    return response.json()
+                        .catch(function () {
+                            return null;
+                        })
+                        .then(function (data) {
+                            if (!response.ok) {
+                                throw new Error(getJsonErrorMessage(data, 'No se pudo actualizar el registro.'));
+                            }
+
+                            return data;
+                        });
+                })
+                .then(function (data) {
+                    const registro = data.registro || {};
+
+                    button.dataset.nombre = registro.nombre || button.dataset.nombre || '';
+                    const deleteForm = button.closest('tr')?.querySelector('.js-confirm-delete');
+                    if (deleteForm && registro.nombre) {
+                        deleteForm.dataset.nombre = registro.nombre;
+                    }
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Listo',
+                            text: data.message || 'Registro actualizado correctamente.',
+                            timer: 1800,
+                            showConfirmButton: false
+                        });
+                    }
+                })
+                .catch(function (error) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: error.message || 'No se pudo actualizar el registro.'
+                        });
+                        return;
+                    }
+
+                    alert(error.message || 'No se pudo actualizar el registro.');
+                })
+                .finally(function () {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                });
+        }
+
         document.querySelectorAll('.js-confirm-update').forEach(function (button) {
             button.addEventListener('click', function () {
                 const form = document.getElementById(button.dataset.formId);
@@ -315,7 +392,10 @@
                 }
 
                 if (typeof Swal === 'undefined') {
-                    form.submit();
+                    if (confirm(`Seguro que deseas actualizar a ${button.dataset.nombre || 'este usuario'}?`)) {
+                        updateRegistro(button, form);
+                    }
+
                     return;
                 }
 
@@ -330,7 +410,7 @@
                     cancelButtonColor: '#74788d'
                 }).then(function (result) {
                     if (result.isConfirmed) {
-                        form.submit();
+                        updateRegistro(button, form);
                     }
                 });
             });

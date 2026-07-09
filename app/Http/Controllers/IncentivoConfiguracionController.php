@@ -98,6 +98,19 @@ class IncentivoConfiguracionController extends Controller
 
         $incentivoAdministrativo->update($validated);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Registro actualizado correctamente.',
+                'registro' => [
+                    'id' => $incentivoAdministrativo->id,
+                    'grupo' => $incentivoAdministrativo->grupo,
+                    'nombre' => $incentivoAdministrativo->nombre,
+                    'empresa' => $incentivoAdministrativo->empresa,
+                    'pct_total' => number_format((float) $incentivoAdministrativo->pct_total, 2, '.', ''),
+                ],
+            ]);
+        }
+
         return redirect()
             ->route('incentivos.incentivo-administrativo.index')
             ->with('success', 'Registro actualizado correctamente.');

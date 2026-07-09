@@ -396,7 +396,7 @@
                                 <button type="button" class="btn btn-primary" id="btnAdminFiltroTodos">Todo</button>
                                 <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG1">1 Gtes. y Encarg.</button>
                                 <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG2">2 Monitoreo</button>
-                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG45">4 Operadores + Seguridad / 5 Servs. Tecnicos</button>
+                                <button type="button" class="btn btn-outline-primary" id="btnAdminFiltroG45">4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</button>
                             </div>
                         </div>
                     </div>
@@ -784,7 +784,6 @@
     function normalizeAdministrativeRowsFromPayload(rows) {
         return (Array.isArray(rows) ? rows : []).map(function (row) {
             const grupo = normalizeAdministrativeGroup(row?.grupo);
-            const rawPct = toNumber(row?.pct);
 
             return {
                 id: row?.id ?? null,
@@ -792,8 +791,8 @@
                 nombre: String(row?.nombre ?? '').trim(),
                 empresa: String(row?.empresa ?? '').trim(),
                 pct: isFixedAdministrativeGroup(grupo)
-                    ? Math.max(0, rawPct)
-                    : Math.max(0, isServsTecnicosGroup(grupo) && rawPct <= 1 ? rawPct : rawPct / 100),
+                    ? Math.max(0, toNumber(row?.pct))
+                    : Math.max(0, toNumber(row?.pct) / 100),
             };
         });
     }
@@ -969,7 +968,7 @@
     }
 
     function getFixedBagBaseBudget(administrativePoolBase) {
-        return toIntegerAmount(toIntegerAmount(administrativePoolBase) * (getPuestoPctByCategoryKey('g45_ops') / 100));
+        return toIntegerAmount(toIntegerAmount(administrativePoolBase) * (getPuestoPctByCategoryKey('g45') / 100));
     }
 
     function getFixedBagMissingBeforeTopUp(administrativePoolBase) {
@@ -1140,8 +1139,6 @@
         const montoG1 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g1) / 100));
         const montoG2 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g2) / 100));
         const montoG45 = toIntegerAmount(montoBase * (toNumber(puestoPctConfig.g45) / 100));
-        const montoG45Ops = getPuestoCategoryBudget('g45_ops');
-        const montoG45Servs = getPuestoCategoryBudget('g45_servs');
         const fixedBalance = getFixedAdministrativeBalance();
         const fixedBalanceText = fixedBalance.missing > 0
             ? `Faltan ${formatMoney(fixedBalance.missing)}`
@@ -1161,12 +1158,7 @@
             <tr>
                 <td>4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</td>
                 <td class="text-end">${toNumber(puestoPctConfig.g45).toFixed(2)}%</td>
-                <td class="text-end">
-                    ${formatMoney(montoG45)}
-                    <br><small class="text-muted">50% Ops/Seg: ${formatMoney(montoG45Ops)}</small>
-                    <br><small class="text-muted">10% Servs: ${formatMoney(montoG45Servs)}</small>
-                    <br><small class="${fixedBalance.missing > 0 ? 'text-danger' : 'text-muted'}">${fixedBalanceText}</small>
-                </td>
+                <td class="text-end">${formatMoney(montoG45)}<br><small class="${fixedBalance.missing > 0 ? 'text-danger' : 'text-muted'}">${fixedBalanceText}</small></td>
             </tr>
         `;
     }
@@ -1759,15 +1751,7 @@
 
     function isFixedAdministrativeGroup(value) {
         const group = normalizeAdministrativeGroup(value);
-        return group === '4. Operadores' || group === '6. Seguridad';
-    }
-
-    function isServsTecnicosGroup(value) {
-        return normalizeAdministrativeGroup(value) === '5. Servs. Tecnicos';
-    }
-
-    function isG45CategoryKey(categoryKey) {
-        return categoryKey === 'g45' || categoryKey === 'g45_ops' || categoryKey === 'g45_servs';
+        return group === '4. Operadores' || group === '5. Servs. Tecnicos' || group === '6. Seguridad';
     }
 
     function updateAdministrativeFilterButtons() {
@@ -1808,8 +1792,6 @@
     function getPuestoPctByCategoryKey(categoryKey) {
         if (categoryKey === 'g1') return toNumber(puestoPctConfig.g1);
         if (categoryKey === 'g2') return toNumber(puestoPctConfig.g2);
-        if (categoryKey === 'g45_ops') return 50;
-        if (categoryKey === 'g45_servs') return 10;
         if (categoryKey === 'g45') return toNumber(puestoPctConfig.g45);
         return 0;
     }
@@ -1823,7 +1805,7 @@
         const base = empresaValue === null
             ? toIntegerAmount(currentAdministrativePoolBase)
             : toIntegerAmount(getAdministrativePoolForEmpresa(empresaValue));
-        const topUp = categoryKey === 'g45_ops' && empresaValue === null
+        const topUp = categoryKey === 'g45' && empresaValue === null
             ? toIntegerAmount(currentFixedBagTopUp)
             : 0;
 
@@ -1834,8 +1816,7 @@
         const group = normalizeAdministrativeGroup(groupValue);
         if (group === '1. Gtes. Y Encarg.') return 'g1';
         if (group === '2. Monitoreo') return 'g2';
-        if (group === '5. Servs. Tecnicos') return 'g45_servs';
-        if (group === '4. Operadores' || group === '6. Seguridad') return 'g45_ops';
+        if (group === '4. Operadores' || group === '5. Servs. Tecnicos' || group === '6. Seguridad') return 'g45';
         return null;
     }
 
@@ -1875,7 +1856,7 @@
     }
 
     function getFixedAdministrativeBalance(empresaValue = null) {
-        const budget = getPuestoCategoryBudget('g45_ops', empresaValue);
+        const budget = getPuestoCategoryBudget('g45', empresaValue);
         const fixedTotal = getFixedAdministrativeAmountTotal(empresaValue);
 
         return {
@@ -1934,7 +1915,7 @@
         let filteredRows = allRows;
 
         if (administrativeGroupFilter === '4_5') {
-            filteredRows = filteredRows.filter((row) => isG45CategoryKey(getAdministrativeCategoryKeyByGroup(row.grupo)));
+            filteredRows = filteredRows.filter((row) => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45');
         } else if (administrativeGroupFilter !== 'todos') {
             filteredRows = filteredRows.filter((row) => row.grupo === administrativeGroupFilter);
         }
@@ -1962,7 +1943,7 @@
         const categoryKey = getAdministrativeCategoryKeyByGroup(group);
 
         if (isFixedAdministrativeGroup(group)) {
-            return 'Monto fijo configurado. Bolsa referencia Ops/Seg: 50% del administrativo.';
+            return 'Monto fijo configurado.';
         }
 
         const empresa = normalizeAdministrativeEmpresaLabel(sourceRow?.empresa);
@@ -1971,9 +1952,7 @@
         const rowPct = toNumber(sourceRow?.pct);
         const rowPctLabel = formatAdministrativePct(rowPct);
         const totalPctLabel = formatAdministrativePct(categoryPctTotal);
-        const pctBase = categoryKey === 'g45_servs'
-            ? '10% Servs. Tecnicos'
-            : categoryKey === 'g2'
+        const pctBase = categoryKey === 'g2'
                 ? `${toNumber(puestoPctConfig.g2).toFixed(2)}% Monitoreo`
                 : categoryKey === 'g1'
                     ? `${toNumber(puestoPctConfig.g1).toFixed(2)}% Gtes./Encarg.`
@@ -2038,14 +2017,14 @@
     function getAdministrativeFilteredBudget() {
         if (administrativeGroupFilter === '1. Gtes. Y Encarg.') return getPuestoCategoryBudget('g1');
         if (administrativeGroupFilter === '2. Monitoreo') return getPuestoCategoryBudget('g2');
-        if (administrativeGroupFilter === '4_5') return getPuestoCategoryBudget('g45_ops') + getPuestoCategoryBudget('g45_servs');
+        if (administrativeGroupFilter === '4_5') return getPuestoCategoryBudget('g45');
 
-        return getPuestoCategoryBudget('g1') + getPuestoCategoryBudget('g2') + getPuestoCategoryBudget('g45_ops') + getPuestoCategoryBudget('g45_servs');
+        return getPuestoCategoryBudget('g1') + getPuestoCategoryBudget('g2') + getPuestoCategoryBudget('g45');
     }
 
     function recalculateAdministrativeOperatorBases() {
         currentAdministrativeBase = getPuestoCategoryBudget('g1') + getPuestoCategoryBudget('g2');
-        currentOperatorBase = getPuestoCategoryBudget('g45_ops') + getPuestoCategoryBudget('g45_servs');
+        currentOperatorBase = getPuestoCategoryBudget('g45');
     }
 
     function getOperatorAmount(row) {
@@ -2062,13 +2041,7 @@
             .filter(row => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g2')
             .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
         const montoG45 = visibleRows
-            .filter(row => isG45CategoryKey(getAdministrativeCategoryKeyByGroup(row.grupo)))
-            .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
-        const montoG45Ops = visibleRows
-            .filter(row => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45_ops')
-            .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
-        const montoG45Servs = visibleRows
-            .filter(row => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45_servs')
+            .filter(row => getAdministrativeCategoryKeyByGroup(row.grupo) === 'g45')
             .reduce((sum, row) => sum + getAdministrativeDisplayAmount(row), 0);
         const montoFiltro = totalDistribuido;
 
@@ -2092,7 +2065,7 @@
             const balanceText = balanceG45.missing > 0
                 ? ` | Faltan ${formatMoney(balanceG45.missing)}`
                 : ` | Restante ${formatMoney(balanceG45.remaining)}`;
-            catG45.innerHTML = `${toNumber(puestoPctConfig.g45).toFixed(2)}% | ${formatMoney(montoG45)}${balanceText}<br><small class="text-muted">50% Ops/Seg: ${formatMoney(montoG45Ops)} | 10% Servs: ${formatMoney(montoG45Servs)}</small>`;
+            catG45.textContent = `${toNumber(puestoPctConfig.g45).toFixed(2)}% | ${formatMoney(montoG45)}${balanceText}`;
             catG45.classList.toggle('text-danger', balanceG45.missing > 0);
         }
         const totalCol = document.getElementById('admin_col_total');
@@ -2273,7 +2246,7 @@
         const keys = new Set();
         for (const row of rows) {
             if (!isFixedAdministrativeGroup(row.grupo) && toNumber(row.pct_total) > 100) {
-                return 'El % Total no puede ser mayor que 100 para gerentes, encargados, monitoreo o servs. tecnicos.';
+                return 'El % Total no puede ser mayor que 100 para gerentes, encargados o monitoreo.';
             }
 
             const key = `${row.grupo}|${row.nombre}|${row.empresa}`.toLowerCase();
