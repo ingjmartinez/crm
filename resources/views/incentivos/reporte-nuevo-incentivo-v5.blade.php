@@ -2149,6 +2149,8 @@
                 });
                 const totalRowFill = '#cfe2ff';
                 const totalRowText = '#0f172a';
+                const warningRowFill = '#fff3cd';
+                const warningRowText = '#7a4d00';
                 const totalRow = (row) => row.map((cell, index) => {
                     if (cell && typeof cell === 'object' && !Array.isArray(cell)) {
                         return {
@@ -2165,6 +2167,24 @@
                         bold: true,
                         fillColor: totalRowFill,
                         color: totalRowText,
+                    };
+                });
+                const warningRow = (row) => row.map((cell, index) => {
+                    if (cell && typeof cell === 'object' && !Array.isArray(cell)) {
+                        return {
+                            ...cell,
+                            bold: true,
+                            fillColor: warningRowFill,
+                            color: warningRowText,
+                        };
+                    }
+
+                    return {
+                        text: String(cell ?? ''),
+                        alignment: index === 0 ? 'left' : 'right',
+                        bold: true,
+                        fillColor: warningRowFill,
+                        color: warningRowText,
                     };
                 });
                 const sectionTitle = (text) => ({
@@ -2219,7 +2239,7 @@
                     ['Usuarios con IdEmpleado', numberCell(empleadoIdSummary.usuariosConId)],
                     ['Monto usuarios con IdEmpleado', moneyCell(empleadoIdSummary.montoConId)],
                     ['Usuarios sin IdEmpleado', numberCell(empleadoIdSummary.usuariosSinId)],
-                    ['Monto usuarios sin IdEmpleado', moneyCell(empleadoIdSummary.montoSinId)],
+                    warningRow(['Monto usuarios sin IdEmpleado', moneyCell(empleadoIdSummary.montoSinId)]),
                     ['Cedulas excluidas por faltantes', numberCell(excludedFaltantesCedulas.size)],
                     ['Cedulas excluidas por desvinculados', numberCell(excludedDesvinculadosCedulas.size)],
                     ['Coordinadores enviados a bolsa', numberCell(excludedCoordinatorIds.size)],
