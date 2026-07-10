@@ -632,6 +632,7 @@
                                     <th style="min-width: 120px;">Detalle</th>
                                     <th style="min-width: 120px;">% Total</th>
                                     <th style="min-width: 160px;">Monto Coordinador</th>
+                                    <th style="min-width: 130px;">Enviar a bolsa</th>
                                 </tr>
                             </thead>
                             <tbody id="tbodyCoordinadores"></tbody>
@@ -639,6 +640,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-warning" id="btnAplicarCoordinadoresBolsa">Aplicar a bolsa</button>
                     <button type="button" class="btn btn-success" id="btnExportCoordinadoresExcel">Excel</button>
                     <button type="button" class="btn btn-soft-secondary" id="btnRestaurarCoordinadores">Restaurar plantilla</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
@@ -950,6 +952,8 @@
     let excludedFaltantesCedulas = new Set();
     let lastDesvinculadosCedulas = new Set();
     let excludedDesvinculadosCedulas = new Set();
+    let excludedCoordinatorIds = new Set();
+    let appliedCoordinatorAmounts = {};
     let adminPctBruto = 10;
     const ADMINISTRATIVE_SHARE = 0.40;
     let administrativeGroupFilter = 'todos';
@@ -982,10 +986,13 @@
     let currentExcludedApplication = {
         faltantesDisponible: 0,
         desvinculadosDisponible: 0,
+        coordinadoresDisponible: 0,
         aplicadoFaltantes: 0,
         aplicadoDesvinculados: 0,
+        aplicadoCoordinadores: 0,
         rebajadoFaltantes: 0,
         rebajadoDesvinculados: 0,
+        rebajadoCoordinadores: 0,
         totalAplicado: 0,
         totalRebajado: 0,
     };
@@ -1085,10 +1092,13 @@
         return {
             faltantesDisponible: 0,
             desvinculadosDisponible: 0,
+            coordinadoresDisponible: 0,
             aplicadoFaltantes: 0,
             aplicadoDesvinculados: 0,
+            aplicadoCoordinadores: 0,
             rebajadoFaltantes: 0,
             rebajadoDesvinculados: 0,
+            rebajadoCoordinadores: 0,
             totalAplicado: 0,
             totalRebajado: 0,
         };
@@ -1115,6 +1125,24 @@
             .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
     }
 
+    function getCoordinatorIdKey(row) {
+        const value = row?.id ?? row?.nombre ?? '';
+        return String(value).trim();
+    }
+
+    function getCoordinatorAppliedAmount(row) {
+        const key = getCoordinatorIdKey(row);
+        if (!key || !excludedCoordinatorIds.has(key)) {
+            return 0;
+        }
+
+        return toIntegerAmount(appliedCoordinatorAmounts[key] ?? getCoordinatorAmount(row));
+    }
+
+    function getCoordinatorExcludedTotal() {
+        return coordinatorRows.reduce((sum, row) => sum + getCoordinatorAppliedAmount(row), 0);
+    }
+
     function calculateExcludedApplication(shortage) {
         const baseRows = getBaseFilteredRows();
         const faltantesCedulas = new Set([...excludedFaltantesCedulas].map(getCedulaKey).filter(Boolean));
@@ -1122,19 +1150,27 @@
         const desvinculadosSoloCedulas = new Set([...desvinculadosCedulas].filter((cedula) => !faltantesCedulas.has(cedula)));
         const faltantesDisponible = sumIncentivesByCedulas(baseRows, faltantesCedulas);
         const desvinculadosDisponible = sumIncentivesByCedulas(baseRows, desvinculadosSoloCedulas);
+        const coordinadoresDisponible = getCoordinatorExcludedTotal();
         const faltantesUsados = Math.min(toIntegerAmount(shortage), faltantesDisponible);
         const restante = Math.max(toIntegerAmount(shortage) - faltantesUsados, 0);
         const desvinculadosUsados = Math.min(restante, desvinculadosDisponible);
+        const restanteDespuesDesvinculados = Math.max(restante - desvinculadosUsados, 0);
+        const coordinadoresUsados = Math.min(restanteDespuesDesvinculados, coordinadoresDisponible);
 
         return {
             faltantesDisponible,
             desvinculadosDisponible,
+            coordinadoresDisponible,
             aplicadoFaltantes: faltantesUsados,
             aplicadoDesvinculados: desvinculadosUsados,
+            aplicadoCoordinadores: coordinadoresUsados,
             rebajadoFaltantes: Math.max(faltantesDisponible - faltantesUsados, 0),
             rebajadoDesvinculados: Math.max(desvinculadosDisponible - desvinculadosUsados, 0),
-            totalAplicado: faltantesUsados + desvinculadosUsados,
-            totalRebajado: Math.max(faltantesDisponible - faltantesUsados, 0) + Math.max(desvinculadosDisponible - desvinculadosUsados, 0),
+            rebajadoCoordinadores: Math.max(coordinadoresDisponible - coordinadoresUsados, 0),
+            totalAplicado: faltantesUsados + desvinculadosUsados + coordinadoresUsados,
+            totalRebajado: Math.max(faltantesDisponible - faltantesUsados, 0)
+                + Math.max(desvinculadosDisponible - desvinculadosUsados, 0)
+                + Math.max(coordinadoresDisponible - coordinadoresUsados, 0),
         };
     }
 
@@ -1443,6 +1479,35 @@
         return String(value ?? '').replace(/\D+/g, '');
     }
 
+    function hasEmpleadoId(row) {
+        return String(row?.empleadoid ?? '').trim() !== '';
+    }
+
+    function getEmpleadoIdPagoSummary(sourceRows = getPagoIncentivoExportRows()) {
+        const rows = (Array.isArray(sourceRows) ? sourceRows : [])
+            .map((row) => ({
+                ...row,
+                __importe: toIntegerAmount(row?.nuevo_incentivo),
+                __hasEmpleadoId: hasEmpleadoId(row),
+            }))
+            .filter((row) => row.__importe > 0);
+
+        const conIdRows = rows.filter(row => row.__hasEmpleadoId);
+        const sinIdRows = rows.filter(row => !row.__hasEmpleadoId);
+        const countUniqueCedulas = (items) => new Set(items
+            .map(row => normalizeCedulaValue(row?.cedula) || String(row?.cedula ?? '').trim())
+            .filter(Boolean)).size;
+
+        return {
+            totalUsuarios: countUniqueCedulas(rows),
+            totalMonto: rows.reduce((sum, row) => sum + row.__importe, 0),
+            usuariosConId: countUniqueCedulas(conIdRows),
+            montoConId: conIdRows.reduce((sum, row) => sum + row.__importe, 0),
+            usuariosSinId: countUniqueCedulas(sinIdRows),
+            montoSinId: sinIdRows.reduce((sum, row) => sum + row.__importe, 0),
+        };
+    }
+
     function getUsuariosPorActualizarRows(sourceRows = currentFilteredRows) {
         const rows = Array.isArray(sourceRows) ? sourceRows : [];
         const grouped = new Map();
@@ -1641,17 +1706,22 @@
         return rows;
     }
 
-    function getPagoIncentivoExportData() {
+    function getPagoIncentivoExportData(options = {}) {
+        const excludeSinEmpleadoId = Boolean(options.excludeSinEmpleadoId);
         const rows = getPagoIncentivoExportRows()
             .map((row) => ({
                 ...row,
                 __importe: toIntegerAmount(row?.nuevo_incentivo),
                 __idEmpleado: String(row?.empleadoid ?? '').trim(),
             }))
+            .filter((row) => !excludeSinEmpleadoId || row.__idEmpleado !== '')
             .filter((row) => row.__importe > 0);
 
         if (!rows.length) {
-            Swal.fire({ title: 'Sin datos', text: 'No hay incentivos con importe mayor a cero para generar el archivo de pago.', icon: 'warning' });
+            const message = excludeSinEmpleadoId
+                ? 'No hay incentivos con IdEmpleado e importe mayor a cero para generar el archivo de pago.'
+                : 'No hay incentivos con importe mayor a cero para generar el archivo de pago.';
+            Swal.fire({ title: 'Sin datos', text: message, icon: 'warning' });
             return null;
         }
 
@@ -1671,6 +1741,7 @@
                 '',
             ].map(toTxtPagoValue)),
             fechaFin: getFechaFinPagoIncentivo(),
+            suffix: excludeSinEmpleadoId ? '_sin_usuarios_sin_id' : '_completo',
         };
     }
 
@@ -1685,8 +1756,8 @@
         URL.revokeObjectURL(url);
     }
 
-    function generarTxtPagoIncentivo() {
-        const data = getPagoIncentivoExportData();
+    function generarTxtPagoIncentivo(options = {}) {
+        const data = getPagoIncentivoExportData(options);
         if (!data) {
             return;
         }
@@ -1696,7 +1767,7 @@
             ...data.rows.map((row) => row.join(',')),
         ];
         const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8;' });
-        downloadBlob(`pago_incentivo_${data.fechaFin}.txt`, blob);
+        downloadBlob(`pago_incentivo_${data.fechaFin}${data.suffix}.txt`, blob);
     }
 
     function escapeXml(value) {
@@ -1764,20 +1835,59 @@
         return new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     }
 
-    function generarXlsxPagoIncentivo() {
-        const data = getPagoIncentivoExportData();
+    function generarXlsxPagoIncentivo(options = {}) {
+        const data = getPagoIncentivoExportData(options);
         if (!data) {
             return;
         }
 
         if (typeof JSZip === 'undefined') {
             const blob = buildExcelHtmlBlob(data.headers, data.rows);
-            downloadBlob(`pago_incentivo_${data.fechaFin}.xls`, blob);
+            downloadBlob(`pago_incentivo_${data.fechaFin}${data.suffix}.xls`, blob);
             return;
         }
 
         buildXlsxBlob(data.headers, data.rows).then((blob) => {
-            downloadBlob(`pago_incentivo_${data.fechaFin}.xlsx`, blob);
+            downloadBlob(`pago_incentivo_${data.fechaFin}${data.suffix}.xlsx`, blob);
+        });
+    }
+
+    function seleccionarDescargaExcelPago() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        const summary = getEmpleadoIdPagoSummary();
+        if (summary.totalMonto <= 0) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay incentivos con importe mayor a cero para generar el archivo de pago.', icon: 'warning' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Generar Excel de pago',
+            html: `
+                <div class="text-start small">
+                    <div><strong>Con IdEmpleado:</strong> ${summary.usuariosConId.toLocaleString('en-US')} usuarios | ${formatMoney(summary.montoConId)}</div>
+                    <div><strong>Sin IdEmpleado:</strong> ${summary.usuariosSinId.toLocaleString('en-US')} usuarios | ${formatMoney(summary.montoSinId)}</div>
+                    <div class="mt-2 text-muted">Puedes descargar completo o excluir los usuarios sin IdEmpleado.</div>
+                </div>
+            `,
+            icon: summary.usuariosSinId > 0 ? 'warning' : 'info',
+            showDenyButton: true,
+            showCancelButton: true,
+            confirmButtonText: 'Completo',
+            denyButtonText: 'Excluir sin ID',
+            cancelButtonText: 'Cancelar',
+        }).then((result) => {
+            if (result.isConfirmed) {
+                generarXlsxPagoIncentivo({ excludeSinEmpleadoId: false });
+                return;
+            }
+
+            if (result.isDenied) {
+                generarXlsxPagoIncentivo({ excludeSinEmpleadoId: true });
+            }
         });
     }
 
@@ -2005,10 +2115,15 @@
                 const totalVendidoBruto = grossRows.reduce((sum, row) => sum + toIntegerAmount(row?.ventas_mes_actual), 0);
                 const totalIncentivoBruto = grossRows.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
                 const totalIncentivoProcesado = processedRows.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+                const empleadoIdSummary = getEmpleadoIdPagoSummary(processedRows);
                 const totalDiezPorciento = toIntegerAmount(currentDistributionBase);
                 const montoAdministrativo = toIntegerAmount(currentAdministrativePoolBase);
                 const montoCoordinador = toIntegerAmount(currentCoordinatorBase);
-                const totalDeduccionesDetectadas = toIntegerAmount(currentExcludedApplication.faltantesDisponible + currentExcludedApplication.desvinculadosDisponible);
+                const totalDeduccionesDetectadas = toIntegerAmount(
+                    currentExcludedApplication.faltantesDisponible
+                    + currentExcludedApplication.desvinculadosDisponible
+                    + currentExcludedApplication.coordinadoresDisponible
+                );
                 const totalFinalPagar = toIntegerAmount(totalIncentivoBruto + totalDiezPorciento - currentExcludedApplication.totalRebajado);
                 const resumenCumplimiento = getUsuariosCumplimientoSummary(grossRows);
                 const terminalesExcluidas = getExcludedTerminalesArray();
@@ -2017,7 +2132,7 @@
                 const administrativosTotal = [...administrativeRows, ...operatorRows]
                     .reduce((sum, row) => sum + getAdministrativeAmountByRow(row), 0);
                 const coordinadoresTotal = coordinatorRows
-                    .reduce((sum, row) => sum + getCoordinatorAmount(row), 0);
+                    .reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0);
 
                 const moneyCell = (value, bold = false) => ({
                     text: formatMoney(value),
@@ -2055,11 +2170,13 @@
                     [{ text: 'Concepto', style: 'tableHeader' }, { text: 'Monto', style: 'tableHeader', alignment: 'right' }],
                     ['Monto generado por faltantes', moneyCell(currentExcludedApplication.faltantesDisponible)],
                     ['Monto generado por desvinculados', moneyCell(currentExcludedApplication.desvinculadosDisponible)],
+                    ['Monto generado por coordinadores excluidos', moneyCell(currentExcludedApplication.coordinadoresDisponible)],
                     ['Total deducciones detectadas', moneyCell(totalDeduccionesDetectadas, true)],
                     ['Aplicado a bolsa fija por faltantes', moneyCell(currentExcludedApplication.aplicadoFaltantes)],
                     ['Aplicado a bolsa fija por desvinculados', moneyCell(currentExcludedApplication.aplicadoDesvinculados)],
+                    ['Aplicado a bolsa fija por coordinadores', moneyCell(currentExcludedApplication.aplicadoCoordinadores)],
                     ['Reasignado a operadores/seguridad', moneyCell(currentFixedBagTopUp, true)],
-                    ['Rebaja neta por faltantes/desvinculados', moneyCell(currentExcludedApplication.totalRebajado, true)],
+                    ['Rebaja neta por exclusiones', moneyCell(currentExcludedApplication.totalRebajado, true)],
                 ];
 
                 const distribucion = [
@@ -2075,8 +2192,13 @@
                     ['Usuarios que no cumplieron', numberCell(resumenCumplimiento.noCumplen)],
                     ['Usuarios procesados despues de exclusiones', numberCell(processedRows.length)],
                     ['Incentivo de usuarios procesados', moneyCell(totalIncentivoProcesado)],
+                    ['Usuarios con IdEmpleado', numberCell(empleadoIdSummary.usuariosConId)],
+                    ['Monto usuarios con IdEmpleado', moneyCell(empleadoIdSummary.montoConId)],
+                    ['Usuarios sin IdEmpleado', numberCell(empleadoIdSummary.usuariosSinId)],
+                    ['Monto usuarios sin IdEmpleado', moneyCell(empleadoIdSummary.montoSinId)],
                     ['Cedulas excluidas por faltantes', numberCell(excludedFaltantesCedulas.size)],
                     ['Cedulas excluidas por desvinculados', numberCell(excludedDesvinculadosCedulas.size)],
+                    ['Coordinadores enviados a bolsa', numberCell(excludedCoordinatorIds.size)],
                     ['Terminales excluidas del calculo', numberCell(terminalesExcluidas.length)],
                     ['Usuarios pendientes por actualizar', numberCell(usuariosPorActualizar)],
                     ['Agencias sin empresa', numberCell(agenciasSinEmpresa)],
@@ -2145,7 +2267,8 @@
                         {
                             ul: [
                                 'Las terminales excluidas no fueron consideradas en el calculo de ventas ni incentivo.',
-                                'Los faltantes y desvinculados se usan primero para cubrir la bolsa fija; el excedente reduce el total final.',
+                                'Los faltantes, desvinculados y coordinadores excluidos se usan primero para cubrir la bolsa fija; el excedente reduce el total final.',
+                                'Los coordinadores no excluidos conservan el monto calculado originalmente.',
                                 'El informe refleja la configuracion activa al momento de generacion.',
                                 `Terminales excluidas: ${terminalesExcluidasText}`,
                             ],
@@ -2186,11 +2309,14 @@
             formatMoney(row.monto_usuarios),
             formatCoordinatorPct(row),
             formatMoney(getCoordinatorAmount(row)),
+            isCoordinatorExcluded(row) ? 'SI' : 'NO',
+            formatMoney(getCoordinatorAppliedAmount(row)),
+            formatMoney(getCoordinatorDisplayAmount(row)),
         ]);
 
         exportRowsToExcelCsv(
             'coordinadores_v5_validacion.csv',
-            ['Nombre', 'Agencias', 'Validas', 'Monto', '% Total', 'Monto Coordinador'],
+            ['Nombre', 'Agencias', 'Validas', 'Monto', '% Total', 'Monto Calculado', 'Enviado a Bolsa', 'Monto Bolsa', 'Monto a Pagar'],
             rows
         );
     }
@@ -2406,6 +2532,15 @@
         return toIntegerAmount(currentCoordinatorBase * (toIntegerAmount(row.monto_usuarios) / pctTotal));
     }
 
+    function isCoordinatorExcluded(row) {
+        const key = getCoordinatorIdKey(row);
+        return key !== '' && excludedCoordinatorIds.has(key);
+    }
+
+    function getCoordinatorDisplayAmount(row) {
+        return isCoordinatorExcluded(row) ? 0 : getCoordinatorAmount(row);
+    }
+
     function formatCoordinatorPct(row) {
         const pctTotal = getCoordinatorPctTotal();
         if (pctTotal <= 0) {
@@ -2507,10 +2642,11 @@
     }
 
     function updateCoordinatorSummary() {
-        const totalDistribuido = coordinatorRows.reduce((sum, row) => sum + getCoordinatorAmount(row), 0);
+        const totalDistribuido = coordinatorRows.reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0);
+        const totalBolsa = getCoordinatorExcludedTotal();
 
         document.getElementById('coord_base_total').textContent = formatMoney(currentCoordinatorBase);
-        document.getElementById('coord_distribuido_total').textContent = formatMoney(totalDistribuido);
+        document.getElementById('coord_distribuido_total').textContent = `${formatMoney(totalDistribuido)} | Bolsa: ${formatMoney(totalBolsa)}`;
     }
 
     function updateAdministrativeAmounts() {
@@ -2534,7 +2670,7 @@
         coordinatorRows.forEach((row, idx) => {
             const cell = document.querySelector(`.coord-monto[data-idx="${idx}"]`);
             if (cell) {
-                cell.textContent = formatMoney(getCoordinatorAmount(row));
+                cell.textContent = formatMoney(getCoordinatorDisplayAmount(row));
             }
 
             const pctInput = document.querySelector(`.coord-pct-input[data-idx="${idx}"]`);
@@ -2792,7 +2928,7 @@
         tbody.innerHTML = '';
 
         if (!coordinatorRows.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay coordinadores registrados.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay coordinadores registrados.</td></tr>';
             updateCoordinatorSummary();
             return;
         }
@@ -2800,7 +2936,11 @@
         coordinatorRows.forEach((row, idx) => {
             const detailUsers = getCoordinatorDetailUsers(row);
             const hasDetail = detailUsers.length > 0;
+            const excluded = isCoordinatorExcluded(row);
+            const rowAmount = getCoordinatorDisplayAmount(row);
+            const appliedAmount = getCoordinatorAppliedAmount(row);
             const tr = document.createElement('tr');
+            tr.classList.toggle('table-warning', excluded);
             tr.innerHTML = `
                 <td><input type="text" class="form-control form-control-sm coord-input" data-field="nombre" data-idx="${idx}" value="${escapeHtml(row.nombre)}"></td>
                 <td class="text-center fw-semibold">${toNumber(row.agencias)}</td>
@@ -2815,7 +2955,13 @@
                         <span class="input-group-text">%</span>
                     </div>
                 </td>
-                <td class="text-end fw-semibold coord-monto" data-idx="${idx}">${formatMoney(getCoordinatorAmount(row))}</td>
+                <td class="text-end fw-semibold coord-monto" data-idx="${idx}">
+                    ${formatMoney(rowAmount)}
+                    ${excluded ? `<br><small class="text-warning">Bolsa: ${formatMoney(appliedAmount)}</small>` : ''}
+                </td>
+                <td class="text-center">
+                    <input class="form-check-input coord-bolsa-check" type="checkbox" data-idx="${idx}" ${excluded ? 'checked' : ''}>
+                </td>
             `;
             tbody.appendChild(tr);
         });
@@ -2845,6 +2991,46 @@
                 <td class="text-end fw-semibold">${formatMoney(user.incentivo)}</td>
             `;
             tbody.appendChild(tr);
+        });
+    }
+
+    function aplicarCoordinadoresBolsa() {
+        if (!coordinatorRows.length) {
+            Swal.fire({ title: 'Sin coordinadores', text: 'No hay coordinadores registrados para aplicar.', icon: 'info' });
+            return;
+        }
+
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte para calcular el monto de coordinadores.', icon: 'warning' });
+            return;
+        }
+
+        const selectedIndexes = [...document.querySelectorAll('.coord-bolsa-check:checked')]
+            .map(input => parseInt(input.dataset.idx, 10))
+            .filter(idx => !Number.isNaN(idx) && coordinatorRows[idx]);
+        const nextExcludedIds = new Set();
+        const nextAmounts = {};
+
+        selectedIndexes.forEach((idx) => {
+            const row = coordinatorRows[idx];
+            const key = getCoordinatorIdKey(row);
+            if (!key) {
+                return;
+            }
+
+            nextExcludedIds.add(key);
+            nextAmounts[key] = toIntegerAmount(getCoordinatorAmount(row));
+        });
+
+        excludedCoordinatorIds = nextExcludedIds;
+        appliedCoordinatorAmounts = nextAmounts;
+
+        applyLocalFilters(false);
+
+        Swal.fire({
+            title: 'Coordinadores aplicados',
+            text: `${excludedCoordinatorIds.size} coordinadores enviados a bolsa por ${formatMoney(getCoordinatorExcludedTotal())}. Los demas coordinadores conservan su monto calculado.`,
+            icon: 'success',
         });
     }
 
@@ -2921,6 +3107,7 @@
         const totalAgenciasSinEmpresa = getAgenciasSinEmpresaRows(data).length;
         const totalVendidoBruto = grossRows.reduce((sum, item) => sum + toIntegerAmount(item.ventas_mes_actual), 0);
         const totalIncentivoBruto = grossRows.reduce((sum, item) => sum + toIntegerAmount(item.nuevo_incentivo), 0);
+        const empleadoIdSummary = getEmpleadoIdPagoSummary(data);
         const distribution = calculateAdministrativeDistribution(totalIncentivoBruto);
         const adminValor = distribution.totalAdministrativoCoordinador;
         const adminDistribucion = distribution.administrativo;
@@ -2947,8 +3134,11 @@
             <div>Administrativo: ${formatMoney(adminDistribucion)}</div>
             <div>Coordinador: ${formatMoney(coordinadorDistribucion)}</div>
             <div>Reasignado a Operadores/Seguridad: ${formatMoney(currentFixedBagTopUp)}</div>
-            <div>Deducciones detectadas: ${formatMoney(currentExcludedApplication.faltantesDisponible + currentExcludedApplication.desvinculadosDisponible)}</div>
-            <div>Rebaja neta por faltantes/desvinculados: ${formatMoney(currentExcludedApplication.totalRebajado)}</div>`;
+            <div>Deducciones detectadas: ${formatMoney(currentExcludedApplication.faltantesDisponible + currentExcludedApplication.desvinculadosDisponible + currentExcludedApplication.coordinadoresDisponible)}</div>
+            <div>Coordinadores enviados a bolsa: ${formatMoney(currentExcludedApplication.coordinadoresDisponible)}</div>
+            <div>Usuarios con IdEmpleado: ${empleadoIdSummary.usuariosConId.toLocaleString('en-US')} | ${formatMoney(empleadoIdSummary.montoConId)}</div>
+            <div>Usuarios sin IdEmpleado: ${empleadoIdSummary.usuariosSinId.toLocaleString('en-US')} | ${formatMoney(empleadoIdSummary.montoSinId)}</div>
+            <div>Rebaja neta por exclusiones: ${formatMoney(currentExcludedApplication.totalRebajado)}</div>`;
         document.getElementById('ni_total_con_admin').textContent =
             `Total a Pagar Final: ${formatMoney(totalConAdmin)}`;
         updateAdministrativeAndOperatorAmounts();
@@ -3727,6 +3917,10 @@
         if (modalAdministrativos && modalAdministrativos.classList.contains('show')) {
             renderAdministrativeCategoryTable();
         }
+        const modalCoordinadores = document.getElementById('modalCoordinadores');
+        if (modalCoordinadores && modalCoordinadores.classList.contains('show')) {
+            renderCoordinatorTable();
+        }
 
         document.getElementById('ni_rango_evaluado').textContent =
             `Mes evaluado: ${cachedMeta.eval_ini || ''} al ${cachedMeta.eval_fin || ''} | Modo: ${cachedMeta.modo_calculo_label || 'General consolidado'}${renderResumenEmpresas(cachedMeta)}`;
@@ -4038,7 +4232,18 @@
         document.querySelector('#btnRestaurarCoordinadores').addEventListener('click', function() {
             coordinatorRows = getDefaultCoordinatorRows();
             coordinatorUserDetailsByCoordinator = {};
-            renderCoordinatorTable();
+            excludedCoordinatorIds = new Set();
+            appliedCoordinatorAmounts = {};
+
+            if (cachedRows.length) {
+                applyLocalFilters(false);
+            } else {
+                renderCoordinatorTable();
+            }
+        });
+
+        document.querySelector('#btnAplicarCoordinadoresBolsa').addEventListener('click', function() {
+            aplicarCoordinadoresBolsa();
         });
 
         document.querySelector('#btnExportAdministrativosExcel').addEventListener('click', function() {
@@ -4186,6 +4391,8 @@
         excludedFaltantesCedulas = new Set();
         lastDesvinculadosCedulas = new Set();
         excludedDesvinculadosCedulas = new Set();
+        excludedCoordinatorIds = new Set();
+        appliedCoordinatorAmounts = {};
         currentFixedBagTopUp = 0;
         currentExcludedApplication = getEmptyExcludedApplication();
 
@@ -4240,7 +4447,7 @@
     });
 
     document.querySelector('#btnGenerarExcelPago').addEventListener('click', function() {
-        generarXlsxPagoIncentivo();
+        seleccionarDescargaExcelPago();
     });
 
     document.querySelector('#btnFiltrarCumplimiento').addEventListener('click', function() {
