@@ -2135,6 +2135,7 @@
                 const operadoresSeguridadTotal = toIntegerAmount(currentFixedBagTopUp);
                 const coordinadoresTotal = coordinatorRows
                     .reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0);
+                const distribucionTotal = toIntegerAmount(administrativosTotal + coordinadoresTotal + operadoresSeguridadTotal);
 
                 const moneyCell = (value, bold = false) => ({
                     text: formatMoney(value),
@@ -2206,6 +2207,7 @@
                     ['Administrativo', moneyCell(montoAdministrativo), moneyCell(administrativosTotal)],
                     ['Coordinadores', moneyCell(montoCoordinador), moneyCell(coordinadoresTotal)],
                     ['Operadores/Seguridad reasignado', moneyCell(operadoresSeguridadTotal), moneyCell(operadoresSeguridadTotal)],
+                    totalRow(['Total distribuido', { text: '', alignment: 'right' }, moneyCell(distribucionTotal)]),
                 ];
 
                 const controles = [
