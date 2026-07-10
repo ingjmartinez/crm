@@ -1981,6 +1981,8 @@
                 const sistema = document.getElementById('ni_sistema')?.value || '';
                 const tipoPago = document.getElementById('ni_tipo_pago')?.selectedOptions?.[0]?.textContent || '';
                 const total = rows.reduce((sum, row) => sum + getAdministrativeAmountByRow(row), 0);
+                const totalRowFill = '#cfe2ff';
+                const totalRowText = '#0f172a';
 
                 const tableBody = [
                     [
@@ -1998,11 +2000,11 @@
                         { text: formatMoney(getAdministrativeAmountByRow(row)), alignment: 'right' },
                     ]),
                     [
-                        { text: 'Total', colSpan: 4, alignment: 'right', bold: true },
-                        {},
-                        {},
-                        {},
-                        { text: formatMoney(total), alignment: 'right', bold: true },
+                        { text: 'Total', colSpan: 4, alignment: 'right', bold: true, fillColor: totalRowFill, color: totalRowText },
+                        { text: '', fillColor: totalRowFill },
+                        { text: '', fillColor: totalRowFill },
+                        { text: '', fillColor: totalRowFill },
+                        { text: formatMoney(total), alignment: 'right', bold: true, fillColor: totalRowFill, color: totalRowText },
                     ],
                 ];
 
@@ -2051,7 +2053,7 @@
                             layout: {
                                 fillColor: function (rowIndex) {
                                     if (rowIndex === 0) return '#eef2f7';
-                                    if (rowIndex === tableBody.length - 1) return '#f8f9fa';
+                                    if (rowIndex === tableBody.length - 1) return totalRowFill;
                                     return rowIndex % 2 === 0 ? '#fbfcfd' : null;
                                 },
                                 hLineColor: function () { return '#d9dee3'; },
@@ -2144,6 +2146,26 @@
                     alignment: 'right',
                     bold,
                 });
+                const totalRowFill = '#cfe2ff';
+                const totalRowText = '#0f172a';
+                const totalRow = (row) => row.map((cell, index) => {
+                    if (cell && typeof cell === 'object' && !Array.isArray(cell)) {
+                        return {
+                            ...cell,
+                            bold: true,
+                            fillColor: totalRowFill,
+                            color: totalRowText,
+                        };
+                    }
+
+                    return {
+                        text: String(cell ?? ''),
+                        alignment: index === 0 ? 'left' : 'right',
+                        bold: true,
+                        fillColor: totalRowFill,
+                        color: totalRowText,
+                    };
+                });
                 const sectionTitle = (text) => ({
                     text,
                     style: 'sectionTitle',
@@ -2160,10 +2182,10 @@
 
                 const resumenEjecutivo = [
                     [{ text: 'Concepto', style: 'tableHeader' }, { text: 'Monto', style: 'tableHeader', alignment: 'right' }],
-                    ['Total vendido bruto', moneyCell(totalVendidoBruto)],
-                    ['Total incentivo bruto generado', moneyCell(totalIncentivoBruto)],
+                    totalRow(['Total vendido bruto', moneyCell(totalVendidoBruto)]),
+                    totalRow(['Total incentivo bruto generado', moneyCell(totalIncentivoBruto)]),
                     [`Porcentaje administrativo/coordinador (${formatPercentDisplay(adminPctBruto)}%)`, moneyCell(totalDiezPorciento)],
-                    ['Total final a pagar', moneyCell(totalFinalPagar, true)],
+                    totalRow(['Total final a pagar', moneyCell(totalFinalPagar, true)]),
                 ];
 
                 const deducciones = [
@@ -2171,12 +2193,12 @@
                     ['Monto generado por faltantes', moneyCell(currentExcludedApplication.faltantesDisponible)],
                     ['Monto generado por desvinculados', moneyCell(currentExcludedApplication.desvinculadosDisponible)],
                     ['Monto generado por coordinadores excluidos', moneyCell(currentExcludedApplication.coordinadoresDisponible)],
-                    ['Total deducciones detectadas', moneyCell(totalDeduccionesDetectadas, true)],
+                    totalRow(['Total deducciones detectadas', moneyCell(totalDeduccionesDetectadas, true)]),
                     ['Aplicado a bolsa fija por faltantes', moneyCell(currentExcludedApplication.aplicadoFaltantes)],
                     ['Aplicado a bolsa fija por desvinculados', moneyCell(currentExcludedApplication.aplicadoDesvinculados)],
                     ['Aplicado a bolsa fija por coordinadores', moneyCell(currentExcludedApplication.aplicadoCoordinadores)],
-                    ['Reasignado a operadores/seguridad', moneyCell(currentFixedBagTopUp, true)],
-                    ['Rebaja neta por exclusiones', moneyCell(currentExcludedApplication.totalRebajado, true)],
+                    totalRow(['Reasignado a operadores/seguridad', moneyCell(currentFixedBagTopUp, true)]),
+                    totalRow(['Rebaja neta por exclusiones', moneyCell(currentExcludedApplication.totalRebajado, true)]),
                 ];
 
                 const distribucion = [
@@ -2218,7 +2240,7 @@
                 ];
 
                 const terminalesExcluidasText = terminalesExcluidas.length
-                    ? terminalesExcluidas.slice(0, 30).join(', ') + (terminalesExcluidas.length > 30 ? ` y ${terminalesExcluidas.length - 30} mas` : '')
+                    ? terminalesExcluidas.join(', ')
                     : 'No hay terminales excluidas.';
 
                 const docDefinition = {
