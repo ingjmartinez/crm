@@ -1926,7 +1926,9 @@ class IncentivosController extends Controller
                 ->values();
         }
 
-        return view('incentivos.reporte-nuevo-incentivo-v5', compact('coordinadores', 'administrativosConfig'));
+        $terminalesExcluidasIncentivo = $this->terminalesExcluidasIncentivoGuardadas();
+
+        return view('incentivos.reporte-nuevo-incentivo-v5', compact('coordinadores', 'administrativosConfig', 'terminalesExcluidasIncentivo'));
     }
 
     public function sincronizarAdministrativosReporteNuevoIncentivoV5(Request $request)
@@ -2111,6 +2113,62 @@ class IncentivosController extends Controller
         }
     }
 
+    public function listarTerminalesExcluidasIncentivoReporteNuevoIncentivoV5()
+    {
+        $terminales = $this->terminalesExcluidasIncentivoGuardadas();
+
+        return response()->json([
+            'ok' => true,
+            'terminales' => $terminales->all(),
+            'count' => $terminales->count(),
+        ]);
+    }
+
+    public function guardarTerminalesExcluidasIncentivoReporteNuevoIncentivoV5(Request $request)
+    {
+        $request->validate([
+            'terminales' => 'nullable',
+        ]);
+
+        $terminales = $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales'));
+
+        if (!Schema::hasTable('terminales_excluidas_incentivo')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'La tabla terminales_excluidas_incentivo no existe. Ejecuta las migraciones pendientes.',
+            ], 500);
+        }
+
+        $userId = auth()->id();
+
+        DB::transaction(function () use ($terminales, $userId) {
+            DB::table('terminales_excluidas_incentivo')
+                ->when($terminales->isNotEmpty(), fn ($query) => $query->whereNotIn('terminal', $terminales->all()))
+                ->delete();
+
+            foreach ($terminales as $terminal) {
+                DB::table('terminales_excluidas_incentivo')->updateOrInsert(
+                    ['terminal' => $terminal],
+                    [
+                        'updated_by' => $userId,
+                        'updated_at' => now(),
+                        'created_by' => $userId,
+                        'created_at' => now(),
+                    ]
+                );
+            }
+        });
+
+        $guardadas = $this->terminalesExcluidasIncentivoGuardadas();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Terminales excluidas guardadas correctamente.',
+            'terminales' => $guardadas->all(),
+            'count' => $guardadas->count(),
+        ]);
+    }
+
     public function plantillaTerminalesExcluidasReporteNuevoIncentivoV5()
     {
         $data = [
@@ -2161,7 +2219,9 @@ class IncentivosController extends Controller
         $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
         $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
         $sistema = $request->input('sistema', 'Todos');
-        $terminalesExcluidas = $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales_excluidas'));
+        $terminalesExcluidas = $request->has('terminales_excluidas')
+            ? $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales_excluidas'))
+            : $this->terminalesExcluidasIncentivoGuardadas();
 
         if ($modoCalculo === 'general') {
             $response = $this->reporteNuevoIncentivoV4($request);
@@ -2658,7 +2718,9 @@ class IncentivosController extends Controller
         $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
         $sistema = $request->input('sistema', 'Todos');
         $minDiasVenta = (int) $request->input('min_dias_venta', 1);
-        $terminalesExcluidas = $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales_excluidas'));
+        $terminalesExcluidas = $request->has('terminales_excluidas')
+            ? $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales_excluidas'))
+            : $this->terminalesExcluidasIncentivoGuardadas();
 
         $rangosPago = [];
         $rangosPagoInput = $request->input('rangos_pago');
@@ -2986,6 +3048,23 @@ class IncentivosController extends Controller
         }
 
         return $terminales
+            ->map(fn ($terminal) => trim((string) $terminal))
+            ->filter(fn ($terminal) => $terminal !== '')
+            ->unique()
+            ->values();
+    }
+
+    private function terminalesExcluidasIncentivoGuardadas()
+    {
+        if (!Schema::hasTable('terminales_excluidas_incentivo')) {
+            return collect();
+        }
+
+        return DB::table('terminales_excluidas_incentivo')
+            ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')
+            ->whereNotNull('terminal')
+            ->orderBy('terminal')
+            ->pluck('terminal')
             ->map(fn ($terminal) => trim((string) $terminal))
             ->filter(fn ($terminal) => $terminal !== '')
             ->unique()

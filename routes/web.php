@@ -505,6 +505,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/incentivos/reporte-nuevo-incentivo-v5/desvinculados', [IncentivosController::class, 'desvinculadosReporteNuevoIncentivoV5']);
     Route::post('/incentivos/reporte-nuevo-incentivo-v5/administrativos/sincronizar', [IncentivosController::class, 'sincronizarAdministrativosReporteNuevoIncentivoV5']);
     Route::post('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas/reconocer', [IncentivosController::class, 'reconocerTerminalesExcluidasReporteNuevoIncentivoV5']);
+    Route::get('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas', [IncentivosController::class, 'listarTerminalesExcluidasIncentivoReporteNuevoIncentivoV5']);
+    Route::post('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas', [IncentivosController::class, 'guardarTerminalesExcluidasIncentivoReporteNuevoIncentivoV5']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas/plantilla', [IncentivosController::class, 'plantillaTerminalesExcluidasReporteNuevoIncentivoV5']);
     Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
     Route::get('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoIndex'])->name('incentivos.incentivo-administrativo.index');

@@ -977,13 +977,7 @@
     let currentCoordinatorBase = 0;
     let currentFixedBagTopUp = 0;
     let horasTotalMinimo = toNumber(localStorage.getItem('incentivo_v5_horas_total_minimo') || 0);
-    let excludedTerminales = new Set((() => {
-        try {
-            return JSON.parse(localStorage.getItem('incentivo_v5_terminales_excluidas') || '[]');
-        } catch (_error) {
-            return [];
-        }
-    })());
+    let excludedTerminales = new Set(@json($terminalesExcluidasIncentivo ?? []));
     let recognizedTerminalesExcluidas = [];
     let currentExcludedApplication = {
         faltantesDisponible: 0,
@@ -1318,8 +1312,56 @@
     }
 
     function persistExcludedTerminales() {
-        localStorage.setItem('incentivo_v5_terminales_excluidas', JSON.stringify(getExcludedTerminalesArray()));
         updateExcludedTerminalesCount();
+    }
+
+    function renderTerminalesExcluidasActuales() {
+        const terminalesActuales = getExcludedTerminalesArray();
+        const resultado = document.getElementById('resultadoTerminalesExcluidas');
+        const aplicarBtn = document.getElementById('btnAplicarTerminalesExcluidas');
+
+        if (terminalesActuales.length) {
+            resultado.innerHTML = `
+                <div class="small">
+                    <div><strong>Terminales excluidas actualmente:</strong> ${terminalesActuales.length.toLocaleString('es-DO')}</div>
+                    <div class="terminal-excluida-list border rounded p-2 mt-2">
+                        ${terminalesActuales.map((terminal, idx) => `
+                            <div class="form-check">
+                                <input class="form-check-input terminal-excluida-check" type="checkbox" value="${escapeHtml(terminal)}" id="terminal_excluida_actual_${idx}" checked>
+                                <label class="form-check-label" for="terminal_excluida_actual_${idx}">${escapeHtml(terminal)}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="text-muted mt-2">Desmarca una terminal y aplica para quitarla de la configuracion fija.</div>
+                </div>
+            `;
+            resultado.style.display = 'block';
+            aplicarBtn.disabled = false;
+            return;
+        }
+
+        resultado.style.display = 'none';
+        resultado.innerHTML = '';
+        aplicarBtn.disabled = true;
+    }
+
+    async function guardarTerminalesExcluidasIncentivo(terminales) {
+        const response = await fetch('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                terminales,
+                _token: csrfToken(),
+            }),
+        });
+
+        return parseResponseAsJson(response, 'Error guardando terminales excluidas');
     }
 
     function updateExcludedTerminalesCount() {
@@ -1336,21 +1378,34 @@
         const encontradas = Array.isArray(response?.terminales_encontradas) ? response.terminales_encontradas : [];
         const noEncontradas = Array.isArray(response?.terminales_no_encontradas) ? response.terminales_no_encontradas : [];
         recognizedTerminalesExcluidas = encontradas.map(normalizeTerminalValue).filter(Boolean);
+        const actuales = getExcludedTerminalesArray();
+        const nuevas = recognizedTerminalesExcluidas.filter(terminal => !actuales.includes(terminal));
 
         const noEncontradasHtml = noEncontradas.length
             ? `<details class="mt-2"><summary class="text-danger" style="cursor:pointer;">No encontradas (${noEncontradas.length})</summary><div class="small mt-2" style="max-height: 120px; overflow-y:auto;"><ul class="mb-0 ps-3">${noEncontradas.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul></div></details>`
             : '<small class="text-success">Todas las terminales reconocidas existen en agencias.</small>';
 
-        const terminalesHtml = recognizedTerminalesExcluidas.length
+        const actualesHtml = actuales.length
             ? `<div class="terminal-excluida-list border rounded p-2 mt-2">
-                ${recognizedTerminalesExcluidas.map((terminal, idx) => `
+                ${actuales.map((terminal, idx) => `
                     <div class="form-check">
-                        <input class="form-check-input terminal-excluida-check" type="checkbox" value="${escapeHtml(terminal)}" id="terminal_excluida_${idx}" checked>
-                        <label class="form-check-label" for="terminal_excluida_${idx}">${escapeHtml(terminal)}</label>
+                        <input class="form-check-input terminal-excluida-check" type="checkbox" value="${escapeHtml(terminal)}" id="terminal_excluida_actual_reconocida_${idx}" checked>
+                        <label class="form-check-label" for="terminal_excluida_actual_reconocida_${idx}">${escapeHtml(terminal)}</label>
                     </div>
                 `).join('')}
             </div>`
-            : '<div class="text-muted small mt-2">No hay terminales validas para seleccionar.</div>';
+            : '<div class="text-muted small mt-2">No hay terminales excluidas actualmente.</div>';
+
+        const terminalesHtml = nuevas.length
+            ? `<div class="terminal-excluida-list border rounded p-2 mt-2">
+                ${nuevas.map((terminal, idx) => `
+                    <div class="form-check">
+                        <input class="form-check-input terminal-excluida-check" type="checkbox" value="${escapeHtml(terminal)}" id="terminal_excluida_nueva_${idx}" checked>
+                        <label class="form-check-label" for="terminal_excluida_nueva_${idx}">${escapeHtml(terminal)}</label>
+                    </div>
+                `).join('')}
+            </div>`
+            : '<div class="text-muted small mt-2">No hay terminales nuevas para agregar.</div>';
 
         container.innerHTML = `
             <div class="small">
@@ -1360,12 +1415,14 @@
                 <div><strong>Coinciden en agencias:</strong> ${Number(response?.encontradas || 0).toLocaleString('es-DO')}</div>
                 <div><strong>No existen en agencias:</strong> ${Number(response?.no_encontradas || 0).toLocaleString('es-DO')}</div>
                 <div class="mt-2">${noEncontradasHtml}</div>
-                <div class="mt-2"><strong>Seleccione las terminales a excluir:</strong></div>
+                <div class="mt-3"><strong>Terminales que quedaran excluidas:</strong></div>
+                ${actualesHtml}
+                <div class="mt-3"><strong>Nuevas terminales reconocidas:</strong></div>
                 ${terminalesHtml}
             </div>
         `;
         container.style.display = 'block';
-        button.disabled = recognizedTerminalesExcluidas.length === 0;
+        button.disabled = actuales.length === 0 && nuevas.length === 0;
     }
 
     function renderNombreEmpleado(value) {
@@ -3351,51 +3408,73 @@
             });
     }
 
-    function aplicarTerminalesExcluidas() {
+    async function aplicarTerminalesExcluidas() {
         const seleccionadas = Array.from(document.querySelectorAll('.terminal-excluida-check:checked'))
             .map(input => normalizeTerminalValue(input.value))
             .filter(Boolean);
 
-        if (!seleccionadas.length) {
-            Swal.fire({ title: 'Sin seleccion', text: 'Selecciona al menos una terminal para excluir.', icon: 'warning' });
-            return;
-        }
-
-        excludedTerminales = new Set([...getExcludedTerminalesArray(), ...seleccionadas]);
-        persistExcludedTerminales();
-        bootstrap.Modal.getInstance(document.getElementById('modalExcluirTerminales'))?.hide();
-
         const recalcular = cachedRows.length
             && document.getElementById('ni_fecha_ini').value
             && document.getElementById('ni_fecha_fin').value;
 
-        Swal.fire({
-            title: 'Terminales excluidas',
-            text: `${seleccionadas.length} terminales quedaron configuradas para excluir del calculo.`,
-            icon: 'success'
-        }).then(() => {
+        try {
+            Swal.fire({
+                title: 'Guardando exclusiones',
+                text: 'Actualizando terminales_excluidas_incentivo...',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            const resp = await guardarTerminalesExcluidasIncentivo([...new Set(seleccionadas)]);
+            excludedTerminales = new Set(Array.isArray(resp?.terminales) ? resp.terminales : seleccionadas);
+            recognizedTerminalesExcluidas = [];
+            persistExcludedTerminales();
+            bootstrap.Modal.getInstance(document.getElementById('modalExcluirTerminales'))?.hide();
+
+            await Swal.fire({
+                title: 'Terminales excluidas',
+                text: `${getExcludedTerminalesArray().length} terminales quedaron fijas para excluir del calculo.`,
+                icon: 'success'
+            });
+
             if (recalcular) {
                 listNuevoIncentivo(false);
             }
-        });
+        } catch (error) {
+            Swal.fire({ title: 'Error', text: error?.message || String(error), icon: 'warning' });
+        }
     }
 
-    function limpiarTerminalesExcluidas() {
-        excludedTerminales = new Set();
-        recognizedTerminalesExcluidas = [];
-        persistExcludedTerminales();
-        document.getElementById('resultadoTerminalesExcluidas').style.display = 'none';
-        document.getElementById('btnAplicarTerminalesExcluidas').disabled = true;
+    async function limpiarTerminalesExcluidas() {
         const recalcular = cachedRows.length
             && document.getElementById('ni_fecha_ini').value
             && document.getElementById('ni_fecha_fin').value;
 
-        Swal.fire({ title: 'Exclusiones limpiadas', text: 'No hay terminales excluidas para el proximo calculo.', icon: 'success' })
-            .then(() => {
-                if (recalcular) {
-                    listNuevoIncentivo(false);
-                }
+        try {
+            Swal.fire({
+                title: 'Limpiando exclusiones',
+                text: 'Actualizando terminales_excluidas_incentivo...',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
             });
+
+            const resp = await guardarTerminalesExcluidasIncentivo([]);
+            excludedTerminales = new Set(Array.isArray(resp?.terminales) ? resp.terminales : []);
+            recognizedTerminalesExcluidas = [];
+            persistExcludedTerminales();
+            document.getElementById('resultadoTerminalesExcluidas').style.display = 'none';
+            document.getElementById('btnAplicarTerminalesExcluidas').disabled = true;
+
+            await Swal.fire({ title: 'Exclusiones limpiadas', text: 'No hay terminales excluidas para el proximo calculo.', icon: 'success' });
+
+            if (recalcular) {
+                listNuevoIncentivo(false);
+            }
+        } catch (error) {
+            Swal.fire({ title: 'Error', text: error?.message || String(error), icon: 'warning' });
+        }
     }
 
     function getBaseFilteredRows(options = {}) {
@@ -3741,28 +3820,12 @@
         });
 
         document.querySelector('#btnExcluirTerminales').addEventListener('click', function() {
-            const terminalesActuales = getExcludedTerminalesArray();
-            const resultado = document.getElementById('resultadoTerminalesExcluidas');
             const aplicarBtn = document.getElementById('btnAplicarTerminalesExcluidas');
             document.getElementById('terminales_excluir_file').value = '';
             document.getElementById('terminales_excluir_manual').value = '';
             recognizedTerminalesExcluidas = [];
             aplicarBtn.disabled = true;
-
-            if (terminalesActuales.length) {
-                resultado.innerHTML = `
-                    <div class="small">
-                        <div><strong>Terminales excluidas actualmente:</strong> ${terminalesActuales.length.toLocaleString('es-DO')}</div>
-                        <div class="terminal-excluida-list border rounded p-2 mt-2">
-                            ${terminalesActuales.map(terminal => `<span class="badge bg-danger-subtle text-danger-emphasis me-1 mb-1">${escapeHtml(terminal)}</span>`).join('')}
-                        </div>
-                    </div>
-                `;
-                resultado.style.display = 'block';
-            } else {
-                resultado.style.display = 'none';
-                resultado.innerHTML = '';
-            }
+            renderTerminalesExcluidasActuales();
 
             const modal = new bootstrap.Modal(document.getElementById('modalExcluirTerminales'));
             modal.show();

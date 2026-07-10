@@ -132,10 +132,10 @@
                                 <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
                                     <div class="d-flex align-items-center gap-2">
                                         <h5 class="card-title mb-0">Listado</h5>
-                                        <a href="{{ route('incentivos.incentivo-administrativo.export', request()->only(['buscar_nombre', 'grupo_filter', 'empresa_filter'])) }}" class="btn btn-success btn-sm">Excel</a>
+                                        <a href="{{ route('incentivos.incentivo-administrativo.export', request()->only(['buscar_nombre', 'grupo_filter', 'empresa_filter', 'estatus_filter'])) }}" class="btn btn-success btn-sm">Excel</a>
                                     </div>
-                                    <form action="{{ route('incentivos.incentivo-administrativo.index') }}" method="GET" class="row g-2" style="max-width: 860px; width: 100%;">
-                                        <div class="col-md-4">
+                                    <form action="{{ route('incentivos.incentivo-administrativo.index') }}" method="GET" class="row g-2" style="max-width: 1040px; width: 100%;">
+                                        <div class="col-md-3">
                                             <input
                                                 type="text"
                                                 name="buscar_nombre"
@@ -153,7 +153,7 @@
                                                 @endforeach
                                             </select>
                                         </div>
-                                        <div class="col-md-3">
+                                        <div class="col-md-2">
                                             <select name="empresa_filter" class="form-select form-select-sm">
                                                 <option value="">Todas las empresas</option>
                                                 @foreach($empresas as $empresa)
@@ -163,9 +163,16 @@
                                                 @endforeach
                                             </select>
                                         </div>
+                                        <div class="col-md-2">
+                                            <select name="estatus_filter" class="form-select form-select-sm">
+                                                <option value="">Todos los estatus</option>
+                                                <option value="activo" {{ $estatusFilter === 'activo' ? 'selected' : '' }}>Activos</option>
+                                                <option value="no_activo" {{ $estatusFilter === 'no_activo' ? 'selected' : '' }}>No activos</option>
+                                            </select>
+                                        </div>
                                         <div class="col-md-2 d-flex gap-2">
                                             <button type="submit" class="btn btn-primary btn-sm flex-fill">Buscar</button>
-                                            @if($buscarNombre !== '' || $grupoFilter !== '' || $empresaFilter !== '')
+                                            @if($buscarNombre !== '' || $grupoFilter !== '' || $empresaFilter !== '' || $estatusFilter !== '')
                                                 <a href="{{ route('incentivos.incentivo-administrativo.index') }}" class="btn btn-light btn-sm">Limpiar</a>
                                             @endif
                                         </div>
@@ -260,7 +267,7 @@
                                             @empty
                                                 <tr>
                                                     <td colspan="6" class="text-center text-muted">
-                                                        @if($buscarNombre !== '' || $grupoFilter !== '' || $empresaFilter !== '')
+                                                        @if($buscarNombre !== '' || $grupoFilter !== '' || $empresaFilter !== '' || $estatusFilter !== '')
                                                             No hay registros para los filtros seleccionados.
                                                         @else
                                                             No hay registros disponibles.

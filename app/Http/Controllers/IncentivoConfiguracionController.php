@@ -19,6 +19,7 @@ class IncentivoConfiguracionController extends Controller
         $buscarNombre = trim((string) $request->query('buscar_nombre', ''));
         $grupoFilter = trim((string) $request->query('grupo_filter', ''));
         $empresaFilter = trim((string) $request->query('empresa_filter', ''));
+        $estatusFilter = trim((string) $request->query('estatus_filter', ''));
 
         $registros = $this->queryIncentivosAdministrativos($request)
             ->orderBy('grupo')
@@ -40,7 +41,7 @@ class IncentivoConfiguracionController extends Controller
 
         $empresas = collect(IncentivoAdministrativo::EMPRESAS_VALIDAS);
 
-        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas', 'buscarNombre', 'grupoFilter', 'empresaFilter'));
+        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas', 'buscarNombre', 'grupoFilter', 'empresaFilter', 'estatusFilter'));
     }
 
     public function incentivoAdministrativoStore(Request $request)
@@ -169,6 +170,7 @@ class IncentivoConfiguracionController extends Controller
         $buscarNombre = trim((string) $request->query('buscar_nombre', ''));
         $grupoFilter = trim((string) $request->query('grupo_filter', ''));
         $empresaFilter = trim((string) $request->query('empresa_filter', ''));
+        $estatusFilter = trim((string) $request->query('estatus_filter', ''));
 
         $query = IncentivoAdministrativo::query()
             ->select('incentivo_administrativos.*')
@@ -212,6 +214,14 @@ class IncentivoConfiguracionController extends Controller
                 ->whereRaw("BINARY REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') = BINARY REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '')")
                 ->whereRaw("NULLIF(REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', ''), '') IS NOT NULL");
         }, 'empleado_estado');
+
+        if (in_array($estatusFilter, ['activo', 'no_activo'], true)) {
+            if ($estatusFilter === 'activo') {
+                $query->having('empleado_estado', '=', 'activo');
+            } else {
+                $query->having('empleado_estado', '<>', 'activo');
+            }
+        }
 
         if ($withEmpleadoId) {
             $query->selectSub(function ($subquery) {
