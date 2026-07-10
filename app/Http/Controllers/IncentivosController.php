@@ -1882,16 +1882,55 @@ class IncentivosController extends Controller
             && Schema::hasTable('coordinador_operador_agencia')
             && Schema::hasTable('agencias')
         ) {
-            $coordinadores = CoordinadorOperador::query()
+            $cedulaLookupKey = function ($cedula) {
+                $digits = preg_replace('/\D+/', '', (string) $cedula);
+                $normalized = ltrim($digits, '0');
+
+                return $normalized === '' ? '0' : $normalized;
+            };
+
+            $coordinadoresBase = CoordinadorOperador::query()
                 ->where('puesto', 'coordinador')
                 ->withCount('agencias')
                 ->orderBy('nombre')
                 ->orderBy('apellido')
-                ->get(['id', 'nombre', 'apellido'])
-                ->map(function ($coordinador) {
+                ->get(['id', 'nombre', 'apellido', 'cedula']);
+
+            $empleadosPorCedula = collect();
+            if (
+                Schema::hasTable('empleados')
+                && Schema::hasColumn('empleados', 'cedula')
+                && Schema::hasColumn('empleados', 'empleadoid')
+            ) {
+                $cedulasCoordinadores = $coordinadoresBase
+                    ->pluck('cedula')
+                    ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                if ($cedulasCoordinadores->isNotEmpty()) {
+                    $empleadosPorCedula = DB::table('empleados')
+                        ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasCoordinadores->all())
+                        ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+                        ->selectRaw('MAX(empleadoid) AS empleadoid')
+                        ->groupByRaw('CAST(cedula AS UNSIGNED)')
+                        ->get()
+                        ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
+                            return [$cedulaLookupKey($row->cedula) => (string) ($row->empleadoid ?? '')];
+                        });
+                }
+            }
+
+            $coordinadores = $coordinadoresBase
+                ->map(function ($coordinador) use ($empleadosPorCedula, $cedulaLookupKey) {
+                    $cedula = (string) ($coordinador->cedula ?? '');
+
                     return [
                         'id' => $coordinador->id,
                         'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
+                        'cedula' => $cedula,
+                        'empleadoid' => (string) ($empleadosPorCedula[$cedulaLookupKey($cedula)] ?? ''),
                         'agencias' => (int) $coordinador->agencias_count,
                         'agencias_validas' => 0,
                         'monto_usuarios' => 0,

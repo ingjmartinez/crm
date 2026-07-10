@@ -2304,6 +2304,7 @@
     function exportCoordinadoresExcel() {
         const rows = coordinatorRows.map((row) => [
             row.nombre,
+            row.empleadoid || '',
             toNumber(row.agencias),
             toNumber(row.agencias_validas),
             formatMoney(row.monto_usuarios),
@@ -2316,7 +2317,7 @@
 
         exportRowsToExcelCsv(
             'coordinadores_v5_validacion.csv',
-            ['Nombre', 'Agencias', 'Validas', 'Monto', '% Total', 'Monto Calculado', 'Enviado a Bolsa', 'Monto Bolsa', 'Monto a Pagar'],
+            ['Nombre', 'IdEmpleado', 'Agencias', 'Validas', 'Monto', '% Total', 'Monto Calculado', 'Enviado a Bolsa', 'Monto Bolsa', 'Monto a Pagar'],
             rows
         );
     }
