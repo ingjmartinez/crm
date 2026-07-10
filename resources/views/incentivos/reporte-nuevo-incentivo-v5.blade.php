@@ -1713,6 +1713,7 @@
                 ...row,
                 __importe: toIntegerAmount(row?.nuevo_incentivo),
                 __idEmpleado: String(row?.empleadoid ?? '').trim(),
+                __empresa: normalizeEmpresaLabel(row?.empresa),
             }))
             .filter((row) => !excludeSinEmpleadoId || row.__idEmpleado !== '')
             .filter((row) => row.__importe > 0);
@@ -1725,13 +1726,14 @@
             return null;
         }
 
-        const headers = ['IdEmpleado', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo'];
+        const headers = ['IdEmpleado', 'Empresa', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo'];
         const comentario = getComentarioPagoIncentivo();
 
         return {
             headers,
             rows: rows.map((row) => [
                 row.__idEmpleado,
+                row.__empresa,
                 'INC',
                 String(row.__importe),
                 '',
