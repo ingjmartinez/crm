@@ -1876,19 +1876,18 @@ class IncentivosController extends Controller
     public function reporteNuevoIncentivoV5View()
     {
         $coordinadores = collect();
+        $cedulaLookupKey = function ($cedula) {
+            $digits = preg_replace('/\D+/', '', (string) $cedula);
+            $normalized = ltrim($digits, '0');
+
+            return $normalized === '' ? '0' : $normalized;
+        };
 
         if (
             Schema::hasTable('coordinador_operador')
             && Schema::hasTable('coordinador_operador_agencia')
             && Schema::hasTable('agencias')
         ) {
-            $cedulaLookupKey = function ($cedula) {
-                $digits = preg_replace('/\D+/', '', (string) $cedula);
-                $normalized = ltrim($digits, '0');
-
-                return $normalized === '' ? '0' : $normalized;
-            };
-
             $coordinadoresBase = CoordinadorOperador::query()
                 ->where('puesto', 'coordinador')
                 ->withCount('agencias')
@@ -1949,15 +1948,53 @@ class IncentivosController extends Controller
             && Schema::hasColumn('incentivo_administrativos', 'empresa')
             && Schema::hasColumn('incentivo_administrativos', 'pct_total')
         ) {
-            $administrativosConfig = IncentivoAdministrativo::query()
+            $administrativosColumns = ['grupo', 'nombre', 'empresa', 'pct_total'];
+            if (Schema::hasColumn('incentivo_administrativos', 'cedula')) {
+                $administrativosColumns[] = 'cedula';
+            }
+
+            $administrativosBase = IncentivoAdministrativo::query()
                 ->orderBy('grupo')
                 ->orderBy('empresa')
                 ->orderBy('nombre')
-                ->get(['grupo', 'nombre', 'empresa', 'pct_total'])
-                ->map(function ($row) {
+                ->get($administrativosColumns);
+
+            $empleadosAdministrativosPorCedula = collect();
+            if (
+                Schema::hasColumn('incentivo_administrativos', 'cedula')
+                && Schema::hasTable('empleados')
+                && Schema::hasColumn('empleados', 'cedula')
+                && Schema::hasColumn('empleados', 'empleadoid')
+            ) {
+                $cedulasAdministrativos = $administrativosBase
+                    ->pluck('cedula')
+                    ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                if ($cedulasAdministrativos->isNotEmpty()) {
+                    $empleadosAdministrativosPorCedula = DB::table('empleados')
+                        ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasAdministrativos->all())
+                        ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+                        ->selectRaw('MAX(empleadoid) AS empleadoid')
+                        ->groupByRaw('CAST(cedula AS UNSIGNED)')
+                        ->get()
+                        ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
+                            return [$cedulaLookupKey($row->cedula) => (string) ($row->empleadoid ?? '')];
+                        });
+                }
+            }
+
+            $administrativosConfig = $administrativosBase
+                ->map(function ($row) use ($empleadosAdministrativosPorCedula, $cedulaLookupKey) {
+                    $cedula = (string) ($row->cedula ?? '');
+
                     return [
                         'grupo' => (string) ($row->grupo ?? ''),
                         'nombre' => (string) ($row->nombre ?? ''),
+                        'cedula' => $cedula,
+                        'empleadoid' => (string) ($empleadosAdministrativosPorCedula[$cedulaLookupKey($cedula)] ?? ''),
                         'empresa' => (string) ($row->empresa ?? ''),
                         'pct' => (float) ($row->pct_total ?? 0),
                     ];

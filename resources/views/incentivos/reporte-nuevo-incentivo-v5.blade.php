@@ -900,6 +900,8 @@
                 id: row?.id ?? null,
                 grupo,
                 nombre: String(row?.nombre ?? '').trim(),
+                cedula: String(row?.cedula ?? '').trim(),
+                empleadoid: String(row?.empleadoid ?? '').trim(),
                 empresa: String(row?.empresa ?? '').trim(),
                 pct: isFixedAdministrativeGroup(grupo)
                     ? Math.max(0, toNumber(row?.pct))
@@ -1897,6 +1899,7 @@
         const rows = getAdministrativeDisplayRows().map((row) => [
             row.grupo,
             row.nombre,
+            row.empleadoid || '',
             row.empresa,
             formatAdministrativeConfigValue(row),
             formatMoney(getAdministrativeDisplayAmount(row)),
@@ -1904,7 +1907,7 @@
 
         exportRowsToExcelCsv(
             'administrativos_v5_validacion.csv',
-            ['Grupo', 'Nombre', 'Empresa', '% Total / Monto fijo', 'Monto'],
+            ['Grupo', 'Nombre', 'IdEmpleado', 'Empresa', '% Total / Monto fijo', 'Monto'],
             rows
         );
     }
