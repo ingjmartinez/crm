@@ -2131,8 +2131,8 @@
                 const terminalesExcluidas = getExcludedTerminalesArray();
                 const usuariosPorActualizar = getUsuariosPorActualizarRows(processedRows).length;
                 const agenciasSinEmpresa = getAgenciasSinEmpresaRows(processedRows).length;
-                const administrativosTotal = [...administrativeRows, ...operatorRows]
-                    .reduce((sum, row) => sum + getAdministrativeAmountByRow(row), 0);
+                const administrativosTotal = toIntegerAmount(montoAdministrativo);
+                const operadoresSeguridadTotal = toIntegerAmount(currentFixedBagTopUp);
                 const coordinadoresTotal = coordinatorRows
                     .reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0);
 
@@ -2205,7 +2205,7 @@
                     [{ text: 'Destino', style: 'tableHeader' }, { text: 'Monto base', style: 'tableHeader', alignment: 'right' }, { text: 'Monto distribuido en plantilla', style: 'tableHeader', alignment: 'right' }],
                     ['Administrativo', moneyCell(montoAdministrativo), moneyCell(administrativosTotal)],
                     ['Coordinadores', moneyCell(montoCoordinador), moneyCell(coordinadoresTotal)],
-                    ['Operadores/Seguridad reasignado', moneyCell(currentFixedBagTopUp), moneyCell(currentFixedBagTopUp)],
+                    ['Operadores/Seguridad reasignado', moneyCell(operadoresSeguridadTotal), moneyCell(operadoresSeguridadTotal)],
                 ];
 
                 const controles = [
