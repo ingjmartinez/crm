@@ -1716,6 +1716,8 @@
                 __importe: toIntegerAmount(row?.nuevo_incentivo),
                 __idEmpleado: String(row?.empleadoid ?? '').trim(),
                 __empresa: normalizeEmpresaLabel(row?.empresa),
+                __viapago: String(row?.viapago ?? '').trim(),
+                __ciudad: String(row?.ciudad ?? '').trim(),
             }))
             .filter((row) => !excludeSinEmpleadoId || row.__idEmpleado !== '')
             .filter((row) => row.__importe > 0);
@@ -1728,7 +1730,7 @@
             return null;
         }
 
-        const headers = ['IdEmpleado', 'Empresa', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo'];
+        const headers = ['IdEmpleado', 'Empresa', 'ViaPago', 'Ciudad', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo'];
         const comentario = getComentarioPagoIncentivo();
 
         return {
@@ -1736,6 +1738,8 @@
             rows: rows.map((row) => [
                 row.__idEmpleado,
                 row.__empresa,
+                row.__viapago,
+                row.__ciudad,
                 'INC',
                 String(row.__importe),
                 '',
@@ -3148,16 +3152,27 @@
             nextAmounts[key] = toIntegerAmount(getCoordinatorAmount(row));
         });
 
-        excludedCoordinatorIds = nextExcludedIds;
-        appliedCoordinatorAmounts = nextAmounts;
-
-        applyLocalFilters(false);
-
         Swal.fire({
-            title: 'Coordinadores aplicados',
-            text: `${excludedCoordinatorIds.size} coordinadores enviados a bolsa por ${formatMoney(getCoordinatorExcludedTotal())}. Los demas coordinadores conservan su monto calculado.`,
-            icon: 'success',
+            title: 'Aplicando coordinadores...',
+            text: 'Estamos enviando los coordinadores seleccionados a la bolsa y recalculando el reporte.',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
         });
+
+        setTimeout(() => {
+            excludedCoordinatorIds = nextExcludedIds;
+            appliedCoordinatorAmounts = nextAmounts;
+
+            applyLocalFilters(false);
+
+            Swal.fire({
+                title: 'Coordinadores aplicados',
+                text: `${excludedCoordinatorIds.size} coordinadores enviados a bolsa por ${formatMoney(getCoordinatorExcludedTotal())}. Los demas coordinadores conservan su monto calculado.`,
+                icon: 'success',
+            });
+        }, 120);
     }
 
     function updateCoordinatorValidAgencies(meta) {

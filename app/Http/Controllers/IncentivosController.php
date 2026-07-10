@@ -1329,6 +1329,8 @@ class IncentivosController extends Controller
             ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
             ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
             ->selectRaw('MAX(empleadoid) AS empleadoid')
+            ->selectRaw("MAX(COALESCE(viapago, '')) AS viapago")
+            ->selectRaw("MAX(COALESCE(ciudad, '')) AS ciudad")
             ->groupByRaw('CAST(cedula AS UNSIGNED)')
             ->get()
             ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
@@ -1410,6 +1412,8 @@ class IncentivosController extends Controller
             return [
                 'cedula' => $row['cedula'],
                 'empleadoid' => (string) ($empleado->empleadoid ?? ''),
+                'viapago' => (string) ($empleado->viapago ?? ''),
+                'ciudad' => (string) ($empleado->ciudad ?? ''),
                 'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
                 'ultima_terminal' => $ultimaVenta['terminal'] ?? '',
                 'ultima_agencia_nombre' => $ultimaVenta['nombre_agencia'] ?? 'SIN AGENCIA',
@@ -2602,6 +2606,8 @@ class IncentivosController extends Controller
                 ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
                 ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
                 ->selectRaw('MAX(empleadoid) AS empleadoid')
+                ->selectRaw("MAX(COALESCE(viapago, '')) AS viapago")
+                ->selectRaw("MAX(COALESCE(ciudad, '')) AS ciudad")
                 ->groupByRaw('CAST(cedula AS UNSIGNED)')
                 ->get()
                 ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
@@ -2626,6 +2632,8 @@ class IncentivosController extends Controller
             return [
                 'cedula' => $row['cedula'],
                 'empleadoid' => (string) ($empleado->empleadoid ?? ''),
+                'viapago' => (string) ($empleado->viapago ?? ''),
+                'ciudad' => (string) ($empleado->ciudad ?? ''),
                 'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
                 'ultima_terminal' => $ultimaVenta['terminal'] ?? '',
                 'ultima_agencia_nombre' => $ultimaVenta['nombre_agencia'] ?? 'SIN AGENCIA',
