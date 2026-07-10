@@ -2226,17 +2226,93 @@
                     ['Agencias sin empresa', numberCell(agenciasSinEmpresa)],
                 ];
 
-                const resumenEmpresas = Array.isArray(cachedMeta?.resumen_empresas) ? cachedMeta.resumen_empresas : [];
+                const empresaRowsMap = new Map();
+                grossRows.forEach((row) => {
+                    const empresa = normalizeEmpresaLabel(row?.empresa);
+                    const key = normalizeEmpresaValue(empresa);
+                    const current = empresaRowsMap.get(key) || {
+                        empresa,
+                        total_vendido: 0,
+                        incentivo_base: 0,
+                        usuariosSet: new Set(),
+                    };
+
+                    current.total_vendido += toIntegerAmount(row?.ventas_mes_actual);
+                    current.incentivo_base += toIntegerAmount(row?.nuevo_incentivo);
+
+                    const cedula = normalizeCedulaValue(row?.cedula) || String(row?.cedula ?? '').trim();
+                    if (cedula) {
+                        current.usuariosSet.add(cedula);
+                    }
+
+                    empresaRowsMap.set(key, current);
+                });
+
+                const ajusteFinalPorEmpresa = toIntegerAmount(totalDiezPorciento - currentExcludedApplication.totalRebajado);
+                const empresasResumenFinal = Array.from(empresaRowsMap.values())
+                    .sort((a, b) => String(a.empresa || '').localeCompare(String(b.empresa || ''), 'es', { sensitivity: 'base' }));
+
+                let ajusteAsignado = 0;
+                let totalFinalEmpresaAsignado = 0;
+                const ultimoIndiceConIncentivo = empresasResumenFinal
+                    .map((row, idx) => ({ row, idx }))
+                    .filter(item => toIntegerAmount(item.row.incentivo_base) > 0)
+                    .map(item => item.idx)
+                    .pop();
+
+                empresasResumenFinal.forEach((row, idx) => {
+                    const base = toIntegerAmount(row.incentivo_base);
+                    let ajuste = 0;
+
+                    if (totalIncentivoBruto > 0 && base > 0) {
+                        ajuste = idx === ultimoIndiceConIncentivo
+                            ? toIntegerAmount(ajusteFinalPorEmpresa - ajusteAsignado)
+                            : toIntegerAmount(ajusteFinalPorEmpresa * (base / totalIncentivoBruto));
+                    }
+
+                    ajusteAsignado += ajuste;
+                    row.ajuste = ajuste;
+                    row.total_final = toIntegerAmount(base + ajuste);
+                    totalFinalEmpresaAsignado += row.total_final;
+                });
+
+                if (empresasResumenFinal.length && totalFinalEmpresaAsignado !== totalFinalPagar) {
+                    const targetIndex = ultimoIndiceConIncentivo ?? empresasResumenFinal.length - 1;
+                    empresasResumenFinal[targetIndex].total_final = toIntegerAmount(
+                        empresasResumenFinal[targetIndex].total_final + (totalFinalPagar - totalFinalEmpresaAsignado)
+                    );
+                    empresasResumenFinal[targetIndex].ajuste = toIntegerAmount(
+                        empresasResumenFinal[targetIndex].total_final - empresasResumenFinal[targetIndex].incentivo_base
+                    );
+                }
+
                 const empresasTable = [
-                    [{ text: 'Empresa', style: 'tableHeader' }, { text: 'Ventas', style: 'tableHeader', alignment: 'right' }, { text: 'Incentivo', style: 'tableHeader', alignment: 'right' }, { text: 'Usuarios', style: 'tableHeader', alignment: 'right' }],
-                    ...(resumenEmpresas.length
-                        ? resumenEmpresas.map(row => [
-                            normalizeEmpresaLabel(row?.empresa),
-                            moneyCell(row?.total_vendido),
-                            moneyCell(row?.total_incentivo),
-                            numberCell(row?.usuarios),
+                    [
+                        { text: 'Empresa', style: 'tableHeader' },
+                        { text: 'Ventas', style: 'tableHeader', alignment: 'right' },
+                        { text: 'Incentivo base', style: 'tableHeader', alignment: 'right' },
+                        { text: 'Ajuste admin/rebajas', style: 'tableHeader', alignment: 'right' },
+                        { text: 'Total final', style: 'tableHeader', alignment: 'right' },
+                        { text: 'Usuarios', style: 'tableHeader', alignment: 'right' },
+                    ],
+                    ...(empresasResumenFinal.length
+                        ? empresasResumenFinal.map(row => [
+                            row.empresa,
+                            moneyCell(row.total_vendido),
+                            moneyCell(row.incentivo_base),
+                            moneyCell(row.ajuste),
+                            moneyCell(row.total_final),
+                            numberCell(row.usuariosSet.size),
                         ])
-                        : [['Sin desglose', moneyCell(0), moneyCell(0), numberCell(0)]]),
+                        : [['Sin desglose', moneyCell(0), moneyCell(0), moneyCell(0), moneyCell(0), numberCell(0)]]),
+                    totalRow([
+                        'Total',
+                        moneyCell(empresasResumenFinal.reduce((sum, row) => sum + toIntegerAmount(row.total_vendido), 0)),
+                        moneyCell(totalIncentivoBruto),
+                        moneyCell(ajusteFinalPorEmpresa),
+                        moneyCell(totalFinalPagar),
+                        numberCell(empresasResumenFinal.reduce((sum, row) => sum + row.usuariosSet.size, 0)),
+                    ]),
                 ];
 
                 const terminalesExcluidasText = terminalesExcluidas.length
@@ -2284,7 +2360,7 @@
                         sectionTitle('Control del proceso'),
                         { table: { widths: ['*', '28%'], body: controles }, layout: tableLayout },
                         sectionTitle('Resumen por empresa'),
-                        { table: { widths: ['*', '24%', '24%', '18%'], body: empresasTable }, layout: tableLayout },
+                        { table: { widths: ['*', '17%', '17%', '17%', '17%', '12%'], body: empresasTable }, layout: tableLayout },
                         sectionTitle('Notas gerenciales'),
                         {
                             ul: [
