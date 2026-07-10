@@ -6,6 +6,7 @@ use App\Models\IncentivoAdministrativo;
 use App\Models\PorcentajeIncentivo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class IncentivoConfiguracionController extends Controller
@@ -170,6 +171,7 @@ class IncentivoConfiguracionController extends Controller
         $empresaFilter = trim((string) $request->query('empresa_filter', ''));
 
         $query = IncentivoAdministrativo::query()
+            ->select('incentivo_administrativos.*')
             ->when($buscarNombre !== '', function ($query) use ($buscarNombre) {
                 $query->where('nombre', 'like', '%' . $buscarNombre . '%');
             })
@@ -180,9 +182,39 @@ class IncentivoConfiguracionController extends Controller
                 $query->where('empresa', $empresaFilter);
             });
 
+        $hasActivo = Schema::hasColumn('empleados', 'activo');
+        $hasFechaSalida = Schema::hasColumn('empleados', 'fechasalida');
+        $hasFechaSalidaAlt = Schema::hasColumn('empleados', 'fecha_salida');
+        $activoCondition = $hasActivo ? 'COALESCE(empleados.activo, 1) = 1' : '1 = 1';
+        $fechaSalidaChecks = [];
+
+        if ($hasFechaSalida) {
+            $fechaSalidaChecks[] = "(NULLIF(TRIM(CAST(empleados.fechasalida AS CHAR)), '') IS NULL OR TRIM(CAST(empleados.fechasalida AS CHAR)) = '0000-00-00')";
+        }
+
+        if ($hasFechaSalidaAlt) {
+            $fechaSalidaChecks[] = "(NULLIF(TRIM(CAST(empleados.fecha_salida AS CHAR)), '') IS NULL OR TRIM(CAST(empleados.fecha_salida AS CHAR)) = '0000-00-00')";
+        }
+
+        $fechaSalidaCondition = empty($fechaSalidaChecks)
+            ? '1 = 1'
+            : '(' . implode(' AND ', $fechaSalidaChecks) . ')';
+
+        $query->selectSub(function ($subquery) use ($activoCondition, $fechaSalidaCondition) {
+            $subquery->from('empleados')
+                ->selectRaw("
+                    CASE
+                        WHEN COUNT(*) = 0 THEN 'no_existe'
+                        WHEN SUM(CASE WHEN {$activoCondition} AND {$fechaSalidaCondition} THEN 1 ELSE 0 END) > 0 THEN 'activo'
+                        ELSE 'inactivo'
+                    END
+                ")
+                ->whereRaw("BINARY REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') = BINARY REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '')")
+                ->whereRaw("NULLIF(REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', ''), '') IS NOT NULL");
+        }, 'empleado_estado');
+
         if ($withEmpleadoId) {
-            $query->addSelect('incentivo_administrativos.*')
-                ->selectSub(function ($subquery) {
+            $query->selectSub(function ($subquery) {
                     $subquery->from('empleados')
                         ->select('empleadoid')
                         ->whereRaw("BINARY REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') = BINARY REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '')")

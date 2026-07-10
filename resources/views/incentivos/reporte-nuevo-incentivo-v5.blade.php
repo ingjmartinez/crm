@@ -107,6 +107,11 @@
             background: #fee2e2;
             color: #991b1b;
         }
+
+        .terminal-excluida-list {
+            max-height: 220px;
+            overflow-y: auto;
+        }
     </style>
 
     <div class="main-content">
@@ -278,9 +283,13 @@
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigHorasTotal">Configurar Horas</button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnExcluirTerminales">
+                                        Excluir Terminales <span class="badge bg-danger ms-1" id="terminalesExcluidasCount">0</span>
+                                    </button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
                                     <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
                                     <button type="button" class="btn btn-info" id="btnValidacionGerencial">Validacion Gerencial</button>
+                                    <button type="button" class="btn btn-info" id="btnInformeGerencialProceso">Informe Gerencial PDF</button>
                                     <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
                                     <button type="button" class="btn btn-success" id="btnConsultarDesvinculados">Usu. Desvinculados</button>
                                 </div>
@@ -307,6 +316,59 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalExcluirTerminales" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Excluir agencias por terminal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="terminales_excluir_file" class="form-label">Seleccione el archivo Excel</label>
+                        <input type="file" class="form-control" id="terminales_excluir_file" accept=".xlsx,.xls,.csv">
+                        <div class="form-text">Formatos aceptados: .xlsx, .xls, .csv. La plantilla solo necesita una columna: Terminal.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="terminales_excluir_manual" class="form-label">Terminales manuales</label>
+                        <textarea id="terminales_excluir_manual" class="form-control" rows="3" placeholder="Escribe o pega terminales, una por linea o separadas por coma"></textarea>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="btn btn-outline-info btn-sm" id="btnReconocerTerminalesExcluidas">
+                            <i class="ri-search-eye-line me-1"></i>Reconocer terminales
+                        </button>
+                        <a href="/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas/plantilla" class="btn btn-outline-primary btn-sm">
+                            <i class="ri-download-line me-1"></i>Descargar plantilla
+                        </a>
+                        <button type="button" class="btn btn-outline-danger btn-sm ms-auto" id="btnLimpiarTerminalesExcluidas">
+                            Limpiar exclusiones
+                        </button>
+                    </div>
+
+                    <div class="border rounded p-2 mb-3" id="resultadoTerminalesExcluidas" style="display:none;"></div>
+
+                    <div class="alert alert-warning mb-0">
+                        <strong class="d-block mb-2">Reglas de exclusion:</strong>
+                        <ul class="mb-2 ps-3">
+                            <li>Solo se usara la columna Terminal del archivo.</li>
+                            <li>Las terminales seleccionadas se excluyen del calculo de ventas e incentivo.</li>
+                            <li>Tambien puedes escribir terminales manualmente y reconocerlas antes de aplicar.</li>
+                        </ul>
+                        <small class="text-muted">Luego de aplicar, genera el reporte para recalcular sin esas terminales.</small>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex gap-2">
+                    <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary flex-grow-1" id="btnAplicarTerminalesExcluidas" disabled>
+                        Aplicar exclusion
+                    </button>
                 </div>
             </div>
         </div>
@@ -915,6 +977,14 @@
     let currentCoordinatorBase = 0;
     let currentFixedBagTopUp = 0;
     let horasTotalMinimo = toNumber(localStorage.getItem('incentivo_v5_horas_total_minimo') || 0);
+    let excludedTerminales = new Set((() => {
+        try {
+            return JSON.parse(localStorage.getItem('incentivo_v5_terminales_excluidas') || '[]');
+        } catch (_error) {
+            return [];
+        }
+    })());
+    let recognizedTerminalesExcluidas = [];
     let currentExcludedApplication = {
         faltantesDisponible: 0,
         desvinculadosDisponible: 0,
@@ -964,6 +1034,10 @@
         }
 
         return payload;
+    }
+
+    function csrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
     }
 
     function formatPercentDisplay(value) {
@@ -1233,6 +1307,65 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function normalizeTerminalValue(value) {
+        return String(value ?? '').trim();
+    }
+
+    function getExcludedTerminalesArray() {
+        return [...excludedTerminales].map(normalizeTerminalValue).filter(Boolean).sort();
+    }
+
+    function persistExcludedTerminales() {
+        localStorage.setItem('incentivo_v5_terminales_excluidas', JSON.stringify(getExcludedTerminalesArray()));
+        updateExcludedTerminalesCount();
+    }
+
+    function updateExcludedTerminalesCount() {
+        const count = getExcludedTerminalesArray().length;
+        const target = document.getElementById('terminalesExcluidasCount');
+        if (target) {
+            target.textContent = count;
+        }
+    }
+
+    function renderTerminalesExcluidasResultado(response) {
+        const container = document.getElementById('resultadoTerminalesExcluidas');
+        const button = document.getElementById('btnAplicarTerminalesExcluidas');
+        const encontradas = Array.isArray(response?.terminales_encontradas) ? response.terminales_encontradas : [];
+        const noEncontradas = Array.isArray(response?.terminales_no_encontradas) ? response.terminales_no_encontradas : [];
+        recognizedTerminalesExcluidas = encontradas.map(normalizeTerminalValue).filter(Boolean);
+
+        const noEncontradasHtml = noEncontradas.length
+            ? `<details class="mt-2"><summary class="text-danger" style="cursor:pointer;">No encontradas (${noEncontradas.length})</summary><div class="small mt-2" style="max-height: 120px; overflow-y:auto;"><ul class="mb-0 ps-3">${noEncontradas.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul></div></details>`
+            : '<small class="text-success">Todas las terminales reconocidas existen en agencias.</small>';
+
+        const terminalesHtml = recognizedTerminalesExcluidas.length
+            ? `<div class="terminal-excluida-list border rounded p-2 mt-2">
+                ${recognizedTerminalesExcluidas.map((terminal, idx) => `
+                    <div class="form-check">
+                        <input class="form-check-input terminal-excluida-check" type="checkbox" value="${escapeHtml(terminal)}" id="terminal_excluida_${idx}" checked>
+                        <label class="form-check-label" for="terminal_excluida_${idx}">${escapeHtml(terminal)}</label>
+                    </div>
+                `).join('')}
+            </div>`
+            : '<div class="text-muted small mt-2">No hay terminales validas para seleccionar.</div>';
+
+        container.innerHTML = `
+            <div class="small">
+                <div><strong>Filas en archivo:</strong> ${Number(response?.total_filas || 0).toLocaleString('es-DO')}</div>
+                <div><strong>Terminales leidas:</strong> ${Number(response?.terminales_leidas || 0).toLocaleString('es-DO')}</div>
+                <div><strong>Terminales unicas:</strong> ${Number(response?.terminales_unicas || 0).toLocaleString('es-DO')}</div>
+                <div><strong>Coinciden en agencias:</strong> ${Number(response?.encontradas || 0).toLocaleString('es-DO')}</div>
+                <div><strong>No existen en agencias:</strong> ${Number(response?.no_encontradas || 0).toLocaleString('es-DO')}</div>
+                <div class="mt-2">${noEncontradasHtml}</div>
+                <div class="mt-2"><strong>Seleccione las terminales a excluir:</strong></div>
+                ${terminalesHtml}
+            </div>
+        `;
+        container.style.display = 'block';
+        button.disabled = recognizedTerminalesExcluidas.length === 0;
     }
 
     function renderNombreEmpleado(value) {
@@ -1777,6 +1910,211 @@
                 Swal.fire({
                     title: 'Error',
                     text: error?.message || String(error) || 'No se pudo generar la validacion gerencial.',
+                    icon: 'error'
+                });
+            }
+        }, 150);
+    }
+
+    function generarPdfInformeGerencialProceso() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        if (typeof pdfMake === 'undefined') {
+            Swal.fire({ title: 'Error', text: 'No se encontro la libreria para generar PDF.', icon: 'error' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Generando informe',
+            text: 'Preparando informe gerencial del proceso...',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        setTimeout(() => {
+            try {
+                const fechaIni = document.getElementById('ni_fecha_ini')?.value || '';
+                const fechaFin = document.getElementById('ni_fecha_fin')?.value || '';
+                const sistema = document.getElementById('ni_sistema')?.value || 'Todos';
+                const tipoPago = document.getElementById('ni_tipo_pago')?.selectedOptions?.[0]?.textContent || '';
+                const modoCalculo = cachedMeta?.modo_calculo_label || document.getElementById('ni_modo_calculo')?.selectedOptions?.[0]?.textContent || '';
+                const grossRows = getBaseFilteredRows({ includeEmpresaFilter: false });
+                const processedRows = Array.isArray(currentFilteredRows) ? currentFilteredRows : [];
+                const totalVendidoBruto = grossRows.reduce((sum, row) => sum + toIntegerAmount(row?.ventas_mes_actual), 0);
+                const totalIncentivoBruto = grossRows.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+                const totalIncentivoProcesado = processedRows.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+                const totalDiezPorciento = toIntegerAmount(currentDistributionBase);
+                const montoAdministrativo = toIntegerAmount(currentAdministrativePoolBase);
+                const montoCoordinador = toIntegerAmount(currentCoordinatorBase);
+                const totalDeduccionesDetectadas = toIntegerAmount(currentExcludedApplication.faltantesDisponible + currentExcludedApplication.desvinculadosDisponible);
+                const totalFinalPagar = toIntegerAmount(totalIncentivoBruto + totalDiezPorciento - currentExcludedApplication.totalRebajado);
+                const resumenCumplimiento = getUsuariosCumplimientoSummary(grossRows);
+                const terminalesExcluidas = getExcludedTerminalesArray();
+                const usuariosPorActualizar = getUsuariosPorActualizarRows(processedRows).length;
+                const agenciasSinEmpresa = getAgenciasSinEmpresaRows(processedRows).length;
+                const administrativosTotal = [...administrativeRows, ...operatorRows]
+                    .reduce((sum, row) => sum + getAdministrativeAmountByRow(row), 0);
+                const coordinadoresTotal = coordinatorRows
+                    .reduce((sum, row) => sum + getCoordinatorAmount(row), 0);
+
+                const moneyCell = (value, bold = false) => ({
+                    text: formatMoney(value),
+                    alignment: 'right',
+                    bold,
+                });
+                const numberCell = (value, bold = false) => ({
+                    text: Number(value || 0).toLocaleString('en-US'),
+                    alignment: 'right',
+                    bold,
+                });
+                const sectionTitle = (text) => ({
+                    text,
+                    style: 'sectionTitle',
+                    margin: [0, 12, 0, 6],
+                });
+                const tableLayout = {
+                    fillColor: function (rowIndex) {
+                        if (rowIndex === 0) return '#eef2f7';
+                        return rowIndex % 2 === 0 ? '#fbfcfd' : null;
+                    },
+                    hLineColor: function () { return '#d9dee3'; },
+                    vLineColor: function () { return '#d9dee3'; },
+                };
+
+                const resumenEjecutivo = [
+                    [{ text: 'Concepto', style: 'tableHeader' }, { text: 'Monto', style: 'tableHeader', alignment: 'right' }],
+                    ['Total vendido bruto', moneyCell(totalVendidoBruto)],
+                    ['Total incentivo bruto generado', moneyCell(totalIncentivoBruto)],
+                    [`Porcentaje administrativo/coordinador (${formatPercentDisplay(adminPctBruto)}%)`, moneyCell(totalDiezPorciento)],
+                    ['Total final a pagar', moneyCell(totalFinalPagar, true)],
+                ];
+
+                const deducciones = [
+                    [{ text: 'Concepto', style: 'tableHeader' }, { text: 'Monto', style: 'tableHeader', alignment: 'right' }],
+                    ['Monto generado por faltantes', moneyCell(currentExcludedApplication.faltantesDisponible)],
+                    ['Monto generado por desvinculados', moneyCell(currentExcludedApplication.desvinculadosDisponible)],
+                    ['Total deducciones detectadas', moneyCell(totalDeduccionesDetectadas, true)],
+                    ['Aplicado a bolsa fija por faltantes', moneyCell(currentExcludedApplication.aplicadoFaltantes)],
+                    ['Aplicado a bolsa fija por desvinculados', moneyCell(currentExcludedApplication.aplicadoDesvinculados)],
+                    ['Reasignado a operadores/seguridad', moneyCell(currentFixedBagTopUp, true)],
+                    ['Rebaja neta por faltantes/desvinculados', moneyCell(currentExcludedApplication.totalRebajado, true)],
+                ];
+
+                const distribucion = [
+                    [{ text: 'Destino', style: 'tableHeader' }, { text: 'Monto base', style: 'tableHeader', alignment: 'right' }, { text: 'Monto distribuido en plantilla', style: 'tableHeader', alignment: 'right' }],
+                    ['Administrativo', moneyCell(montoAdministrativo), moneyCell(administrativosTotal)],
+                    ['Coordinadores', moneyCell(montoCoordinador), moneyCell(coordinadoresTotal)],
+                    ['Operadores/Seguridad reasignado', moneyCell(currentFixedBagTopUp), moneyCell(currentFixedBagTopUp)],
+                ];
+
+                const controles = [
+                    [{ text: 'Control', style: 'tableHeader' }, { text: 'Cantidad / Monto', style: 'tableHeader', alignment: 'right' }],
+                    ['Usuarios que cumplieron', numberCell(resumenCumplimiento.cumplen)],
+                    ['Usuarios que no cumplieron', numberCell(resumenCumplimiento.noCumplen)],
+                    ['Usuarios procesados despues de exclusiones', numberCell(processedRows.length)],
+                    ['Incentivo de usuarios procesados', moneyCell(totalIncentivoProcesado)],
+                    ['Cedulas excluidas por faltantes', numberCell(excludedFaltantesCedulas.size)],
+                    ['Cedulas excluidas por desvinculados', numberCell(excludedDesvinculadosCedulas.size)],
+                    ['Terminales excluidas del calculo', numberCell(terminalesExcluidas.length)],
+                    ['Usuarios pendientes por actualizar', numberCell(usuariosPorActualizar)],
+                    ['Agencias sin empresa', numberCell(agenciasSinEmpresa)],
+                ];
+
+                const resumenEmpresas = Array.isArray(cachedMeta?.resumen_empresas) ? cachedMeta.resumen_empresas : [];
+                const empresasTable = [
+                    [{ text: 'Empresa', style: 'tableHeader' }, { text: 'Ventas', style: 'tableHeader', alignment: 'right' }, { text: 'Incentivo', style: 'tableHeader', alignment: 'right' }, { text: 'Usuarios', style: 'tableHeader', alignment: 'right' }],
+                    ...(resumenEmpresas.length
+                        ? resumenEmpresas.map(row => [
+                            normalizeEmpresaLabel(row?.empresa),
+                            moneyCell(row?.total_vendido),
+                            moneyCell(row?.total_incentivo),
+                            numberCell(row?.usuarios),
+                        ])
+                        : [['Sin desglose', moneyCell(0), moneyCell(0), numberCell(0)]]),
+                ];
+
+                const terminalesExcluidasText = terminalesExcluidas.length
+                    ? terminalesExcluidas.slice(0, 30).join(', ') + (terminalesExcluidas.length > 30 ? ` y ${terminalesExcluidas.length - 30} mas` : '')
+                    : 'No hay terminales excluidas.';
+
+                const docDefinition = {
+                    pageSize: 'LETTER',
+                    pageMargins: [32, 34, 32, 42],
+                    footer: function (currentPage, pageCount) {
+                        return {
+                            text: `Pagina ${currentPage} de ${pageCount}`,
+                            alignment: 'right',
+                            margin: [0, 0, 32, 0],
+                            fontSize: 8,
+                            color: '#6c757d',
+                        };
+                    },
+                    content: [
+                        { text: 'Informe Gerencial de Incentivos V5', style: 'title' },
+                        { text: 'Resumen de cierre del proceso de incentivo', style: 'subtitle' },
+                        {
+                            columns: [
+                                { text: `Periodo: ${formatDateDisplay(fechaIni)} al ${formatDateDisplay(fechaFin)}` },
+                                { text: `Sistema: ${sistema}` },
+                                { text: `Tipo de pago: ${tipoPago}` },
+                            ],
+                            margin: [0, 8, 0, 4],
+                            fontSize: 9,
+                        },
+                        {
+                            columns: [
+                                { text: `Modo: ${modoCalculo}` },
+                                { text: `Generado: ${new Date().toLocaleString('es-DO')}`, alignment: 'right' },
+                            ],
+                            margin: [0, 0, 0, 8],
+                            fontSize: 9,
+                        },
+                        sectionTitle('Resumen ejecutivo'),
+                        { table: { widths: ['*', '28%'], body: resumenEjecutivo }, layout: tableLayout },
+                        sectionTitle('Deducciones y reasignaciones'),
+                        { table: { widths: ['*', '28%'], body: deducciones }, layout: tableLayout },
+                        sectionTitle('Distribucion administrativa'),
+                        { table: { widths: ['*', '25%', '28%'], body: distribucion }, layout: tableLayout },
+                        sectionTitle('Control del proceso'),
+                        { table: { widths: ['*', '28%'], body: controles }, layout: tableLayout },
+                        sectionTitle('Resumen por empresa'),
+                        { table: { widths: ['*', '24%', '24%', '18%'], body: empresasTable }, layout: tableLayout },
+                        sectionTitle('Notas gerenciales'),
+                        {
+                            ul: [
+                                'Las terminales excluidas no fueron consideradas en el calculo de ventas ni incentivo.',
+                                'Los faltantes y desvinculados se usan primero para cubrir la bolsa fija; el excedente reduce el total final.',
+                                'El informe refleja la configuracion activa al momento de generacion.',
+                                `Terminales excluidas: ${terminalesExcluidasText}`,
+                            ],
+                            fontSize: 8,
+                            color: '#495057',
+                        },
+                    ],
+                    styles: {
+                        title: { fontSize: 16, bold: true, color: '#212529' },
+                        subtitle: { fontSize: 10, color: '#495057' },
+                        sectionTitle: { fontSize: 11, bold: true, color: '#1f2937' },
+                        tableHeader: { bold: true, fontSize: 8.5, color: '#212529' },
+                    },
+                    defaultStyle: {
+                        fontSize: 8,
+                    },
+                };
+
+                const pdf = pdfMake.createPdf(docDefinition);
+                Swal.close();
+                pdf.download(`informe_gerencial_incentivo_v5_${fechaFin || 'proceso'}.pdf`);
+            } catch (error) {
+                console.error('Error generando informe gerencial:', error);
+                Swal.fire({
+                    title: 'Error',
+                    text: error?.message || String(error) || 'No se pudo generar el informe gerencial.',
                     icon: 'error'
                 });
             }
@@ -2964,6 +3302,102 @@
         );
     }
 
+    function reconocerTerminalesExcluidas() {
+        const fileInput = document.getElementById('terminales_excluir_file');
+        const manualInput = document.getElementById('terminales_excluir_manual');
+        const hasFile = fileInput?.files && fileInput.files.length > 0;
+        const manualText = String(manualInput?.value || '').trim();
+
+        if (!hasFile && !manualText) {
+            Swal.fire({ title: 'Datos requeridos', text: 'Selecciona un archivo o escribe al menos una terminal.', icon: 'warning' });
+            return;
+        }
+
+        const formData = new FormData();
+        if (hasFile) {
+            formData.append('file', fileInput.files[0]);
+        }
+        formData.append('terminales_manual', manualText);
+        formData.append('_token', csrfToken());
+
+        Swal.fire({
+            title: 'Reconociendo terminales',
+            text: 'Analizando terminales para excluir...',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        fetch('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas/reconocer', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            credentials: 'same-origin',
+            body: formData,
+        })
+            .then(response => parseResponseAsJson(response, 'Error reconociendo terminales excluidas'))
+            .then(resp => {
+                Swal.close();
+                renderTerminalesExcluidasResultado(resp);
+            })
+            .catch(error => {
+                recognizedTerminalesExcluidas = [];
+                document.getElementById('btnAplicarTerminalesExcluidas').disabled = true;
+                document.getElementById('resultadoTerminalesExcluidas').style.display = 'none';
+                Swal.fire({ title: 'Error', text: error?.message || String(error), icon: 'warning' });
+            });
+    }
+
+    function aplicarTerminalesExcluidas() {
+        const seleccionadas = Array.from(document.querySelectorAll('.terminal-excluida-check:checked'))
+            .map(input => normalizeTerminalValue(input.value))
+            .filter(Boolean);
+
+        if (!seleccionadas.length) {
+            Swal.fire({ title: 'Sin seleccion', text: 'Selecciona al menos una terminal para excluir.', icon: 'warning' });
+            return;
+        }
+
+        excludedTerminales = new Set([...getExcludedTerminalesArray(), ...seleccionadas]);
+        persistExcludedTerminales();
+        bootstrap.Modal.getInstance(document.getElementById('modalExcluirTerminales'))?.hide();
+
+        const recalcular = cachedRows.length
+            && document.getElementById('ni_fecha_ini').value
+            && document.getElementById('ni_fecha_fin').value;
+
+        Swal.fire({
+            title: 'Terminales excluidas',
+            text: `${seleccionadas.length} terminales quedaron configuradas para excluir del calculo.`,
+            icon: 'success'
+        }).then(() => {
+            if (recalcular) {
+                listNuevoIncentivo(false);
+            }
+        });
+    }
+
+    function limpiarTerminalesExcluidas() {
+        excludedTerminales = new Set();
+        recognizedTerminalesExcluidas = [];
+        persistExcludedTerminales();
+        document.getElementById('resultadoTerminalesExcluidas').style.display = 'none';
+        document.getElementById('btnAplicarTerminalesExcluidas').disabled = true;
+        const recalcular = cachedRows.length
+            && document.getElementById('ni_fecha_ini').value
+            && document.getElementById('ni_fecha_fin').value;
+
+        Swal.fire({ title: 'Exclusiones limpiadas', text: 'No hay terminales excluidas para el proximo calculo.', icon: 'success' })
+            .then(() => {
+                if (recalcular) {
+                    listNuevoIncentivo(false);
+                }
+            });
+    }
+
     function getBaseFilteredRows(options = {}) {
         const includeEmpresaFilter = options.includeEmpresaFilter !== false;
         const filtroCumplimiento = document.getElementById('ni_filtro_cumplimiento').value;
@@ -3241,6 +3675,7 @@
         document.getElementById('ni_fecha_ini').value = `${yyyy}-${mm}-01`;
         updatePuestoPctSummaryCard();
         populateEmpresaFilterOptions([]);
+        updateExcludedTerminalesCount();
 
         document.querySelector('#btnConfigPct').addEventListener('click', function() {
             renderRangesTable();
@@ -3303,6 +3738,52 @@
             document.getElementById('horas_total_minimo').value = horasTotalMinimo;
             const modal = new bootstrap.Modal(document.getElementById('modalConfigHorasTotal'));
             modal.show();
+        });
+
+        document.querySelector('#btnExcluirTerminales').addEventListener('click', function() {
+            const terminalesActuales = getExcludedTerminalesArray();
+            const resultado = document.getElementById('resultadoTerminalesExcluidas');
+            const aplicarBtn = document.getElementById('btnAplicarTerminalesExcluidas');
+            document.getElementById('terminales_excluir_file').value = '';
+            document.getElementById('terminales_excluir_manual').value = '';
+            recognizedTerminalesExcluidas = [];
+            aplicarBtn.disabled = true;
+
+            if (terminalesActuales.length) {
+                resultado.innerHTML = `
+                    <div class="small">
+                        <div><strong>Terminales excluidas actualmente:</strong> ${terminalesActuales.length.toLocaleString('es-DO')}</div>
+                        <div class="terminal-excluida-list border rounded p-2 mt-2">
+                            ${terminalesActuales.map(terminal => `<span class="badge bg-danger-subtle text-danger-emphasis me-1 mb-1">${escapeHtml(terminal)}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+                resultado.style.display = 'block';
+            } else {
+                resultado.style.display = 'none';
+                resultado.innerHTML = '';
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('modalExcluirTerminales'));
+            modal.show();
+        });
+
+        document.querySelector('#btnReconocerTerminalesExcluidas').addEventListener('click', function() {
+            reconocerTerminalesExcluidas();
+        });
+
+        document.querySelector('#btnAplicarTerminalesExcluidas').addEventListener('click', function() {
+            aplicarTerminalesExcluidas();
+        });
+
+        document.querySelector('#btnLimpiarTerminalesExcluidas').addEventListener('click', function() {
+            limpiarTerminalesExcluidas();
+        });
+
+        document.querySelector('#terminales_excluir_file').addEventListener('change', function() {
+            recognizedTerminalesExcluidas = [];
+            document.getElementById('btnAplicarTerminalesExcluidas').disabled = true;
+            document.getElementById('resultadoTerminalesExcluidas').style.display = 'none';
         });
 
         document.querySelector('#btnConsultarFaltantes').addEventListener('click', function() {
@@ -3505,6 +3986,10 @@
             generarPdfValidacionGerencial();
         });
 
+        document.querySelector('#btnInformeGerencialProceso').addEventListener('click', function() {
+            generarPdfInformeGerencialProceso();
+        });
+
         document.querySelector('#btnExportCoordinadoresExcel').addEventListener('click', function() {
             exportCoordinadoresExcel();
         });
@@ -3650,6 +4135,7 @@
             tipo_pago: tipoPago,
             modo_calculo: modoCalculo,
             rangos_pago: JSON.stringify(payoutRangesByType[tipoPago]),
+            terminales_excluidas: JSON.stringify(getExcludedTerminalesArray()),
         });
 
         fetch('/incentivos/reporte-nuevo-incentivo-v5?' + params.toString(), {

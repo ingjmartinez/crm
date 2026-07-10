@@ -1,6 +1,43 @@
 @extends('app')
 
 @section('content')
+    <style>
+        .admin-create-form {
+            display: grid;
+            grid-template-columns: minmax(170px, 0.8fr) minmax(210px, 1.15fr) minmax(150px, 0.9fr) minmax(190px, 1fr) minmax(135px, 0.65fr) 124px;
+            gap: .65rem;
+            align-items: end;
+        }
+
+        .admin-create-form .form-label {
+            font-size: .82rem;
+        }
+
+        .admin-create-form .btn {
+            min-height: 38px;
+        }
+
+        .empleado-activo-row > td {
+            background-color: #e8f7ee !important;
+        }
+
+        .empleado-inactivo-row > td {
+            background-color: #fdecec !important;
+        }
+
+        @media (max-width: 1199.98px) {
+            .admin-create-form {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .admin-create-form {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -36,9 +73,9 @@
                                     </div>
                                 @endif
 
-                                <form action="{{ route('incentivos.incentivo-administrativo.store') }}" method="POST" class="row g-2">
+                                <form action="{{ route('incentivos.incentivo-administrativo.store') }}" method="POST" class="admin-create-form">
                                     @csrf
-                                    <div class="col-md-3">
+                                    <div>
                                         <label class="form-label mb-1">Grupo</label>
                                         <select name="grupo" id="grupo_create" class="form-select js-grupo-select" data-pct-target="pct_total_create" required>
                                             <option value="">Seleccione</option>
@@ -52,15 +89,15 @@
                                             @endforeach
                                         </select>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div>
                                         <label class="form-label mb-1">Nombre</label>
                                         <input type="text" name="nombre" class="form-control" value="{{ old('nombre') }}" required>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div>
                                         <label class="form-label mb-1">Cedula</label>
                                         <input type="text" name="cedula" class="form-control js-cedula-input" value="{{ old('cedula') }}" maxlength="11" pattern="\d{11}" inputmode="numeric">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div>
                                         <label class="form-label mb-1">Empresa</label>
                                         <select name="empresa" class="form-select" required>
                                             <option value="">Seleccione</option>
@@ -71,14 +108,14 @@
                                             @endforeach
                                         </select>
                                     </div>
-                                    <div class="col-md-1">
+                                    <div>
                                         <label class="form-label mb-1">% Total / Monto fijo</label>
                                         <div class="input-group">
                                             <input type="number" id="pct_total_create" name="pct_total" min="0" max="9999999" step="0.01" class="form-control" value="{{ old('pct_total', 0) }}" required>
                                             <span class="input-group-text js-pct-suffix" data-target="pct_total_create">%</span>
                                         </div>
                                     </div>
-                                    <div class="col-md-1 d-grid">
+                                    <div class="d-grid">
                                         <label class="form-label mb-1">&nbsp;</label>
                                         <button type="submit" class="btn btn-primary">Guardar</button>
                                     </div>
@@ -150,7 +187,11 @@
                                         </thead>
                                         <tbody id="incentivoAdministrativoTableBody">
                                             @forelse($registros as $registro)
-                                                <tr>
+                                                @php
+                                                    $empleadoEstado = (string) ($registro->empleado_estado ?? 'no_existe');
+                                                    $empleadoActivo = $empleadoEstado === 'activo';
+                                                @endphp
+                                                <tr class="{{ $empleadoActivo ? 'empleado-activo-row' : 'empleado-inactivo-row' }}">
                                                     <td>
                                                         <form id="form-adm-{{ $registro->id }}" action="{{ route('incentivos.incentivo-administrativo.update', $registro->id) }}" method="POST">
                                                             @csrf
@@ -378,10 +419,15 @@
                             icon: 'success',
                             title: 'Listo',
                             text: data.message || 'Registro actualizado correctamente.',
-                            timer: 1800,
+                            timer: 900,
                             showConfirmButton: false
+                        }).then(function () {
+                            window.location.reload();
                         });
+                        return;
                     }
+
+                    window.location.reload();
                 })
                 .catch(function (error) {
                     if (typeof Swal !== 'undefined') {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Models\CoordinadorOperador;
 use App\Models\IncentivoAdministrativo;
 use Carbon\Carbon;
@@ -9,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Maatwebsite\Excel\Facades\Excel;
 
 class IncentivosController extends Controller
 {
@@ -1051,6 +1053,7 @@ class IncentivosController extends Controller
             'filtro_cumplimiento' => 'nullable|in:todos,cumplidos,no_cumplidos',
             'tramo_activo' => 'nullable|in:tramo1,tramo2',
             'rangos_pago' => 'nullable|string',
+            'terminales_excluidas' => 'nullable|string',
         ]);
 
         $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
@@ -1064,6 +1067,7 @@ class IncentivosController extends Controller
         $minDiasVenta = (int) $request->input('min_dias_venta', 10);
         $filtroCumplimiento = $request->input('filtro_cumplimiento', 'todos');
         $tramoActivo = $request->input('tramo_activo', 'tramo1');
+        $terminalesExcluidas = $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales_excluidas'));
 
         $rangosPagoDefault = [
             ['desde' => 100001, 'hasta' => 250000, 'pago' => 1000],
@@ -1130,7 +1134,7 @@ class IncentivosController extends Controller
             }
         }
 
-        $buildBaseQuery = function (string $desde, string $hasta) use ($sistema) {
+        $buildBaseQuery = function (string $desde, string $hasta) use ($sistema, $terminalesExcluidas) {
             $betQuery = DB::table('vt_usuarios_bet')
                 ->selectRaw("cedula, monto, fecha, 'Lotobet' as sistema")
                 ->whereBetween('fecha', [$desde, $hasta]);
@@ -1138,6 +1142,11 @@ class IncentivosController extends Controller
             $netQuery = DB::table('vt_usuarios_net')
                 ->selectRaw("cedula, monto, fecha, 'Lotonet' as sistema")
                 ->whereBetween('fecha', [$desde, $hasta]);
+
+            if ($terminalesExcluidas->isNotEmpty()) {
+                $betQuery->whereNotIn(DB::raw('TRIM(CAST(agencia_id AS CHAR))'), $terminalesExcluidas->all());
+                $netQuery->whereNotIn(DB::raw('TRIM(CAST(agencia_id AS CHAR))'), $terminalesExcluidas->all());
+            }
 
             if ($sistema === 'Lotobet') {
                 return $betQuery;
@@ -1172,15 +1181,20 @@ class IncentivosController extends Controller
         $empresaByCedula = [];
 
         if ($cedulas->isNotEmpty()) {
-            $buildAgencyTerminalQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada) {
-                return DB::table($tabla)
+            $buildAgencyTerminalQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada, $terminalesExcluidas) {
+                $query = DB::table($tabla)
                     ->selectRaw('cedula, TRIM(CAST(agencia_id AS CHAR)) AS terminal, COUNT(*) AS total')
                     ->whereBetween('fecha', [$fechaIniSeleccionada, $fechaFinSeleccionada])
                     ->whereNotNull('cedula')
                     ->where('cedula', '<>', '')
                     ->whereNotNull('agencia_id')
-                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''")
-                    ->groupBy('cedula', DB::raw('TRIM(CAST(agencia_id AS CHAR))'));
+                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''");
+
+                if ($terminalesExcluidas->isNotEmpty()) {
+                    $query->whereNotIn(DB::raw('TRIM(CAST(agencia_id AS CHAR))'), $terminalesExcluidas->all());
+                }
+
+                return $query->groupBy('cedula', DB::raw('TRIM(CAST(agencia_id AS CHAR))'));
             };
 
             if ($sistema === 'Lotobet') {
@@ -1323,15 +1337,20 @@ class IncentivosController extends Controller
 
         $ultimaVentaPorCedula = [];
         if ($cedulasNormalizadas->isNotEmpty()) {
-            $buildUltimaVentaQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada) {
-                return DB::table($tabla)
+            $buildUltimaVentaQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada, $terminalesExcluidas) {
+                $query = DB::table($tabla)
                     ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula, TRIM(CAST(agencia_id AS CHAR)) AS terminal, MAX(DATE(fecha)) AS ultimo_dia_venta')
                     ->whereBetween('fecha', [$fechaIniSeleccionada, $fechaFinSeleccionada])
                     ->whereNotNull('cedula')
                     ->where('cedula', '<>', '')
                     ->whereNotNull('agencia_id')
-                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''")
-                    ->groupByRaw('CAST(cedula AS UNSIGNED), TRIM(CAST(agencia_id AS CHAR))');
+                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''");
+
+                if ($terminalesExcluidas->isNotEmpty()) {
+                    $query->whereNotIn(DB::raw('TRIM(CAST(agencia_id AS CHAR))'), $terminalesExcluidas->all());
+                }
+
+                return $query->groupByRaw('CAST(cedula AS UNSIGNED), TRIM(CAST(agencia_id AS CHAR))');
             };
 
             if ($sistema === 'Lotobet') {
@@ -1515,21 +1534,27 @@ class IncentivosController extends Controller
             $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
             $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
             $sistema = $request->input('sistema', 'Todos');
+            $terminalesExcluidas = $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales_excluidas'));
 
             $qualifiedCedulaSet = $qualifiedCedulas
                 ->mapWithKeys(function ($cedula) {
                     return [(string) $cedula => true];
                 });
 
-            $buildAgencyQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada) {
-                return DB::table($tabla)
+            $buildAgencyQuery = function (string $tabla) use ($fechaIniSeleccionada, $fechaFinSeleccionada, $terminalesExcluidas) {
+                $query = DB::table($tabla)
                     ->selectRaw('cedula, TRIM(CAST(agencia_id AS CHAR)) AS terminal, COUNT(*) AS total')
                     ->whereBetween('fecha', [$fechaIniSeleccionada, $fechaFinSeleccionada])
                     ->whereNotNull('cedula')
                     ->where('cedula', '<>', '')
                     ->whereNotNull('agencia_id')
-                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''")
-                    ->groupBy('cedula', DB::raw('TRIM(CAST(agencia_id AS CHAR))'));
+                    ->whereRaw("TRIM(CAST(agencia_id AS CHAR)) <> ''");
+
+                if ($terminalesExcluidas->isNotEmpty()) {
+                    $query->whereNotIn(DB::raw('TRIM(CAST(agencia_id AS CHAR))'), $terminalesExcluidas->all());
+                }
+
+                return $query->groupBy('cedula', DB::raw('TRIM(CAST(agencia_id AS CHAR))'));
             };
 
             if ($sistema === 'Lotobet') {
@@ -2008,6 +2033,116 @@ class IncentivosController extends Controller
         ]);
     }
 
+    public function reconocerTerminalesExcluidasReporteNuevoIncentivoV5(Request $request)
+    {
+        $request->validate([
+            'file' => 'nullable|mimes:xlsx,xls,csv|max:4096',
+            'terminales_manual' => 'nullable|string',
+        ]);
+
+        if (!$request->hasFile('file') && trim((string) $request->input('terminales_manual', '')) === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Debe seleccionar un archivo o escribir al menos una terminal.',
+            ], 422);
+        }
+
+        try {
+            $terminales = collect();
+            $totalFilas = 0;
+
+            if ($request->hasFile('file')) {
+                $import = new AgenciasActualizacionMasivaImport();
+                Excel::import($import, $request->file('file'));
+
+                $rows = $import->rows ?? collect();
+                $totalFilas = $rows->count();
+                $terminales = $terminales->merge($rows
+                    ->map(function ($rowCollection) {
+                        $row = collect($rowCollection)->toArray();
+                        return $this->valorColumnaReporteNuevoIncentivoV5($row, ['terminal']);
+                    })
+                    ->filter(fn ($terminal) => trim((string) $terminal) !== '')
+                    ->values());
+            }
+
+            $terminales = $terminales
+                ->merge($this->extraerTerminalesTextoReporteNuevoIncentivoV5($request->input('terminales_manual', '')))
+                ->map(fn ($terminal) => trim((string) $terminal))
+                ->filter(fn ($terminal) => $terminal !== '')
+                ->unique()
+                ->values();
+
+            if ($terminales->isEmpty()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'No se encontraron terminales para reconocer. La plantilla debe tener una columna llamada Terminal.',
+                ], 422);
+            }
+
+            $terminalesEncontradas = DB::table('agencias')
+                ->whereIn(DB::raw('TRIM(CAST(terminal AS CHAR))'), $terminales->all())
+                ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')
+                ->pluck('terminal')
+                ->map(fn ($terminal) => trim((string) $terminal))
+                ->filter(fn ($terminal) => $terminal !== '')
+                ->unique()
+                ->values();
+
+            $terminalesNoEncontradas = $terminales
+                ->diff($terminalesEncontradas)
+                ->values();
+
+            return response()->json([
+                'ok' => true,
+                'total_filas' => $totalFilas,
+                'terminales_leidas' => $terminales->count(),
+                'terminales_unicas' => $terminales->count(),
+                'encontradas' => $terminalesEncontradas->count(),
+                'no_encontradas' => $terminalesNoEncontradas->count(),
+                'terminales_encontradas' => $terminalesEncontradas->all(),
+                'terminales_no_encontradas' => $terminalesNoEncontradas->all(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Error al reconocer terminales: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function plantillaTerminalesExcluidasReporteNuevoIncentivoV5()
+    {
+        $data = [
+            ['Terminal'],
+        ];
+
+        return Excel::download(new class($data) implements
+            \Maatwebsite\Excel\Concerns\FromArray,
+            \Maatwebsite\Excel\Concerns\WithStyles,
+            \Maatwebsite\Excel\Concerns\ShouldAutoSize
+        {
+            protected array $data;
+
+            public function __construct(array $data)
+            {
+                $this->data = $data;
+            }
+
+            public function array(): array
+            {
+                return $this->data;
+            }
+
+            public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet)
+            {
+                return [
+                    1 => ['font' => ['bold' => true]],
+                ];
+            }
+        }, 'plantilla_terminales_excluidas_incentivo_v5.xlsx');
+    }
+
     public function reporteNuevoIncentivoV5(Request $request)
     {
         $request->validate([
@@ -2019,12 +2154,14 @@ class IncentivosController extends Controller
             'tipo_pago' => 'nullable|string',
             'rangos_pago' => 'nullable|string',
             'modo_calculo' => 'nullable|in:general,separado_empresa',
+            'terminales_excluidas' => 'nullable|string',
         ]);
 
         $modoCalculo = $request->input('modo_calculo', 'general');
         $fechaIniSeleccionada = Carbon::parse($request->input('fecha_ini'))->toDateString();
         $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
         $sistema = $request->input('sistema', 'Todos');
+        $terminalesExcluidas = $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales_excluidas'));
 
         if ($modoCalculo === 'general') {
             $response = $this->reporteNuevoIncentivoV4($request);
@@ -2035,6 +2172,8 @@ class IncentivosController extends Controller
                 $payload['meta']['modo_calculo'] = 'general';
                 $payload['meta']['modo_calculo_label'] = 'General consolidado';
                 $payload['meta']['resumen_empresas'] = $this->resumenEmpresasReporteNuevoIncentivoV5($request);
+                $payload['meta']['terminales_excluidas'] = $terminalesExcluidas->all();
+                $payload['meta']['terminales_excluidas_count'] = $terminalesExcluidas->count();
             }
 
             $payload = $this->normalizarPayloadEnteroReporteNuevoIncentivoV5($payload);
@@ -2146,8 +2285,8 @@ class IncentivosController extends Controller
             return 0;
         };
 
-        $buildVentasTerminalQuery = function (string $tabla, string $sistemaLabel, string $desde, string $hasta) {
-            return DB::table("{$tabla} as v")
+        $buildVentasTerminalQuery = function (string $tabla, string $sistemaLabel, string $desde, string $hasta) use ($terminalesExcluidas) {
+            $query = DB::table("{$tabla} as v")
                 ->selectRaw(
                     "v.cedula,
                     v.monto,
@@ -2161,6 +2300,12 @@ class IncentivosController extends Controller
                 ->where('v.cedula', '<>', '')
                 ->whereNotNull('v.agencia_id')
                 ->whereRaw("TRIM(CAST(v.agencia_id AS CHAR)) <> ''");
+
+            if ($terminalesExcluidas->isNotEmpty()) {
+                $query->whereNotIn(DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'), $terminalesExcluidas->all());
+            }
+
+            return $query;
         };
 
         $buildSourceQuery = function (string $desde, string $hasta) use ($sistema, $buildVentasTerminalQuery) {
@@ -2494,6 +2639,8 @@ class IncentivosController extends Controller
                 'total_vendido_mes_actual_format' => number_format($totalVendido, 0, '.', ','),
                 'total_incentivo_format' => number_format($totalIncentivo, 0, '.', ','),
                 'resumen_empresas' => $resumenEmpresas,
+                'terminales_excluidas' => $terminalesExcluidas->all(),
+                'terminales_excluidas_count' => $terminalesExcluidas->count(),
                 'aviso_agencias_por_asignar_empresa' => $agenciasPorAsignar
                     ? 'Hay ventas en agencias sin empresa asignada. Filtra "Agencias por asignar empresa" y actualiza la columna empresa en agencias.'
                     : '',
@@ -2511,6 +2658,7 @@ class IncentivosController extends Controller
         $fechaFinSeleccionada = Carbon::parse($request->input('fecha_fin'))->toDateString();
         $sistema = $request->input('sistema', 'Todos');
         $minDiasVenta = (int) $request->input('min_dias_venta', 1);
+        $terminalesExcluidas = $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales_excluidas'));
 
         $rangosPago = [];
         $rangosPagoInput = $request->input('rangos_pago');
@@ -2596,8 +2744,8 @@ class IncentivosController extends Controller
             return 0;
         };
 
-        $buildVentasTerminalQuery = function (string $tabla, string $sistemaLabel) use ($fechaIniSeleccionada, $fechaFinSeleccionada) {
-            return DB::table("{$tabla} as v")
+        $buildVentasTerminalQuery = function (string $tabla, string $sistemaLabel) use ($fechaIniSeleccionada, $fechaFinSeleccionada, $terminalesExcluidas) {
+            $query = DB::table("{$tabla} as v")
                 ->selectRaw(
                     "v.cedula,
                     TRIM(CAST(v.agencia_id AS CHAR)) AS terminal,
@@ -2612,6 +2760,12 @@ class IncentivosController extends Controller
                 ->whereNotNull('v.agencia_id')
                 ->whereRaw("TRIM(CAST(v.agencia_id AS CHAR)) <> ''")
                 ->groupByRaw('v.cedula, TRIM(CAST(v.agencia_id AS CHAR)), DATE(v.fecha)');
+
+            if ($terminalesExcluidas->isNotEmpty()) {
+                $query->whereNotIn(DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'), $terminalesExcluidas->all());
+            }
+
+            return $query;
         };
 
         if ($sistema === 'Lotobet') {
@@ -2814,6 +2968,60 @@ class IncentivosController extends Controller
         unset($row);
 
         return $payload;
+    }
+
+    private function normalizarTerminalesExcluidasReporteNuevoIncentivoV5($value)
+    {
+        $terminales = collect();
+
+        if (is_string($value) && trim($value) !== '') {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                $terminales = collect($decoded);
+            } else {
+                $terminales = $this->extraerTerminalesTextoReporteNuevoIncentivoV5($value);
+            }
+        } elseif (is_array($value)) {
+            $terminales = collect($value);
+        }
+
+        return $terminales
+            ->map(fn ($terminal) => trim((string) $terminal))
+            ->filter(fn ($terminal) => $terminal !== '')
+            ->unique()
+            ->values();
+    }
+
+    private function extraerTerminalesTextoReporteNuevoIncentivoV5($texto)
+    {
+        $texto = trim((string) $texto);
+        if ($texto === '') {
+            return collect();
+        }
+
+        return collect(preg_split('/[\r\n,;\t ]+/', $texto))
+            ->map(fn ($terminal) => trim((string) $terminal))
+            ->filter(fn ($terminal) => $terminal !== '')
+            ->values();
+    }
+
+    private function valorColumnaReporteNuevoIncentivoV5(array $row, array $aliases)
+    {
+        foreach ($aliases as $alias) {
+            if (array_key_exists($alias, $row)) {
+                return $row[$alias];
+            }
+
+            $normalizedAlias = strtolower(str_replace([' ', '-', '.'], '_', $alias));
+            foreach ($row as $key => $value) {
+                $normalizedKey = strtolower(str_replace([' ', '-', '.'], '_', (string) $key));
+                if ($normalizedKey === $normalizedAlias) {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function obtenerHorasTotalesReporteNuevoIncentivoV5(string $fechaIni, string $fechaFin, string $sistema, $cedulas)
