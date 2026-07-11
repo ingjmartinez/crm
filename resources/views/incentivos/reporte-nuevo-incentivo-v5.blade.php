@@ -1110,7 +1110,10 @@
     }
 
     function getCedulaKey(value) {
-        return String(value ?? '').replace(/\D+/g, '');
+        const digits = String(value ?? '').replace(/\D+/g, '');
+        const normalized = digits.replace(/^0+/, '');
+
+        return normalized || (digits ? '0' : '');
     }
 
     function getEmpleadoIdKey(value) {
@@ -1146,6 +1149,15 @@
                     || empleadoIdsSet.has(getEmpleadoIdKey(row?.empleadoid));
             })
             .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+    }
+
+    function isExcludedFromMainIncentiveTable(row) {
+        const cedula = getCedulaKey(row?.cedula);
+        const empleadoId = getEmpleadoIdKey(row?.empleadoid);
+
+        return (cedula && excludedFaltantesCedulas.has(cedula))
+            || (cedula && excludedDesvinculadosCedulas.has(cedula))
+            || (empleadoId && excludedDesvinculadosEmpleadoIds.has(empleadoId));
     }
 
     function getCoordinatorIdKey(row) {
@@ -1865,6 +1877,30 @@
         });
     }
 
+    function getAdmiCoorPagoExportData() {
+        const rows = [
+            ...getAdministrativeDisplayRows().map((row) => ({
+                empleadoid: row?.empleadoid,
+                empresa: normalizeAdministrativeEmpresaLabel(row?.empresa),
+                viapago: row?.viapago,
+                ciudad: row?.ciudad,
+                importe: getAdministrativeDisplayAmount(row),
+            })),
+            ...coordinatorRows.map((row) => ({
+                empleadoid: row?.empleadoid,
+                empresa: String(row?.empresa ?? '').trim(),
+                viapago: row?.viapago,
+                ciudad: row?.ciudad,
+                importe: getCoordinatorDisplayAmount(row),
+            })),
+        ].filter((row) => toIntegerAmount(row.importe) > 0);
+
+        return buildPagoIncentivoData(rows, {
+            suffix: '_admi_coor',
+            emptyMessage: 'No hay registros administrativos ni coordinadores con importe mayor a cero para generar el Excel de pago.',
+        });
+    }
+
     function downloadBlob(filename, blob) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1905,6 +1941,15 @@
 
     function generarTxtPagoCoordinadores() {
         const data = getCoordinadoresPagoExportData();
+        if (!data) {
+            return;
+        }
+
+        generarTxtPagoDesdeData(data, 'pago_incentivo');
+    }
+
+    function generarTxtPagoAdmiCoor() {
+        const data = getAdmiCoorPagoExportData();
         if (!data) {
             return;
         }
@@ -1983,15 +2028,28 @@
             return;
         }
 
+        generarXlsxPagoDesdeData(data, 'pago_incentivo');
+    }
+
+    function generarXlsxPagoDesdeData(data, filenamePrefix) {
         if (typeof JSZip === 'undefined') {
             const blob = buildExcelHtmlBlob(data.headers, data.rows);
-            downloadBlob(`pago_incentivo_${data.fechaFin}${data.suffix}.xls`, blob);
+            downloadBlob(`${filenamePrefix}_${data.fechaFin}${data.suffix}.xls`, blob);
             return;
         }
 
         buildXlsxBlob(data.headers, data.rows).then((blob) => {
-            downloadBlob(`pago_incentivo_${data.fechaFin}${data.suffix}.xlsx`, blob);
+            downloadBlob(`${filenamePrefix}_${data.fechaFin}${data.suffix}.xlsx`, blob);
         });
+    }
+
+    function generarXlsxPagoAdmiCoor() {
+        const data = getAdmiCoorPagoExportData();
+        if (!data) {
+            return;
+        }
+
+        generarXlsxPagoDesdeData(data, 'pago_incentivo');
     }
 
     function seleccionarDescargaExcelPago() {
@@ -2023,15 +2081,15 @@
                     <div><strong>Sin IdEmpleado:</strong> ${summary.usuariosSinId.toLocaleString('en-US')} usuarios | ${formatMoney(summary.montoSinId)}</div>
                     <div><strong>Administrativo:</strong> ${administrativosPagoRows.length.toLocaleString('en-US')} registros | ${formatMoney(administrativosTotal)}</div>
                     <div><strong>Coordinadores:</strong> ${coordinadoresPagoRows.length.toLocaleString('en-US')} registros | ${formatMoney(coordinadoresTotal)}</div>
-                    <div class="row g-2 mt-3">
-                        <div class="col-12 col-md-4">
+                    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px;">
+                        <div>
                             <button type="button" class="btn btn-dark btn-lg fw-bold w-100 py-3" id="btnPagoExcelCompleto">Excel pago todos</button>
                         </div>
-                        <div class="col-12 col-md-4">
-                            <button type="button" class="btn btn-primary btn-lg fw-bold w-100 py-3" id="btnPagoTxtAdministrativo">TXT administrativo</button>
+                        <div>
+                            <button type="button" class="btn btn-outline-dark btn-lg fw-bold w-100 py-3" id="btnPagoExcelSinId">Excel excluir sin ID</button>
                         </div>
-                        <div class="col-12 col-md-4">
-                            <button type="button" class="btn btn-info btn-lg fw-bold w-100 py-3" id="btnPagoTxtCoordinadores">TXT coordinadores</button>
+                        <div style="grid-column:1 / -1;">
+                            <button type="button" class="btn btn-primary btn-lg fw-bold w-100 py-3" id="btnPagoExcelAdmiCoor">admi-coor</button>
                         </div>
                     </div>
                 </div>
@@ -2045,13 +2103,13 @@
                     Swal.close();
                     generarXlsxPagoIncentivo({ excludeSinEmpleadoId: false });
                 });
-                document.getElementById('btnPagoTxtAdministrativo')?.addEventListener('click', () => {
+                document.getElementById('btnPagoExcelSinId')?.addEventListener('click', () => {
                     Swal.close();
-                    generarTxtPagoAdministrativo();
+                    generarXlsxPagoIncentivo({ excludeSinEmpleadoId: true });
                 });
-                document.getElementById('btnPagoTxtCoordinadores')?.addEventListener('click', () => {
+                document.getElementById('btnPagoExcelAdmiCoor')?.addEventListener('click', () => {
                     Swal.close();
-                    generarTxtPagoCoordinadores();
+                    generarXlsxPagoAdmiCoor();
                 });
             },
         });
@@ -3998,7 +4056,7 @@
 
         return [...new Set(sourceRows
             .filter(row => toIntegerAmount(row?.ventas_mes_actual) > 0)
-            .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
+            .map(row => getCedulaKey(row?.cedula))
             .filter(Boolean)
         )];
     }
@@ -4026,11 +4084,11 @@
 
     function calcularMontoIncentivosPorCedulas(cedulas) {
         const cedulasSet = new Set((Array.isArray(cedulas) ? cedulas : [...cedulas])
-            .map(cedula => String(cedula ?? '').replace(/\D+/g, ''))
+            .map(getCedulaKey)
             .filter(Boolean));
 
         return currentFilteredRows
-            .filter(row => cedulasSet.has(String(row?.cedula ?? '').replace(/\D+/g, '')))
+            .filter(row => cedulasSet.has(getCedulaKey(row?.cedula)))
             .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
     }
 
@@ -4061,7 +4119,10 @@
         });
 
         setTimeout(() => {
-            excludedFaltantesCedulas = new Set([...excludedFaltantesCedulas, ...lastFaltantesCedulas]);
+            excludedFaltantesCedulas = new Set([
+                ...excludedFaltantesCedulas,
+                ...[...lastFaltantesCedulas].map(getCedulaKey).filter(Boolean),
+            ]);
             applyLocalFilters(false);
             bootstrap.Modal.getInstance(document.getElementById('modalFaltantesIncentivo'))?.hide();
 
@@ -4120,7 +4181,7 @@
                 Swal.close();
                 const faltantesRows = Array.isArray(resp.data) ? resp.data : [];
                 lastFaltantesCedulas = new Set(faltantesRows
-                    .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
+                    .map(row => getCedulaKey(row?.cedula))
                     .filter(Boolean));
                 const montoIncentivosConFaltantes = calcularMontoIncentivosPorCedulas([...lastFaltantesCedulas]);
 
@@ -4155,8 +4216,14 @@
         });
 
         setTimeout(() => {
-            excludedDesvinculadosCedulas = new Set([...excludedDesvinculadosCedulas, ...lastDesvinculadosCedulas]);
-            excludedDesvinculadosEmpleadoIds = new Set([...excludedDesvinculadosEmpleadoIds, ...lastDesvinculadosEmpleadoIds]);
+            excludedDesvinculadosCedulas = new Set([
+                ...excludedDesvinculadosCedulas,
+                ...[...lastDesvinculadosCedulas].map(getCedulaKey).filter(Boolean),
+            ]);
+            excludedDesvinculadosEmpleadoIds = new Set([
+                ...excludedDesvinculadosEmpleadoIds,
+                ...[...lastDesvinculadosEmpleadoIds].map(getEmpleadoIdKey).filter(Boolean),
+            ]);
             applyLocalFilters(false);
             bootstrap.Modal.getInstance(document.getElementById('modalDesvinculadosIncentivo'))?.hide();
 
@@ -4174,11 +4241,10 @@
             return;
         }
 
-        const empleadoids = getEmpleadoIdsReporteActual();
-        const cedulas = getCedulasSinEmpleadoIdReporteActual();
+        const cedulas = getCedulasReporteActual();
 
-        if (!cedulas.length && !empleadoids.length) {
-            Swal.fire({ title: 'Sin datos', text: 'No hay cedulas ni ids de empleado disponibles en el reporte actual.', icon: 'warning' });
+        if (!cedulas.length) {
+            Swal.fire({ title: 'Sin cedulas', text: 'No hay cedulas disponibles en el reporte actual.', icon: 'warning' });
             return;
         }
 
@@ -4200,29 +4266,23 @@
             },
             body: JSON.stringify({
                 cedulas: cedulas,
-                empleadoids: empleadoids,
             }),
         })
             .then(response => parseResponseAsJson(response, 'Error consultando usuarios desvinculados del incentivo'))
             .then(resp => {
                 Swal.close();
                 const rows = Array.isArray(resp.data) ? resp.data : [];
-                const empleadoidsConsultados = new Set(empleadoids.map(getEmpleadoIdKey).filter(Boolean));
                 lastDesvinculadosCedulas = new Set(rows
-                    .filter(row => !empleadoidsConsultados.has(getEmpleadoIdKey(row?.empleadoid)))
                     .map(row => getCedulaKey(row?.cedula))
                     .filter(Boolean));
-                lastDesvinculadosEmpleadoIds = new Set(rows
-                    .map(row => getEmpleadoIdKey(row?.empleadoid))
-                    .filter(empleadoId => empleadoidsConsultados.has(empleadoId))
-                    .filter(Boolean));
+                lastDesvinculadosEmpleadoIds = new Set();
                 const montoIncentivosConDesvinculados = calcularMontoIncentivosPorDesvinculados(lastDesvinculadosCedulas, lastDesvinculadosEmpleadoIds);
 
                 document.getElementById('desvinculadosIncentivoTotalUsuarios').textContent = Number(resp.total_desvinculados || 0).toLocaleString('en-US');
                 document.getElementById('desvinculadosIncentivoTotalDesactivados').textContent = Number(resp.total_desactivados || 0).toLocaleString('en-US');
                 document.getElementById('desvinculadosIncentivoTotalFechaSalida').textContent = Number(resp.total_con_fecha_salida || 0).toLocaleString('en-US');
                 document.getElementById('desvinculadosIncentivoMontoIncentivos').textContent = formatMoney(montoIncentivosConDesvinculados);
-                document.getElementById('desvinculadosIncentivoRango').textContent = `Ids consultados: ${empleadoids.length.toLocaleString('en-US')} | Cedulas sin Id consultadas: ${cedulas.length.toLocaleString('en-US')}`;
+                document.getElementById('desvinculadosIncentivoRango').textContent = `Cedulas consultadas en maestra: ${cedulas.length.toLocaleString('en-US')}`;
                 renderDesvinculadosIncentivoTable(rows);
 
                 const modal = new bootstrap.Modal(document.getElementById('modalDesvinculadosIncentivo'));
@@ -4249,18 +4309,7 @@
         }
 
         let filtered = getBaseFilteredRows();
-
-        if (excludedFaltantesCedulas.size) {
-            filtered = filtered.filter(item => !excludedFaltantesCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
-        }
-
-        if (excludedDesvinculadosCedulas.size) {
-            filtered = filtered.filter(item => !excludedDesvinculadosCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
-        }
-
-        if (excludedDesvinculadosEmpleadoIds.size) {
-            filtered = filtered.filter(item => !excludedDesvinculadosEmpleadoIds.has(getEmpleadoIdKey(item?.empleadoid)));
-        }
+        filtered = filtered.filter(item => !isExcludedFromMainIncentiveTable(item));
 
         currentFilteredRows = filtered;
         renderTableFromData(filtered);
