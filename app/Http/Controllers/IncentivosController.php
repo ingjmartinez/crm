@@ -1917,10 +1917,12 @@ class IncentivosController extends Controller
                         ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasCoordinadores->all())
                         ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
                         ->selectRaw('MAX(empleadoid) AS empleadoid')
+                        ->selectRaw("MAX(COALESCE(viapago, '')) AS viapago")
+                        ->selectRaw("MAX(COALESCE(ciudad, '')) AS ciudad")
                         ->groupByRaw('CAST(cedula AS UNSIGNED)')
                         ->get()
                         ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
-                            return [$cedulaLookupKey($row->cedula) => (string) ($row->empleadoid ?? '')];
+                            return [$cedulaLookupKey($row->cedula) => $row];
                         });
                 }
             }
@@ -1933,7 +1935,9 @@ class IncentivosController extends Controller
                         'id' => $coordinador->id,
                         'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
                         'cedula' => $cedula,
-                        'empleadoid' => (string) ($empleadosPorCedula[$cedulaLookupKey($cedula)] ?? ''),
+                        'empleadoid' => (string) ($empleadosPorCedula[$cedulaLookupKey($cedula)]->empleadoid ?? ''),
+                        'viapago' => (string) ($empleadosPorCedula[$cedulaLookupKey($cedula)]->viapago ?? ''),
+                        'ciudad' => (string) ($empleadosPorCedula[$cedulaLookupKey($cedula)]->ciudad ?? ''),
                         'agencias' => (int) $coordinador->agencias_count,
                         'agencias_validas' => 0,
                         'monto_usuarios' => 0,
@@ -1982,10 +1986,12 @@ class IncentivosController extends Controller
                         ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasAdministrativos->all())
                         ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
                         ->selectRaw('MAX(empleadoid) AS empleadoid')
+                        ->selectRaw("MAX(COALESCE(viapago, '')) AS viapago")
+                        ->selectRaw("MAX(COALESCE(ciudad, '')) AS ciudad")
                         ->groupByRaw('CAST(cedula AS UNSIGNED)')
                         ->get()
                         ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
-                            return [$cedulaLookupKey($row->cedula) => (string) ($row->empleadoid ?? '')];
+                            return [$cedulaLookupKey($row->cedula) => $row];
                         });
                 }
             }
@@ -1998,7 +2004,9 @@ class IncentivosController extends Controller
                         'grupo' => (string) ($row->grupo ?? ''),
                         'nombre' => (string) ($row->nombre ?? ''),
                         'cedula' => $cedula,
-                        'empleadoid' => (string) ($empleadosAdministrativosPorCedula[$cedulaLookupKey($cedula)] ?? ''),
+                        'empleadoid' => (string) ($empleadosAdministrativosPorCedula[$cedulaLookupKey($cedula)]->empleadoid ?? ''),
+                        'viapago' => (string) ($empleadosAdministrativosPorCedula[$cedulaLookupKey($cedula)]->viapago ?? ''),
+                        'ciudad' => (string) ($empleadosAdministrativosPorCedula[$cedulaLookupKey($cedula)]->ciudad ?? ''),
                         'empresa' => (string) ($row->empresa ?? ''),
                         'pct' => (float) ($row->pct_total ?? 0),
                     ];

@@ -903,6 +903,8 @@
                 nombre: String(row?.nombre ?? '').trim(),
                 cedula: String(row?.cedula ?? '').trim(),
                 empleadoid: String(row?.empleadoid ?? '').trim(),
+                viapago: String(row?.viapago ?? '').trim(),
+                ciudad: String(row?.ciudad ?? '').trim(),
                 empresa: String(row?.empresa ?? '').trim(),
                 pct: isFixedAdministrativeGroup(grupo)
                     ? Math.max(0, toNumber(row?.pct))
