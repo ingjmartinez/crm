@@ -2023,11 +2023,16 @@
                     <div><strong>Sin IdEmpleado:</strong> ${summary.usuariosSinId.toLocaleString('en-US')} usuarios | ${formatMoney(summary.montoSinId)}</div>
                     <div><strong>Administrativo:</strong> ${administrativosPagoRows.length.toLocaleString('en-US')} registros | ${formatMoney(administrativosTotal)}</div>
                     <div><strong>Coordinadores:</strong> ${coordinadoresPagoRows.length.toLocaleString('en-US')} registros | ${formatMoney(coordinadoresTotal)}</div>
-                    <div class="d-grid gap-2 mt-3">
-                        <button type="button" class="btn btn-dark btn-sm" id="btnPagoExcelCompleto">Excel incentivo completo</button>
-                        <button type="button" class="btn btn-outline-dark btn-sm" id="btnPagoExcelSinId">Excel incentivo sin usuarios sin ID</button>
-                        <button type="button" class="btn btn-primary btn-sm" id="btnPagoTxtAdministrativo">TXT administrativo</button>
-                        <button type="button" class="btn btn-info btn-sm" id="btnPagoTxtCoordinadores">TXT coordinadores</button>
+                    <div class="row g-2 mt-3">
+                        <div class="col-12 col-md-4">
+                            <button type="button" class="btn btn-dark btn-lg fw-bold w-100 py-3" id="btnPagoExcelCompleto">Excel pago todos</button>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <button type="button" class="btn btn-primary btn-lg fw-bold w-100 py-3" id="btnPagoTxtAdministrativo">TXT administrativo</button>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <button type="button" class="btn btn-info btn-lg fw-bold w-100 py-3" id="btnPagoTxtCoordinadores">TXT coordinadores</button>
+                        </div>
                     </div>
                 </div>
             `,
@@ -2039,10 +2044,6 @@
                 document.getElementById('btnPagoExcelCompleto')?.addEventListener('click', () => {
                     Swal.close();
                     generarXlsxPagoIncentivo({ excludeSinEmpleadoId: false });
-                });
-                document.getElementById('btnPagoExcelSinId')?.addEventListener('click', () => {
-                    Swal.close();
-                    generarXlsxPagoIncentivo({ excludeSinEmpleadoId: true });
                 });
                 document.getElementById('btnPagoTxtAdministrativo')?.addEventListener('click', () => {
                     Swal.close();
