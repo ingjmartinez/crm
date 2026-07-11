@@ -1737,6 +1737,50 @@
         return document.getElementById('ni_fecha_fin')?.value || new Date().toISOString().slice(0, 10);
     }
 
+    const PAGO_INCENTIVO_HEADERS = ['IdEmpleado', 'Empresa', 'ViaPago', 'Ciudad', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo'];
+
+    function buildPagoIncentivoData(rows, options = {}) {
+        const excludeSinEmpleadoId = Boolean(options.excludeSinEmpleadoId);
+        const emptyMessage = options.emptyMessage || 'No hay registros con importe mayor a cero para generar el archivo de pago.';
+        const mappedRows = (Array.isArray(rows) ? rows : [])
+            .map((row) => ({
+                ...row,
+                __importe: toIntegerAmount(row?.importe ?? row?.nuevo_incentivo ?? row?.monto),
+                __idEmpleado: String(row?.empleadoid ?? '').trim(),
+                __empresa: String(row?.empresa ?? '').trim(),
+                __viapago: String(row?.viapago ?? '').trim(),
+                __ciudad: String(row?.ciudad ?? '').trim(),
+            }))
+            .filter((row) => !excludeSinEmpleadoId || row.__idEmpleado !== '')
+            .filter((row) => row.__importe > 0);
+
+        if (!mappedRows.length) {
+            Swal.fire({ title: 'Sin datos', text: emptyMessage, icon: 'warning' });
+            return null;
+        }
+
+        const comentario = getComentarioPagoIncentivo();
+
+        return {
+            headers: PAGO_INCENTIVO_HEADERS,
+            rows: mappedRows.map((row) => [
+                row.__idEmpleado,
+                row.__empresa,
+                row.__viapago,
+                row.__ciudad,
+                'INC',
+                String(row.__importe),
+                '',
+                '',
+                '',
+                comentario,
+                '',
+            ].map(toTxtPagoValue)),
+            fechaFin: getFechaFinPagoIncentivo(),
+            suffix: options.suffix || '',
+        };
+    }
+
     function getPagoIncentivoExportRows() {
         let rows = getBaseFilteredRows({ includeEmpresaFilter: false });
 
@@ -1770,45 +1814,55 @@
         const excludeSinEmpleadoId = Boolean(options.excludeSinEmpleadoId);
         const rows = getPagoIncentivoExportRows()
             .map((row) => ({
-                ...row,
-                __importe: toIntegerAmount(row?.nuevo_incentivo),
-                __idEmpleado: String(row?.empleadoid ?? '').trim(),
-                __empresa: normalizeEmpresaLabel(row?.empresa),
-                __viapago: String(row?.viapago ?? '').trim(),
-                __ciudad: String(row?.ciudad ?? '').trim(),
+                empleadoid: row?.empleadoid,
+                empresa: normalizeEmpresaLabel(row?.empresa),
+                viapago: row?.viapago,
+                ciudad: row?.ciudad,
+                importe: row?.nuevo_incentivo,
             }))
-            .filter((row) => !excludeSinEmpleadoId || row.__idEmpleado !== '')
-            .filter((row) => row.__importe > 0);
+            .filter((row) => toIntegerAmount(row.importe) > 0);
 
-        if (!rows.length) {
-            const message = excludeSinEmpleadoId
-                ? 'No hay incentivos con IdEmpleado e importe mayor a cero para generar el archivo de pago.'
-                : 'No hay incentivos con importe mayor a cero para generar el archivo de pago.';
-            Swal.fire({ title: 'Sin datos', text: message, icon: 'warning' });
-            return null;
-        }
-
-        const headers = ['IdEmpleado', 'Empresa', 'ViaPago', 'Ciudad', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo'];
-        const comentario = getComentarioPagoIncentivo();
-
-        return {
-            headers,
-            rows: rows.map((row) => [
-                row.__idEmpleado,
-                row.__empresa,
-                row.__viapago,
-                row.__ciudad,
-                'INC',
-                String(row.__importe),
-                '',
-                '',
-                '',
-                comentario,
-                '',
-            ].map(toTxtPagoValue)),
-            fechaFin: getFechaFinPagoIncentivo(),
+        return buildPagoIncentivoData(rows, {
+            excludeSinEmpleadoId,
             suffix: excludeSinEmpleadoId ? '_sin_usuarios_sin_id' : '_completo',
-        };
+            emptyMessage: excludeSinEmpleadoId
+                ? 'No hay incentivos con IdEmpleado e importe mayor a cero para generar el archivo de pago.'
+                : 'No hay incentivos con importe mayor a cero para generar el archivo de pago.',
+        });
+    }
+
+    function getAdministrativosPagoExportData() {
+        const rows = getAdministrativeDisplayRows()
+            .map((row) => ({
+                empleadoid: row?.empleadoid,
+                empresa: normalizeAdministrativeEmpresaLabel(row?.empresa),
+                viapago: row?.viapago,
+                ciudad: row?.ciudad,
+                importe: getAdministrativeDisplayAmount(row),
+            }))
+            .filter((row) => toIntegerAmount(row.importe) > 0);
+
+        return buildPagoIncentivoData(rows, {
+            suffix: '_administrativo',
+            emptyMessage: 'No hay registros administrativos con importe mayor a cero para generar el TXT de pago.',
+        });
+    }
+
+    function getCoordinadoresPagoExportData() {
+        const rows = coordinatorRows
+            .map((row) => ({
+                empleadoid: row?.empleadoid,
+                empresa: String(row?.empresa ?? '').trim(),
+                viapago: row?.viapago,
+                ciudad: row?.ciudad,
+                importe: getCoordinatorDisplayAmount(row),
+            }))
+            .filter((row) => toIntegerAmount(row.importe) > 0);
+
+        return buildPagoIncentivoData(rows, {
+            suffix: '_coordinadores',
+            emptyMessage: 'No hay coordinadores con importe mayor a cero para generar el TXT de pago.',
+        });
     }
 
     function downloadBlob(filename, blob) {
@@ -1828,12 +1882,34 @@
             return;
         }
 
+        generarTxtPagoDesdeData(data, 'pago_incentivo');
+    }
+
+    function generarTxtPagoDesdeData(data, filenamePrefix) {
         const lines = [
             data.headers.join(','),
             ...data.rows.map((row) => row.join(',')),
         ];
         const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8;' });
-        downloadBlob(`pago_incentivo_${data.fechaFin}${data.suffix}.txt`, blob);
+        downloadBlob(`${filenamePrefix}_${data.fechaFin}${data.suffix}.txt`, blob);
+    }
+
+    function generarTxtPagoAdministrativo() {
+        const data = getAdministrativosPagoExportData();
+        if (!data) {
+            return;
+        }
+
+        generarTxtPagoDesdeData(data, 'pago_incentivo');
+    }
+
+    function generarTxtPagoCoordinadores() {
+        const data = getCoordinadoresPagoExportData();
+        if (!data) {
+            return;
+        }
+
+        generarTxtPagoDesdeData(data, 'pago_incentivo');
     }
 
     function escapeXml(value) {
@@ -1925,35 +2001,58 @@
         }
 
         const summary = getEmpleadoIdPagoSummary();
-        if (summary.totalMonto <= 0) {
-            Swal.fire({ title: 'Sin datos', text: 'No hay incentivos con importe mayor a cero para generar el archivo de pago.', icon: 'warning' });
+        const administrativosPagoRows = getAdministrativeDisplayRows()
+            .map((row) => toIntegerAmount(getAdministrativeDisplayAmount(row)))
+            .filter((amount) => amount > 0);
+        const coordinadoresPagoRows = coordinatorRows
+            .map((row) => toIntegerAmount(getCoordinatorDisplayAmount(row)))
+            .filter((amount) => amount > 0);
+        const administrativosTotal = administrativosPagoRows.reduce((sum, amount) => sum + amount, 0);
+        const coordinadoresTotal = coordinadoresPagoRows.reduce((sum, amount) => sum + amount, 0);
+
+        if (summary.totalMonto <= 0 && administrativosTotal <= 0 && coordinadoresTotal <= 0) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay importes mayores a cero para generar archivos de pago.', icon: 'warning' });
             return;
         }
 
         Swal.fire({
-            title: 'Generar Excel de pago',
+            title: 'Generar archivo de pago',
             html: `
                 <div class="text-start small">
                     <div><strong>Con IdEmpleado:</strong> ${summary.usuariosConId.toLocaleString('en-US')} usuarios | ${formatMoney(summary.montoConId)}</div>
                     <div><strong>Sin IdEmpleado:</strong> ${summary.usuariosSinId.toLocaleString('en-US')} usuarios | ${formatMoney(summary.montoSinId)}</div>
-                    <div class="mt-2 text-muted">Puedes descargar completo o excluir los usuarios sin IdEmpleado.</div>
+                    <div><strong>Administrativo:</strong> ${administrativosPagoRows.length.toLocaleString('en-US')} registros | ${formatMoney(administrativosTotal)}</div>
+                    <div><strong>Coordinadores:</strong> ${coordinadoresPagoRows.length.toLocaleString('en-US')} registros | ${formatMoney(coordinadoresTotal)}</div>
+                    <div class="d-grid gap-2 mt-3">
+                        <button type="button" class="btn btn-dark btn-sm" id="btnPagoExcelCompleto">Excel incentivo completo</button>
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="btnPagoExcelSinId">Excel incentivo sin usuarios sin ID</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btnPagoTxtAdministrativo">TXT administrativo</button>
+                        <button type="button" class="btn btn-info btn-sm" id="btnPagoTxtCoordinadores">TXT coordinadores</button>
+                    </div>
                 </div>
             `,
             icon: summary.usuariosSinId > 0 ? 'warning' : 'info',
-            showDenyButton: true,
             showCancelButton: true,
-            confirmButtonText: 'Completo',
-            denyButtonText: 'Excluir sin ID',
             cancelButtonText: 'Cancelar',
-        }).then((result) => {
-            if (result.isConfirmed) {
-                generarXlsxPagoIncentivo({ excludeSinEmpleadoId: false });
-                return;
-            }
-
-            if (result.isDenied) {
-                generarXlsxPagoIncentivo({ excludeSinEmpleadoId: true });
-            }
+            showConfirmButton: false,
+            didOpen: () => {
+                document.getElementById('btnPagoExcelCompleto')?.addEventListener('click', () => {
+                    Swal.close();
+                    generarXlsxPagoIncentivo({ excludeSinEmpleadoId: false });
+                });
+                document.getElementById('btnPagoExcelSinId')?.addEventListener('click', () => {
+                    Swal.close();
+                    generarXlsxPagoIncentivo({ excludeSinEmpleadoId: true });
+                });
+                document.getElementById('btnPagoTxtAdministrativo')?.addEventListener('click', () => {
+                    Swal.close();
+                    generarTxtPagoAdministrativo();
+                });
+                document.getElementById('btnPagoTxtCoordinadores')?.addEventListener('click', () => {
+                    Swal.close();
+                    generarTxtPagoCoordinadores();
+                });
+            },
         });
     }
 
