@@ -632,7 +632,7 @@
                                     <th style="min-width: 120px;">Detalle</th>
                                     <th style="min-width: 120px;">% Total</th>
                                     <th style="min-width: 160px;">Monto Coordinador</th>
-                                    <th style="min-width: 130px;">Enviar a bolsa</th>
+                                    <th style="min-width: 130px;">Monto en retención</th>
                                 </tr>
                             </thead>
                             <tbody id="tbodyCoordinadores"></tbody>
@@ -640,7 +640,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-warning" id="btnAplicarCoordinadoresBolsa">Aplicar a bolsa</button>
+                    <button type="button" class="btn btn-warning" id="btnAplicarCoordinadoresBolsa">Aplicar retención</button>
                     <button type="button" class="btn btn-success" id="btnExportCoordinadoresExcel">Excel</button>
                     <button type="button" class="btn btn-soft-secondary" id="btnRestaurarCoordinadores">Restaurar plantilla</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
@@ -2517,7 +2517,7 @@
                     totalRow(['Total deducciones detectadas', moneyCell(totalDeduccionesDetectadas, true)]),
                     ['Aplicado a bolsa fija por faltantes', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoFaltantes))],
                     ['Aplicado a bolsa fija por desvinculados', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoDesvinculados))],
-                    ['Aplicado a bolsa fija por coordinadores', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoCoordinadores))],
+                    ['Monto en retención aplicado por coordinadores', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoCoordinadores))],
                     totalRow(['Reasignado a operadores/seguridad', moneyCell(operadoresSeguridadTotal, true)]),
                     totalRow(['Rebaja neta por exclusiones', moneyCell(totalRebajadoInforme, true)]),
                 ];
@@ -2543,7 +2543,7 @@
                     ['Cedulas excluidas por faltantes', numberCell(excludedFaltantesCedulas.size)],
                     ['Cedulas excluidas por desvinculados', numberCell(excludedDesvinculadosCedulas.size)],
                     ['Ids excluidos por desvinculados', numberCell(excludedDesvinculadosEmpleadoIds.size)],
-                    ['Coordinadores enviados a bolsa', numberCell(excludedCoordinatorIds.size)],
+                    ['Coordinadores con monto en retención', numberCell(excludedCoordinatorIds.size)],
                     ['Terminales excluidas del calculo', numberCell(terminalesExcluidas.length)],
                     ['Usuarios pendientes por actualizar', numberCell(usuariosPorActualizar)],
                     ['Agencias sin empresa', numberCell(agenciasSinEmpresa)],
@@ -2689,7 +2689,7 @@
                         {
                             ul: [
                                 'Las terminales excluidas no fueron consideradas en el calculo de ventas ni incentivo.',
-                                'Los faltantes, desvinculados y coordinadores excluidos se usan primero para cubrir la bolsa fija; el excedente reduce el total final.',
+                                'Los faltantes, desvinculados y coordinadores con monto en retención se usan primero para cubrir la bolsa fija; el excedente reduce el total final.',
                                 'Los coordinadores no excluidos conservan el monto calculado originalmente.',
                                 'El informe refleja la configuracion activa al momento de generacion.',
                                 `Terminales excluidas: ${terminalesExcluidasText}`,
@@ -2740,7 +2740,7 @@
 
         exportRowsToExcelCsv(
             'coordinadores_v5_validacion.csv',
-            ['Nombre', 'IdEmpleado', 'Agencias', 'Validas', 'Monto', '% Total', 'Monto Calculado', 'Enviado a Bolsa', 'Monto Bolsa', 'Monto a Pagar'],
+            ['Nombre', 'IdEmpleado', 'Agencias', 'Validas', 'Monto', '% Total', 'Monto Calculado', 'En retención', 'Monto en Retención', 'Monto a Pagar'],
             rows
         );
     }
@@ -3070,7 +3070,7 @@
         const totalBolsa = getCoordinatorExcludedTotal();
 
         document.getElementById('coord_base_total').textContent = formatMoney(currentCoordinatorBase);
-        document.getElementById('coord_distribuido_total').textContent = `${formatMoney(totalDistribuido)} | Bolsa: ${formatMoney(totalBolsa)}`;
+        document.getElementById('coord_distribuido_total').textContent = `${formatMoney(totalDistribuido)} | Retención: ${formatMoney(totalBolsa)}`;
     }
 
     function updateAdministrativeAmounts() {
@@ -3381,7 +3381,7 @@
                 </td>
                 <td class="text-end fw-semibold coord-monto" data-idx="${idx}">
                     ${formatMoney(rowAmount)}
-                    ${excluded ? `<br><small class="text-warning">Bolsa: ${formatMoney(appliedAmount)}</small>` : ''}
+                    ${excluded ? `<br><small class="text-warning">Retención: ${formatMoney(appliedAmount)}</small>` : ''}
                 </td>
                 <td class="text-center">
                     <input class="form-check-input coord-bolsa-check" type="checkbox" data-idx="${idx}" ${excluded ? 'checked' : ''}>
@@ -3448,7 +3448,7 @@
 
         Swal.fire({
             title: 'Aplicando coordinadores...',
-            text: 'Estamos enviando los coordinadores seleccionados a la bolsa y recalculando el reporte.',
+            text: 'Estamos marcando el monto en retención de los coordinadores seleccionados y recalculando el reporte.',
             icon: 'info',
             allowOutsideClick: false,
             showConfirmButton: false,
@@ -3463,7 +3463,7 @@
 
             Swal.fire({
                 title: 'Coordinadores aplicados',
-                text: `${excludedCoordinatorIds.size} coordinadores enviados a bolsa por ${formatMoney(getCoordinatorExcludedTotal())}. Los demas coordinadores conservan su monto calculado.`,
+                text: `${excludedCoordinatorIds.size} coordinadores con monto en retención por ${formatMoney(getCoordinatorExcludedTotal())}. Los demas coordinadores conservan su monto calculado.`,
                 icon: 'success',
             });
         }, 120);
@@ -3570,7 +3570,7 @@
             <div>Coordinador: ${formatMoney(coordinadorDistribucion)}</div>
             <div>Reasignado a Operadores/Seguridad: ${formatMoney(currentFixedBagTopUp)}</div>
             <div>Deducciones detectadas: ${formatMoney(currentExcludedApplication.faltantesDisponible + currentExcludedApplication.desvinculadosDisponible + currentExcludedApplication.coordinadoresDisponible)}</div>
-            <div>Coordinadores enviados a bolsa: ${formatMoney(currentExcludedApplication.coordinadoresDisponible)}</div>
+            <div>Coordinadores con monto en retención: ${formatMoney(currentExcludedApplication.coordinadoresDisponible)}</div>
             <div>Usuarios con IdEmpleado: ${empleadoIdSummary.usuariosConId.toLocaleString('en-US')} | ${formatMoney(empleadoIdSummary.montoConId)}</div>
             <div>Usuarios sin IdEmpleado: ${empleadoIdSummary.usuariosSinId.toLocaleString('en-US')} | ${formatMoney(empleadoIdSummary.montoSinId)}</div>
             <div>Rebaja neta por exclusiones: ${formatMoney(currentExcludedApplication.totalRebajado)}</div>`;
