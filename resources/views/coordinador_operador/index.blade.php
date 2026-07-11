@@ -37,12 +37,20 @@
                                     <div class="alert alert-danger">{{ session('error') }}</div>
                                 @endif
 
-                                <div class="row mb-3">
+                                <form method="GET" action="{{ route('coordinador-operador.index') }}" class="row g-2 align-items-end mb-3">
                                     <div class="col-12 col-md-5 col-lg-4">
                                         <label for="buscarCoordinador" class="form-label">Buscar coordinador</label>
-                                        <input type="text" id="buscarCoordinador" class="form-control" placeholder="Escribe nombre o cedula...">
+                                        <input type="text" id="buscarCoordinador" name="buscar" class="form-control" value="{{ $buscar ?? '' }}" placeholder="Nombre, apellido o cedula...">
                                     </div>
-                                </div>
+                                    <div class="col-auto">
+                                        <button type="submit" class="btn btn-primary">Buscar</button>
+                                    </div>
+                                    @if(!empty($buscar))
+                                        <div class="col-auto">
+                                            <a href="{{ route('coordinador-operador.index') }}" class="btn btn-light">Limpiar</a>
+                                        </div>
+                                    @endif
+                                </form>
 
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-striped align-middle mb-0" id="tablaCoordinadorOperador">
@@ -61,7 +69,7 @@
                                         </thead>
                                         <tbody>
                                             @forelse($registros as $item)
-                                                <tr>
+                                                <tr data-search="{{ strtolower(trim($item->nombre . ' ' . $item->apellido . ' ' . $item->cedula . ' ' . preg_replace('/\D+/', '', (string) $item->cedula))) }}">
                                                     <td class="text-center">{{ $item->id }}</td>
                                                     <td>{{ $item->nombre }}</td>
                                                     <td>{{ $item->apellido }}</td>
@@ -362,19 +370,35 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function normalizarBusquedaCoordinador(valor) {
+            return String(valor || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function soloDigitos(valor) {
+            return String(valor || '').replace(/\D+/g, '');
+        }
+
         function filtrarCoordinadorTabla() {
-            const termino = (buscarCoordinador?.value || '').toLowerCase().trim();
+            const terminoOriginal = buscarCoordinador?.value || '';
+            const termino = normalizarBusquedaCoordinador(terminoOriginal);
+            const tokens = termino.split(' ').filter(Boolean);
 
             filasTablaCoordinador.forEach(function (fila) {
-                const celdas = fila.querySelectorAll('td');
-                if (!celdas.length || celdas.length < 5) {
+                if (!fila.querySelectorAll('td').length) {
                     return;
                 }
 
-                const nombre = (celdas[1]?.textContent || '').toLowerCase();
-                const apellido = (celdas[2]?.textContent || '').toLowerCase();
-                const cedula = (celdas[4]?.textContent || '').toLowerCase();
-                const coincide = !termino || nombre.includes(termino) || apellido.includes(termino) || `${nombre} ${apellido}`.includes(termino) || cedula.includes(termino);
+                const texto = normalizarBusquedaCoordinador(fila.dataset.search || fila.textContent || '');
+                const textoDigitos = soloDigitos(fila.dataset.search || fila.textContent || '').replace(/^0+/, '');
+                const coincide = !tokens.length || tokens.every(function (token) {
+                    const tokenDigitos = soloDigitos(token).replace(/^0+/, '');
+                    return texto.includes(token) || (tokenDigitos !== '' && textoDigitos.includes(tokenDigitos));
+                });
 
                 fila.style.display = coincide ? '' : 'none';
             });

@@ -4670,8 +4670,18 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         const sourceRows = isAdmin ? getAdministrativeDesvinculadosSourceRows() : getCoordinatorDisplayRows();
         const cedulas = [...new Set(sourceRows.map((row) => getCedulaKey(row?.cedula)).filter(Boolean))];
         const empleadoids = [...new Set(sourceRows.map((row) => getEmpleadoIdKey(row?.empleadoid)).filter(Boolean))];
+        const cedulasConsulta = isAdmin ? cedulas : [];
 
-        if (!cedulas.length && !empleadoids.length) {
+        if (!isAdmin && !empleadoids.length) {
+            Swal.fire({
+                title: 'Sin IdEmpleado',
+                text: 'No hay IdEmpleado en coordinadores para validar desvinculados sin mezclar agentes de venta.',
+                icon: 'info',
+            });
+            return;
+        }
+
+        if (!cedulasConsulta.length && !empleadoids.length) {
             Swal.fire({
                 title: 'Sin datos',
                 text: `No hay cedulas ni IdEmpleado en ${label} para consultar desvinculados.`,
@@ -4696,7 +4706,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': csrfToken(),
             },
-            body: JSON.stringify({ cedulas, empleadoids }),
+            body: JSON.stringify({ cedulas: cedulasConsulta, empleadoids }),
         })
             .then(response => parseResponseAsJson(response, `Error consultando desvinculados de ${label}`))
             .then(resp => {

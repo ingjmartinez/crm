@@ -9,12 +9,37 @@ use Illuminate\Support\Facades\DB;
 
 class CoordinadorOperadorController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $registros = CoordinadorOperador::with('agencias:id,agencia,nombre_agencia,terminal')
-            ->withCount('agencias')
+        $buscar = trim((string) $request->query('buscar', ''));
+        $buscarDigits = preg_replace('/\D+/', '', $buscar);
+        $buscarCedulaSinCeros = ltrim((string) $buscarDigits, '0');
+
+        $registrosQuery = CoordinadorOperador::with('agencias:id,agencia,nombre_agencia,terminal')
+            ->withCount('agencias');
+
+        if ($buscar !== '') {
+            $registrosQuery->where(function ($query) use ($buscar, $buscarDigits, $buscarCedulaSinCeros) {
+                $query->where('nombre', 'like', "%{$buscar}%")
+                    ->orWhere('apellido', 'like', "%{$buscar}%")
+                    ->orWhereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) LIKE ?", ["%{$buscar}%"])
+                    ->orWhere('correo', 'like', "%{$buscar}%")
+                    ->orWhere('puesto', 'like', "%{$buscar}%");
+
+                if ($buscarDigits !== '') {
+                    $query->orWhereRaw('CAST(cedula AS CHAR) LIKE ?', ["%{$buscarDigits}%"]);
+
+                    if ($buscarCedulaSinCeros !== '') {
+                        $query->orWhereRaw('CAST(CAST(cedula AS UNSIGNED) AS CHAR) LIKE ?', ["%{$buscarCedulaSinCeros}%"]);
+                    }
+                }
+            });
+        }
+
+        $registros = $registrosQuery
             ->orderByDesc('id')
-            ->paginate(15);
+            ->paginate(15)
+            ->appends($request->query());
 
         $agencias = Agencia::select('id', 'agencia', 'nombre_agencia')
             ->addSelect('terminal')
@@ -40,7 +65,7 @@ class CoordinadorOperadorController extends Controller
                 })->values();
             });
 
-        return view('coordinador_operador.index', compact('registros', 'agencias', 'asignacionesAgencia'));
+        return view('coordinador_operador.index', compact('registros', 'agencias', 'asignacionesAgencia', 'buscar'));
     }
 
     public function create()

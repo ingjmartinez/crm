@@ -2007,12 +2007,31 @@ class IncentivosController extends Controller
                 ->get($administrativosColumns);
 
             $empleadosAdministrativosPorCedula = collect();
+            $puedeValidarAdministrativosActivos = false;
             if (
                 Schema::hasColumn('incentivo_administrativos', 'cedula')
                 && Schema::hasTable('empleados')
                 && Schema::hasColumn('empleados', 'cedula')
                 && Schema::hasColumn('empleados', 'empleadoid')
             ) {
+                $puedeValidarAdministrativosActivos = true;
+                $hasActivo = Schema::hasColumn('empleados', 'activo');
+                $hasFechaSalida = Schema::hasColumn('empleados', 'fechasalida');
+                $hasFechaSalidaAlt = Schema::hasColumn('empleados', 'fecha_salida');
+                $activoCondition = $hasActivo ? 'COALESCE(activo, 1) = 1' : '1 = 1';
+                $fechaSalidaChecks = [];
+
+                if ($hasFechaSalida) {
+                    $fechaSalidaChecks[] = "(NULLIF(TRIM(CAST(fechasalida AS CHAR)), '') IS NULL OR TRIM(CAST(fechasalida AS CHAR)) = '0000-00-00')";
+                }
+
+                if ($hasFechaSalidaAlt) {
+                    $fechaSalidaChecks[] = "(NULLIF(TRIM(CAST(fecha_salida AS CHAR)), '') IS NULL OR TRIM(CAST(fecha_salida AS CHAR)) = '0000-00-00')";
+                }
+
+                $fechaSalidaCondition = empty($fechaSalidaChecks)
+                    ? '1 = 1'
+                    : '(' . implode(' AND ', $fechaSalidaChecks) . ')';
                 $cedulasAdministrativos = $administrativosBase
                     ->pluck('cedula')
                     ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
@@ -2028,6 +2047,7 @@ class IncentivosController extends Controller
                         ->selectRaw('MAX(empleadoid) AS empleadoid')
                         ->selectRaw("MAX(COALESCE(viapago, '')) AS viapago")
                         ->selectRaw("MAX(COALESCE(ciudad, '')) AS ciudad")
+                        ->selectRaw("SUM(CASE WHEN {$activoCondition} AND {$fechaSalidaCondition} THEN 1 ELSE 0 END) AS empleados_activos")
                         ->groupByRaw('CAST(cedula AS UNSIGNED), TRIM(CAST(companyid AS CHAR))')
                         ->get()
                         ->mapWithKeys(function ($row) use ($empleadoLookupKey) {
@@ -2035,6 +2055,17 @@ class IncentivosController extends Controller
                         });
                 }
             }
+
+            $administrativosBase = $puedeValidarAdministrativosActivos
+                ? $administrativosBase
+                    ->filter(function ($row) use ($empleadosAdministrativosPorCedula, $empleadoLookupKey) {
+                        $cedula = (string) ($row->cedula ?? '');
+                        $empleado = $empleadosAdministrativosPorCedula->get($empleadoLookupKey($cedula, $row->empresa ?? ''));
+
+                        return (int) ($empleado->empleados_activos ?? 0) > 0;
+                    })
+                    ->values()
+                : collect();
 
             $administrativosConfig = $administrativosBase
                 ->map(function ($row) use ($empleadosAdministrativosPorCedula, $empleadoLookupKey) {
