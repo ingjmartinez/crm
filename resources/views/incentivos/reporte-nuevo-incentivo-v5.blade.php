@@ -1283,6 +1283,19 @@
         return normalizeEmpresaValue(row?.empresa) === 'agencias por asignar empresa';
     }
 
+    function normalizeInformeEmpresaKey(value) {
+        const text = normalizeEmpresaValue(value);
+        if (text.includes('joselito')) return 'joselito';
+        if (text.includes('negosur')) return 'negosur';
+        return text;
+    }
+
+    function getInformeEmpresaLabel(key) {
+        if (key === 'joselito') return 'Grupo Joselito';
+        if (key === 'negosur') return 'Negosur';
+        return 'Completo';
+    }
+
     function normalizeAdministrativeEmpresaKey(value) {
         const text = String(value ?? '').trim().toLowerCase();
         if (text === '') return 'sin empresa';
@@ -2312,7 +2325,46 @@
         }, 150);
     }
 
-    function generarPdfInformeGerencialProceso() {
+    function seleccionarPdfInformeGerencialProceso() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Informe Gerencial PDF',
+            html: `
+                <div class="text-start small">
+                    <div class="mb-3 text-muted">Selecciona el alcance que quieres generar.</div>
+                    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
+                        <button type="button" class="btn btn-dark btn-lg fw-bold py-3" id="btnInformeCompleto">Completo</button>
+                        <button type="button" class="btn btn-primary btn-lg fw-bold py-3" id="btnInformeJoselito">Joselito</button>
+                        <button type="button" class="btn btn-info btn-lg fw-bold py-3" id="btnInformeNegosur">Negosur</button>
+                    </div>
+                </div>
+            `,
+            icon: 'info',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+            showConfirmButton: false,
+            didOpen: () => {
+                document.getElementById('btnInformeCompleto')?.addEventListener('click', () => {
+                    Swal.close();
+                    generarPdfInformeGerencialProceso({ empresaKey: 'todos' });
+                });
+                document.getElementById('btnInformeJoselito')?.addEventListener('click', () => {
+                    Swal.close();
+                    generarPdfInformeGerencialProceso({ empresaKey: 'joselito' });
+                });
+                document.getElementById('btnInformeNegosur')?.addEventListener('click', () => {
+                    Swal.close();
+                    generarPdfInformeGerencialProceso({ empresaKey: 'negosur' });
+                });
+            },
+        });
+    }
+
+    function generarPdfInformeGerencialProceso(options = {}) {
         if (!cachedRows.length) {
             Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
             return;
@@ -2339,29 +2391,50 @@
                 const sistema = document.getElementById('ni_sistema')?.value || 'Todos';
                 const tipoPago = document.getElementById('ni_tipo_pago')?.selectedOptions?.[0]?.textContent || '';
                 const modoCalculo = cachedMeta?.modo_calculo_label || document.getElementById('ni_modo_calculo')?.selectedOptions?.[0]?.textContent || '';
-                const grossRows = getBaseFilteredRows({ includeEmpresaFilter: false });
-                const processedRows = Array.isArray(currentFilteredRows) ? currentFilteredRows : [];
+                const informeEmpresaKey = options?.empresaKey || 'todos';
+                const informeEmpresaLabel = getInformeEmpresaLabel(informeEmpresaKey);
+                const filterInformeEmpresa = (row) => informeEmpresaKey === 'todos'
+                    || normalizeInformeEmpresaKey(row?.empresa) === informeEmpresaKey;
+                const grossRowsAll = getBaseFilteredRows({ includeEmpresaFilter: false });
+                const processedRowsAll = Array.isArray(currentFilteredRows) ? currentFilteredRows : [];
+                const grossRows = grossRowsAll.filter(filterInformeEmpresa);
+                const processedRows = processedRowsAll.filter(filterInformeEmpresa);
+                const totalIncentivoBrutoGlobal = grossRowsAll.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+                const informeShare = informeEmpresaKey === 'todos'
+                    ? 1
+                    : (totalIncentivoBrutoGlobal > 0
+                        ? grossRows.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0) / totalIncentivoBrutoGlobal
+                        : 0);
+
+                if (!grossRows.length) {
+                    Swal.close();
+                    Swal.fire({ title: 'Sin datos', text: `No hay registros para ${informeEmpresaLabel}.`, icon: 'warning' });
+                    return;
+                }
+
                 const totalVendidoBruto = grossRows.reduce((sum, row) => sum + toIntegerAmount(row?.ventas_mes_actual), 0);
                 const totalIncentivoBruto = grossRows.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
                 const totalIncentivoProcesado = processedRows.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
                 const empleadoIdSummary = getEmpleadoIdPagoSummary(processedRows);
-                const totalDiezPorciento = toIntegerAmount(currentDistributionBase);
-                const montoAdministrativo = toIntegerAmount(currentAdministrativePoolBase);
-                const montoCoordinador = toIntegerAmount(currentCoordinatorBase);
+                const totalDiezPorciento = toIntegerAmount(currentDistributionBase * informeShare);
+                const montoAdministrativo = toIntegerAmount(currentAdministrativePoolBase * informeShare);
+                const montoCoordinador = toIntegerAmount(currentCoordinatorBase * informeShare);
+                const scaleExcluded = (value) => toIntegerAmount(toIntegerAmount(value) * informeShare);
                 const totalDeduccionesDetectadas = toIntegerAmount(
-                    currentExcludedApplication.faltantesDisponible
-                    + currentExcludedApplication.desvinculadosDisponible
-                    + currentExcludedApplication.coordinadoresDisponible
+                    scaleExcluded(currentExcludedApplication.faltantesDisponible)
+                    + scaleExcluded(currentExcludedApplication.desvinculadosDisponible)
+                    + scaleExcluded(currentExcludedApplication.coordinadoresDisponible)
                 );
-                const totalFinalPagar = toIntegerAmount(totalIncentivoBruto + totalDiezPorciento - currentExcludedApplication.totalRebajado);
+                const totalRebajadoInforme = scaleExcluded(currentExcludedApplication.totalRebajado);
+                const totalFinalPagar = toIntegerAmount(totalIncentivoBruto + totalDiezPorciento - totalRebajadoInforme);
                 const resumenCumplimiento = getUsuariosCumplimientoSummary(grossRows);
                 const terminalesExcluidas = getExcludedTerminalesArray();
                 const usuariosPorActualizar = getUsuariosPorActualizarRows(processedRows).length;
                 const agenciasSinEmpresa = getAgenciasSinEmpresaRows(processedRows).length;
                 const administrativosTotal = toIntegerAmount(montoAdministrativo);
-                const operadoresSeguridadTotal = toIntegerAmount(currentFixedBagTopUp);
+                const operadoresSeguridadTotal = toIntegerAmount(currentFixedBagTopUp * informeShare);
                 const coordinadoresTotal = coordinatorRows
-                    .reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0);
+                    .reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0) * informeShare;
                 const distribucionTotal = toIntegerAmount(administrativosTotal + coordinadoresTotal + operadoresSeguridadTotal);
 
                 const moneyCell = (value, bold = false) => ({
@@ -2438,15 +2511,15 @@
 
                 const deducciones = [
                     [{ text: 'Concepto', style: 'tableHeader' }, { text: 'Monto', style: 'tableHeader', alignment: 'right' }],
-                    ['Monto generado por faltantes', moneyCell(currentExcludedApplication.faltantesDisponible)],
-                    ['Monto generado por desvinculados', moneyCell(currentExcludedApplication.desvinculadosDisponible)],
-                    ['Monto generado por coordinadores excluidos', moneyCell(currentExcludedApplication.coordinadoresDisponible)],
+                    ['Monto generado por faltantes', moneyCell(scaleExcluded(currentExcludedApplication.faltantesDisponible))],
+                    ['Monto generado por desvinculados', moneyCell(scaleExcluded(currentExcludedApplication.desvinculadosDisponible))],
+                    ['Monto generado por coordinadores excluidos', moneyCell(scaleExcluded(currentExcludedApplication.coordinadoresDisponible))],
                     totalRow(['Total deducciones detectadas', moneyCell(totalDeduccionesDetectadas, true)]),
-                    ['Aplicado a bolsa fija por faltantes', moneyCell(currentExcludedApplication.aplicadoFaltantes)],
-                    ['Aplicado a bolsa fija por desvinculados', moneyCell(currentExcludedApplication.aplicadoDesvinculados)],
-                    ['Aplicado a bolsa fija por coordinadores', moneyCell(currentExcludedApplication.aplicadoCoordinadores)],
-                    totalRow(['Reasignado a operadores/seguridad', moneyCell(currentFixedBagTopUp, true)]),
-                    totalRow(['Rebaja neta por exclusiones', moneyCell(currentExcludedApplication.totalRebajado, true)]),
+                    ['Aplicado a bolsa fija por faltantes', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoFaltantes))],
+                    ['Aplicado a bolsa fija por desvinculados', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoDesvinculados))],
+                    ['Aplicado a bolsa fija por coordinadores', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoCoordinadores))],
+                    totalRow(['Reasignado a operadores/seguridad', moneyCell(operadoresSeguridadTotal, true)]),
+                    totalRow(['Rebaja neta por exclusiones', moneyCell(totalRebajadoInforme, true)]),
                 ];
 
                 const distribucion = [
@@ -2582,7 +2655,7 @@
                         };
                     },
                     content: [
-                        { text: 'Informe Gerencial de Incentivos V5', style: 'title' },
+                        { text: `Informe Gerencial de Incentivos V5 - ${informeEmpresaLabel}`, style: 'title' },
                         { text: 'Resumen de cierre del proceso de incentivo', style: 'subtitle' },
                         {
                             columns: [
@@ -2596,6 +2669,7 @@
                         {
                             columns: [
                                 { text: `Modo: ${modoCalculo}` },
+                                { text: `Alcance: ${informeEmpresaLabel}` },
                                 { text: `Generado: ${new Date().toLocaleString('es-DO')}`, alignment: 'right' },
                             ],
                             margin: [0, 0, 0, 8],
@@ -2637,7 +2711,8 @@
 
                 const pdf = pdfMake.createPdf(docDefinition);
                 Swal.close();
-                pdf.download(`informe_gerencial_incentivo_v5_${fechaFin || 'proceso'}.pdf`);
+                const suffix = informeEmpresaKey === 'todos' ? 'completo' : informeEmpresaKey;
+                pdf.download(`informe_gerencial_incentivo_v5_${suffix}_${fechaFin || 'proceso'}.pdf`);
             } catch (error) {
                 console.error('Error generando informe gerencial:', error);
                 Swal.fire({
@@ -4658,7 +4733,7 @@
         });
 
         document.querySelector('#btnInformeGerencialProceso').addEventListener('click', function() {
-            generarPdfInformeGerencialProceso();
+            seleccionarPdfInformeGerencialProceso();
         });
 
         document.querySelector('#btnExportCoordinadoresExcel').addEventListener('click', function() {
