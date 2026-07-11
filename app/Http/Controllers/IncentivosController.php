@@ -3263,17 +3263,25 @@ class IncentivosController extends Controller
     public function desvinculadosReporteNuevoIncentivoV5(Request $request)
     {
         $validated = $request->validate([
-            'cedulas' => 'required|array|min:1',
+            'cedulas' => 'nullable|array',
             'cedulas.*' => 'nullable|string|max:50',
+            'empleadoids' => 'nullable|array',
+            'empleadoids.*' => 'nullable|string|max:50',
         ]);
 
-        $cedulas = collect($validated['cedulas'])
+        $cedulas = collect($validated['cedulas'] ?? [])
             ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
             ->filter()
             ->unique()
             ->values();
 
-        if ($cedulas->isEmpty()) {
+        $empleadoIds = collect($validated['empleadoids'] ?? [])
+            ->map(fn ($empleadoId) => trim((string) $empleadoId))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($cedulas->isEmpty() && $empleadoIds->isEmpty()) {
             return response()->json([
                 'total_desvinculados' => 0,
                 'total_desactivados' => 0,
@@ -3296,7 +3304,15 @@ class IncentivosController extends Controller
         }
 
         $rows = DB::table('empleados')
-            ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulas->all())
+            ->where(function ($query) use ($cedulas, $empleadoIds) {
+                if ($cedulas->isNotEmpty()) {
+                    $query->orWhereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulas->all());
+                }
+
+                if ($empleadoIds->isNotEmpty()) {
+                    $query->orWhereIn(DB::raw('TRIM(CAST(empleadoid AS CHAR))'), $empleadoIds->all());
+                }
+            })
             ->where(function ($query) use ($hasActivo, $hasFechaSalida, $hasFechaSalidaAlt) {
                 if ($hasActivo) {
                     $query->orWhereRaw('COALESCE(activo, 1) = 0');
@@ -3311,6 +3327,7 @@ class IncentivosController extends Controller
                 }
             })
             ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw('TRIM(CAST(empleadoid AS CHAR)) AS empleadoid')
             ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
             ->selectRaw($hasActivo ? 'MIN(COALESCE(activo, 1)) AS activo' : '1 AS activo')
             ->selectRaw(
@@ -3322,7 +3339,7 @@ class IncentivosController extends Controller
                             ? "MAX(NULLIF(TRIM(CAST(fechasalida AS CHAR)), '')) AS fecha_salida"
                             : "'' AS fecha_salida"))
             )
-            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->groupByRaw('CAST(cedula AS UNSIGNED), TRIM(CAST(empleadoid AS CHAR))')
             ->orderBy('nombre')
             ->get()
             ->map(function ($row) {
@@ -3346,6 +3363,7 @@ class IncentivosController extends Controller
 
                 return [
                     'cedula' => (string) $row->cedula,
+                    'empleadoid' => trim((string) ($row->empleadoid ?? '')),
                     'nombre' => $nombre !== '' ? $nombre : 'Actualizar en maestro de empleados',
                     'estatus' => $motivos ? implode(' / ', $motivos) : 'Desvinculado',
                     'desactivado' => $estaDesactivado,

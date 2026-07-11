@@ -743,7 +743,7 @@
                 <div class="modal-header">
                     <div>
                         <h5 class="modal-title">Usuarios desvinculados en maestra</h5>
-                        <small class="text-muted" id="desvinculadosIncentivoRango">Consulta basada en las cedulas del reporte actual.</small>
+                        <small class="text-muted" id="desvinculadosIncentivoRango">Consulta basada en las cedulas e ids de empleado del reporte actual.</small>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -780,6 +780,7 @@
                             <thead>
                                 <tr>
                                     <th>Cedula</th>
+                                    <th>IdEmpleado</th>
                                     <th>Nombre</th>
                                     <th>Estatus</th>
                                     <th>Fecha salida</th>
@@ -953,7 +954,9 @@
     let lastFaltantesCedulas = new Set();
     let excludedFaltantesCedulas = new Set();
     let lastDesvinculadosCedulas = new Set();
+    let lastDesvinculadosEmpleadoIds = new Set();
     let excludedDesvinculadosCedulas = new Set();
+    let excludedDesvinculadosEmpleadoIds = new Set();
     let excludedCoordinatorIds = new Set();
     let appliedCoordinatorAmounts = {};
     let adminPctBruto = 10;
@@ -1110,6 +1113,10 @@
         return String(value ?? '').replace(/\D+/g, '');
     }
 
+    function getEmpleadoIdKey(value) {
+        return String(value ?? '').trim();
+    }
+
     function getFixedBagBaseBudget(administrativePoolBase) {
         return toIntegerAmount(toIntegerAmount(administrativePoolBase) * (getPuestoPctByCategoryKey('g45') / 100));
     }
@@ -1124,6 +1131,20 @@
     function sumIncentivesByCedulas(rows, cedulasSet) {
         return (Array.isArray(rows) ? rows : [])
             .filter((row) => cedulasSet.has(getCedulaKey(row?.cedula)))
+            .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+    }
+
+    function sumIncentivesByDesvinculados(rows, cedulasSet, empleadoIdsSet, excludedCedulasSet = new Set()) {
+        return (Array.isArray(rows) ? rows : [])
+            .filter((row) => {
+                const cedula = getCedulaKey(row?.cedula);
+                if (cedula && excludedCedulasSet.has(cedula)) {
+                    return false;
+                }
+
+                return (cedula && cedulasSet.has(cedula))
+                    || empleadoIdsSet.has(getEmpleadoIdKey(row?.empleadoid));
+            })
             .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
     }
 
@@ -1149,9 +1170,9 @@
         const baseRows = getBaseFilteredRows();
         const faltantesCedulas = new Set([...excludedFaltantesCedulas].map(getCedulaKey).filter(Boolean));
         const desvinculadosCedulas = new Set([...excludedDesvinculadosCedulas].map(getCedulaKey).filter(Boolean));
-        const desvinculadosSoloCedulas = new Set([...desvinculadosCedulas].filter((cedula) => !faltantesCedulas.has(cedula)));
+        const desvinculadosEmpleadoIds = new Set([...excludedDesvinculadosEmpleadoIds].map(getEmpleadoIdKey).filter(Boolean));
         const faltantesDisponible = sumIncentivesByCedulas(baseRows, faltantesCedulas);
-        const desvinculadosDisponible = sumIncentivesByCedulas(baseRows, desvinculadosSoloCedulas);
+        const desvinculadosDisponible = sumIncentivesByDesvinculados(baseRows, desvinculadosCedulas, desvinculadosEmpleadoIds, faltantesCedulas);
         const coordinadoresDisponible = getCoordinatorExcludedTotal();
         const faltantesUsados = Math.min(toIntegerAmount(shortage), faltantesDisponible);
         const restante = Math.max(toIntegerAmount(shortage) - faltantesUsados, 0);
@@ -1510,6 +1531,28 @@
         };
     }
 
+    function getExcludedCoordinatorPaymentKeys() {
+        const cedulas = new Set();
+        const empleadoIds = new Set();
+
+        coordinatorRows
+            .filter((row) => isCoordinatorExcluded(row))
+            .forEach((row) => {
+                const cedula = getCedulaKey(row?.cedula);
+                const empleadoId = getEmpleadoIdKey(row?.empleadoid);
+
+                if (cedula) {
+                    cedulas.add(cedula);
+                }
+
+                if (empleadoId) {
+                    empleadoIds.add(empleadoId);
+                }
+            });
+
+        return { cedulas, empleadoIds };
+    }
+
     function getUsuariosPorActualizarRows(sourceRows = currentFilteredRows) {
         const rows = Array.isArray(sourceRows) ? sourceRows : [];
         const grouped = new Map();
@@ -1698,11 +1741,26 @@
         let rows = getBaseFilteredRows({ includeEmpresaFilter: false });
 
         if (excludedFaltantesCedulas.size) {
-            rows = rows.filter(item => !excludedFaltantesCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
+            rows = rows.filter(item => !excludedFaltantesCedulas.has(getCedulaKey(item?.cedula)));
         }
 
         if (excludedDesvinculadosCedulas.size) {
-            rows = rows.filter(item => !excludedDesvinculadosCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
+            rows = rows.filter(item => !excludedDesvinculadosCedulas.has(getCedulaKey(item?.cedula)));
+        }
+
+        if (excludedDesvinculadosEmpleadoIds.size) {
+            rows = rows.filter(item => !excludedDesvinculadosEmpleadoIds.has(getEmpleadoIdKey(item?.empleadoid)));
+        }
+
+        if (excludedCoordinatorIds.size) {
+            const coordinatorKeys = getExcludedCoordinatorPaymentKeys();
+            rows = rows.filter((item) => {
+                const cedula = getCedulaKey(item?.cedula);
+                const empleadoId = getEmpleadoIdKey(item?.empleadoid);
+
+                return !(cedula && coordinatorKeys.cedulas.has(cedula))
+                    && !(empleadoId && coordinatorKeys.empleadoIds.has(empleadoId));
+            });
         }
 
         return rows;
@@ -2251,6 +2309,7 @@
                     warningRow(['Monto usuarios sin IdEmpleado', moneyCell(empleadoIdSummary.montoSinId)]),
                     ['Cedulas excluidas por faltantes', numberCell(excludedFaltantesCedulas.size)],
                     ['Cedulas excluidas por desvinculados', numberCell(excludedDesvinculadosCedulas.size)],
+                    ['Ids excluidos por desvinculados', numberCell(excludedDesvinculadosEmpleadoIds.size)],
                     ['Coordinadores enviados a bolsa', numberCell(excludedCoordinatorIds.size)],
                     ['Terminales excluidas del calculo', numberCell(terminalesExcluidas.length)],
                     ['Usuarios pendientes por actualizar', numberCell(usuariosPorActualizar)],
@@ -3392,7 +3451,7 @@
             responsive: true,
             pageLength: 10,
             lengthMenu: [10, 25, 50],
-            order: [[3, 'desc']],
+            order: [[2, 'desc']],
             language: {
                 lengthMenu: 'Mostrar _MENU_ registros por pagina',
                 info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
@@ -3423,6 +3482,13 @@
             columns: [
                 { data: 'cedula' },
                 {
+                    data: 'empleadoid',
+                    render: function(data, type) {
+                        const value = String(data || '').trim();
+                        return type === 'display' ? escapeHtml(value || '-') : value;
+                    }
+                },
+                {
                     data: 'nombre',
                     render: function(data, type) {
                         return type === 'display' ? renderNombreEmpleado(data) : data;
@@ -3447,7 +3513,7 @@
             responsive: true,
             pageLength: 10,
             lengthMenu: [10, 25, 50],
-            order: [[1, 'asc']],
+            order: [[2, 'asc']],
             language: {
                 lengthMenu: 'Mostrar _MENU_ registros por pagina',
                 info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
@@ -3837,6 +3903,16 @@
         )];
     }
 
+    function getEmpleadoIdsReporteActual() {
+        const sourceRows = currentFilteredRows;
+
+        return [...new Set(sourceRows
+            .filter(row => toIntegerAmount(row?.ventas_mes_actual) > 0)
+            .map(row => getEmpleadoIdKey(row?.empleadoid))
+            .filter(Boolean)
+        )];
+    }
+
     function calcularMontoIncentivosPorCedulas(cedulas) {
         const cedulasSet = new Set((Array.isArray(cedulas) ? cedulas : [...cedulas])
             .map(cedula => String(cedula ?? '').replace(/\D+/g, ''))
@@ -3845,6 +3921,17 @@
         return currentFilteredRows
             .filter(row => cedulasSet.has(String(row?.cedula ?? '').replace(/\D+/g, '')))
             .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+    }
+
+    function calcularMontoIncentivosPorDesvinculados(cedulas, empleadoIds) {
+        const cedulasSet = new Set((Array.isArray(cedulas) ? cedulas : [...cedulas])
+            .map(getCedulaKey)
+            .filter(Boolean));
+        const empleadoIdsSet = new Set((Array.isArray(empleadoIds) ? empleadoIds : [...empleadoIds])
+            .map(getEmpleadoIdKey)
+            .filter(Boolean));
+
+        return sumIncentivesByDesvinculados(currentFilteredRows, cedulasSet, empleadoIdsSet);
     }
 
     function aplicarFaltantesIncentivo() {
@@ -3942,14 +4029,14 @@
     }
 
     function aplicarDesvinculadosIncentivo() {
-        if (!lastDesvinculadosCedulas.size) {
-            Swal.fire({ title: 'Sin desvinculados', text: 'No hay cedulas desvinculadas para aplicar.', icon: 'info' });
+        if (!lastDesvinculadosCedulas.size && !lastDesvinculadosEmpleadoIds.size) {
+            Swal.fire({ title: 'Sin desvinculados', text: 'No hay usuarios desvinculados para aplicar.', icon: 'info' });
             return;
         }
 
         Swal.fire({
             title: 'Aplicando usuarios desvinculados...',
-            text: 'Estamos ocultando las cedulas desvinculadas y recalculando el reporte.',
+            text: 'Estamos ocultando los usuarios desvinculados y recalculando el reporte.',
             icon: 'info',
             allowOutsideClick: false,
             showConfirmButton: false,
@@ -3958,12 +4045,13 @@
 
         setTimeout(() => {
             excludedDesvinculadosCedulas = new Set([...excludedDesvinculadosCedulas, ...lastDesvinculadosCedulas]);
+            excludedDesvinculadosEmpleadoIds = new Set([...excludedDesvinculadosEmpleadoIds, ...lastDesvinculadosEmpleadoIds]);
             applyLocalFilters(false);
             bootstrap.Modal.getInstance(document.getElementById('modalDesvinculadosIncentivo'))?.hide();
 
             Swal.fire({
                 title: 'Desvinculados aplicados',
-                text: `${lastDesvinculadosCedulas.size} cedulas fueron ocultadas. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoDesvinculados)}. Rebaja neta: ${formatMoney(currentExcludedApplication.rebajadoDesvinculados)}.`,
+                text: `${lastDesvinculadosCedulas.size} cedulas / ${lastDesvinculadosEmpleadoIds.size} ids fueron ocultados. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoDesvinculados)}. Rebaja neta: ${formatMoney(currentExcludedApplication.rebajadoDesvinculados)}.`,
                 icon: 'success'
             });
         }, 120);
@@ -3976,9 +4064,10 @@
         }
 
         const cedulas = getCedulasReporteActual();
+        const empleadoids = getEmpleadoIdsReporteActual();
 
-        if (!cedulas.length) {
-            Swal.fire({ title: 'Sin cedulas', text: 'No hay cedulas disponibles en el reporte actual.', icon: 'warning' });
+        if (!cedulas.length && !empleadoids.length) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay cedulas ni ids de empleado disponibles en el reporte actual.', icon: 'warning' });
             return;
         }
 
@@ -4000,6 +4089,7 @@
             },
             body: JSON.stringify({
                 cedulas: cedulas,
+                empleadoids: empleadoids,
             }),
         })
             .then(response => parseResponseAsJson(response, 'Error consultando usuarios desvinculados del incentivo'))
@@ -4009,13 +4099,16 @@
                 lastDesvinculadosCedulas = new Set(rows
                     .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
                     .filter(Boolean));
-                const montoIncentivosConDesvinculados = calcularMontoIncentivosPorCedulas([...lastDesvinculadosCedulas]);
+                lastDesvinculadosEmpleadoIds = new Set(rows
+                    .map(row => getEmpleadoIdKey(row?.empleadoid))
+                    .filter(Boolean));
+                const montoIncentivosConDesvinculados = calcularMontoIncentivosPorDesvinculados(lastDesvinculadosCedulas, lastDesvinculadosEmpleadoIds);
 
                 document.getElementById('desvinculadosIncentivoTotalUsuarios').textContent = Number(resp.total_desvinculados || 0).toLocaleString('en-US');
                 document.getElementById('desvinculadosIncentivoTotalDesactivados').textContent = Number(resp.total_desactivados || 0).toLocaleString('en-US');
                 document.getElementById('desvinculadosIncentivoTotalFechaSalida').textContent = Number(resp.total_con_fecha_salida || 0).toLocaleString('en-US');
                 document.getElementById('desvinculadosIncentivoMontoIncentivos').textContent = formatMoney(montoIncentivosConDesvinculados);
-                document.getElementById('desvinculadosIncentivoRango').textContent = `Cedulas consultadas: ${cedulas.length.toLocaleString('en-US')}`;
+                document.getElementById('desvinculadosIncentivoRango').textContent = `Cedulas consultadas: ${cedulas.length.toLocaleString('en-US')} | Ids consultados: ${empleadoids.length.toLocaleString('en-US')}`;
                 renderDesvinculadosIncentivoTable(rows);
 
                 const modal = new bootstrap.Modal(document.getElementById('modalDesvinculadosIncentivo'));
@@ -4049,6 +4142,10 @@
 
         if (excludedDesvinculadosCedulas.size) {
             filtered = filtered.filter(item => !excludedDesvinculadosCedulas.has(String(item?.cedula ?? '').replace(/\D+/g, '')));
+        }
+
+        if (excludedDesvinculadosEmpleadoIds.size) {
+            filtered = filtered.filter(item => !excludedDesvinculadosEmpleadoIds.has(getEmpleadoIdKey(item?.empleadoid)));
         }
 
         currentFilteredRows = filtered;
@@ -4531,7 +4628,9 @@
         lastFaltantesCedulas = new Set();
         excludedFaltantesCedulas = new Set();
         lastDesvinculadosCedulas = new Set();
+        lastDesvinculadosEmpleadoIds = new Set();
         excludedDesvinculadosCedulas = new Set();
+        excludedDesvinculadosEmpleadoIds = new Set();
         excludedCoordinatorIds = new Set();
         appliedCoordinatorAmounts = {};
         currentFixedBagTopUp = 0;
