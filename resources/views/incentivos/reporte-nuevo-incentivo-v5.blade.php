@@ -4012,6 +4012,17 @@
         )];
     }
 
+    function getCedulasSinEmpleadoIdReporteActual() {
+        const sourceRows = currentFilteredRows;
+
+        return [...new Set(sourceRows
+            .filter(row => toIntegerAmount(row?.ventas_mes_actual) > 0)
+            .filter(row => !getEmpleadoIdKey(row?.empleadoid))
+            .map(row => getCedulaKey(row?.cedula))
+            .filter(Boolean)
+        )];
+    }
+
     function calcularMontoIncentivosPorCedulas(cedulas) {
         const cedulasSet = new Set((Array.isArray(cedulas) ? cedulas : [...cedulas])
             .map(cedula => String(cedula ?? '').replace(/\D+/g, ''))
@@ -4162,8 +4173,8 @@
             return;
         }
 
-        const cedulas = getCedulasReporteActual();
         const empleadoids = getEmpleadoIdsReporteActual();
+        const cedulas = getCedulasSinEmpleadoIdReporteActual();
 
         if (!cedulas.length && !empleadoids.length) {
             Swal.fire({ title: 'Sin datos', text: 'No hay cedulas ni ids de empleado disponibles en el reporte actual.', icon: 'warning' });
@@ -4195,11 +4206,14 @@
             .then(resp => {
                 Swal.close();
                 const rows = Array.isArray(resp.data) ? resp.data : [];
+                const empleadoidsConsultados = new Set(empleadoids.map(getEmpleadoIdKey).filter(Boolean));
                 lastDesvinculadosCedulas = new Set(rows
-                    .map(row => String(row?.cedula ?? '').replace(/\D+/g, ''))
+                    .filter(row => !empleadoidsConsultados.has(getEmpleadoIdKey(row?.empleadoid)))
+                    .map(row => getCedulaKey(row?.cedula))
                     .filter(Boolean));
                 lastDesvinculadosEmpleadoIds = new Set(rows
                     .map(row => getEmpleadoIdKey(row?.empleadoid))
+                    .filter(empleadoId => empleadoidsConsultados.has(empleadoId))
                     .filter(Boolean));
                 const montoIncentivosConDesvinculados = calcularMontoIncentivosPorDesvinculados(lastDesvinculadosCedulas, lastDesvinculadosEmpleadoIds);
 
@@ -4207,7 +4221,7 @@
                 document.getElementById('desvinculadosIncentivoTotalDesactivados').textContent = Number(resp.total_desactivados || 0).toLocaleString('en-US');
                 document.getElementById('desvinculadosIncentivoTotalFechaSalida').textContent = Number(resp.total_con_fecha_salida || 0).toLocaleString('en-US');
                 document.getElementById('desvinculadosIncentivoMontoIncentivos').textContent = formatMoney(montoIncentivosConDesvinculados);
-                document.getElementById('desvinculadosIncentivoRango').textContent = `Cedulas consultadas: ${cedulas.length.toLocaleString('en-US')} | Ids consultados: ${empleadoids.length.toLocaleString('en-US')}`;
+                document.getElementById('desvinculadosIncentivoRango').textContent = `Ids consultados: ${empleadoids.length.toLocaleString('en-US')} | Cedulas sin Id consultadas: ${cedulas.length.toLocaleString('en-US')}`;
                 renderDesvinculadosIncentivoTable(rows);
 
                 const modal = new bootstrap.Modal(document.getElementById('modalDesvinculadosIncentivo'));
