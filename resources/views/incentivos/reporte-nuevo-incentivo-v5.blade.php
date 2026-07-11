@@ -2433,8 +2433,8 @@
                 const agenciasSinEmpresa = getAgenciasSinEmpresaRows(processedRows).length;
                 const administrativosTotal = toIntegerAmount(montoAdministrativo);
                 const operadoresSeguridadTotal = toIntegerAmount(currentFixedBagTopUp * informeShare);
-                const coordinadoresTotal = coordinatorRows
-                    .reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0) * informeShare;
+                const montoRetencionCoordinadores = scaleExcluded(currentExcludedApplication.coordinadoresDisponible);
+                const coordinadoresTotal = Math.max(toIntegerAmount(montoCoordinador - montoRetencionCoordinadores), 0);
                 const distribucionTotal = toIntegerAmount(administrativosTotal + coordinadoresTotal + operadoresSeguridadTotal);
 
                 const moneyCell = (value, bold = false) => ({
@@ -2451,6 +2451,8 @@
                 const totalRowText = '#0f172a';
                 const warningRowFill = '#fff3cd';
                 const warningRowText = '#7a4d00';
+                const paymentRowFill = '#d1e7dd';
+                const paymentRowText = '#0f5132';
                 const totalRow = (row) => row.map((cell, index) => {
                     if (cell && typeof cell === 'object' && !Array.isArray(cell)) {
                         return {
@@ -2487,6 +2489,24 @@
                         color: warningRowText,
                     };
                 });
+                const paymentRow = (row) => row.map((cell, index) => {
+                    if (cell && typeof cell === 'object' && !Array.isArray(cell)) {
+                        return {
+                            ...cell,
+                            bold: true,
+                            fillColor: paymentRowFill,
+                            color: paymentRowText,
+                        };
+                    }
+
+                    return {
+                        text: String(cell ?? ''),
+                        alignment: index === 0 ? 'left' : 'right',
+                        bold: true,
+                        fillColor: paymentRowFill,
+                        color: paymentRowText,
+                    };
+                });
                 const sectionTitle = (text) => ({
                     text,
                     style: 'sectionTitle',
@@ -2509,6 +2529,13 @@
                     totalRow(['Total final a pagar', moneyCell(totalFinalPagar, true)]),
                 ];
 
+                const totalPagarDetallado = [
+                    [{ text: 'Destino', style: 'tableHeader' }, { text: 'Monto a pagar', style: 'tableHeader', alignment: 'right' }],
+                    paymentRow(['Monto a pagar por agente de ventas', moneyCell(totalIncentivoProcesado)]),
+                    paymentRow(['Monto a pagar por administrativo', moneyCell(administrativosTotal + operadoresSeguridadTotal)]),
+                    paymentRow(['Monto a pagar por coordinadores', moneyCell(coordinadoresTotal)]),
+                ];
+
                 const deducciones = [
                     [{ text: 'Concepto', style: 'tableHeader' }, { text: 'Monto', style: 'tableHeader', alignment: 'right' }],
                     ['Monto generado por faltantes', moneyCell(scaleExcluded(currentExcludedApplication.faltantesDisponible))],
@@ -2526,6 +2553,7 @@
                     [{ text: 'Destino', style: 'tableHeader' }, { text: 'Monto base', style: 'tableHeader', alignment: 'right' }, { text: 'Monto distribuido en plantilla', style: 'tableHeader', alignment: 'right' }],
                     ['Administrativo', moneyCell(montoAdministrativo), moneyCell(administrativosTotal)],
                     ['Coordinadores', moneyCell(montoCoordinador), moneyCell(coordinadoresTotal)],
+                    ['Monto en retención coordinadores', moneyCell(montoRetencionCoordinadores), moneyCell(0)],
                     ['Operadores/Seguridad reasignado', moneyCell(operadoresSeguridadTotal), moneyCell(operadoresSeguridadTotal)],
                     totalRow(['Total distribuido', { text: '', alignment: 'right' }, moneyCell(distribucionTotal)]),
                 ];
@@ -2677,6 +2705,8 @@
                         },
                         sectionTitle('Resumen ejecutivo'),
                         { table: { widths: ['*', '28%'], body: resumenEjecutivo }, layout: tableLayout },
+                        sectionTitle('Total a pagar detallado'),
+                        { table: { widths: ['*', '28%'], body: totalPagarDetallado }, layout: tableLayout },
                         sectionTitle('Deducciones y reasignaciones'),
                         { table: { widths: ['*', '28%'], body: deducciones }, layout: tableLayout },
                         sectionTitle('Distribucion administrativa'),
