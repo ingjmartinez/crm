@@ -1312,6 +1312,13 @@
         return String(value ?? '').trim();
     }
 
+    function normalizePagoEmpresaGroupKey(value) {
+        const text = normalizeEmpresaValue(value);
+        if (text.includes('joselito') || text.includes('cjoselito')) return 'joselito';
+        if (text.includes('negosur')) return 'negosur';
+        return text;
+    }
+
     function getAdministrativeEmpresaFilterKey() {
         const selected = document.getElementById('ni_filtro_empresa')?.value || 'todos';
         if (selected === 'todos') return 'todos';
@@ -1916,6 +1923,79 @@
         });
     }
 
+    function getAdmiCoorPagoExportWorkbookData() {
+        const buildRows = (rows) => buildPagoIncentivoData(rows, {
+            suffix: '_admi_coor',
+            emptyMessage: 'No hay registros administrativos ni coordinadores con importe mayor a cero para generar el Excel de pago.',
+        });
+
+        const administrativos = getAdministrativeDisplayRows()
+            .map((row) => ({
+                empleadoid: row?.empleadoid,
+                empresa: normalizeAdministrativeEmpresaLabel(row?.empresa),
+                viapago: row?.viapago,
+                ciudad: row?.ciudad,
+                importe: getAdministrativeDisplayAmount(row),
+            }))
+            .filter((row) => toIntegerAmount(row.importe) > 0);
+
+        const coordinadores = coordinatorRows
+            .map((row) => ({
+                empleadoid: row?.empleadoid,
+                empresa: String(row?.empresa ?? '').trim(),
+                viapago: row?.viapago,
+                ciudad: row?.ciudad,
+                importe: getCoordinatorDisplayAmount(row),
+            }))
+            .filter((row) => toIntegerAmount(row.importe) > 0);
+
+        const groups = [
+            {
+                key: 'joselito',
+                label: 'Joselito',
+            },
+            {
+                key: 'negosur',
+                label: 'Negosur',
+            },
+        ];
+
+        const sheets = groups.flatMap((group) => {
+            const adminRows = administrativos.filter((row) => normalizePagoEmpresaGroupKey(row.empresa) === group.key);
+            const coordRows = coordinadores.filter((row) => normalizePagoEmpresaGroupKey(row.empresa) === group.key);
+            const adminData = adminRows.length ? buildRows(adminRows) : null;
+            const coordData = coordRows.length ? buildRows(coordRows) : null;
+
+            return [
+                adminData ? {
+                    name: `${group.label} Administrativo`,
+                    headers: adminData.headers,
+                    rows: adminData.rows,
+                } : null,
+                coordData ? {
+                    name: `${group.label} Coordinadores`,
+                    headers: coordData.headers,
+                    rows: coordData.rows,
+                } : null,
+            ].filter(Boolean);
+        });
+
+        if (!sheets.length) {
+            Swal.fire({
+                title: 'Sin datos',
+                text: 'No hay registros administrativos ni coordinadores de Joselito o Negosur con importe mayor a cero para generar el Excel de pago.',
+                icon: 'warning',
+            });
+            return null;
+        }
+
+        return {
+            sheets,
+            fechaFin: getFechaFinPagoIncentivo(),
+            suffix: '_admi_coor',
+        };
+    }
+
     function downloadBlob(filename, blob) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1992,8 +2072,27 @@
         return name;
     }
 
-    function buildXlsxBlob(headers, rows) {
-        const zip = new JSZip();
+    function normalizeWorksheetName(name, index, usedNames) {
+        const fallback = `Hoja ${index + 1}`;
+        const cleanName = String(name || fallback)
+            .replace(/[\[\]\*\/\\\?:]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim() || fallback;
+        let baseName = cleanName.slice(0, 31);
+        let finalName = baseName;
+        let count = 2;
+
+        while (usedNames.has(finalName.toLowerCase())) {
+            const suffix = ` ${count}`;
+            finalName = `${baseName.slice(0, 31 - suffix.length)}${suffix}`;
+            count += 1;
+        }
+
+        usedNames.add(finalName.toLowerCase());
+        return finalName;
+    }
+
+    function buildWorksheetXml(headers, rows) {
         const allRows = [headers, ...rows];
         const sheetRows = allRows.map((row, rowIndex) => {
             const rowNumber = rowIndex + 1;
@@ -2005,18 +2104,47 @@
             return `<row r="${rowNumber}">${cells}</row>`;
         }).join('');
 
+        return `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`;
+    }
+
+    function buildXlsxWorkbookBlob(sheets) {
+        const zip = new JSZip();
+        const usedNames = new Set();
+        const workbookSheets = (Array.isArray(sheets) ? sheets : [])
+            .filter((sheet) => Array.isArray(sheet?.headers) && Array.isArray(sheet?.rows))
+            .map((sheet, index) => ({
+                ...sheet,
+                name: normalizeWorksheetName(sheet.name, index, usedNames),
+            }));
+
+        const worksheetOverrides = workbookSheets.map((sheet, index) => (
+            `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+        )).join('');
+        const workbookSheetNodes = workbookSheets.map((sheet, index) => (
+            `<sheet name="${escapeXml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`
+        )).join('');
+        const workbookRelationships = workbookSheets.map((sheet, index) => (
+            `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`
+        )).join('');
+
         zip.file('[Content_Types].xml', `${XML_DECL}
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${worksheetOverrides}</Types>`);
         zip.folder('_rels').file('.rels', `${XML_DECL}
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
         zip.folder('xl').file('workbook.xml', `${XML_DECL}
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Pago incentivo" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${workbookSheetNodes}</sheets></workbook>`);
         zip.folder('xl').folder('_rels').file('workbook.xml.rels', `${XML_DECL}
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
-        zip.folder('xl').folder('worksheets').file('sheet1.xml', `${XML_DECL}
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`);
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${workbookRelationships}</Relationships>`);
+        workbookSheets.forEach((sheet, index) => {
+            zip.folder('xl').folder('worksheets').file(`sheet${index + 1}.xml`, `${XML_DECL}
+${buildWorksheetXml(sheet.headers, sheet.rows)}`);
+        });
 
         return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    }
+
+    function buildXlsxBlob(headers, rows) {
+        return buildXlsxWorkbookBlob([{ name: 'Pago incentivo', headers, rows }]);
     }
 
     function buildExcelHtmlBlob(headers, rows) {
@@ -2030,6 +2158,28 @@
                 </head>
                 <body>
                     <table>${tableRows}</table>
+                </body>
+            </html>
+        `;
+
+        return new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    }
+
+    function buildExcelHtmlWorkbookBlob(sheets) {
+        const tableBlocks = sheets.map((sheet) => {
+            const tableRows = [sheet.headers, ...sheet.rows].map((row) => (
+                `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`
+            )).join('');
+
+            return `<h3>${escapeHtml(sheet.name)}</h3><table>${tableRows}</table><br>`;
+        }).join('');
+        const html = `
+            <html>
+                <head>
+                    <meta charset="UTF-8">
+                </head>
+                <body>
+                    ${tableBlocks}
                 </body>
             </html>
         `;
@@ -2059,12 +2209,20 @@
     }
 
     function generarXlsxPagoAdmiCoor() {
-        const data = getAdmiCoorPagoExportData();
+        const data = getAdmiCoorPagoExportWorkbookData();
         if (!data) {
             return;
         }
 
-        generarXlsxPagoDesdeData(data, 'pago_incentivo');
+        if (typeof JSZip === 'undefined') {
+            const blob = buildExcelHtmlWorkbookBlob(data.sheets);
+            downloadBlob(`pago_incentivo_${data.fechaFin}${data.suffix}.xls`, blob);
+            return;
+        }
+
+        buildXlsxWorkbookBlob(data.sheets).then((blob) => {
+            downloadBlob(`pago_incentivo_${data.fechaFin}${data.suffix}.xlsx`, blob);
+        });
     }
 
     function seleccionarDescargaExcelPago() {
