@@ -534,6 +534,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-success" id="btnExportAdministrativosExcel">Excel</button>
+                    <button type="button" class="btn btn-danger" id="btnDesvinculadosAdministrativos">Desvinculados</button>
                     <button type="button" class="btn btn-primary" id="btnAgregarAdministrativoFila">Agregar fila</button>
                     <button type="button" class="btn btn-warning" id="btnGuardarAdministrativosPlantilla">Guardar cambios</button>
                     <button type="button" class="btn btn-soft-secondary" id="btnRestaurarAdministrativos">Restaurar plantilla</button>
@@ -641,6 +642,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-warning" id="btnAplicarCoordinadoresBolsa">Aplicar retención</button>
+                    <button type="button" class="btn btn-danger" id="btnDesvinculadosCoordinadores">Desvinculados</button>
                     <button type="button" class="btn btn-success" id="btnExportCoordinadoresExcel">Excel</button>
                     <button type="button" class="btn btn-soft-secondary" id="btnRestaurarCoordinadores">Restaurar plantilla</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
@@ -959,6 +961,10 @@
     let lastDesvinculadosEmpleadoIds = new Set();
     let excludedDesvinculadosCedulas = new Set();
     let excludedDesvinculadosEmpleadoIds = new Set();
+    let excludedAdministrativeDesvinculadosCedulas = new Set();
+    let excludedAdministrativeDesvinculadosEmpleadoIds = new Set();
+    let excludedCoordinatorDesvinculadosCedulas = new Set();
+    let excludedCoordinatorDesvinculadosEmpleadoIds = new Set();
     let excludedCoordinatorIds = new Set();
     let appliedCoordinatorAmounts = {};
     let adminPctBruto = 10;
@@ -1165,6 +1171,38 @@
     function getCoordinatorIdKey(row) {
         const value = row?.id ?? row?.nombre ?? '';
         return String(value).trim();
+    }
+
+    function isRowExcludedByModuleDesvinculados(row, cedulasSet, empleadoIdsSet) {
+        const empleadoId = getEmpleadoIdKey(row?.empleadoid);
+        if (empleadoId) {
+            return empleadoIdsSet.has(empleadoId);
+        }
+
+        const cedula = getCedulaKey(row?.cedula);
+        return cedula ? cedulasSet.has(cedula) : false;
+    }
+
+    function isAdministrativeDesvinculadoExcluded(row) {
+        return isRowExcludedByModuleDesvinculados(
+            row,
+            excludedAdministrativeDesvinculadosCedulas,
+            excludedAdministrativeDesvinculadosEmpleadoIds
+        );
+    }
+
+    function isCoordinatorDesvinculadoExcluded(row) {
+        return isRowExcludedByModuleDesvinculados(
+            row,
+            excludedCoordinatorDesvinculadosCedulas,
+            excludedCoordinatorDesvinculadosEmpleadoIds
+        );
+    }
+
+    function getCoordinatorDisplayRows() {
+        return coordinatorRows
+            .map((row, idx) => ({ ...row, __idx: idx }))
+            .filter((row) => !isCoordinatorDesvinculadoExcluded(row));
     }
 
     function getCoordinatorAppliedAmount(row) {
@@ -1775,12 +1813,14 @@
 
     function buildPagoIncentivoData(rows, options = {}) {
         const excludeSinEmpleadoId = Boolean(options.excludeSinEmpleadoId);
+        const includeNombre = Boolean(options.includeNombre);
         const emptyMessage = options.emptyMessage || 'No hay registros con importe mayor a cero para generar el archivo de pago.';
         const mappedRows = (Array.isArray(rows) ? rows : [])
             .map((row) => ({
                 ...row,
                 __importe: toIntegerAmount(row?.importe ?? row?.nuevo_incentivo ?? row?.monto),
                 __idEmpleado: String(row?.empleadoid ?? '').trim(),
+                __nombre: String(row?.nombre ?? '').trim(),
                 __empresa: String(row?.empresa ?? '').trim(),
                 __viapago: String(row?.viapago ?? '').trim(),
                 __ciudad: String(row?.ciudad ?? '').trim(),
@@ -1794,11 +1834,15 @@
         }
 
         const comentario = getComentarioPagoIncentivo();
+        const headers = includeNombre
+            ? ['IdEmpleado', 'Nombre', ...PAGO_INCENTIVO_HEADERS.slice(1)]
+            : PAGO_INCENTIVO_HEADERS;
 
         return {
-            headers: PAGO_INCENTIVO_HEADERS,
+            headers,
             rows: mappedRows.map((row) => [
                 row.__idEmpleado,
+                ...(includeNombre ? [row.__nombre] : []),
                 row.__empresa,
                 row.__viapago,
                 row.__ciudad,
@@ -1883,7 +1927,7 @@
     }
 
     function getCoordinadoresPagoExportData() {
-        const rows = coordinatorRows
+        const rows = getCoordinatorDisplayRows()
             .map((row) => ({
                 empleadoid: row?.empleadoid,
                 empresa: String(row?.empresa ?? '').trim(),
@@ -1903,13 +1947,15 @@
         const rows = [
             ...getAdministrativeDisplayRows().map((row) => ({
                 empleadoid: row?.empleadoid,
+                nombre: row?.nombre,
                 empresa: normalizeAdministrativeEmpresaLabel(row?.empresa),
                 viapago: row?.viapago,
                 ciudad: row?.ciudad,
                 importe: getAdministrativeDisplayAmount(row),
             })),
-            ...coordinatorRows.map((row) => ({
+            ...getCoordinatorDisplayRows().map((row) => ({
                 empleadoid: row?.empleadoid,
+                nombre: row?.nombre,
                 empresa: String(row?.empresa ?? '').trim(),
                 viapago: row?.viapago,
                 ciudad: row?.ciudad,
@@ -1918,6 +1964,7 @@
         ].filter((row) => toIntegerAmount(row.importe) > 0);
 
         return buildPagoIncentivoData(rows, {
+            includeNombre: true,
             suffix: '_admi_coor',
             emptyMessage: 'No hay registros administrativos ni coordinadores con importe mayor a cero para generar el Excel de pago.',
         });
@@ -1925,6 +1972,7 @@
 
     function getAdmiCoorPagoExportWorkbookData() {
         const buildRows = (rows) => buildPagoIncentivoData(rows, {
+            includeNombre: true,
             suffix: '_admi_coor',
             emptyMessage: 'No hay registros administrativos ni coordinadores con importe mayor a cero para generar el Excel de pago.',
         });
@@ -1932,6 +1980,7 @@
         const administrativos = getAdministrativeDisplayRows()
             .map((row) => ({
                 empleadoid: row?.empleadoid,
+                nombre: row?.nombre,
                 empresa: normalizeAdministrativeEmpresaLabel(row?.empresa),
                 viapago: row?.viapago,
                 ciudad: row?.ciudad,
@@ -1939,9 +1988,10 @@
             }))
             .filter((row) => toIntegerAmount(row.importe) > 0);
 
-        const coordinadores = coordinatorRows
+        const coordinadores = getCoordinatorDisplayRows()
             .map((row) => ({
                 empleadoid: row?.empleadoid,
+                nombre: row?.nombre,
                 empresa: String(row?.empresa ?? '').trim(),
                 viapago: row?.viapago,
                 ciudad: row?.ciudad,
@@ -2235,7 +2285,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         const administrativosPagoRows = getAdministrativeDisplayRows()
             .map((row) => toIntegerAmount(getAdministrativeDisplayAmount(row)))
             .filter((amount) => amount > 0);
-        const coordinadoresPagoRows = coordinatorRows
+        const coordinadoresPagoRows = getCoordinatorDisplayRows()
             .map((row) => toIntegerAmount(getCoordinatorDisplayAmount(row)))
             .filter((amount) => amount > 0);
         const administrativosTotal = administrativosPagoRows.reduce((sum, amount) => sum + amount, 0);
@@ -2913,7 +2963,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
     }
 
     function exportCoordinadoresExcel() {
-        const rows = coordinatorRows.map((row) => [
+        const rows = getCoordinatorDisplayRows().map((row) => [
             row.nombre,
             row.empleadoid || '',
             toNumber(row.agencias),
@@ -3120,7 +3170,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             filteredRows = filteredRows.filter((row) => row.__empresaKey === empresaFilterKey);
         }
 
-        return filteredRows;
+        return filteredRows.filter((row) => !isAdministrativeDesvinculadoExcluded(row));
     }
 
     function getAdministrativeDisplayAmount(row) {
@@ -3254,7 +3304,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
     }
 
     function updateCoordinatorSummary() {
-        const totalDistribuido = coordinatorRows.reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0);
+        const totalDistribuido = getCoordinatorDisplayRows().reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0);
         const totalBolsa = getCoordinatorExcludedTotal();
 
         document.getElementById('coord_base_total').textContent = formatMoney(currentCoordinatorBase);
@@ -3539,13 +3589,16 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         const tbody = document.getElementById('tbodyCoordinadores');
         tbody.innerHTML = '';
 
-        if (!coordinatorRows.length) {
+        const rows = getCoordinatorDisplayRows();
+
+        if (!rows.length) {
             tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay coordinadores registrados.</td></tr>';
             updateCoordinatorSummary();
             return;
         }
 
-        coordinatorRows.forEach((row, idx) => {
+        rows.forEach((row) => {
+            const idx = row.__idx;
             const detailUsers = getCoordinatorDetailUsers(row);
             const hasDetail = detailUsers.length > 0;
             const excluded = isCoordinatorExcluded(row);
@@ -4558,6 +4611,144 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             });
     }
 
+    function getAdministrativeDesvinculadosSourceRows() {
+        return [
+            ...administrativeRows.map((row) => ({ ...row, __tipo: 'admin' })),
+            ...operatorRows.map((row) => ({ ...row, __tipo: 'operador' })),
+        ].filter((row) => !isAdministrativeDesvinculadoExcluded(row));
+    }
+
+    function getModuleDesvinculadosAffectedRows(sourceRows, desvinculadosRows) {
+        const empleadoIds = new Set((Array.isArray(desvinculadosRows) ? desvinculadosRows : [])
+            .map((row) => getEmpleadoIdKey(row?.empleadoid))
+            .filter(Boolean));
+        const cedulas = new Set((Array.isArray(desvinculadosRows) ? desvinculadosRows : [])
+            .map((row) => getCedulaKey(row?.cedula))
+            .filter(Boolean));
+
+        return (Array.isArray(sourceRows) ? sourceRows : []).filter((row) => {
+            const empleadoId = getEmpleadoIdKey(row?.empleadoid);
+            if (empleadoId) {
+                return empleadoIds.has(empleadoId);
+            }
+
+            const cedula = getCedulaKey(row?.cedula);
+            return cedula ? cedulas.has(cedula) : false;
+        });
+    }
+
+    function applyModuleDesvinculadosRows(tipo, affectedRows) {
+        const isAdmin = tipo === 'administrativos';
+        const cedulasSet = isAdmin ? excludedAdministrativeDesvinculadosCedulas : excludedCoordinatorDesvinculadosCedulas;
+        const empleadoIdsSet = isAdmin ? excludedAdministrativeDesvinculadosEmpleadoIds : excludedCoordinatorDesvinculadosEmpleadoIds;
+
+        affectedRows.forEach((row) => {
+            const empleadoId = getEmpleadoIdKey(row?.empleadoid);
+            if (empleadoId) {
+                empleadoIdsSet.add(empleadoId);
+                return;
+            }
+
+            const cedula = getCedulaKey(row?.cedula);
+            if (cedula) {
+                cedulasSet.add(cedula);
+            }
+        });
+
+        if (isAdmin) {
+            renderAdministrativeCategoryTable();
+            updateAdministrativeAndOperatorAmounts();
+        } else {
+            renderCoordinatorTable();
+            updateCoordinatorAmounts();
+        }
+    }
+
+    function consultarDesvinculadosModuloPago(tipo) {
+        const isAdmin = tipo === 'administrativos';
+        const label = isAdmin ? 'administrativos' : 'coordinadores';
+        const sourceRows = isAdmin ? getAdministrativeDesvinculadosSourceRows() : getCoordinatorDisplayRows();
+        const cedulas = [...new Set(sourceRows.map((row) => getCedulaKey(row?.cedula)).filter(Boolean))];
+        const empleadoids = [...new Set(sourceRows.map((row) => getEmpleadoIdKey(row?.empleadoid)).filter(Boolean))];
+
+        if (!cedulas.length && !empleadoids.length) {
+            Swal.fire({
+                title: 'Sin datos',
+                text: `No hay cedulas ni IdEmpleado en ${label} para consultar desvinculados.`,
+                icon: 'info',
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: `Consultando desvinculados de ${label}...`,
+            text: 'Estamos validando la maestra de empleados.',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        fetch('/incentivos/reporte-nuevo-incentivo-v5/desvinculados', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: JSON.stringify({ cedulas, empleadoids }),
+        })
+            .then(response => parseResponseAsJson(response, `Error consultando desvinculados de ${label}`))
+            .then(resp => {
+                const desvinculadosRows = Array.isArray(resp.data) ? resp.data : [];
+                const affectedRows = getModuleDesvinculadosAffectedRows(sourceRows, desvinculadosRows);
+                const monto = affectedRows.reduce((sum, row) => (
+                    sum + (isAdmin
+                        ? toIntegerAmount(getAdministrativeAmountByRow(row))
+                        : toIntegerAmount(getCoordinatorDisplayAmount(row)))
+                ), 0);
+
+                if (!affectedRows.length) {
+                    Swal.fire({
+                        title: 'Sin desvinculados',
+                        text: `No se encontraron ${label} desactivados o con fecha de salida en la maestra.`,
+                        icon: 'info',
+                    });
+                    return;
+                }
+
+                Swal.fire({
+                    title: `Aplicar desvinculados de ${label}`,
+                    html: `
+                        <div class="text-start">
+                            <div><strong>Registros a limpiar:</strong> ${affectedRows.length.toLocaleString('en-US')}</div>
+                            <div><strong>Monto afectado:</strong> ${formatMoney(monto)}</div>
+                            <div><strong>Desactivados:</strong> ${Number(resp.total_desactivados || 0).toLocaleString('en-US')}</div>
+                            <div><strong>Con fecha de salida:</strong> ${Number(resp.total_con_fecha_salida || 0).toLocaleString('en-US')}</div>
+                        </div>
+                    `,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Aplicar',
+                    cancelButtonText: 'Cancelar',
+                }).then((result) => {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
+                    applyModuleDesvinculadosRows(tipo, affectedRows);
+                    Swal.fire({
+                        title: 'Desvinculados aplicados',
+                        text: `${affectedRows.length} registros fueron limpiados de ${label}.`,
+                        icon: 'success',
+                    });
+                });
+            })
+            .catch(error => {
+                Swal.fire({ title: 'Error', text: error?.message || String(error), icon: 'warning' });
+            });
+    }
+
     function applyLocalFilters(showFilterAlert = false) {
         if (!cachedRows.length) {
             Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
@@ -4864,6 +5055,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         document.querySelector('#btnRestaurarAdministrativos').addEventListener('click', function() {
             administrativeRows = getDefaultAdministrativeRows();
             operatorRows = getDefaultOperatorRows();
+            excludedAdministrativeDesvinculadosCedulas = new Set();
+            excludedAdministrativeDesvinculadosEmpleadoIds = new Set();
             administrativeGroupFilter = 'todos';
             renderAdministrativeCategoryTable();
             updateAdministrativeAndOperatorAmounts();
@@ -4900,6 +5093,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             coordinatorUserDetailsByCoordinator = {};
             excludedCoordinatorIds = new Set();
             appliedCoordinatorAmounts = {};
+            excludedCoordinatorDesvinculadosCedulas = new Set();
+            excludedCoordinatorDesvinculadosEmpleadoIds = new Set();
 
             if (cachedRows.length) {
                 applyLocalFilters(false);
@@ -4910,6 +5105,14 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
         document.querySelector('#btnAplicarCoordinadoresBolsa').addEventListener('click', function() {
             aplicarCoordinadoresBolsa();
+        });
+
+        document.querySelector('#btnDesvinculadosAdministrativos').addEventListener('click', function() {
+            consultarDesvinculadosModuloPago('administrativos');
+        });
+
+        document.querySelector('#btnDesvinculadosCoordinadores').addEventListener('click', function() {
+            consultarDesvinculadosModuloPago('coordinadores');
         });
 
         document.querySelector('#btnExportAdministrativosExcel').addEventListener('click', function() {
@@ -5059,6 +5262,10 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         lastDesvinculadosEmpleadoIds = new Set();
         excludedDesvinculadosCedulas = new Set();
         excludedDesvinculadosEmpleadoIds = new Set();
+        excludedAdministrativeDesvinculadosCedulas = new Set();
+        excludedAdministrativeDesvinculadosEmpleadoIds = new Set();
+        excludedCoordinatorDesvinculadosCedulas = new Set();
+        excludedCoordinatorDesvinculadosEmpleadoIds = new Set();
         excludedCoordinatorIds = new Set();
         appliedCoordinatorAmounts = {};
         currentFixedBagTopUp = 0;
