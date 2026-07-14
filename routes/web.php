@@ -510,6 +510,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas/plantilla', [IncentivosController::class, 'plantillaTerminalesExcluidasReporteNuevoIncentivoV5']);
     Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
     Route::get('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoIndex'])->name('incentivos.incentivo-administrativo.index');
+    Route::get('/incentivos/incentivo-administrativo/empleados', [IncentivoConfiguracionController::class, 'incentivoAdministrativoEmpleados'])->name('incentivos.incentivo-administrativo.empleados');
     Route::get('/incentivos/incentivo-administrativo/export', [IncentivoConfiguracionController::class, 'incentivoAdministrativoExport'])->name('incentivos.incentivo-administrativo.export');
     Route::post('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoStore'])->name('incentivos.incentivo-administrativo.store');
     Route::put('/incentivos/incentivo-administrativo/{incentivoAdministrativo}', [IncentivoConfiguracionController::class, 'incentivoAdministrativoUpdate'])->name('incentivos.incentivo-administrativo.update');

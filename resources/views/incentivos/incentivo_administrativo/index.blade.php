@@ -4,7 +4,7 @@
     <style>
         .admin-create-form {
             display: grid;
-            grid-template-columns: minmax(170px, 0.8fr) minmax(210px, 1.15fr) minmax(150px, 0.9fr) minmax(190px, 1fr) minmax(135px, 0.65fr) 124px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: .65rem;
             align-items: end;
         }
@@ -23,6 +23,54 @@
 
         .empleado-inactivo-row > td {
             background-color: #fdecec !important;
+        }
+
+        .employee-picker {
+            position: relative;
+        }
+
+        .employee-results {
+            position: absolute;
+            z-index: 1050;
+            top: calc(100% + 2px);
+            right: 0;
+            left: 0;
+            display: none;
+            max-height: 320px;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            border-radius: .375rem;
+            background: #fff;
+            box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .12);
+        }
+
+        .employee-results.is-open {
+            display: block;
+        }
+
+        .employee-option {
+            display: block;
+            width: 100%;
+            padding: .55rem .75rem;
+            border: 0;
+            border-bottom: 1px solid #eef0f2;
+            background: #fff;
+            text-align: left;
+        }
+
+        .employee-option:hover,
+        .employee-option:focus {
+            background: #f3f6f9;
+        }
+
+        .employee-option:last-child {
+            border-bottom: 0;
+        }
+
+        .employee-result-message {
+            padding: .75rem;
+            color: #878a99;
+            text-align: center;
         }
 
         @media (max-width: 1199.98px) {
@@ -73,8 +121,15 @@
                                     </div>
                                 @endif
 
-                                <form action="{{ route('incentivos.incentivo-administrativo.store') }}" method="POST" class="admin-create-form">
+                                @php
+                                    $registroEdicionId = (int) old('registro_id', 0);
+                                @endphp
+                                <form id="admin_create_form"
+                                    action="{{ $registroEdicionId ? route('incentivos.incentivo-administrativo.update', $registroEdicionId) : route('incentivos.incentivo-administrativo.store') }}"
+                                    method="POST" class="admin-create-form">
                                     @csrf
+                                    <input type="hidden" name="_method" id="admin_form_method" value="PUT" {{ $registroEdicionId ? '' : 'disabled' }}>
+                                    <input type="hidden" name="registro_id" id="admin_record_id" value="{{ $registroEdicionId ?: '' }}">
                                     <div>
                                         <label class="form-label mb-1">Grupo</label>
                                         <select name="grupo" id="grupo_create" class="form-select js-grupo-select" data-pct-target="pct_total_create" required>
@@ -90,23 +145,41 @@
                                         </select>
                                     </div>
                                     <div>
-                                        <label class="form-label mb-1">Nombre</label>
-                                        <input type="text" name="nombre" class="form-control" value="{{ old('nombre') }}" required>
-                                    </div>
-                                    <div>
-                                        <label class="form-label mb-1">Cedula</label>
-                                        <input type="text" name="cedula" class="form-control js-cedula-input" value="{{ old('cedula') }}" maxlength="11" pattern="\d{11}" inputmode="numeric">
-                                    </div>
-                                    <div>
                                         <label class="form-label mb-1">Empresa</label>
-                                        <select name="empresa" class="form-select" required>
+                                        <select name="empresa" id="empresa_create" class="form-select" required>
                                             <option value="">Seleccione</option>
                                             @foreach($empresas as $empresa)
-                                                <option value="{{ $empresa }}" {{ old('empresa') === $empresa ? 'selected' : '' }}>
-                                                    {{ $empresa }}
+                                                <option value="{{ $empresa }}"
+                                                    data-company-id="{{ $empresa === 'Consorcio Joselito' ? '168' : '169' }}"
+                                                    {{ old('empresa') === $empresa ? 'selected' : '' }}>
+                                                    {{ $empresa === 'Consorcio Joselito' ? 'Grupo Joselito' : $empresa }}
                                                 </option>
                                             @endforeach
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label mb-1" for="departamento_create">Departamento</label>
+                                        <select name="departamento" id="departamento_create" class="form-select" required disabled>
+                                            <option value="">Seleccione primero una empresa</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label mb-1" for="empleado_search">Empleado activo</label>
+                                        <div class="employee-picker" id="employee_picker">
+                                            <input type="search" id="empleado_search" class="form-control"
+                                                value="{{ old('nombre') }}" placeholder="Seleccione un departamento" autocomplete="off"
+                                                aria-autocomplete="list" aria-controls="empleado_results" required disabled>
+                                            <input type="hidden" name="empleado_id" id="empleado_id" value="{{ old('empleado_id') }}">
+                                            <div id="empleado_results" class="employee-results" role="listbox"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="form-label mb-1">Nombre</label>
+                                        <input type="text" name="nombre" id="nombre_create" class="form-control bg-light" value="{{ old('nombre') }}" readonly required>
+                                    </div>
+                                    <div>
+                                        <label class="form-label mb-1">Cedula</label>
+                                        <input type="text" name="cedula" id="cedula_create" class="form-control bg-light" value="{{ old('cedula') }}" readonly required>
                                     </div>
                                     <div>
                                         <label class="form-label mb-1">% Total / Monto fijo</label>
@@ -117,7 +190,9 @@
                                     </div>
                                     <div class="d-grid">
                                         <label class="form-label mb-1">&nbsp;</label>
-                                        <button type="submit" class="btn btn-primary">Guardar</button>
+                                        <button type="submit" id="admin_submit_button" class="btn btn-primary">
+                                            {{ $registroEdicionId ? 'Actualizar empleado' : 'Guardar' }}
+                                        </button>
                                     </div>
                                 </form>
                             </div>
@@ -199,63 +274,16 @@
                                                     $empleadoActivo = $empleadoEstado === 'activo';
                                                 @endphp
                                                 <tr class="{{ $empleadoActivo ? 'empleado-activo-row' : 'empleado-inactivo-row' }}">
-                                                    <td>
-                                                        <form id="form-adm-{{ $registro->id }}" action="{{ route('incentivos.incentivo-administrativo.update', $registro->id) }}" method="POST">
-                                                            @csrf
-                                                            @method('PUT')
-                                                        </form>
-                                                        <select
-                                                            name="grupo"
-                                                            form="form-adm-{{ $registro->id }}"
-                                                            class="form-select form-select-sm js-grupo-select"
-                                                            data-pct-target="pct_total_{{ $registro->id }}"
-                                                            required>
-                                                            @php
-                                                                $grupoExiste = $posiciones->contains('posicion', $registro->grupo);
-                                                            @endphp
-                                                            @if(!$grupoExiste)
-                                                                <option value="{{ $registro->grupo }}" selected>{{ $registro->grupo }}</option>
-                                                            @endif
-                                                            @foreach($posiciones as $posicion)
-                                                                <option
-                                                                    value="{{ $posicion->posicion }}"
-                                                                    data-bono="{{ number_format((float) $posicion->bono_pct, 2, '.', '') }}"
-                                                                    {{ $registro->grupo === $posicion->posicion ? 'selected' : '' }}>
-                                                                    {{ $posicion->posicion }}
-                                                                </option>
-                                                            @endforeach
-                                                        </select>
-                                                    </td>
-                                                    <td>
-                                                        <input type="text" name="nombre" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm" value="{{ $registro->nombre }}" required>
-                                                    </td>
-                                                    <td>
-                                                        <input type="text" name="cedula" form="form-adm-{{ $registro->id }}" class="form-control form-control-sm js-cedula-input" value="{{ $registro->cedula }}" maxlength="11" pattern="\d{11}" inputmode="numeric">
-                                                    </td>
-                                                    <td>
-                                                        <select name="empresa" form="form-adm-{{ $registro->id }}" class="form-select form-select-sm" required>
-                                                            @php
-                                                                $empresaExiste = $empresas->contains($registro->empresa);
-                                                            @endphp
-                                                            @if(!$empresaExiste)
-                                                                <option value="{{ $registro->empresa }}" selected>{{ $registro->empresa }}</option>
-                                                            @endif
-                                                            @foreach($empresas as $empresa)
-                                                                <option value="{{ $empresa }}" {{ $registro->empresa === $empresa ? 'selected' : '' }}>
-                                                                    {{ $empresa }}
-                                                                </option>
-                                                            @endforeach
-                                                        </select>
-                                                    </td>
-                                                    <td>
-                                                        <div class="input-group input-group-sm">
-                                                            <input type="number" id="pct_total_{{ $registro->id }}" name="pct_total" form="form-adm-{{ $registro->id }}" min="0" max="9999999" step="0.01" class="form-control" value="{{ number_format((float) $registro->pct_total, 2, '.', '') }}" required>
-                                                            <span class="input-group-text js-pct-suffix" data-target="pct_total_{{ $registro->id }}">%</span>
-                                                        </div>
+                                                    <td>{{ $registro->grupo }}</td>
+                                                    <td>{{ $registro->nombre }}</td>
+                                                    <td>{{ $registro->cedula }}</td>
+                                                    <td>{{ $registro->empresa === 'Consorcio Joselito' ? 'Grupo Joselito' : $registro->empresa }}</td>
+                                                    <td class="text-end">
+                                                        {{ number_format((float) $registro->pct_total, 2) }}
+                                                        {{ in_array($registro->grupo, ['4. Operadores', '5. Servs. Tecnicos', '6. Seguridad'], true) ? 'RD$' : '%' }}
                                                     </td>
                                                     <td>
                                                         <div class="d-flex gap-1">
-                                                            <button type="button" data-form-id="form-adm-{{ $registro->id }}" data-nombre="{{ $registro->nombre }}" class="btn btn-success btn-sm js-confirm-update">Actualizar</button>
                                                             <form action="{{ route('incentivos.incentivo-administrativo.destroy', $registro->id) }}" method="POST" class="js-confirm-delete" data-nombre="{{ $registro->nombre }}">
                                                                 @csrf
                                                                 @method('DELETE')
@@ -295,6 +323,273 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const successMessage = @json(session('success'));
+        const employeesUrl = @json(route('incentivos.incentivo-administrativo.empleados'));
+        const departments = @json($departamentos);
+        const initialDepartment = @json(old('departamento', ''));
+        const departmentSelect = document.getElementById('departamento_create');
+        const employeeSearch = document.getElementById('empleado_search');
+        const employeeId = document.getElementById('empleado_id');
+        const employeeResults = document.getElementById('empleado_results');
+        const employeePicker = document.getElementById('employee_picker');
+        const employeeName = document.getElementById('nombre_create');
+        const employeeCedula = document.getElementById('cedula_create');
+        const employeeCompany = document.getElementById('empresa_create');
+        const adminForm = document.getElementById('admin_create_form');
+        const adminFormMethod = document.getElementById('admin_form_method');
+        const adminRecordId = document.getElementById('admin_record_id');
+        const adminSubmitButton = document.getElementById('admin_submit_button');
+        const groupCreate = document.getElementById('grupo_create');
+        const pctTotalCreate = document.getElementById('pct_total_create');
+        const adminBaseUrl = @json(url('/incentivos/incentivo-administrativo'));
+        let employeeSearchTimer;
+        let employeeRequestController;
+
+        function closeEmployeeResults() {
+            employeeResults.classList.remove('is-open');
+        }
+
+        function showEmployeeMessage(message) {
+            employeeResults.innerHTML = '';
+            const element = document.createElement('div');
+            element.className = 'employee-result-message';
+            element.textContent = message;
+            employeeResults.appendChild(element);
+            employeeResults.classList.add('is-open');
+        }
+
+        function clearSelectedEmployee(clearSearch = true) {
+            setCreateMode();
+            employeeId.value = '';
+            employeeName.value = '';
+            employeeCedula.value = '';
+
+            if (clearSearch) {
+                employeeSearch.value = '';
+            }
+        }
+
+        function setCreateMode() {
+            adminForm.action = adminBaseUrl;
+            adminFormMethod.disabled = true;
+            adminRecordId.value = '';
+            adminSubmitButton.textContent = 'Guardar';
+        }
+
+        function setUpdateMode(incentivo) {
+            adminForm.action = `${adminBaseUrl}/${incentivo.id}`;
+            adminFormMethod.disabled = false;
+            adminRecordId.value = incentivo.id;
+            adminSubmitButton.textContent = 'Actualizar empleado';
+
+            groupCreate.value = incentivo.grupo;
+            updatePctInputMode(groupCreate);
+            pctTotalCreate.value = incentivo.pct_total;
+        }
+
+        function selectEmployee(empleado) {
+            setCreateMode();
+            employeeId.value = empleado.id;
+            employeeSearch.value = empleado.nombre;
+            employeeName.value = empleado.nombre;
+            employeeCedula.value = empleado.cedula;
+            closeEmployeeResults();
+
+            if (!empleado.incentivo) {
+                return;
+            }
+
+            const confirmUpdate = function () {
+                setUpdateMode(empleado.incentivo);
+            };
+            const cancelUpdate = function () {
+                clearSelectedEmployee();
+                employeeSearch.focus();
+            };
+
+            if (typeof Swal === 'undefined') {
+                if (confirm(`${empleado.nombre} ya existe. ¿Desea actualizar el empleado?`)) {
+                    confirmUpdate();
+                } else {
+                    cancelUpdate();
+                }
+                return;
+            }
+
+            Swal.fire({
+                icon: 'question',
+                title: 'Empleado existente',
+                text: `${empleado.nombre} ya está registrado en Incentivo Administrativo.`,
+                showCancelButton: true,
+                confirmButtonText: 'Actualizar empleado',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0ab39c',
+                cancelButtonColor: '#74788d'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    confirmUpdate();
+                } else {
+                    cancelUpdate();
+                }
+            });
+        }
+
+        function selectedCompanyId() {
+            const option = employeeCompany.selectedOptions[0];
+            return option ? String(option.dataset.companyId || '') : '';
+        }
+
+        function populateDepartments(selectedDepartment = '') {
+            const companyId = selectedCompanyId();
+            departmentSelect.innerHTML = '';
+
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = companyId ? 'Seleccione' : 'Seleccione primero una empresa';
+            departmentSelect.appendChild(placeholder);
+
+            const visibleDepartments = new Set();
+            departments.forEach(function (item) {
+                if (String(item.companyid) !== companyId || visibleDepartments.has(item.departamento)) {
+                    return;
+                }
+
+                visibleDepartments.add(item.departamento);
+                const option = document.createElement('option');
+                option.value = item.departamento;
+                option.textContent = item.departamento;
+                option.selected = item.departamento === selectedDepartment;
+                departmentSelect.appendChild(option);
+            });
+
+            departmentSelect.disabled = !companyId;
+        }
+
+        function renderEmployees(empleados) {
+            employeeResults.innerHTML = '';
+
+            if (!empleados.length) {
+                showEmployeeMessage('No se encontraron empleados activos.');
+                return;
+            }
+
+            empleados.forEach(function (empleado) {
+                const option = document.createElement('button');
+                const name = document.createElement('span');
+                const detail = document.createElement('small');
+
+                option.type = 'button';
+                option.className = 'employee-option';
+                option.setAttribute('role', 'option');
+                name.className = 'd-block fw-semibold';
+                name.textContent = empleado.nombre;
+                detail.className = 'd-block text-muted';
+                detail.textContent = `${empleado.cedula} · ${empleado.empresa_nombre} · ID ${empleado.empleadoid}`;
+                option.append(name, detail);
+                option.addEventListener('click', function () {
+                    selectEmployee(empleado);
+                });
+                employeeResults.appendChild(option);
+            });
+
+            employeeResults.classList.add('is-open');
+        }
+
+        function loadEmployees() {
+            const company = employeeCompany.value;
+            const department = departmentSelect.value;
+
+            if (!company || !department) {
+                closeEmployeeResults();
+                return;
+            }
+
+            if (employeeRequestController) {
+                employeeRequestController.abort();
+            }
+
+            employeeRequestController = new AbortController();
+            showEmployeeMessage('Buscando empleados...');
+
+            const params = new URLSearchParams({
+                empresa: company,
+                departamento: department,
+                buscar: employeeSearch.value.trim()
+            });
+
+            fetch(`${employeesUrl}?${params}`, {
+                headers: { 'Accept': 'application/json' },
+                signal: employeeRequestController.signal
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('No se pudieron consultar los empleados.');
+                    }
+
+                    return response.json();
+                })
+                .then(function (data) {
+                    renderEmployees(data.data || []);
+                })
+                .catch(function (error) {
+                    if (error.name !== 'AbortError') {
+                        showEmployeeMessage(error.message || 'No se pudieron consultar los empleados.');
+                    }
+                });
+        }
+
+        employeeCompany.addEventListener('change', function () {
+            clearTimeout(employeeSearchTimer);
+
+            if (employeeRequestController) {
+                employeeRequestController.abort();
+            }
+
+            clearSelectedEmployee();
+            populateDepartments();
+            employeeSearch.disabled = true;
+            employeeSearch.placeholder = 'Seleccione un departamento';
+            closeEmployeeResults();
+        });
+
+        departmentSelect.addEventListener('change', function () {
+            clearTimeout(employeeSearchTimer);
+            clearSelectedEmployee();
+            employeeSearch.disabled = !departmentSelect.value;
+            employeeSearch.placeholder = departmentSelect.value
+                ? 'Buscar por nombre, cédula o ID'
+                : 'Seleccione un departamento';
+
+            if (departmentSelect.value) {
+                employeeSearch.focus();
+            } else {
+                closeEmployeeResults();
+            }
+        });
+
+        employeeSearch.addEventListener('focus', function () {
+            if (departmentSelect.value) {
+                loadEmployees();
+            }
+        });
+
+        employeeSearch.addEventListener('input', function () {
+            clearSelectedEmployee(false);
+            clearTimeout(employeeSearchTimer);
+            employeeSearchTimer = setTimeout(loadEmployees, 300);
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!employeePicker.contains(event.target)) {
+                closeEmployeeResults();
+            }
+        });
+
+        populateDepartments(initialDepartment);
+
+        if (employeeCompany.value && departmentSelect.value) {
+            employeeSearch.disabled = false;
+            employeeSearch.placeholder = 'Buscar por nombre, cédula o ID';
+        }
 
         const showActionSuccess = successMessage
             && (successMessage.includes('actualizado') || successMessage.includes('eliminado'));
@@ -369,120 +664,6 @@
         document.querySelectorAll('.js-cedula-input').forEach(function (input) {
             input.addEventListener('input', function () {
                 input.value = input.value.replace(/\D/g, '').slice(0, 11);
-            });
-        });
-
-        function getJsonErrorMessage(data, fallback) {
-            if (data && data.message) {
-                return data.message;
-            }
-
-            if (data && data.errors) {
-                return Object.values(data.errors).flat().join('\n');
-            }
-
-            return fallback;
-        }
-
-        function updateRegistro(button, form) {
-            const formData = new FormData(form);
-            const originalText = button.textContent;
-
-            button.disabled = true;
-            button.textContent = 'Actualizando...';
-
-            fetch(form.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-                .then(function (response) {
-                    return response.json()
-                        .catch(function () {
-                            return null;
-                        })
-                        .then(function (data) {
-                            if (!response.ok) {
-                                throw new Error(getJsonErrorMessage(data, 'No se pudo actualizar el registro.'));
-                            }
-
-                            return data;
-                        });
-                })
-                .then(function (data) {
-                    const registro = data.registro || {};
-
-                    button.dataset.nombre = registro.nombre || button.dataset.nombre || '';
-                    const deleteForm = button.closest('tr')?.querySelector('.js-confirm-delete');
-                    if (deleteForm && registro.nombre) {
-                        deleteForm.dataset.nombre = registro.nombre;
-                    }
-
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Listo',
-                            text: data.message || 'Registro actualizado correctamente.',
-                            timer: 900,
-                            showConfirmButton: false
-                        }).then(function () {
-                            window.location.reload();
-                        });
-                        return;
-                    }
-
-                    window.location.reload();
-                })
-                .catch(function (error) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: error.message || 'No se pudo actualizar el registro.'
-                        });
-                        return;
-                    }
-
-                    alert(error.message || 'No se pudo actualizar el registro.');
-                })
-                .finally(function () {
-                    button.disabled = false;
-                    button.textContent = originalText;
-                });
-        }
-
-        document.querySelectorAll('.js-confirm-update').forEach(function (button) {
-            button.addEventListener('click', function () {
-                const form = document.getElementById(button.dataset.formId);
-                if (!form) {
-                    return;
-                }
-
-                if (typeof Swal === 'undefined') {
-                    if (confirm(`Seguro que deseas actualizar a ${button.dataset.nombre || 'este usuario'}?`)) {
-                        updateRegistro(button, form);
-                    }
-
-                    return;
-                }
-
-                Swal.fire({
-                    icon: 'question',
-                    title: 'Actualizar registro',
-                    text: `Seguro que deseas actualizar a ${button.dataset.nombre || 'este usuario'}?`,
-                    showCancelButton: true,
-                    confirmButtonText: 'Si, actualizar',
-                    cancelButtonText: 'Cancelar',
-                    confirmButtonColor: '#0ab39c',
-                    cancelButtonColor: '#74788d'
-                }).then(function (result) {
-                    if (result.isConfirmed) {
-                        updateRegistro(button, form);
-                    }
-                });
             });
         });
 

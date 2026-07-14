@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class IncentivoConfiguracionController extends Controller
 {
@@ -40,12 +41,87 @@ class IncentivoConfiguracionController extends Controller
         }
 
         $empresas = collect(IncentivoAdministrativo::EMPRESAS_VALIDAS);
+        $departamentos = $this->empleadosActivosQuery()
+            ->whereNotNull('depto')
+            ->whereRaw("TRIM(CAST(depto AS CHAR)) <> ''")
+            ->selectRaw('CAST(companyid AS CHAR) as companyid')
+            ->selectRaw('TRIM(CAST(depto AS CHAR)) as departamento')
+            ->distinct()
+            ->orderBy('companyid')
+            ->orderBy('departamento')
+            ->get();
 
-        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas', 'buscarNombre', 'grupoFilter', 'empresaFilter', 'estatusFilter'));
+        return view('incentivos.incentivo_administrativo.index', compact('registros', 'posiciones', 'empresas', 'departamentos', 'buscarNombre', 'grupoFilter', 'empresaFilter', 'estatusFilter'));
+    }
+
+    public function incentivoAdministrativoEmpleados(Request $request)
+    {
+        $validated = $request->validate([
+            'empresa' => ['required', 'string', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
+            'departamento' => ['required', 'string', 'max:100'],
+            'buscar' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $companyId = $this->companyIdDesdeEmpresaAdministrativa($validated['empresa']);
+        $departamento = trim($validated['departamento']);
+        $buscar = trim((string) ($validated['buscar'] ?? ''));
+
+        $empleados = $this->empleadosActivosQuery()
+            ->where('companyid', $companyId)
+            ->whereRaw('TRIM(CAST(depto AS CHAR)) = ?', [$departamento])
+            ->whereNotNull('cedula')
+            ->whereRaw("TRIM(CAST(cedula AS CHAR)) <> ''")
+            ->when($buscar !== '', function ($query) use ($buscar) {
+                $termino = '%' . $buscar . '%';
+
+                $query->where(function ($subQuery) use ($termino) {
+                    $subQuery
+                        ->whereRaw("CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')) LIKE ?", [$termino])
+                        ->orWhere('cedula', 'like', $termino)
+                        ->orWhere('empleadoid', 'like', $termino);
+                });
+            })
+            ->select('id', 'empleadoid', 'nombres', 'apellidos', 'cedula', 'companyid')
+            ->orderBy('nombres')
+            ->orderBy('apellidos')
+            ->limit(30)
+            ->get();
+
+        $incentivosPorCedula = IncentivoAdministrativo::query()
+            ->whereIn('cedula', $empleados
+                ->map(fn ($empleado) => preg_replace('/\D+/', '', (string) $empleado->cedula))
+                ->filter())
+            ->get(['id', 'grupo', 'nombre', 'cedula', 'empresa', 'pct_total'])
+            ->keyBy('cedula');
+
+        $empleados = $empleados
+            ->map(function ($empleado) use ($incentivosPorCedula) {
+                $cedula = preg_replace('/\D+/', '', (string) $empleado->cedula);
+                $incentivo = $incentivosPorCedula->get($cedula);
+
+                return [
+                    'id' => (int) $empleado->id,
+                    'empleadoid' => (string) $empleado->empleadoid,
+                    'nombre' => trim(preg_replace('/\s+/', ' ', $empleado->nombres . ' ' . $empleado->apellidos)),
+                    'cedula' => $cedula,
+                    'empresa' => $this->empresaAdministrativaDesdeCompanyId($empleado->companyid),
+                    'empresa_nombre' => $this->nombreEmpresaDesdeCompanyId($empleado->companyid),
+                    'incentivo' => $incentivo ? [
+                        'id' => (int) $incentivo->id,
+                        'grupo' => (string) $incentivo->grupo,
+                        'pct_total' => number_format((float) $incentivo->pct_total, 2, '.', ''),
+                    ] : null,
+                ];
+            })
+            ->values();
+
+        return response()->json(['data' => $empleados]);
     }
 
     public function incentivoAdministrativoStore(Request $request)
     {
+        $this->completarEmpleadoSeleccionado($request);
+
         $validated = $this->validateIncentivoAdministrativo($request, [
             'grupo' => ['required', 'string', 'max:70', $this->grupoAdministrativoRule()],
             'nombre' => [
@@ -57,11 +133,17 @@ class IncentivoConfiguracionController extends Controller
                         ->where('grupo', $request->input('grupo'))
                         ->where('empresa', $request->input('empresa'))),
             ],
-            'cedula' => ['nullable', 'string', 'regex:/^\d{11}$/'],
+            'cedula' => [
+                'nullable',
+                'string',
+                'regex:/^\d{11}$/',
+                Rule::unique('incentivo_administrativos', 'cedula'),
+            ],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:9999999'],
         ], [
             'nombre.unique' => 'Ya existe un colaborador registrado con ese grupo y empresa.',
+            'cedula.unique' => 'Este empleado ya está registrado. Debe actualizar el registro existente.',
         ]);
 
         IncentivoAdministrativo::create($validated);
@@ -73,6 +155,8 @@ class IncentivoConfiguracionController extends Controller
 
     public function incentivoAdministrativoUpdate(Request $request, IncentivoAdministrativo $incentivoAdministrativo)
     {
+        $this->completarEmpleadoSeleccionado($request);
+
         $validated = $this->validateIncentivoAdministrativo($request, [
             'grupo' => ['required', 'string', 'max:70', $this->grupoAdministrativoRule()],
             'nombre' => [
@@ -85,11 +169,17 @@ class IncentivoConfiguracionController extends Controller
                         ->where('empresa', $request->input('empresa')))
                     ->ignore($incentivoAdministrativo->id),
             ],
-            'cedula' => ['nullable', 'string', 'regex:/^\d{11}$/'],
+            'cedula' => [
+                'nullable',
+                'string',
+                'regex:/^\d{11}$/',
+                Rule::unique('incentivo_administrativos', 'cedula')->ignore($incentivoAdministrativo->id),
+            ],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:9999999'],
         ], [
             'nombre.unique' => 'Ya existe un colaborador registrado con ese grupo y empresa.',
+            'cedula.unique' => 'Esta cédula pertenece a otro registro administrativo.',
         ]);
 
         $incentivoAdministrativo->update($validated);
@@ -202,36 +292,40 @@ class IncentivoConfiguracionController extends Controller
             ? '1 = 1'
             : '(' . implode(' AND ', $fechaSalidaChecks) . ')';
 
-        $query->selectSub(function ($subquery) use ($activoCondition, $fechaSalidaCondition) {
-            $subquery->from('empleados')
-                ->selectRaw("
-                    CASE
-                        WHEN COUNT(*) = 0 THEN 'no_existe'
-                        WHEN SUM(CASE WHEN {$activoCondition} AND {$fechaSalidaCondition} THEN 1 ELSE 0 END) > 0 THEN 'activo'
-                        ELSE 'inactivo'
-                    END
-                ")
-                ->whereRaw("BINARY REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') = BINARY REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '')")
-                ->whereRaw("NULLIF(REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', ''), '') IS NOT NULL");
-        }, 'empleado_estado');
+        $cedulaEmpleado = "CAST(REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') AS BINARY)";
+        $cedulaAdministrativo = "CAST(REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '') AS BINARY)";
+        $empleadosLookup = DB::table('empleados')
+            ->selectRaw("{$cedulaEmpleado} as cedula_normalizada")
+            ->selectRaw("
+                CASE
+                    WHEN SUM(CASE WHEN {$activoCondition} AND {$fechaSalidaCondition} THEN 1 ELSE 0 END) > 0 THEN 'activo'
+                    ELSE 'inactivo'
+                END as empleado_estado
+            ")
+            ->selectRaw('MAX(empleados.empleadoid) as empleadoid')
+            ->whereRaw("NULLIF({$cedulaEmpleado}, '') IS NOT NULL")
+            ->groupByRaw($cedulaEmpleado);
+
+        $query
+            ->leftJoinSub($empleadosLookup, 'empleados_lookup', function ($join) use ($cedulaAdministrativo) {
+                $join->on('empleados_lookup.cedula_normalizada', '=', DB::raw($cedulaAdministrativo));
+            })
+            ->addSelect(DB::raw("COALESCE(empleados_lookup.empleado_estado, 'no_existe') as empleado_estado"));
 
         if (in_array($estatusFilter, ['activo', 'no_activo'], true)) {
             if ($estatusFilter === 'activo') {
-                $query->having('empleado_estado', '=', 'activo');
+                $query->where('empleados_lookup.empleado_estado', 'activo');
             } else {
-                $query->having('empleado_estado', '<>', 'activo');
+                $query->where(function ($subQuery) {
+                    $subQuery
+                        ->whereNull('empleados_lookup.empleado_estado')
+                        ->orWhere('empleados_lookup.empleado_estado', '<>', 'activo');
+                });
             }
         }
 
         if ($withEmpleadoId) {
-            $query->selectSub(function ($subquery) {
-                    $subquery->from('empleados')
-                        ->select('empleadoid')
-                        ->whereRaw("BINARY REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') = BINARY REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '')")
-                        ->whereRaw("NULLIF(REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', ''), '') IS NOT NULL")
-                        ->orderByDesc('empleadoid')
-                        ->limit(1);
-                }, 'empleadoid');
+            $query->addSelect('empleados_lookup.empleadoid');
         }
 
         return $query;
@@ -249,6 +343,79 @@ class IncentivoConfiguracionController extends Controller
             ->whereRaw("BINARY REPLACE(REPLACE(COALESCE(cedula, ''), '-', ''), ' ', '') = ?", [$cedula])
             ->orderByDesc('empleadoid')
             ->value('empleadoid') ?? '');
+    }
+
+    private function empleadosActivosQuery()
+    {
+        return DB::table('empleados')
+            ->where(function ($query) {
+                $query
+                    ->whereNull('fechasalida')
+                    ->orWhereRaw("TRIM(CAST(fechasalida AS CHAR)) = ''")
+                    ->orWhereRaw("TRIM(CAST(fechasalida AS CHAR)) = '0000-00-00'");
+            });
+    }
+
+    private function completarEmpleadoSeleccionado(Request $request): void
+    {
+        $seleccion = $request->validate([
+            'empresa' => ['required', 'string', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
+            'departamento' => ['required', 'string', 'max:100'],
+            'empleado_id' => ['required', 'integer'],
+        ], [
+            'empresa.required' => 'Debe seleccionar una empresa.',
+            'departamento.required' => 'Debe seleccionar un departamento.',
+            'empleado_id.required' => 'Debe seleccionar un empleado activo.',
+        ]);
+
+        $companyId = $this->companyIdDesdeEmpresaAdministrativa($seleccion['empresa']);
+        $departamento = trim($seleccion['departamento']);
+        $empleado = $this->empleadosActivosQuery()
+            ->where('id', $seleccion['empleado_id'])
+            ->where('companyid', $companyId)
+            ->whereRaw('TRIM(CAST(depto AS CHAR)) = ?', [$departamento])
+            ->first(['nombres', 'apellidos', 'cedula', 'companyid']);
+
+        $cedula = preg_replace('/\D+/', '', (string) ($empleado->cedula ?? ''));
+
+        if (!$empleado || strlen($cedula) !== 11) {
+            throw ValidationException::withMessages([
+                'empleado_id' => 'El empleado seleccionado no está activo o no tiene una cédula válida.',
+            ]);
+        }
+
+        $request->merge([
+            'nombre' => trim(preg_replace('/\s+/', ' ', $empleado->nombres . ' ' . $empleado->apellidos)),
+            'cedula' => $cedula,
+            'empresa' => $this->empresaAdministrativaDesdeCompanyId($empleado->companyid),
+        ]);
+    }
+
+    private function empresaAdministrativaDesdeCompanyId($companyId): string
+    {
+        return match ((string) $companyId) {
+            '168' => 'Consorcio Joselito',
+            '169' => 'Negosur',
+            default => '',
+        };
+    }
+
+    private function nombreEmpresaDesdeCompanyId($companyId): string
+    {
+        return match ((string) $companyId) {
+            '168' => 'Grupo Joselito',
+            '169' => 'Negosur',
+            default => 'Sin empresa',
+        };
+    }
+
+    private function companyIdDesdeEmpresaAdministrativa(string $empresa): string
+    {
+        return match ($empresa) {
+            'Consorcio Joselito' => '168',
+            'Negosur' => '169',
+            default => '',
+        };
     }
 
     private function validateIncentivoAdministrativo(Request $request, array $rules, array $messages = []): array

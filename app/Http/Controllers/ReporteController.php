@@ -506,6 +506,7 @@ class ReporteController extends Controller
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
         $empresa = $request->input('empresa', 'todos');
+        $buscar = trim((string) $request->input('buscar', ''));
         $config = $this->getFaltantesConfig($request->input('tipo'));
         $tabla = $config['tabla'];
 
@@ -533,6 +534,24 @@ class ReporteController extends Controller
             $query->whereRaw('LOWER(COALESCE(agencias.empresa, "")) LIKE ?', ['%joselito%']);
         } elseif ($empresa === 'negosur') {
             $query->whereRaw('LOWER(COALESCE(agencias.empresa, "")) LIKE ?', ['%negosur%']);
+        }
+
+        if ($buscar !== '') {
+            $termino = '%' . mb_strtolower($buscar) . '%';
+            $cedula = preg_replace('/\D+/', '', $buscar);
+
+            $query->where(function ($subQuery) use ($tabla, $termino, $cedula) {
+                $subQuery
+                    ->whereRaw("LOWER(CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, ''))) LIKE ?", [$termino])
+                    ->orWhereRaw("LOWER(CAST({$tabla}.identificacion AS CHAR)) LIKE ?", [$termino]);
+
+                if ($cedula !== '') {
+                    $subQuery->orWhereRaw(
+                        "REPLACE(REPLACE(CAST({$tabla}.identificacion AS CHAR), '-', ''), ' ', '') LIKE ?",
+                        ['%' . $cedula . '%']
+                    );
+                }
+            });
         }
 
         $registros = $query

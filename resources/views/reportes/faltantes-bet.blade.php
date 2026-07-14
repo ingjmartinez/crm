@@ -73,6 +73,13 @@
                                 </div>
                             </div>
                             <div class="card-body">
+                                <div class="row justify-content-end mb-3">
+                                    <div class="col-sm-6 col-md-4 col-lg-3">
+                                        <label class="form-label" for="buscar_faltante">Buscar por nombre o cédula</label>
+                                        <input type="search" class="form-control" id="buscar_faltante"
+                                            placeholder="Escriba un nombre o cédula" autocomplete="off">
+                                    </div>
+                                </div>
                                 <div class="table-responsive" style="width:100%; height:525px; max-height:525px; overflow-y:scroll;">
                                     <table id="tableFaltantes"
                                         class="table table-bordered dt-responsive nowrap table-striped align-middle"
@@ -251,12 +258,14 @@
             const fechaFin = document.getElementById('fecha_fin').value;
             const tipo = obtenerTipoFaltante();
             const empresa = obtenerEmpresa();
+            const buscar = document.getElementById('buscar_faltante').value.trim();
 
             const params = new URLSearchParams({
                 tipo: tipo,
                 empresa: empresa,
                 fecha_inicio: fechaInicio,
                 fecha_fin: fechaFin,
+                buscar: buscar,
                 page: page
             });
 
@@ -407,6 +416,12 @@
 
         document.getElementById('tipo_faltante').addEventListener('change', function() {
             actualizarTitulos();
+        });
+
+        let temporizadorBusqueda;
+        document.getElementById('buscar_faltante').addEventListener('input', function() {
+            clearTimeout(temporizadorBusqueda);
+            temporizadorBusqueda = setTimeout(() => cargarDatos(1), 400);
         });
 
         document.getElementById('btnExportarExcel').addEventListener('click', function() {
