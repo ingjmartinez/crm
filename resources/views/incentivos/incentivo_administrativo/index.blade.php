@@ -191,7 +191,7 @@
                                     <div class="d-grid">
                                         <label class="form-label mb-1">&nbsp;</label>
                                         <button type="submit" id="admin_submit_button" class="btn btn-primary">
-                                            {{ $registroEdicionId ? 'Actualizar empleado' : 'Guardar' }}
+                                            Guardar
                                         </button>
                                     </div>
                                 </form>
@@ -379,7 +379,7 @@
             adminForm.action = `${adminBaseUrl}/${incentivo.id}`;
             adminFormMethod.disabled = false;
             adminRecordId.value = incentivo.id;
-            adminSubmitButton.textContent = 'Actualizar empleado';
+            adminSubmitButton.textContent = 'Guardar';
 
             groupCreate.value = incentivo.grupo;
             updatePctInputMode(groupCreate);
@@ -398,40 +398,44 @@
                 return;
             }
 
-            const confirmUpdate = function () {
-                setUpdateMode(empleado.incentivo);
-            };
-            const cancelUpdate = function () {
-                clearSelectedEmployee();
-                employeeSearch.focus();
-            };
+            setUpdateMode(empleado.incentivo);
+        }
+
+        function submitAdministrativeForm() {
+            adminSubmitButton.disabled = true;
+            adminSubmitButton.textContent = 'Guardando...';
+            HTMLFormElement.prototype.submit.call(adminForm);
+        }
+
+        adminForm.addEventListener('submit', function (event) {
+            if (!adminRecordId.value) {
+                return;
+            }
+
+            event.preventDefault();
 
             if (typeof Swal === 'undefined') {
-                if (confirm(`${empleado.nombre} ya existe. ¿Desea actualizar el empleado?`)) {
-                    confirmUpdate();
-                } else {
-                    cancelUpdate();
+                if (confirm(`Este empleado ya existe en ${employeeCompany.value}. ¿Desea actualizarlo?`)) {
+                    submitAdministrativeForm();
                 }
                 return;
             }
 
             Swal.fire({
                 icon: 'question',
-                title: 'Empleado existente',
-                text: `${empleado.nombre} ya está registrado en Incentivo Administrativo.`,
+                title: 'Actualizar empleado',
+                text: `Este empleado ya está registrado en ${employeeCompany.value}. ¿Desea guardar los cambios?`,
                 showCancelButton: true,
-                confirmButtonText: 'Actualizar empleado',
+                confirmButtonText: 'Sí, actualizar',
                 cancelButtonText: 'Cancelar',
                 confirmButtonColor: '#0ab39c',
                 cancelButtonColor: '#74788d'
             }).then(function (result) {
                 if (result.isConfirmed) {
-                    confirmUpdate();
-                } else {
-                    cancelUpdate();
+                    submitAdministrativeForm();
                 }
             });
-        }
+        });
 
         function selectedCompanyId() {
             const option = employeeCompany.selectedOptions[0];

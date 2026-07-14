@@ -88,6 +88,7 @@ class IncentivoConfiguracionController extends Controller
             ->get();
 
         $incentivosPorCedula = IncentivoAdministrativo::query()
+            ->where('empresa', $validated['empresa'])
             ->whereIn('cedula', $empleados
                 ->map(fn ($empleado) => preg_replace('/\D+/', '', (string) $empleado->cedula))
                 ->filter())
@@ -128,22 +129,18 @@ class IncentivoConfiguracionController extends Controller
                 'required',
                 'string',
                 'max:120',
-                Rule::unique('incentivo_administrativos', 'nombre')
-                    ->where(fn ($query) => $query
-                        ->where('grupo', $request->input('grupo'))
-                        ->where('empresa', $request->input('empresa'))),
             ],
             'cedula' => [
                 'nullable',
                 'string',
                 'regex:/^\d{11}$/',
-                Rule::unique('incentivo_administrativos', 'cedula'),
+                Rule::unique('incentivo_administrativos', 'cedula')
+                    ->where(fn ($query) => $query->where('empresa', $request->input('empresa'))),
             ],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:9999999'],
         ], [
-            'nombre.unique' => 'Ya existe un colaborador registrado con ese grupo y empresa.',
-            'cedula.unique' => 'Este empleado ya está registrado. Debe actualizar el registro existente.',
+            'cedula.unique' => 'Este empleado ya está registrado en la empresa seleccionada. Debe actualizar el registro existente.',
         ]);
 
         IncentivoAdministrativo::create($validated);
@@ -163,23 +160,19 @@ class IncentivoConfiguracionController extends Controller
                 'required',
                 'string',
                 'max:120',
-                Rule::unique('incentivo_administrativos', 'nombre')
-                    ->where(fn ($query) => $query
-                        ->where('grupo', $request->input('grupo'))
-                        ->where('empresa', $request->input('empresa')))
-                    ->ignore($incentivoAdministrativo->id),
             ],
             'cedula' => [
                 'nullable',
                 'string',
                 'regex:/^\d{11}$/',
-                Rule::unique('incentivo_administrativos', 'cedula')->ignore($incentivoAdministrativo->id),
+                Rule::unique('incentivo_administrativos', 'cedula')
+                    ->where(fn ($query) => $query->where('empresa', $request->input('empresa')))
+                    ->ignore($incentivoAdministrativo->id),
             ],
             'empresa' => ['required', 'string', 'max:50', Rule::in(IncentivoAdministrativo::EMPRESAS_VALIDAS)],
             'pct_total' => ['required', 'numeric', 'min:0', 'max:9999999'],
         ], [
-            'nombre.unique' => 'Ya existe un colaborador registrado con ese grupo y empresa.',
-            'cedula.unique' => 'Esta cédula pertenece a otro registro administrativo.',
+            'cedula.unique' => 'Esta cédula ya pertenece a otro registro de la empresa seleccionada.',
         ]);
 
         $incentivoAdministrativo->update($validated);
