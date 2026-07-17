@@ -116,6 +116,26 @@ class RendimientoCoordinadorController extends Controller
             }
             echo '</tbody></table>';
 
+            echo '<h2>Plan de rescate - Agencias</h2><table><thead><tr>';
+            foreach (['Prioridad', 'Terminal', 'Agencia', 'Venta', 'Usuarios', 'Usuario a trabajar', 'Avance %', 'Faltante', 'Accion sugerida'] as $heading) {
+                echo '<th>' . e($heading) . '</th>';
+            }
+            echo '</tr></thead><tbody>';
+            foreach ($data['rescate']['agencias'] as $row) {
+                echo '<tr><td>' . e($row['prioridad']) . '</td><td style="mso-number-format:\'@\';">' . e($row['terminal']) . '</td><td>' . e($row['agencia']) . '</td><td>' . $row['venta_total'] . '</td><td>' . $row['usuarios'] . '</td><td>' . e($row['mejor_usuario']) . '</td><td>' . $row['mejor_usuario_avance_pct'] . '</td><td>' . $row['faltante_mejor_usuario'] . '</td><td>' . e($row['accion_sugerida']) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+
+            echo '<h2>Plan de rescate - Usuarios</h2><table><thead><tr>';
+            foreach (['Prioridad', 'Cedula', 'Usuario', 'Agencia principal', 'Venta', 'Avance %', 'Faltante', 'Accion sugerida'] as $heading) {
+                echo '<th>' . e($heading) . '</th>';
+            }
+            echo '</tr></thead><tbody>';
+            foreach ($data['rescate']['usuarios'] as $row) {
+                echo '<tr><td>' . e($row['prioridad']) . '</td><td style="mso-number-format:\'@\';">' . e($row['cedula']) . '</td><td>' . e($row['nombre']) . '</td><td>' . e($row['agencia_principal']) . '</td><td>' . $row['venta_total'] . '</td><td>' . $row['avance_pct'] . '</td><td>' . $row['faltante'] . '</td><td>' . e($row['accion_sugerida']) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+
             echo '<h2>Tendencia</h2><table><thead><tr><th>Fecha actual</th><th>Venta actual</th><th>Fecha comparable</th><th>Venta anterior</th></tr></thead><tbody>';
             foreach ($data['tendencia'] as $row) {
                 echo '<tr><td>' . e($row['fecha']) . '</td><td>' . $row['venta_actual'] . '</td><td>' . e((string) $row['fecha_anterior']) . '</td><td>' . $row['venta_anterior'] . '</td></tr>';

@@ -96,6 +96,11 @@ class RendimientoCoordinadorIntegralTest extends TestCase
         $this->assertSame(200.0, $reporte['comparacion']['variacion_pct']);
         $this->assertSame('Agencia Uno', $reporte['agencias'][0]['agencia']);
         $this->assertSame('Cumple', $reporte['usuarios'][0]['clasificacion']);
+        $this->assertCount(1, $reporte['rescate']['agencias']);
+        $this->assertSame('Agencia Dos', $reporte['rescate']['agencias'][0]['agencia']);
+        $this->assertSame('Crítica', $reporte['rescate']['agencias'][0]['prioridad']);
+        $this->assertCount(1, $reporte['rescate']['usuarios']);
+        $this->assertSame('Crítico', $reporte['rescate']['usuarios'][0]['prioridad']);
         $this->assertCount(2, $reporte['tendencia']);
     }
 
@@ -128,6 +133,8 @@ class RendimientoCoordinadorIntegralTest extends TestCase
         $this->assertStringContainsString('modalReporteIntegralCoordinador', $html);
         $this->assertStringContainsString('PDF ejecutivo', $html);
         $this->assertStringContainsString('Excel detallado', $html);
+        $this->assertStringContainsString('Plan de rescate', $html);
+        $this->assertStringContainsString('Agencias que requieren intervenci', $html);
         $this->assertStringContainsString('Tendencia y comparaci', $html);
     }
 }

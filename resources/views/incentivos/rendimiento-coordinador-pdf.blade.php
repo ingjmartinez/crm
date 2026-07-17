@@ -92,6 +92,39 @@
         </tr></table>
     </div>
 
+    <div class="page-break"></div>
+
+    <div class="section">
+        <h2 class="section-title">Plan de rescate</h2>
+        <p class="meta" style="margin-bottom:5px">
+            Agencias críticas: {{ $rescate['resumen']['agencias_criticas'] }} |
+            Rescates rápidos de agencia: {{ $rescate['resumen']['agencias_rescate_rapido'] }} |
+            Usuarios próximos a meta: {{ $rescate['resumen']['usuarios_rescate_rapido'] }} |
+            Usuarios críticos: {{ $rescate['resumen']['usuarios_criticos'] }}
+        </p>
+        <table class="data">
+            <thead><tr><th>Prioridad</th><th>Terminal</th><th>Agencia</th><th class="right">Venta</th><th>Usuario a trabajar</th><th class="right">Avance</th><th>Acción sugerida</th></tr></thead>
+            <tbody>
+                @forelse (collect($rescate['agencias'])->take(8) as $row)
+                    <tr><td>{{ $row['prioridad'] }}</td><td>{{ $row['terminal'] }}</td><td>{{ $row['agencia'] }}</td><td class="right">{{ number_format($row['venta_total'], 2) }}</td><td>{{ $row['mejor_usuario'] }}</td><td class="right">{{ number_format($row['mejor_usuario_avance_pct'], 2) }}%</td><td>{{ $row['accion_sugerida'] }}</td></tr>
+                @empty
+                    <tr><td colspan="7">No se detectaron agencias para rescate en el periodo.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+        <p class="meta" style="margin:7px 0 4px"><strong>Usuarios prioritarios</strong></p>
+        <table class="data">
+            <thead><tr><th>Prioridad</th><th>Usuario</th><th>Agencia</th><th class="right">Venta</th><th class="right">Avance</th><th class="right">Faltante</th><th>Acción sugerida</th></tr></thead>
+            <tbody>
+                @forelse (collect($rescate['usuarios'])->take(8) as $row)
+                    <tr><td>{{ $row['prioridad'] }}</td><td>{{ $row['nombre'] }}</td><td>{{ $row['agencia_principal'] }}</td><td class="right">{{ number_format($row['venta_total'], 2) }}</td><td class="right">{{ number_format($row['avance_pct'], 2) }}%</td><td class="right">{{ number_format($row['faltante'], 2) }}</td><td>{{ $row['accion_sugerida'] }}</td></tr>
+                @empty
+                    <tr><td colspan="7">No se detectaron usuarios pendientes de meta.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
     <div class="section">
         <h2 class="section-title">Top 10 agencias por volumen</h2>
         <table class="data">

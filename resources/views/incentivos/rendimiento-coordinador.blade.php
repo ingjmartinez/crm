@@ -377,6 +377,7 @@
                             <ul class="nav nav-tabs mb-3" role="tablist">
                                 <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#rcTabAgencias" type="button">Ranking de agencias</button></li>
                                 <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rcTabUsuarios" type="button">Ranking de usuarios</button></li>
+                                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rcTabRescate" type="button">Plan de rescate</button></li>
                                 <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rcTabTendencia" type="button">Tendencia y comparación</button></li>
                             </ul>
 
@@ -393,6 +394,24 @@
                                     <div class="table-responsive">
                                         <table id="rcDashboardUsuarios" class="table table-bordered table-striped rc-table w-100">
                                             <thead class="table-light"><tr><th>#</th><th>Cédula</th><th>Usuario</th><th>Agencia principal</th><th class="text-end">Venta total</th><th class="text-end">Avance</th><th class="text-end">Faltante</th><th>Clasificación</th><th class="text-end">Incentivo</th></tr></thead>
+                                            <tbody></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div id="rcTabRescate" class="tab-pane fade">
+                                    <div id="rcRescateSummary" class="row g-3 mb-3"></div>
+                                    <h6 class="text-primary">Agencias que requieren intervención</h6>
+                                    <p class="text-muted">Ordenadas por urgencia y oportunidad de recuperación.</p>
+                                    <div class="table-responsive mb-4">
+                                        <table id="rcDashboardRescateAgencias" class="table table-bordered table-striped rc-table w-100">
+                                            <thead class="table-light"><tr><th>Prioridad</th><th>Terminal</th><th>Agencia</th><th class="text-end">Venta</th><th class="text-center">Usuarios</th><th>Usuario a trabajar</th><th class="text-end">Avance</th><th>Acción sugerida</th></tr></thead>
+                                            <tbody></tbody>
+                                        </table>
+                                    </div>
+                                    <h6 class="text-primary">Usuarios que requieren seguimiento</h6>
+                                    <div class="table-responsive">
+                                        <table id="rcDashboardRescateUsuarios" class="table table-bordered table-striped rc-table w-100">
+                                            <thead class="table-light"><tr><th>Prioridad</th><th>Cédula</th><th>Usuario</th><th>Agencia principal</th><th class="text-end">Venta</th><th class="text-end">Avance</th><th class="text-end">Faltante</th><th>Acción sugerida</th></tr></thead>
                                             <tbody></tbody>
                                         </table>
                                     </div>
@@ -597,6 +616,8 @@
 
                 let dashboardAgencyTable = null;
                 let dashboardUserTable = null;
+                let dashboardRescueAgencyTable = null;
+                let dashboardRescueUserTable = null;
                 const dashboardBaseUrl = @json(url('/incentivos/rendimiento-coordinador'));
                 const dashboardFilters = new URLSearchParams({
                     fecha_inicio: @json($filtros['fecha_inicio']),
@@ -613,6 +634,17 @@
                         'Crítico': 'bg-danger',
                     };
                     return `<span class="badge ${classes[classification] || 'bg-secondary'}">${escapeDetailHtml(classification)}</span>`;
+                };
+
+                const rescueBadge = (priority) => {
+                    const classes = {
+                        'Crítica': 'bg-danger',
+                        'Crítico': 'bg-danger',
+                        'Rescate rápido': 'bg-warning text-dark',
+                        'Alta': 'bg-info text-dark',
+                        'Seguimiento': 'bg-primary',
+                    };
+                    return `<span class="badge ${classes[priority] || 'bg-secondary'}">${escapeDetailHtml(priority)}</span>`;
                 };
 
                 const renderTrendChart = (rows) => {
@@ -694,13 +726,49 @@
                             <td class="text-end">${detailMoney(row.incentivo)}</td>
                         </tr>`).join('');
 
+                    const rescue = data.rescate || { agencias: [], usuarios: [], resumen: {} };
+                    const rescueSummary = rescue.resumen || {};
+                    document.getElementById('rcRescateSummary').innerHTML = [
+                        ['Agencias críticas', rescueSummary.agencias_criticas || 0, 'text-danger'],
+                        ['Agencias de rescate rápido', rescueSummary.agencias_rescate_rapido || 0, 'text-warning'],
+                        ['Usuarios próximos a meta', rescueSummary.usuarios_rescate_rapido || 0, 'text-warning'],
+                        ['Usuarios críticos', rescueSummary.usuarios_criticos || 0, 'text-danger'],
+                    ].map(item => `<div class="col-xl-3 col-md-6"><div class="rc-dashboard-kpi"><small>${item[0]}</small><strong class="${item[2]}">${item[1]}</strong></div></div>`).join('');
+
+                    document.querySelector('#rcDashboardRescateAgencias tbody').innerHTML = rescue.agencias.map(row => `
+                        <tr>
+                            <td data-order="${Number(row.prioridad_orden)}">${rescueBadge(row.prioridad)}</td>
+                            <td>${escapeDetailHtml(row.terminal)}</td><td>${escapeDetailHtml(row.agencia)}</td>
+                            <td class="text-end" data-order="${Number(row.venta_total)}">${detailMoney(row.venta_total)}</td>
+                            <td class="text-center">${row.usuarios}</td><td>${escapeDetailHtml(row.mejor_usuario)}</td>
+                            <td class="text-end" data-order="${Number(row.mejor_usuario_avance_pct)}">${Number(row.mejor_usuario_avance_pct).toFixed(2)}%</td>
+                            <td class="text-wrap">${escapeDetailHtml(row.accion_sugerida)}</td>
+                        </tr>`).join('');
+
+                    document.querySelector('#rcDashboardRescateUsuarios tbody').innerHTML = rescue.usuarios.map(row => `
+                        <tr>
+                            <td data-order="${Number(row.prioridad_orden)}">${rescueBadge(row.prioridad)}</td>
+                            <td>${escapeDetailHtml(row.cedula)}</td><td>${escapeDetailHtml(row.nombre)}</td><td>${escapeDetailHtml(row.agencia_principal)}</td>
+                            <td class="text-end" data-order="${Number(row.venta_total)}">${detailMoney(row.venta_total)}</td>
+                            <td class="text-end" data-order="${Number(row.avance_pct)}">${Number(row.avance_pct).toFixed(2)}%</td>
+                            <td class="text-end">${detailMoney(row.faltante)}</td><td class="text-wrap">${escapeDetailHtml(row.accion_sugerida)}</td>
+                        </tr>`).join('');
+
                     if (dashboardAgencyTable) dashboardAgencyTable.destroy();
                     if (dashboardUserTable) dashboardUserTable.destroy();
+                    if (dashboardRescueAgencyTable) dashboardRescueAgencyTable.destroy();
+                    if (dashboardRescueUserTable) dashboardRescueUserTable.destroy();
                     dashboardAgencyTable = $('#rcDashboardAgencias').DataTable({
                         responsive: true, pageLength: 10, order: [[0, 'asc']], scrollX: true, language: commonOptions.language,
                     });
                     dashboardUserTable = $('#rcDashboardUsuarios').DataTable({
                         responsive: true, pageLength: 10, order: [[0, 'asc']], scrollX: true, language: commonOptions.language,
+                    });
+                    dashboardRescueAgencyTable = $('#rcDashboardRescateAgencias').DataTable({
+                        responsive: true, pageLength: 10, order: [[0, 'asc'], [3, 'asc']], scrollX: true, language: commonOptions.language,
+                    });
+                    dashboardRescueUserTable = $('#rcDashboardRescateUsuarios').DataTable({
+                        responsive: true, pageLength: 10, order: [[0, 'asc'], [5, 'desc']], scrollX: true, language: commonOptions.language,
                     });
                     renderTrendChart(data.tendencia);
 
@@ -745,6 +813,8 @@
                     tab.addEventListener('shown.bs.tab', () => {
                         dashboardAgencyTable?.columns.adjust();
                         dashboardUserTable?.columns.adjust();
+                        dashboardRescueAgencyTable?.columns.adjust();
+                        dashboardRescueUserTable?.columns.adjust();
                     });
                 });
             @endif

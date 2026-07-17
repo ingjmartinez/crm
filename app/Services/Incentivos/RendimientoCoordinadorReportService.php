@@ -22,7 +22,7 @@ class RendimientoCoordinadorReportService
         $finAnterior = $inicio->copy()->subDay();
         $inicioAnterior = $finAnterior->copy()->subDays($dias - 1);
         $cacheKey = implode(':', [
-            'rendimiento-coordinador-v1',
+            'rendimiento-coordinador-v2',
             $coordinadorId,
             $inicio->toDateString(),
             $fin->toDateString(),
@@ -287,6 +287,8 @@ class RendimientoCoordinadorReportService
                     : 0,
                 'mejor_usuario' => $mejorUsuario['nombre'] ?? 'Sin vendedores',
                 'mejor_usuario_venta_agencia' => round((float) ($usuariosAgencia[$mejorCedula] ?? 0), 2),
+                'mejor_usuario_avance_pct' => round((float) ($mejorUsuario['avance_pct'] ?? 0), 2),
+                'faltante_mejor_usuario' => round((float) ($mejorUsuario['faltante'] ?? self::META_USUARIO), 2),
                 'tiene_usuario_meta' => $usuariosCumplieron > 0,
             ];
         })->sortByDesc('venta_total')->values()->map(function ($row, $indice) {
@@ -300,6 +302,59 @@ class RendimientoCoordinadorReportService
         $variacion = $ventaActual - $ventaAnterior;
         $usuariosCumplieron = $usuariosReporte->where('cumple', true)->count();
         $agenciasConMeta = $agenciasReporte->where('tiene_usuario_meta', true)->count();
+        $rescateAgencias = $agenciasReporte
+            ->filter(fn ($row) => $row['venta_total'] <= 0 || !$row['tiene_usuario_meta'])
+            ->map(function ($row) {
+                if ($row['venta_total'] <= 0) {
+                    $prioridad = 'Crítica';
+                    $orden = 1;
+                    $accion = 'Validar operación, personal asignado y causa de ausencia de ventas.';
+                } elseif ($row['mejor_usuario_avance_pct'] >= 80) {
+                    $prioridad = 'Rescate rápido';
+                    $orden = 2;
+                    $accion = 'Acompañar al usuario más cercano: faltan RD$'
+                        . number_format($row['faltante_mejor_usuario'], 2) . ' para la meta.';
+                } else {
+                    $prioridad = 'Alta';
+                    $orden = 3;
+                    $accion = 'Definir plan comercial con el mejor usuario y revisar productividad del equipo.';
+                }
+
+                return array_merge($row, [
+                    'prioridad' => $prioridad,
+                    'prioridad_orden' => $orden,
+                    'accion_sugerida' => $accion,
+                ]);
+            })
+            ->sort(fn ($a, $b) => [$a['prioridad_orden'], $a['venta_total']]
+                <=> [$b['prioridad_orden'], $b['venta_total']])
+            ->values();
+        $rescateUsuarios = $usuariosReporte
+            ->where('cumple', false)
+            ->map(function ($row) {
+                if ($row['clasificacion'] === 'Cerca') {
+                    $prioridad = 'Rescate rápido';
+                    $orden = 1;
+                    $accion = 'Seguimiento diario hasta completar RD$' . number_format($row['faltante'], 2) . '.';
+                } elseif ($row['clasificacion'] === 'Crítico') {
+                    $prioridad = 'Crítico';
+                    $orden = 2;
+                    $accion = 'Revisar actividad, asignación y barreras comerciales con el usuario.';
+                } else {
+                    $prioridad = 'Seguimiento';
+                    $orden = 3;
+                    $accion = 'Acordar objetivo de recuperación y revisar avance periódicamente.';
+                }
+
+                return array_merge($row, [
+                    'prioridad' => $prioridad,
+                    'prioridad_orden' => $orden,
+                    'accion_sugerida' => $accion,
+                ]);
+            })
+            ->sort(fn ($a, $b) => [$a['prioridad_orden'], -$a['avance_pct']]
+                <=> [$b['prioridad_orden'], -$b['avance_pct']])
+            ->values();
 
         return [
             'meta' => [
@@ -346,6 +401,16 @@ class RendimientoCoordinadorReportService
             ],
             'agencias' => $agenciasReporte->all(),
             'usuarios' => $usuariosReporte->all(),
+            'rescate' => [
+                'agencias' => $rescateAgencias->all(),
+                'usuarios' => $rescateUsuarios->all(),
+                'resumen' => [
+                    'agencias_criticas' => $rescateAgencias->where('prioridad', 'Crítica')->count(),
+                    'agencias_rescate_rapido' => $rescateAgencias->where('prioridad', 'Rescate rápido')->count(),
+                    'usuarios_rescate_rapido' => $rescateUsuarios->where('prioridad', 'Rescate rápido')->count(),
+                    'usuarios_criticos' => $rescateUsuarios->where('prioridad', 'Crítico')->count(),
+                ],
+            ],
             'tendencia' => $tendencia,
         ];
     }
