@@ -510,6 +510,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Rendimiento de Coordinador',
+                'descripcion' => 'Resume agencias y usuarios que cumplieron por coordinador, y detecta agencias sin coordinador asignado.',
+                'url' => '/incentivos/rendimiento-coordinador',
+                'icono' => 'ri-bar-chart-grouped-line',
+                'categoria' => 'Reportes',
+                'tags' => ['rendimiento', 'coordinador', 'agencias', 'usuarios', 'sin asignar'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Incentivo Administrativo',
                 'descripcion' => 'Administra empleados base para distribucion administrativa.',
                 'url' => '/incentivos/incentivo-administrativo',

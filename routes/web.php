@@ -42,6 +42,7 @@ use App\Http\Controllers\RecargasController;
 use App\Http\Controllers\RecursosHumanosController;
 use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\RendimientoCoordinadorController;
 use App\Http\Controllers\RutaController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SuperAdminSesionController;
@@ -489,6 +490,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/incentivos/save/pago-incentivos-admin', [IncentivosController::class, 'savePagoAdmin']);
 
     Route::get('/incentivos/reporte-pagos', [IncentivosController::class, 'reportePagos']);
+    Route::get('/incentivos/rendimiento-coordinador', [RendimientoCoordinadorController::class, 'index'])
+        ->name('incentivos.rendimiento-coordinador.index');
     Route::get('/incentivos/reporte-nuevo-incentivo-view', [IncentivosController::class, 'reporteNuevoIncentivoView']);
     Route::get('/incentivos/reporte-nuevo-incentivo', [IncentivosController::class, 'reporteNuevoIncentivo']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v2-view', [IncentivosController::class, 'reporteNuevoIncentivoV2View']);
