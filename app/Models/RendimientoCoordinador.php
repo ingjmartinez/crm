@@ -86,7 +86,6 @@ class RendimientoCoordinador extends Model
                 $asignacionesPorCoordinador,
                 $agenciasPorId,
                 $ventasPorAgencia,
-                $cumplimientoUsuarios,
                 $nombresUsuarios
             ) {
                 $asignadas = $asignacionesPorCoordinador
@@ -103,6 +102,25 @@ class RendimientoCoordinador extends Model
                 $detalleUsuariosCumplieron = [];
                 $detalleUsuariosNoCumplieron = [];
 
+                $ventasUsuariosCoordinador = [];
+                foreach ($asignadas as $agenciaId) {
+                    foreach (($ventasPorAgencia[$agenciaId]['usuarios'] ?? []) as $cedula => $monto) {
+                        $ventasUsuariosCoordinador[$cedula] = ($ventasUsuariosCoordinador[$cedula] ?? 0)
+                            + (float) $monto;
+                    }
+                }
+                $cumplimientoCoordinador = collect($ventasUsuariosCoordinador)
+                    ->map(function ($ventas) {
+                        $cumple = (float) $ventas >= self::META_MINIMA_VENTA;
+
+                        return [
+                            'ventas' => (float) $ventas,
+                            'cumple' => $cumple,
+                            'incentivo' => $cumple ? $this->calcularIncentivo((float) $ventas) : 0,
+                        ];
+                    })
+                    ->all();
+
                 foreach ($asignadas as $agenciaId) {
                     $usuariosAgencia = array_keys($ventasPorAgencia[$agenciaId]['usuarios'] ?? []);
                     $agenciaCumple = false;
@@ -110,7 +128,7 @@ class RendimientoCoordinador extends Model
 
                     foreach ($usuariosAgencia as $cedula) {
                         $usuariosVendedores[$cedula] = true;
-                        $usuarioCumple = ($cumplimientoUsuarios[$cedula]['cumple'] ?? false) === true;
+                        $usuarioCumple = ($cumplimientoCoordinador[$cedula]['cumple'] ?? false) === true;
                         if ($usuarioCumple) {
                             $agenciaCumple = true;
                         }
@@ -121,14 +139,14 @@ class RendimientoCoordinador extends Model
                             'cedula' => str_pad((string) $cedula, 11, '0', STR_PAD_LEFT),
                             'nombre' => $nombresUsuarios[$cedula] ?? 'Actualizar en maestro de empleados',
                             'monto_vendido' => round((float) ($ventasPorAgencia[$agenciaId]['usuarios'][$cedula] ?? 0), 2),
-                            'incentivo_ganado' => (int) ($cumplimientoUsuarios[$cedula]['incentivo'] ?? 0),
-                            'venta_total_usuario' => round((float) ($cumplimientoUsuarios[$cedula]['ventas'] ?? 0), 2),
+                            'incentivo_ganado' => (int) ($cumplimientoCoordinador[$cedula]['incentivo'] ?? 0),
+                            'venta_total_usuario' => round((float) ($cumplimientoCoordinador[$cedula]['ventas'] ?? 0), 2),
                             'faltante_regla' => round(max(
-                                self::META_MINIMA_VENTA - (float) ($cumplimientoUsuarios[$cedula]['ventas'] ?? 0),
+                                self::META_MINIMA_VENTA - (float) ($cumplimientoCoordinador[$cedula]['ventas'] ?? 0),
                                 0
                             ), 2),
                             'faltante_pct' => round(max(
-                                ((self::META_MINIMA_VENTA - (float) ($cumplimientoUsuarios[$cedula]['ventas'] ?? 0))
+                                ((self::META_MINIMA_VENTA - (float) ($cumplimientoCoordinador[$cedula]['ventas'] ?? 0))
                                     / self::META_MINIMA_VENTA) * 100,
                                 0
                             ), 2),
@@ -147,7 +165,7 @@ class RendimientoCoordinador extends Model
                     ];
 
                     $mejorVentaUsuario = (float) collect($usuariosAgencia)
-                        ->map(fn ($cedula) => (float) ($cumplimientoUsuarios[$cedula]['ventas'] ?? 0))
+                        ->map(fn ($cedula) => (float) ($cumplimientoCoordinador[$cedula]['ventas'] ?? 0))
                         ->max();
                     $detalleAgencia['mejor_venta_usuario'] = round($mejorVentaUsuario, 2);
                     $detalleAgencia['faltante_regla'] = round(max(
@@ -169,7 +187,7 @@ class RendimientoCoordinador extends Model
 
                 $usuarios = array_keys($usuariosVendedores);
                 $usuariosCumplieron = collect($usuarios)
-                    ->filter(fn ($cedula) => ($cumplimientoUsuarios[$cedula]['cumple'] ?? false) === true)
+                    ->filter(fn ($cedula) => ($cumplimientoCoordinador[$cedula]['cumple'] ?? false) === true)
                     ->count();
 
                 return [

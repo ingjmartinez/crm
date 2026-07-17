@@ -492,6 +492,15 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/incentivos/reporte-pagos', [IncentivosController::class, 'reportePagos']);
     Route::get('/incentivos/rendimiento-coordinador', [RendimientoCoordinadorController::class, 'index'])
         ->name('incentivos.rendimiento-coordinador.index');
+    Route::get('/incentivos/rendimiento-coordinador/{coordinador}/detalle', [RendimientoCoordinadorController::class, 'detalle'])
+        ->whereNumber('coordinador')
+        ->name('incentivos.rendimiento-coordinador.detalle');
+    Route::get('/incentivos/rendimiento-coordinador/{coordinador}/pdf', [RendimientoCoordinadorController::class, 'pdf'])
+        ->whereNumber('coordinador')
+        ->name('incentivos.rendimiento-coordinador.pdf');
+    Route::get('/incentivos/rendimiento-coordinador/{coordinador}/excel', [RendimientoCoordinadorController::class, 'excel'])
+        ->whereNumber('coordinador')
+        ->name('incentivos.rendimiento-coordinador.excel');
     Route::get('/incentivos/reporte-nuevo-incentivo-view', [IncentivosController::class, 'reporteNuevoIncentivoView']);
     Route::get('/incentivos/reporte-nuevo-incentivo', [IncentivosController::class, 'reporteNuevoIncentivo']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v2-view', [IncentivosController::class, 'reporteNuevoIncentivoV2View']);
