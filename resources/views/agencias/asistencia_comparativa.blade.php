@@ -661,6 +661,22 @@
     }
 
     $(document).ready(function() {
+        const modalConfigEstadosElement = document.getElementById('modalConfigEstadosInc');
+
+        if (modalConfigEstadosElement.parentElement !== document.body) {
+            document.body.appendChild(modalConfigEstadosElement);
+        }
+
+        const modalConfigEstados = bootstrap.Modal.getOrCreateInstance(modalConfigEstadosElement);
+
+        modalConfigEstadosElement.addEventListener('hidden.bs.modal', function() {
+            if (!document.querySelector('.modal.show')) {
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('padding-right');
+                document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+            }
+        });
+
         table = $('#tableIncumplimientos').DataTable({
             data: [],
             responsive: true,
@@ -742,7 +758,7 @@
 
         $('#btnConfigEstados').on('click', function() {
             poblarModalConfigEstados();
-            $('#modalConfigEstadosInc').modal('show');
+            modalConfigEstados.show();
         });
 
         $('#btnGuardarConfigEstados').on('click', function() {
@@ -755,7 +771,7 @@
 
             configEstados = cfg;
             guardarConfigEstadosEnStorage();
-            $('#modalConfigEstadosInc').modal('hide');
+            modalConfigEstados.hide();
 
             if (ultimaRespuesta && Array.isArray(ultimaRespuesta.data)) {
                 renderizarTablaConConfig(ultimaRespuesta);

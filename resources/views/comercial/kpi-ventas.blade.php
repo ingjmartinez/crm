@@ -616,14 +616,14 @@
 
             const html = `
                 <html>
-                    <head><meta charset="UTF-8"></head>
+                    <head><meta charset="UTF-8"><\/head>
                     <body>
                         <table border="1">
                             <thead><tr>${headerHtml}</tr></thead>
                             <tbody>${rowsHtml}</tbody>
                         </table>
-                    </body>
-                </html>
+                    <\/body>
+                <\/html>
             `;
 
             const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8;' });

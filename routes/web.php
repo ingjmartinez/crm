@@ -4,24 +4,27 @@ use App\Http\Controllers\AgenciaController;
 use App\Http\Controllers\Api;
 use App\Http\Controllers\AsistenciaComparativaController;
 use App\Http\Controllers\AsistenciaController;
-use App\Http\Controllers\AutoProcesoConfigController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AutoProcesoConfigController;
+use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\ComercialController;
 use App\Http\Controllers\ContabilidadComisionController;
+use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\ContabilidadFlujoRutaController;
-use App\Http\Controllers\ContabilidadElectricidadController;
-use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\CruceUsuarioSeguimientoController;
 use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\EntrevistaOnlineController;
 use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
+use App\Http\Controllers\Gerencia\RentabilidadAgenciaController;
+use App\Http\Controllers\Gerencia\SeguimientoAgenciaController;
 use App\Http\Controllers\GestionAgenciasReporteController;
-use App\Http\Controllers\InicioController;
-use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\IncentivoConfiguracionController;
+use App\Http\Controllers\IncentivosController;
+use App\Http\Controllers\IncentivoV6Controller;
+use App\Http\Controllers\InicioController;
 use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\MarController;
 use App\Http\Controllers\MetaIncentivoController;
@@ -41,14 +44,16 @@ use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\RecargasController;
 use App\Http\Controllers\RecursosHumanosController;
 use App\Http\Controllers\RegistroEmpleadoController;
-use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\RendimientoCoordinadorController;
-use App\Http\Controllers\RutaController;
+use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\RoleController;
-use App\Http\Controllers\SuperAdminSesionController;
+use App\Http\Controllers\RutaController;
 use App\Http\Controllers\ServicioGeneralMantenimientoEquipoController;
 use App\Http\Controllers\ServicioGeneralRequerimientoController;
+use App\Http\Controllers\SuperAdminSesionController;
 use App\Http\Controllers\TareaController;
+use App\Http\Controllers\Tecnologia\MonitoreoAgenciaPlazaController;
+use App\Http\Controllers\Tecnologia\MonitoreoTerminalController;
 use App\Http\Controllers\TecnologiaSolicitudController;
 use App\Http\Controllers\TokenController;
 use App\Http\Controllers\UserController;
@@ -82,6 +87,18 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/gerencia', [ModuleHubController::class, 'gerencia'])->name('gerencia.index');
+    Route::get('/gerencia/rentabilidad-agencia', [RentabilidadAgenciaController::class, 'index'])
+        ->name('gerencia.rentabilidad-agencia');
+    Route::get('/gerencia/rentabilidad-agencia/buscar', [RentabilidadAgenciaController::class, 'buscar'])
+        ->name('gerencia.rentabilidad-agencia.buscar');
+    Route::get('/gerencia/seguimiento-agencia', [SeguimientoAgenciaController::class, 'index'])
+        ->name('gerencia.seguimiento-agencia');
+    Route::get('/gerencia/seguimiento-agencia/detalle', [SeguimientoAgenciaController::class, 'detalle'])
+        ->name('gerencia.seguimiento-agencia.detalle');
+    Route::get('/gerencia/seguimiento-agencia/export/excel', [SeguimientoAgenciaController::class, 'exportExcel'])
+        ->name('gerencia.seguimiento-agencia.export.excel');
+    Route::get('/gerencia/seguimiento-agencia/export/pdf', [SeguimientoAgenciaController::class, 'exportPdf'])
+        ->name('gerencia.seguimiento-agencia.export.pdf');
     Route::get('/gerencia/gerencial', [\App\Http\Controllers\Gerencia\GerencialController::class, 'index'])->name('gerencia.gerencial');
     Route::get('/gerencia/gerencial/data', [\App\Http\Controllers\Gerencia\GerencialController::class, 'data'])->name('gerencia.gerencial.data');
     Route::get('/gerencia/venta-gerencial', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'index'])->name('gerencia.venta-gerencial');
@@ -163,16 +180,16 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/auto-proceso/{sistema}/config', [AutoProcesoConfigController::class, 'show']);
     Route::post('/auto-proceso/{sistema}/config', [AutoProcesoConfigController::class, 'update']);
 
-    Route::get('/ventas-por-usuario-lotobet', fn() => view('lotobet.ventas-usuario'));
-    Route::get('/faltantes-lotobet', fn() => view('lotobet.faltantes'));
-    Route::get('/faltantes-lotonet', fn() => view('lotonet.faltantes'));
-    Route::get('/ventas-por-producto-lotobet', fn() => view('lotobet.ventas-productos'));
-    Route::get('/recargas-lotobet', fn() => view('lotobet.recargas'));
-    Route::get('/premios-lotobet', fn() => view('lotobet.premios'));
-    Route::get('/pagos-misma-empresa-lotobet', fn() => view('lotobet.pagos-misma-empresa'));
-    Route::get('/pagos-aotra-empresa-lotobet', fn() => view('lotobet.pagos-aotra-empresa'));
-    Route::get('/pagos-porotra-empresa-lotobet', fn() => view('lotobet.pagos-porotra-empresa'));
-    Route::get('/asistencias-lotobet', fn() => view('lotobet.asistencias'));
+    Route::get('/ventas-por-usuario-lotobet', fn () => view('lotobet.ventas-usuario'));
+    Route::get('/faltantes-lotobet', fn () => view('lotobet.faltantes'));
+    Route::get('/faltantes-lotonet', fn () => view('lotonet.faltantes'));
+    Route::get('/ventas-por-producto-lotobet', fn () => view('lotobet.ventas-productos'));
+    Route::get('/recargas-lotobet', fn () => view('lotobet.recargas'));
+    Route::get('/premios-lotobet', fn () => view('lotobet.premios'));
+    Route::get('/pagos-misma-empresa-lotobet', fn () => view('lotobet.pagos-misma-empresa'));
+    Route::get('/pagos-aotra-empresa-lotobet', fn () => view('lotobet.pagos-aotra-empresa'));
+    Route::get('/pagos-porotra-empresa-lotobet', fn () => view('lotobet.pagos-porotra-empresa'));
+    Route::get('/asistencias-lotobet', fn () => view('lotobet.asistencias'));
 
     Route::get('/ventas-usuarios-lotobet', [VentasController::class, 'getVentasUsuariosLotobet']);
     Route::get('/save-ventas-usuarios-lotobet', [VentasController::class, 'saveVentasUsuariosLotobet']);
@@ -215,16 +232,16 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/agencias/asistencia-comparativa/list', [AsistenciaComparativaController::class, 'list'])->name('agencias.asistencia-comparativa.list');
     Route::post('/agencias/asistencia-comparativa/send-mail', [AsistenciaComparativaController::class, 'enviarPorCoordinador'])->name('agencias.asistencia-comparativa.send-mail');
 
-    Route::get('/ventas-por-usuario-lotonet', fn() => view('lotonet.ventas-usuario'));
-    Route::get('/faltantes-lotonet', fn() => view('lotonet.faltantes'));
-    Route::get('/paquetico-lotonet', fn() => view('lotonet.paquetico'));
-    Route::get('/recargas-lotonet', fn() => view('lotonet.recargas'));
-    Route::get('/ventas-por-producto-lotonet', fn() => view('lotonet.ventas-productos'));
-    Route::get('/premios-lotonet', fn() => view('lotonet.premios'));
-    Route::get('/pagos-misma-empresa-lotonet', fn() => view('lotonet.pagos-misma-empresa'));
-    Route::get('/pagos-aotra-empresa-lotonet', fn() => view('lotonet.pagos-aotra-empresa'));
-    Route::get('/pagos-porotra-empresa-lotonet', fn() => view('lotonet.pagos-porotra-empresa'));
-    Route::get('/asistencias-lotonet', fn() => view('lotonet.asistencias'));
+    Route::get('/ventas-por-usuario-lotonet', fn () => view('lotonet.ventas-usuario'));
+    Route::get('/faltantes-lotonet', fn () => view('lotonet.faltantes'));
+    Route::get('/paquetico-lotonet', fn () => view('lotonet.paquetico'));
+    Route::get('/recargas-lotonet', fn () => view('lotonet.recargas'));
+    Route::get('/ventas-por-producto-lotonet', fn () => view('lotonet.ventas-productos'));
+    Route::get('/premios-lotonet', fn () => view('lotonet.premios'));
+    Route::get('/pagos-misma-empresa-lotonet', fn () => view('lotonet.pagos-misma-empresa'));
+    Route::get('/pagos-aotra-empresa-lotonet', fn () => view('lotonet.pagos-aotra-empresa'));
+    Route::get('/pagos-porotra-empresa-lotonet', fn () => view('lotonet.pagos-porotra-empresa'));
+    Route::get('/asistencias-lotonet', fn () => view('lotonet.asistencias'));
 
     Route::get('/ventas-usuarios-lotonet', [VentasController::class, 'getVentasUsuariosLotonet']);
     Route::get('/save-ventas-usuarios-lotonet', [VentasController::class, 'saveVentasUsuariosLotonet']);
@@ -266,7 +283,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/save-asistencias-lotonet', [AsistenciaController::class, 'saveAsistenciasLotonet']);
     Route::get('/delete-asistencias-lotonet', [AsistenciaController::class, 'deleteAsistenciasLotonet']);
 
-    Route::get('/mar-ventas', fn() => view('mar.ventas'));
+    Route::get('/mar-ventas', fn () => view('mar.ventas'));
 
     Route::get('/get-mar-ventas', [MarController::class, 'getVentas']);
     Route::get('/save-mar-ventas', [MarController::class, 'saveVentas']);
@@ -398,7 +415,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/superadmin/sesiones', [SuperAdminSesionController::class, 'index'])
         ->middleware('role:superadmin')
         ->name('superadmin.sesiones.index');
-    Route::resource('coordinador-operador', CoordinadorOperadorController::class)->except(['show']);
+    Route::get('coordinador-operador/empleados', [CoordinadorOperadorController::class, 'empleados'])
+        ->name('coordinador-operador.empleados');
+    Route::resource('coordinador-operador', CoordinadorOperadorController::class)->except(['show', 'edit']);
     Route::post('coordinador-operador/{coordinador_operador}/asignar-agencias', [CoordinadorOperadorController::class, 'asignarAgencias'])
         ->name('coordinador-operador.asignar-agencias');
 
@@ -416,9 +435,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::delete('/catalogo-juegos/{catalogoJuego}', [CatalogoJuegoController::class, 'destroy'])->name('catalogo-juegos.destroy');
     });
 
-    Route::get('/reportes-bi/resumen-ventas', fn() => view('reportes-bi.resumen-ventas'));
-    Route::get('/reportes-bi/ventas-usuarios', fn() => view('reportes-bi.ventas-usuarios'));
-    Route::get('/reportes-bi/faltantes', fn() => view('reportes-bi.faltantes'));
+    Route::get('/reportes-bi/resumen-ventas', fn () => view('reportes-bi.resumen-ventas'));
+    Route::get('/reportes-bi/ventas-usuarios', fn () => view('reportes-bi.ventas-usuarios'));
+    Route::get('/reportes-bi/faltantes', fn () => view('reportes-bi.faltantes'));
 
     Route::get('/comercial', [ModuleHubController::class, 'comercial'])->name('comercial.index');
     Route::get('/comercial/resumen', [ComercialController::class, 'index'])->name('comercial.resumen');
@@ -431,15 +450,15 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/comercial/meta-incentivo', [MetaIncentivoController::class, 'index'])->name('comercial.meta-incentivo');
     Route::get('/comercial/meta-incentivo/export', [MetaIncentivoController::class, 'export'])->name('comercial.meta-incentivo.export');
     Route::post('/comercial/meta-incentivo/send-mail', [MetaIncentivoController::class, 'enviarMiniReporte'])->name('comercial.meta-incentivo.send-mail');
-    Route::get('/comercial/ventas-producto', fn() => view('comercial.ventas-producto'))->name('comercial.ventas-producto');
+    Route::get('/comercial/ventas-producto', fn () => view('comercial.ventas-producto'))->name('comercial.ventas-producto');
 
     // Modulo Operaciones
     Route::get('/operaciones', [ModuleHubController::class, 'operaciones'])->name('operaciones.index');
     Route::get('/operaciones/deposito-ruta', [OperacionDepositoRutaController::class, 'index'])->name('operaciones.deposito-ruta');
     Route::get('/operaciones/deposito-ruta/data', [OperacionDepositoRutaController::class, 'data'])->name('operaciones.deposito-ruta.data');
     Route::post('/operaciones/deposito-ruta/{deposito}/estado', [OperacionDepositoRutaController::class, 'updateEstado'])->name('operaciones.deposito-ruta.estado');
-    Route::get('/operaciones/panel', fn() => view('operaciones.panel'))->name('operaciones.panel');
-    Route::get('/operaciones/gestion', fn() => view('operaciones.gestion'))->name('operaciones.gestion');
+    Route::get('/operaciones/panel', fn () => view('operaciones.panel'))->name('operaciones.panel');
+    Route::get('/operaciones/gestion', fn () => view('operaciones.gestion'))->name('operaciones.gestion');
     Route::get('/operaciones/rutas-consolidadas', [OperacionesRutasConsolidadasController::class, 'index'])->name('operaciones.rutas-consolidadas');
     Route::post('/operaciones/rutas-consolidadas/procesar', [OperacionesRutasConsolidadasController::class, 'procesar'])->name('operaciones.rutas-consolidadas.procesar');
     Route::get('/operaciones/reportes/diario', [OperacionesReporteDiarioController::class, 'index'])->name('operaciones.reporte.diario');
@@ -455,7 +474,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/operaciones/reportes/diario/{reporte_diario_ruta}/comprobante/{tipo}', [OperacionesReporteDiarioController::class, 'verComprobante'])->name('operaciones.reporte.diario.comprobante');
     Route::post('/operaciones/reportes/diario/{reporte_diario_ruta}/comprobante/upload', [OperacionesReporteDiarioController::class, 'uploadComprobanteEnReporte'])->name('operaciones.reporte.diario.comprobante.upload');
     Route::post('/operaciones/reportes/diario/upload-comprobante', [OperacionesReporteDiarioController::class, 'uploadComprobante'])->name('operaciones.reporte.diario.upload-comprobante');
-    Route::get('/operaciones/reportes/mensual', fn() => view('operaciones.reportes.mensual'))->name('operaciones.reporte.mensual');
+    Route::get('/operaciones/reportes/mensual', fn () => view('operaciones.reportes.mensual'))->name('operaciones.reporte.mensual');
     Route::resource('operaciones/operador-ruta', OperadorRutaController::class)
         ->except(['show'])
         ->parameters(['operador-ruta' => 'operador_ruta'])
@@ -520,6 +539,14 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas', [IncentivosController::class, 'listarTerminalesExcluidasIncentivoReporteNuevoIncentivoV5']);
     Route::post('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas', [IncentivosController::class, 'guardarTerminalesExcluidasIncentivoReporteNuevoIncentivoV5']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas/plantilla', [IncentivosController::class, 'plantillaTerminalesExcluidasReporteNuevoIncentivoV5']);
+    Route::get('/incentivos/reporte-nuevo-incentivo-v6-view', [IncentivoV6Controller::class, 'index'])
+        ->name('incentivos.reporte-nuevo-incentivo-v6.index');
+    Route::get('/incentivos/reporte-nuevo-incentivo-v6', [IncentivoV6Controller::class, 'reporte'])
+        ->name('incentivos.reporte-nuevo-incentivo-v6.reporte');
+    Route::get('/incentivos/reporte-nuevo-incentivo-v6/calendario', [IncentivoV6Controller::class, 'calendario'])
+        ->name('incentivos.reporte-nuevo-incentivo-v6.calendario');
+    Route::put('/incentivos/reporte-nuevo-incentivo-v6/calendario', [IncentivoV6Controller::class, 'guardarCalendario'])
+        ->name('incentivos.reporte-nuevo-incentivo-v6.calendario.guardar');
     Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);
     Route::get('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoIndex'])->name('incentivos.incentivo-administrativo.index');
     Route::get('/incentivos/incentivo-administrativo/empleados', [IncentivoConfiguracionController::class, 'incentivoAdministrativoEmpleados'])->name('incentivos.incentivo-administrativo.empleados');
@@ -538,6 +565,14 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
     Route::prefix('tecnologia')->name('tecnologia.')->group(function () {
         Route::get('/', [ModuleHubController::class, 'tecnologia'])->name('index');
+        Route::get('/monitoreo-terminales', [MonitoreoTerminalController::class, 'index'])->name('monitoreo-terminales.index');
+        Route::get('/monitoreo-terminales/generar', [MonitoreoTerminalController::class, 'generar'])
+            ->name('monitoreo-terminales.generar');
+        Route::post('/monitoreo-terminales/comentario', [MonitoreoTerminalController::class, 'guardarComentario'])
+            ->name('monitoreo-terminales.comentario');
+        Route::post('/monitoreo-terminales/exportar', [MonitoreoTerminalController::class, 'exportar'])
+            ->name('monitoreo-terminales.exportar');
+        Route::get('/monitoreo-agencias-plaza', MonitoreoAgenciaPlazaController::class)->name('monitoreo-agencias-plaza.index');
         Route::get('/solicitudes', [TecnologiaSolicitudController::class, 'index'])->name('solicitudes.index');
         Route::get('/solicitudes/list', [TecnologiaSolicitudController::class, 'list'])->name('solicitudes.list');
         Route::post('/solicitudes', [TecnologiaSolicitudController::class, 'store'])->name('solicitudes.store');
@@ -582,8 +617,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
                 ->name('mantenimiento-equipos.destroy');
         });
 
-    Route::get('/generar-lotobet', fn() => view('lotobet.index'));
-    Route::get('/generar-lotonet', fn() => view('lotonet.index'));
+    Route::get('/generar-lotobet', fn () => view('lotobet.index'));
+    Route::get('/generar-lotonet', fn () => view('lotonet.index'));
 
     Route::get('/ventas-flash-lotobet', [VentaFlashController::class, 'ventasFlashLotobet']);
     Route::get('/get-ventas-flash-lotobet', [VentaFlashController::class, 'getVentasLotobet']);

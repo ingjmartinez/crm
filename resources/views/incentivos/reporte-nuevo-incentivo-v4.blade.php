@@ -1219,11 +1219,11 @@
             <html>
                 <head>
                     <meta charset="UTF-8">
-                </head>
+                <\/head>
                 <body>
                     <table>${tableRows}</table>
-                </body>
-            </html>
+                <\/body>
+            <\/html>
         `;
 
         return new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });

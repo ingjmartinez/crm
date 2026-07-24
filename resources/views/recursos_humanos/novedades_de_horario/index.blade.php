@@ -236,6 +236,22 @@
             return `$${formatearNumero(valor)}`;
         }
 
+        function formatearFechaConDia(fecha) {
+            if (!fecha) {
+                return '-';
+            }
+
+            const fechaLocal = new Date(`${fecha}T00:00:00`);
+            const fechaFormateada = new Intl.DateTimeFormat('es-DO', {
+                weekday: 'long',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            }).format(fechaLocal);
+
+            return fechaFormateada.charAt(0).toUpperCase() + fechaFormateada.slice(1);
+        }
+
         function formatearHorasMinutos(valor) {
             const numero = Number(valor || 0);
             const signo = numero < 0 ? '-' : '';
@@ -385,7 +401,7 @@
             fechasBody.innerHTML = detalle.length
                 ? detalle.map(item => `
                     <tr>
-                        <td>${escaparHtml(item.fecha)}</td>
+                        <td>${escaparHtml(formatearFechaConDia(item.fecha))}</td>
                         <td class="text-end">${formatearHorasMinutos(item.horas_faltantes)}</td>
                         <td class="text-end">${formatearMonto(item.monto_dia)}</td>
                     </tr>

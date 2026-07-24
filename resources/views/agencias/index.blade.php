@@ -196,7 +196,8 @@
                                     <tr>
                                         <th style="min-width: 140px;">Desde</th>
                                         <th style="min-width: 140px;">Hasta</th>
-                                        <th style="min-width: 190px;">Horario AM</th>
+                                        <th style="min-width: 150px;">Tipo</th>
+                                        <th style="min-width: 190px;">Horario AM / Corrido</th>
                                         <th style="min-width: 190px;">Horario PM</th>
                                         <th class="text-center" style="width: 70px;">Accion</th>
                                     </tr>
@@ -595,6 +596,12 @@
                         </select>
                     </td>
                     <td>
+                        <select class="form-select form-select-sm tipo-horario-regla" data-field="tipo_horario">
+                            <option value="dividido"${(config.tipo_horario || 'dividido') === 'dividido' ? ' selected' : ''}>Dividido AM/PM</option>
+                            <option value="corrido"${config.tipo_horario === 'corrido' ? ' selected' : ''}>Horario corrido</option>
+                        </select>
+                    </td>
+                    <td>
                         <input type="text" class="form-control form-control-sm" data-field="horario_am" value="${escapeHtml(config.horario_am || '')}" placeholder="7:30 AM / 2:30 PM">
                     </td>
                     <td>
@@ -609,7 +616,21 @@
             `;
 
             tablaReglasHorarioBody.append(row);
+            aplicarTipoHorarioFila(tablaReglasHorarioBody.find('tr').last());
             renumerarReglasHorario();
+        }
+
+        function aplicarTipoHorarioFila(row) {
+            var esCorrido = row.find('[data-field="tipo_horario"]').val() === 'corrido';
+            var horarioAm = row.find('[data-field="horario_am"]');
+            var horarioPm = row.find('[data-field="horario_pm"]');
+
+            horarioAm.attr('placeholder', esCorrido ? '8:00 AM / 8:00 PM' : '7:30 AM / 2:30 PM');
+            horarioPm.prop('disabled', esCorrido);
+
+            if (esCorrido) {
+                horarioPm.val('');
+            }
         }
 
         function reiniciarReglasHorario() {
@@ -617,16 +638,22 @@
             agregarReglaHorario({
                 dia_desde: 1,
                 dia_hasta: 6,
+                tipo_horario: 'dividido',
                 horario_am: '7:30 AM / 2:30 PM',
                 horario_pm: '2:00 PM / 9:30 PM'
             });
             agregarReglaHorario({
                 dia_desde: 7,
                 dia_hasta: 7,
-                horario_am: '7:30 AM / 2:30 PM',
-                horario_pm: '2:00 PM / 9:30 PM'
+                tipo_horario: 'corrido',
+                horario_am: '8:00 AM / 8:00 PM',
+                horario_pm: ''
             });
         }
+
+        tablaReglasHorarioBody.on('change', '.tipo-horario-regla', function() {
+            aplicarTipoHorarioFila($(this).closest('tr'));
+        });
 
         function aplicarVisibilidadAgenciaHorario() {
             var agenciaEspecifica = horarioMasivoScope.val() === 'agencia';

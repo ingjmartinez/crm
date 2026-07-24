@@ -77,6 +77,53 @@
             transform: translateY(-1px);
         }
 
+        .calendar-payment-grid {
+            contain: layout paint;
+            max-height: 68vh;
+            overflow: auto;
+        }
+
+        .calendar-payment-grid th {
+            background: var(--vz-light);
+            position: sticky;
+            top: 0;
+            vertical-align: middle;
+            z-index: 3;
+        }
+
+        .calendar-payment-grid .calendar-terminal-column {
+            background: var(--vz-card-bg);
+            left: 0;
+            min-width: 260px;
+            position: sticky;
+            z-index: 2;
+        }
+
+        .calendar-payment-grid th.calendar-terminal-column {
+            background: var(--vz-light);
+            z-index: 4;
+        }
+
+        .calendar-payment-cell {
+            min-width: 112px;
+        }
+
+        .calendar-payment-cell.payment-60 {
+            background-color: #d1e7dd;
+        }
+
+        .calendar-payment-cell.payment-70 {
+            background-color: #cff4fc;
+        }
+
+        .calendar-payment-cell.payment-80 {
+            background-color: #fff3cd;
+        }
+
+        .calendar-payment-cell.payment-default {
+            background-color: #f3f6f9;
+        }
+
         .agencia-formato-comparativa .agencia-nombre {
             color: #172033;
             font-weight: 600;
@@ -120,12 +167,12 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">Calculo de Incentivos</h4>
+                            <h4 class="mb-sm-0">Calculo de Incentivos V6 - Pruebas</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('incentivos.index') }}">Incentivos</a></li>
-                                    <li class="breadcrumb-item active">Calculo de Incentivos</li>
+                                    <li class="breadcrumb-item active">Calculo de Incentivos V6 - Pruebas</li>
                                 </ol>
                             </div>
                         </div>
@@ -217,7 +264,7 @@
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between">
                                 <div>
-                                    <h5 class="card-title mb-0">Calculo por sistema y tipo de pago (V5)</h5>
+                                    <h5 class="card-title mb-0">Calculo por sistema y tipo de pago (V6 - Pruebas)</h5>
                                     <small class="text-muted">Configura tramos de venta mensual por pago a 60, 70 u 80.</small>
                                 </div>
                                 <div class="d-flex gap-3 align-items-end flex-wrap">
@@ -283,6 +330,9 @@
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnConfigHorasTotal">Configurar Horas</button>
+                                    <button type="button" class="btn btn-soft-primary" id="btnCalendarioTiposPago">
+                                        <i class="ri-calendar-check-line me-1"></i>Calendario de pagos
+                                    </button>
                                     <button type="button" class="btn btn-soft-secondary" id="btnExcluirTerminales">
                                         Excluir Terminales <span class="badge bg-danger ms-1" id="terminalesExcluidasCount">0</span>
                                     </button>
@@ -303,6 +353,7 @@
                                             <th>IdEmpleado</th>
                                             <th class="col-nombre">Nombre</th>
                                             <th class="col-empresa">Empresa</th>
+                                            <th>Tipos de pago</th>
                                             <th class="col-monto text-end">Ventas Ult. Mes</th>
                                             <th class="col-monto text-end">Ventas Mes Actual</th>
                                             <th class="col-dias text-center">Dias</th>
@@ -867,12 +918,95 @@
             </div>
         </div>
     </div>
+
+    <div id="modalCalendarioTiposPago" class="modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Calendario diario de tipos de pago</h5>
+                        <small class="text-muted">Configura 60, 70 u 80 por terminal y día. “General” usa el tipo seleccionado en el reporte.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="calendarioBuscarTerminal">Buscar terminal o agencia</label>
+                            <input type="search" class="form-control" id="calendarioBuscarTerminal" placeholder="Terminal, agencia, empresa...">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-outline-primary w-100" id="btnCargarCalendarioPago">
+                                <i class="ri-refresh-line me-1"></i>Cargar período
+                            </button>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="calendarioTipoMasivo">Tipo para selección</label>
+                            <select class="form-select" id="calendarioTipoMasivo">
+                                <option value="tramos_60">Pago 60</option>
+                                <option value="tramos_70">Pago 70</option>
+                                <option value="tramos_80">Pago 80</option>
+                                <option value="">General</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-primary w-100" id="btnAplicarTipoMasivo">
+                                Aplicar en masa
+                            </button>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-success w-100" id="btnGuardarCalendarioPago">
+                                <i class="ri-save-line me-1"></i>Guardar cambios
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-3 mb-2 small">
+                        <span><span class="badge bg-success-subtle text-success">60</span> Pago 60</span>
+                        <span><span class="badge bg-info-subtle text-info">70</span> Pago 70</span>
+                        <span><span class="badge bg-warning-subtle text-warning">80</span> Pago 80</span>
+                        <span><span class="badge bg-light text-muted">General</span> Tipo general del reporte</span>
+                        <span class="ms-auto fw-semibold" id="calendarioPagoResumen"></span>
+                    </div>
+
+                    <div class="calendar-payment-grid border rounded">
+                        <table class="table table-bordered table-sm align-middle mb-0" id="tablaCalendarioTiposPago">
+                            <thead></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2" id="calendarioPaginacion">
+                        <div class="d-flex align-items-center gap-2 small text-muted">
+                            <label for="calendarioPorPagina" class="mb-0">Mostrar</label>
+                            <select class="form-select form-select-sm" id="calendarioPorPagina" style="width: 82px">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                            </select>
+                            <span>agencias por pagina</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="calendarioPaginaAnterior">
+                                <i class="ri-arrow-left-s-line"></i> Anterior
+                            </button>
+                            <span class="small fw-semibold" id="calendarioPaginaEstado">Pagina 1 de 1</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="calendarioPaginaSiguiente">
+                                Siguiente <i class="ri-arrow-right-s-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
 <script>
     const XML_DECL = '<' + '?xml version="1.0" encoding="UTF-8" standalone="yes"?' + '>';
     const CAN_CONFIG_ADMIN_PCT = @json($canConfigAdminPct);
+    const CALENDARIO_V6_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario'));
+    const CALENDARIO_V6_GUARDAR_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario.guardar'));
 
     function buildRanges(percent, pagos) {
         return [
@@ -951,6 +1085,17 @@
     let cachedSistema = null;
     let cachedTipoPago = null;
     let cachedModoCalculo = null;
+    let calendarPaymentDates = [];
+    let calendarPaymentRows = [];
+    let calendarPaymentPagination = {
+        pagina_actual: 1,
+        ultima_pagina: 1,
+        por_pagina: 50,
+        total: 0,
+        desde: 0,
+        hasta: 0,
+    };
+    const calendarDirtyAssignments = new Map();
     let tableFaltantesIncentivo = null;
     let tableDesvinculadosIncentivo = null;
     let tableUsuariosActualizar = null;
@@ -993,7 +1138,7 @@
     let currentOperatorBase = 0;
     let currentCoordinatorBase = 0;
     let currentFixedBagTopUp = 0;
-    let horasTotalMinimo = toNumber(localStorage.getItem('incentivo_v5_horas_total_minimo') || 0);
+    let horasTotalMinimo = toNumber(localStorage.getItem('incentivo_v6_horas_total_minimo') || 0);
     let excludedTerminales = new Set(@json($terminalesExcluidasIncentivo ?? []));
     let recognizedTerminalesExcluidas = [];
     let currentExcludedApplication = {
@@ -1019,6 +1164,292 @@
 
     function toIntegerAmount(value) {
         return Math.round(toNumber(value));
+    }
+
+    function calendarPaymentKey(sistema, terminal, fecha) {
+        return `${String(sistema).trim().toLowerCase()}|${String(terminal).trim()}|${fecha}`;
+    }
+
+    function updateCalendarPaymentCell(select) {
+        const cell = select.closest('.calendar-payment-cell');
+        if (!cell) {
+            return;
+        }
+
+        cell.classList.remove('payment-60', 'payment-70', 'payment-80', 'payment-default');
+        cell.classList.add({
+            tramos_60: 'payment-60',
+            tramos_70: 'payment-70',
+            tramos_80: 'payment-80',
+        }[select.value] || 'payment-default');
+    }
+
+    function updateCalendarPaymentSummary() {
+        const summary = document.getElementById('calendarioPagoResumen');
+        if (!summary) {
+            return;
+        }
+
+        const total = Number(calendarPaymentPagination.total || calendarPaymentRows.length);
+        const from = Number(calendarPaymentPagination.desde || 0);
+        const to = Number(calendarPaymentPagination.hasta || 0);
+        summary.textContent = `${from.toLocaleString('en-US')}-${to.toLocaleString('en-US')} de ${total.toLocaleString('en-US')} terminales | ${calendarDirtyAssignments.size.toLocaleString('en-US')} cambios pendientes`;
+    }
+
+    function markCalendarPaymentDirty(select) {
+        const assignment = {
+            sistema: select.dataset.sistema,
+            terminal: select.dataset.terminal,
+            fecha: select.dataset.fecha,
+            tipo_pago: select.value || null,
+        };
+
+        calendarDirtyAssignments.set(
+            calendarPaymentKey(assignment.sistema, assignment.terminal, assignment.fecha),
+            assignment
+        );
+        updateCalendarPaymentCell(select);
+        updateCalendarPaymentSummary();
+    }
+
+    function createCalendarPaymentOption(value, label, selectedValue) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        option.selected = value === selectedValue;
+
+        return option;
+    }
+
+    function getCalendarPaymentValue(row, fecha) {
+        const dirtyAssignment = calendarDirtyAssignments.get(
+            calendarPaymentKey(row.sistema, row.terminal, fecha)
+        );
+
+        if (dirtyAssignment) {
+            return dirtyAssignment.tipo_pago || '';
+        }
+
+        return row.tipos_por_fecha?.[fecha] || '';
+    }
+
+    function updateCalendarPaymentPagination() {
+        const currentPage = Number(calendarPaymentPagination.pagina_actual || 1);
+        const lastPage = Number(calendarPaymentPagination.ultima_pagina || 1);
+        const state = document.getElementById('calendarioPaginaEstado');
+        const previous = document.getElementById('calendarioPaginaAnterior');
+        const next = document.getElementById('calendarioPaginaSiguiente');
+
+        if (state) {
+            state.textContent = `Pagina ${currentPage.toLocaleString('en-US')} de ${lastPage.toLocaleString('en-US')}`;
+        }
+        if (previous) {
+            previous.disabled = currentPage <= 1;
+        }
+        if (next) {
+            next.disabled = currentPage >= lastPage;
+        }
+    }
+
+    function renderCalendarPaymentGrid() {
+        const table = document.getElementById('tablaCalendarioTiposPago');
+        const thead = table.querySelector('thead');
+        const tbody = table.querySelector('tbody');
+        const headerRow = document.createElement('tr');
+        const terminalHeader = document.createElement('th');
+        terminalHeader.className = 'calendar-terminal-column';
+        terminalHeader.innerHTML = `
+            <div class="d-flex align-items-center justify-content-between gap-2">
+                <label class="mb-0"><input type="checkbox" class="form-check-input me-1" id="calendarSelectAllRows"> Terminales</label>
+                <label class="mb-0 small"><input type="checkbox" class="form-check-input me-1" id="calendarSelectAllDates"> Dias</label>
+            </div>`;
+        headerRow.appendChild(terminalHeader);
+
+        calendarPaymentDates.forEach((fecha) => {
+            const th = document.createElement('th');
+            const date = new Date(`${fecha}T00:00:00`);
+            th.className = 'text-center';
+            th.innerHTML = `
+                <label class="mb-0 d-block">
+                    <input type="checkbox" class="form-check-input calendar-date-check" value="${fecha}">
+                    <span class="d-block mt-1">${date.toLocaleDateString('es-DO', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>
+                </label>`;
+            headerRow.appendChild(th);
+        });
+        thead.replaceChildren(headerRow);
+        const bodyFragment = document.createDocumentFragment();
+
+        calendarPaymentRows.forEach((row) => {
+            const tr = document.createElement('tr');
+            const terminalCell = document.createElement('td');
+            terminalCell.className = 'calendar-terminal-column';
+            terminalCell.innerHTML = `
+                <div class="d-flex align-items-start gap-2">
+                    <input type="checkbox" class="form-check-input calendar-row-check mt-1">
+                    <div>
+                        <div class="fw-bold">
+                            ${escapeHtml(row.terminal)}
+                            <span class="badge bg-light text-dark">${escapeHtml(row.sistema)}</span>
+                            ${row.tiene_configuracion ? '<span class="badge bg-primary-subtle text-primary">Configurado</span>' : ''}
+                        </div>
+                        <div class="small">${escapeHtml(row.agencia)}</div>
+                        <div class="small text-muted">${escapeHtml(row.empresa)} | Ventas: ${formatMoney(row.ventas)}</div>
+                    </div>
+                </div>`;
+            tr.appendChild(terminalCell);
+
+            calendarPaymentDates.forEach((fecha) => {
+                const td = document.createElement('td');
+                td.className = 'calendar-payment-cell p-1';
+                const select = document.createElement('select');
+                const selectedValue = getCalendarPaymentValue(row, fecha);
+                select.className = 'form-select form-select-sm calendar-payment-select';
+                select.dataset.sistema = row.sistema;
+                select.dataset.terminal = row.terminal;
+                select.dataset.fecha = fecha;
+                select.appendChild(createCalendarPaymentOption('', 'General', selectedValue));
+                select.appendChild(createCalendarPaymentOption('tramos_60', '60', selectedValue));
+                select.appendChild(createCalendarPaymentOption('tramos_70', '70', selectedValue));
+                select.appendChild(createCalendarPaymentOption('tramos_80', '80', selectedValue));
+                td.appendChild(select);
+                tr.appendChild(td);
+                updateCalendarPaymentCell(select);
+            });
+
+            bodyFragment.appendChild(tr);
+        });
+        tbody.replaceChildren(bodyFragment);
+
+        if (table.dataset.calendarEventsBound !== '1') {
+            table.addEventListener('change', function(event) {
+                const target = event.target;
+
+                if (target.matches('.calendar-payment-select')) {
+                    markCalendarPaymentDirty(target);
+                } else if (target.id === 'calendarSelectAllRows') {
+                    table.querySelectorAll('.calendar-row-check').forEach((checkbox) => {
+                        checkbox.checked = target.checked;
+                    });
+                } else if (target.id === 'calendarSelectAllDates') {
+                    table.querySelectorAll('.calendar-date-check').forEach((checkbox) => {
+                        checkbox.checked = target.checked;
+                    });
+                }
+            });
+            table.dataset.calendarEventsBound = '1';
+        }
+
+        updateCalendarPaymentSummary();
+        updateCalendarPaymentPagination();
+    }
+
+    function loadCalendarPaymentGrid(page = 1, preserveDirtyAssignments = false, showBlockingLoader = true) {
+        const fechaInicio = document.getElementById('ni_fecha_ini').value;
+        const fechaFin = document.getElementById('ni_fecha_fin').value;
+        const sistema = document.getElementById('ni_sistema').value;
+        const buscar = document.getElementById('calendarioBuscarTerminal').value.trim();
+        const perPage = Number(document.getElementById('calendarioPorPagina')?.value || 50);
+
+        if (!fechaInicio || !fechaFin) {
+            Swal.fire({ title: 'Informacion', text: 'Selecciona las fechas del reporte antes de abrir el calendario.', icon: 'warning' });
+            return;
+        }
+
+        if (showBlockingLoader) {
+            Swal.fire({
+                title: 'Cargando calendario...',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading(),
+            });
+        } else {
+            const summary = document.getElementById('calendarioPagoResumen');
+            if (summary) {
+                summary.textContent = 'Cargando pagina...';
+            }
+        }
+        const params = new URLSearchParams({
+            fecha_ini: fechaInicio,
+            fecha_fin: fechaFin,
+            sistema,
+            buscar,
+            page: String(page),
+            per_page: String(perPage),
+        });
+
+        fetch(`${CALENDARIO_V6_URL}?${params.toString()}`, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then(response => parseResponseAsJson(response, 'No se pudo cargar el calendario de pagos'))
+            .then((response) => {
+                calendarPaymentDates = Array.isArray(response.fechas) ? response.fechas : [];
+                calendarPaymentRows = Array.isArray(response.terminales) ? response.terminales : [];
+                calendarPaymentPagination = response.paginacion || calendarPaymentPagination;
+                if (!preserveDirtyAssignments) {
+                    calendarDirtyAssignments.clear();
+                }
+                renderCalendarPaymentGrid();
+                if (showBlockingLoader) {
+                    Swal.close();
+                }
+            })
+            .catch((error) => Swal.fire({ title: 'Error', text: error.message || String(error), icon: 'error' }));
+    }
+
+    function applyBulkCalendarPaymentType() {
+        const selectedRows = [...document.querySelectorAll('.calendar-row-check:checked')]
+            .map(checkbox => checkbox.closest('tr'));
+        const selectedDates = new Set(
+            [...document.querySelectorAll('.calendar-date-check:checked')].map(checkbox => checkbox.value)
+        );
+        const tipoPago = document.getElementById('calendarioTipoMasivo').value;
+
+        if (!selectedRows.length || !selectedDates.size) {
+            Swal.fire({ title: 'Seleccion incompleta', text: 'Selecciona al menos una terminal y un dia.', icon: 'warning' });
+            return;
+        }
+
+        selectedRows.forEach((row) => {
+            row.querySelectorAll('.calendar-payment-select').forEach((select) => {
+                if (selectedDates.has(select.dataset.fecha)) {
+                    select.value = tipoPago;
+                    markCalendarPaymentDirty(select);
+                }
+            });
+        });
+    }
+
+    function saveCalendarPaymentChanges() {
+        const assignments = [...calendarDirtyAssignments.values()];
+        if (!assignments.length) {
+            Swal.fire({ title: 'Informacion', text: 'No hay cambios pendientes para guardar.', icon: 'info' });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Guardando calendario...',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        fetch(CALENDARIO_V6_GUARDAR_URL, {
+            method: 'PUT',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: JSON.stringify({ asignaciones: assignments }),
+        })
+            .then(response => parseResponseAsJson(response, 'No se pudo guardar el calendario de pagos'))
+            .then((response) => {
+                calendarDirtyAssignments.clear();
+                updateCalendarPaymentSummary();
+                Swal.fire({ title: 'Calendario actualizado', text: response.message, icon: 'success' });
+            })
+            .catch((error) => Swal.fire({ title: 'Error', text: error.message || String(error), icon: 'error' }));
     }
 
     async function parseResponseAsJson(response, contexto) {
@@ -2644,6 +3075,22 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 const montoRetencionCoordinadores = scaleExcluded(currentExcludedApplication.coordinadoresDisponible);
                 const coordinadoresTotal = Math.max(toIntegerAmount(montoCoordinador - montoRetencionCoordinadores), 0);
                 const distribucionTotal = toIntegerAmount(administrativosTotal + coordinadoresTotal + operadoresSeguridadTotal);
+                const agenciasPorTipoPago = ['tramos_60', 'tramos_70', 'tramos_80'].map((paymentType) => {
+                    const distribution = cachedMeta?.distribucion_tipos_pago?.[paymentType] || {};
+                    const agenciesByCompany = distribution?.agencias_por_empresa || {};
+                    const agencies = informeEmpresaKey === 'todos'
+                        ? Number(distribution?.agencias || 0)
+                        : Object.entries(agenciesByCompany).reduce((total, [company, count]) => (
+                            normalizeInformeEmpresaKey(company) === informeEmpresaKey
+                                ? total + Number(count || 0)
+                                : total
+                        ), 0);
+
+                    return {
+                        label: paymentType.replace('tramos_', ''),
+                        agencies,
+                    };
+                });
 
                 const moneyCell = (value, bold = false) => ({
                     text: formatMoney(value),
@@ -2877,6 +3324,31 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 const terminalesExcluidasText = terminalesExcluidas.length
                     ? terminalesExcluidas.join(', ')
                     : 'No hay terminales excluidas.';
+                const paymentTypeAgencyBlock = {
+                    table: {
+                        widths: ['*', '*', '*'],
+                        body: [
+                            agenciasPorTipoPago.map(item => ({
+                                text: `Pago ${item.label}`,
+                                alignment: 'center',
+                                bold: true,
+                                fillColor: '#e8f0fe',
+                                color: '#1e3a5f',
+                            })),
+                            agenciasPorTipoPago.map(item => ({
+                                text: `${item.agencies.toLocaleString('en-US')} agencias`,
+                                alignment: 'center',
+                                bold: true,
+                                fontSize: 11,
+                            })),
+                        ],
+                    },
+                    layout: {
+                        hLineColor: function () { return '#b8c7dc'; },
+                        vLineColor: function () { return '#b8c7dc'; },
+                    },
+                    margin: [0, 0, 0, 6],
+                };
 
                 const docDefinition = {
                     pageSize: 'LETTER',
@@ -2891,7 +3363,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                         };
                     },
                     content: [
-                        { text: `Informe Gerencial de Incentivos V5 - ${informeEmpresaLabel}`, style: 'title' },
+                        { text: `Informe Gerencial de Incentivos V6 - ${informeEmpresaLabel}`, style: 'title' },
                         { text: 'Resumen de cierre del proceso de incentivo', style: 'subtitle' },
                         {
                             columns: [
@@ -2911,6 +3383,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                             margin: [0, 0, 0, 8],
                             fontSize: 9,
                         },
+                        sectionTitle('Agencias calculadas por tipo de pago'),
+                        paymentTypeAgencyBlock,
                         sectionTitle('Resumen ejecutivo'),
                         { table: { widths: ['*', '28%'], body: resumenEjecutivo }, layout: tableLayout },
                         sectionTitle('Total a pagar detallado'),
@@ -2950,7 +3424,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 const pdf = pdfMake.createPdf(docDefinition);
                 Swal.close();
                 const suffix = informeEmpresaKey === 'todos' ? 'completo' : informeEmpresaKey;
-                pdf.download(`informe_gerencial_incentivo_v5_${suffix}_${fechaFin || 'proceso'}.pdf`);
+                pdf.download(`informe_gerencial_incentivo_v6_${suffix}_${fechaFin || 'proceso'}.pdf`);
             } catch (error) {
                 console.error('Error generando informe gerencial:', error);
                 Swal.fire({
@@ -3822,6 +4296,23 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         updatePuestoPctSummaryCard();
     }
 
+    function renderPaymentTypeBreakdown(item) {
+        const details = Array.isArray(item?.tipos_pago_detalle) ? item.tipos_pago_detalle : [];
+        if (!details.length) {
+            return '<span class="badge bg-light text-muted">General</span>';
+        }
+
+        return details.map((detail) => {
+            const value = String(detail?.tipo_pago || '').replace('tramos_', '');
+            const className = value === '60'
+                ? 'bg-success-subtle text-success'
+                : (value === '70' ? 'bg-info-subtle text-info' : 'bg-warning-subtle text-warning');
+            const title = `Ventas: ${formatMoney(detail?.ventas)} | Incentivo: ${formatMoney(detail?.incentivo)} | Dias: ${toNumber(detail?.dias)}`;
+
+            return `<span class="badge ${className} me-1" title="${escapeHtml(title)}">${escapeHtml(value)}</span>`;
+        }).join('');
+    }
+
     function renderTableFromData(data) {
         if ($.fn.DataTable.isDataTable('#tableNuevoIncentivo')) {
             $('#tableNuevoIncentivo').DataTable().destroy();
@@ -3842,6 +4333,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 <td>${escapeHtml(item.empleadoid || '')}</td>
                 <td class="cell-nombre">${renderNombreEmpleado(item.nombre)}</td>
                 <td>${escapeHtml(normalizeEmpresaLabel(item.empresa))}</td>
+                <td>${renderPaymentTypeBreakdown(item)}</td>
                 <td class="text-end">${formatMoney(item.ventas_ultimo_mes)}</td>
                 <td class="text-end">${formatMoney(item.ventas_mes_actual)}</td>
                 <td class="text-center">${item.dias_ventas_mes_actual ?? 0}</td>
@@ -3856,17 +4348,18 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             responsive: true,
             dom: 'Bfrtip',
             buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
-            order: [[4, 'desc']],
+            order: [[5, 'desc']],
             autoWidth: true,
             columnDefs: [
                 { targets: 0, width: '7rem' },
                 { targets: 1, width: '7rem' },
                 { targets: 2, width: '13rem' },
                 { targets: 3, width: '8rem' },
-                { targets: [4, 5, 9], width: '8.4rem', className: 'text-end' },
-                { targets: 6, width: '4.4rem', className: 'text-center' },
-                { targets: 7, width: '5.2rem', className: 'text-center' },
-                { targets: 8, width: '9rem' },
+                { targets: 4, width: '7rem' },
+                { targets: [5, 6, 10], width: '8.4rem', className: 'text-end' },
+                { targets: 7, width: '4.4rem', className: 'text-center' },
+                { targets: 8, width: '5.2rem', className: 'text-center' },
+                { targets: 9, width: '9rem' },
             ],
             pageLength: 10000,
             scrollY: '500px',
@@ -5227,7 +5720,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             }
 
             horasTotalMinimo = nuevoMinimo;
-            localStorage.setItem('incentivo_v5_horas_total_minimo', String(horasTotalMinimo));
+            localStorage.setItem('incentivo_v6_horas_total_minimo', String(horasTotalMinimo));
             bootstrap.Modal.getInstance(document.getElementById('modalConfigHorasTotal'))?.hide();
 
             if (currentFilteredRows.length) {
@@ -5290,16 +5783,17 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             tipo_pago: tipoPago,
             modo_calculo: modoCalculo,
             rangos_pago: JSON.stringify(payoutRangesByType[tipoPago]),
+            rangos_pago_por_tipo: JSON.stringify(payoutRangesByType),
             terminales_excluidas: JSON.stringify(getExcludedTerminalesArray()),
         });
 
-        fetch('/incentivos/reporte-nuevo-incentivo-v5?' + params.toString(), {
+        fetch('/incentivos/reporte-nuevo-incentivo-v6?' + params.toString(), {
             headers: {
                 'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
             },
         })
-            .then(response => parseResponseAsJson(response, 'Error consultando reporte nuevo incentivo V5'))
+            .then(response => parseResponseAsJson(response, 'Error consultando reporte nuevo incentivo V6'))
             .then(resp => {
                 if ('message' in resp) {
                     Swal.fire({ title: 'Informacion', text: resp.message, icon: 'warning' });
@@ -5337,6 +5831,50 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
     document.querySelector('#btnFiltrarCumplimiento').addEventListener('click', function() {
         filtrarCumplimientoTabla();
+    });
+
+    document.querySelector('#btnCalendarioTiposPago').addEventListener('click', function() {
+        const modal = new bootstrap.Modal(document.getElementById('modalCalendarioTiposPago'));
+        modal.show();
+        loadCalendarPaymentGrid();
+    });
+
+    document.querySelector('#btnCargarCalendarioPago').addEventListener('click', function() {
+        loadCalendarPaymentGrid();
+    });
+
+    document.querySelector('#calendarioBuscarTerminal').addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            loadCalendarPaymentGrid();
+        }
+    });
+
+    document.querySelector('#btnAplicarTipoMasivo').addEventListener('click', function() {
+        applyBulkCalendarPaymentType();
+    });
+
+    document.querySelector('#btnGuardarCalendarioPago').addEventListener('click', function() {
+        saveCalendarPaymentChanges();
+    });
+
+    document.querySelector('#calendarioPaginaAnterior').addEventListener('click', function() {
+        const page = Number(calendarPaymentPagination.pagina_actual || 1);
+        if (page > 1) {
+            loadCalendarPaymentGrid(page - 1, true, false);
+        }
+    });
+
+    document.querySelector('#calendarioPaginaSiguiente').addEventListener('click', function() {
+        const page = Number(calendarPaymentPagination.pagina_actual || 1);
+        const lastPage = Number(calendarPaymentPagination.ultima_pagina || 1);
+        if (page < lastPage) {
+            loadCalendarPaymentGrid(page + 1, true, false);
+        }
+    });
+
+    document.querySelector('#calendarioPorPagina').addEventListener('change', function() {
+        loadCalendarPaymentGrid(1, true, false);
     });
 </script>
 @endsection
