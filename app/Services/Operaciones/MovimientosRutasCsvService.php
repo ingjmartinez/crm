@@ -82,8 +82,10 @@ class MovimientosRutasCsvService
                 $idTransaccion = $this->limpiarTexto($row[$columnas['id_trans']] ?? '');
                 $terminal = $this->limpiarTexto($row[$columnas['terminal']] ?? '');
                 $fecha = $this->parsearFecha($row[$columnas['fecha']] ?? '');
+                $referencia = $this->limpiarTexto($row[$columnas['referencia']] ?? '');
                 $montoOriginal = $this->limpiarMonto($row[$columnas['monto']] ?? '');
                 $esDeposito = $tipoNormalizado === self::TIPO_DEPOSITO;
+                $esRetiroEgreso = ! $esDeposito && Str::contains($referencia, 'egreso', ignoreCase: true);
 
                 if (
                     $ruta === ''
@@ -120,7 +122,9 @@ class MovimientosRutasCsvService
                     'fecha' => $fecha->format('d/m/Y'),
                     'fecha_iso' => $fecha->format('Y-m-d'),
                     'tipo' => $tipo,
-                    'tipo_etiqueta' => $esDeposito ? 'Depósito' : 'Retiro',
+                    'tipo_etiqueta' => $esDeposito
+                        ? 'Depósito'
+                        : ($esRetiroEgreso ? 'Retiro - Egreso' : 'Retiro'),
                     'monto' => $monto,
                     'monto_original' => $montoOriginal,
                 ];
@@ -200,7 +204,7 @@ class MovimientosRutasCsvService
 
     /**
      * @param  array<int, string|null>  $headers
-     * @return array{tipo_transaccion: int, ruta: int, id_trans: int, terminal: int, fecha: int, monto: int}
+     * @return array{tipo_transaccion: int, ruta: int, id_trans: int, terminal: int, fecha: int, referencia: int, monto: int}
      */
     private function mapearColumnas(array $headers): array
     {
@@ -216,6 +220,7 @@ class MovimientosRutasCsvService
             'id_trans' => 'idtrans',
             'terminal' => 'numeroexterno',
             'fecha' => 'fectransaccion',
+            'referencia' => 'referencia',
             'monto' => 'dmonto2',
         ];
         $columnas = [];
@@ -228,6 +233,7 @@ class MovimientosRutasCsvService
                     'id_trans' => 'IdTrans',
                     'terminal' => 'NumeroExterno',
                     'fecha' => 'FecTransaccion',
+                    'referencia' => 'Referencia',
                     'monto' => 'DMonto2',
                     default => 'Ruta',
                 };
@@ -242,7 +248,7 @@ class MovimientosRutasCsvService
             $this->fallar('No se encontraron estas columnas requeridas: '.implode(', ', $faltantes).'.');
         }
 
-        /** @var array{tipo_transaccion: int, ruta: int, id_trans: int, terminal: int, fecha: int, monto: int} $columnas */
+        /** @var array{tipo_transaccion: int, ruta: int, id_trans: int, terminal: int, fecha: int, referencia: int, monto: int} $columnas */
         return $columnas;
     }
 

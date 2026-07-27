@@ -33,7 +33,7 @@
                     <div class="card-header">
                         <h5 class="card-title mb-1">Cargar informe de transacciones</h5>
                         <p class="text-muted mb-0">
-                            El análisis conserva únicamente TipoTransaccion, Ruta, IdTrans, NumeroExterno, FecTransaccion y DMonto2.
+                            El análisis utiliza Referencia para identificar los retiros marcados como egreso.
                         </p>
                     </div>
                     <div class="card-body">

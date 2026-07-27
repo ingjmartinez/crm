@@ -51,6 +51,25 @@ class OperacionesMovimientosRutasTest extends TestCase
         app(MovimientosRutasCsvService::class)->procesar($archivo);
     }
 
+    public function test_identifica_retiros_de_egreso_por_la_referencia_sin_importar_mayusculas(): void
+    {
+        $csv = implode("\n", [
+            'TipoTransaccion,NumeroExterno,Ruta,IdTrans,FecTransaccion,Referencia,DMonto2',
+            'RETIRO DE EFECTIVO DE LA AGENCIA E INGRESO A LA CAJA,5503586,01 - NORTE,T-1,23/07/2026,Pago por eGrEsO operativo,-500.00',
+            'RETIRO DE EFECTIVO DE LA AGENCIA E INGRESO A LA CAJA,5503586,01 - NORTE,T-2,23/07/2026,Transferencia interna,-250.00',
+            'DEPOSITO DE EFECTIVO DEL COLECTOR/CAJA A LA AGENCIA,5503586,01 - NORTE,T-3,23/07/2026,Punto de ingreso,1000.00',
+        ]);
+        $archivo = UploadedFile::fake()->createWithContent('movimientos.csv', $csv);
+
+        $transacciones = collect(
+            app(MovimientosRutasCsvService::class)->procesar($archivo)['transacciones']
+        )->keyBy('id_trans');
+
+        $this->assertSame('Retiro - Egreso', $transacciones['T-1']['tipo_etiqueta']);
+        $this->assertSame('Retiro', $transacciones['T-2']['tipo_etiqueta']);
+        $this->assertSame('Depósito', $transacciones['T-3']['tipo_etiqueta']);
+    }
+
     public function test_registra_el_reporte_en_el_hub_de_operaciones(): void
     {
         $item = collect(config('module_hubs.operaciones.items'))
