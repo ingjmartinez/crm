@@ -65,7 +65,7 @@ class MonitoreoTerminalController extends Controller
         }
 
         $agencias = Agencia::query()
-            ->select('id', 'agencia', 'terminal', 'nombre_agencia', 'coordinador', 'horario_am', 'horario_pm')
+            ->select('id', 'agencia', 'terminal', 'nombre_agencia', 'empresa', 'ciudad', 'ruta', 'coordinador', 'horario_am', 'horario_pm')
             ->with([
                 'coordinadoresOperadores' => function ($query): void {
                     $query->where('puesto', 'coordinador');
@@ -127,6 +127,9 @@ class MonitoreoTerminalController extends Controller
                         'agencia_id' => $agencia->id,
                         'terminal' => (string) $agencia->terminal,
                         'agencia' => $this->nombreAgencia($agencia) ?: 'Sin identificar',
+                        'empresa' => trim((string) $agencia->empresa) ?: 'Sin empresa',
+                        'ciudad' => trim((string) $agencia->ciudad) ?: 'Sin ciudad',
+                        'ruta' => trim((string) $agencia->ruta) ?: 'Sin ruta',
                         'coordinador' => $this->nombreCoordinador($agencia),
                         'comentario' => (string) ($comentario?->comentario ?? ''),
                         'fecha' => $fecha->format('d/m/Y'),

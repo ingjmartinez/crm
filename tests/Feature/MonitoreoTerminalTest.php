@@ -42,6 +42,9 @@ class MonitoreoTerminalTest extends TestCase
             $table->string('agencia')->nullable();
             $table->string('terminal')->nullable();
             $table->string('nombre_agencia')->nullable();
+            $table->string('empresa')->nullable();
+            $table->string('ciudad')->nullable();
+            $table->string('ruta')->nullable();
             $table->string('coordinador')->nullable();
             $table->string('sistema')->nullable();
             $table->string('horario_am')->nullable();
@@ -130,6 +133,11 @@ class MonitoreoTerminalTest extends TestCase
             ->assertSee('Cumplen')
             ->assertSee('Avisos')
             ->assertSee('Sin agente de venta')
+            ->assertSee('filtro-estado-asistencia-opcion', false)
+            ->assertSee('mostrarTodosEstadosButton', false)
+            ->assertSee('function applyAttendanceFilter()', false)
+            ->assertSee("selectedStates.join('|')", false)
+            ->assertSee('table.column(5).search', false)
             ->assertSee('Leyenda de estados')
             ->assertSee('Ponche registrado hasta 5 minutos después de la apertura.')
             ->assertSee('Ponche registrado entre 6 y 10 minutos después de la apertura.')
@@ -143,6 +151,26 @@ class MonitoreoTerminalTest extends TestCase
             ->assertSee('exportarMonitoreoExcelButton', false)
             ->assertSee('exportarMonitoreoPdfButton', false)
             ->assertSee('compartirMonitoreoPdfButton', false)
+            ->assertSee('filtroEmpresaMonitoreo', false)
+            ->assertSee('filtroCiudadMonitoreo', false)
+            ->assertSee('filtroRutaMonitoreo', false)
+            ->assertSee('filtroCoordinadorMonitoreo', false)
+            ->assertSee('aplicarFiltrosMonitoreoButton', false)
+            ->assertSee('limpiarFiltrosMonitoreoButton', false)
+            ->assertSee('Aplicar filtro')
+            ->assertSee('showGeneratingMonitoringAlert', false)
+            ->assertSee('Generando información')
+            ->assertSee('Estamos consultando las asistencias y preparando el monitoreo.')
+            ->assertSee('Swal.showLoading()', false)
+            ->assertSee('async function validateShareFilters()', false)
+            ->assertSee('Antes de compartir debe seleccionar:', false)
+            ->assertSee('Debe aplicar los filtros')
+            ->assertSee('function updateFilteredSummary()', false)
+            ->assertSee("rows.filter(row => row.estado === 'CUMPLE').length", false)
+            ->assertSee("rows.filter(row => row.estado === 'SIN AGENTE DE VENTA').length", false)
+            ->assertSee('const companyRows = rows.filter', false)
+            ->assertSee('const cityRows = companyRows.filter', false)
+            ->assertSee('const routeRows = cityRows.filter', false)
             ->assertSee('navigator.share', false)
             ->assertSee('const exportUrl =', false)
             ->assertSee('Configurar hora')
@@ -428,6 +456,9 @@ class MonitoreoTerminalTest extends TestCase
         $agenciaConPonche = $this->insertAgency([
             'terminal' => '001',
             'nombre_agencia' => 'Agencia Central',
+            'empresa' => 'Empresa Uno',
+            'ciudad' => 'Santo Domingo',
+            'ruta' => 'Ruta Metropolitana',
         ]);
         $agenciaSinPonche = $this->insertAgency([
             'terminal' => '002',
@@ -474,6 +505,13 @@ class MonitoreoTerminalTest extends TestCase
             'hora_monitoreo' => '08:00',
             'tipo_horario' => 'AM',
         ]));
+
+        $response->assertJsonFragment([
+            'agencia_id' => $agenciaConPonche,
+            'empresa' => 'Empresa Uno',
+            'ciudad' => 'Santo Domingo',
+            'ruta' => 'Ruta Metropolitana',
+        ]);
 
         $response->assertOk()
             ->assertJsonPath('total', 2)
@@ -839,6 +877,9 @@ class MonitoreoTerminalTest extends TestCase
             'agencia' => '001',
             'terminal' => '001',
             'nombre_agencia' => 'Agencia Central',
+            'empresa' => 'Empresa Uno',
+            'ciudad' => 'Santo Domingo',
+            'ruta' => 'Ruta Metropolitana',
             'coordinador' => null,
             'sistema' => 'LOTOBET',
             'horario_am' => '7:30 AM / 2:00 PM',

@@ -40,13 +40,31 @@
                             </div>
                             <div class="col-sm-6 col-xl-2">
                                 <label for="filtroEstadoAsistencia" class="form-label">Estado de asistencia</label>
-                                <select id="filtroEstadoAsistencia" class="form-select">
-                                    <option value="">Todos</option>
-                                    <option value="FALTA">Falta</option>
-                                    <option value="CUMPLE">Cumple</option>
-                                    <option value="AVISO">Aviso</option>
-                                    <option value="SIN AGENTE DE VENTA">Sin agente de venta</option>
-                                </select>
+                                <div class="dropdown">
+                                    <button type="button" id="filtroEstadoAsistencia"
+                                        class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex align-items-center justify-content-between"
+                                        data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                                        <span id="filtroEstadoAsistenciaTexto">Todos</span>
+                                    </button>
+                                    <div class="dropdown-menu w-100 p-2" aria-labelledby="filtroEstadoAsistencia">
+                                        <button type="button" id="mostrarTodosEstadosButton" class="dropdown-item rounded mb-1">
+                                            Todos
+                                        </button>
+                                        <div class="dropdown-divider"></div>
+                                        @foreach ([
+                                            'CUMPLE' => 'Cumple',
+                                            'AVISO' => 'Aviso',
+                                            'FALTA' => 'Falta',
+                                            'SIN AGENTE DE VENTA' => 'Sin agente de venta',
+                                        ] as $estado => $etiqueta)
+                                            <label class="dropdown-item rounded d-flex align-items-center gap-2 mb-0">
+                                                <input type="checkbox" class="form-check-input mt-0 filtro-estado-asistencia-opcion"
+                                                    value="{{ $estado }}" data-label="{{ $etiqueta }}">
+                                                <span>{{ $etiqueta }}</span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-sm-6 col-xl-3">
                                 <input type="hidden" id="horaMonitoreo">
@@ -157,6 +175,42 @@
                                 </div>
                             </div>
                             <div class="card-body">
+                                <div class="row g-3 align-items-end mb-4">
+                                    <div class="col-md-6 col-xl">
+                                        <label for="filtroEmpresaMonitoreo" class="form-label">Empresa</label>
+                                        <select id="filtroEmpresaMonitoreo" class="form-select">
+                                            <option value="">Todas las empresas</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 col-xl">
+                                        <label for="filtroCiudadMonitoreo" class="form-label">Ciudad</label>
+                                        <select id="filtroCiudadMonitoreo" class="form-select">
+                                            <option value="">Todas las ciudades</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 col-xl">
+                                        <label for="filtroRutaMonitoreo" class="form-label">Ruta</label>
+                                        <select id="filtroRutaMonitoreo" class="form-select">
+                                            <option value="">Todas las rutas</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 col-xl">
+                                        <label for="filtroCoordinadorMonitoreo" class="form-label">Coordinador</label>
+                                        <select id="filtroCoordinadorMonitoreo" class="form-select">
+                                            <option value="">Todos los coordinadores</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-xl-auto">
+                                        <div class="d-flex gap-2">
+                                            <button type="button" id="aplicarFiltrosMonitoreoButton" class="btn btn-primary flex-fill">
+                                                <i class="ri-filter-3-line align-bottom me-1"></i>Aplicar filtro
+                                            </button>
+                                            <button type="button" id="limpiarFiltrosMonitoreoButton" class="btn btn-soft-secondary flex-fill">
+                                                <i class="ri-filter-off-line align-bottom me-1"></i>Limpiar filtros
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="table-responsive">
                                     <table id="tablaMonitoreoTerminales" class="table table-bordered table-striped align-middle w-100">
                                         <thead class="table-light">
@@ -354,7 +408,15 @@
             const monitoringScheduleTypeInput = document.getElementById('tipoHorarioMonitoreo');
             const monitoringTimeText = document.getElementById('horaMonitoreoTexto');
             const configureTimeButton = document.getElementById('configurarHoraButton');
-            const attendanceFilter = document.getElementById('filtroEstadoAsistencia');
+            const attendanceFilterText = document.getElementById('filtroEstadoAsistenciaTexto');
+            const attendanceOptions = [...document.querySelectorAll('.filtro-estado-asistencia-opcion')];
+            const showAllAttendanceStatesButton = document.getElementById('mostrarTodosEstadosButton');
+            const companyFilter = document.getElementById('filtroEmpresaMonitoreo');
+            const cityFilter = document.getElementById('filtroCiudadMonitoreo');
+            const routeFilter = document.getElementById('filtroRutaMonitoreo');
+            const coordinatorFilter = document.getElementById('filtroCoordinadorMonitoreo');
+            const applyTableFiltersButton = document.getElementById('aplicarFiltrosMonitoreoButton');
+            const clearTableFiltersButton = document.getElementById('limpiarFiltrosMonitoreoButton');
             const commentForm = document.getElementById('formComentarioTerminal');
             const agencyIdInput = document.getElementById('comentarioAgenciaId');
             const agencyNameInput = document.getElementById('comentarioAgenciaNombre');
@@ -377,6 +439,12 @@
             let activeRow = null;
             let activeDetailState = null;
             let plazaAgencies = new Map();
+            const appliedTableFilters = {
+                company: '',
+                city: '',
+                route: '',
+                coordinator: ''
+            };
 
             function escapeHtml(value) {
                 const element = document.createElement('div');
@@ -635,6 +703,87 @@
                 language: { url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json' }
             });
 
+            function populateTableFilter(select, values, placeholder) {
+                const selectedValue = select.value;
+                const uniqueValues = [...new Set(values.filter(Boolean))]
+                    .sort((firstValue, secondValue) => firstValue.localeCompare(
+                        secondValue,
+                        'es',
+                        { numeric: true, sensitivity: 'base' }
+                    ));
+
+                select.replaceChildren(new Option(placeholder, ''));
+                uniqueValues.forEach(value => select.add(new Option(value, value)));
+                select.value = uniqueValues.includes(selectedValue) ? selectedValue : '';
+            }
+
+            function refreshTableFilterOptions() {
+                const rows = table.rows().data().toArray();
+
+                populateTableFilter(companyFilter, rows.map(row => row.empresa), 'Todas las empresas');
+                const companyRows = rows.filter(row => matchesTableFilter(companyFilter.value, row.empresa));
+
+                populateTableFilter(cityFilter, companyRows.map(row => row.ciudad), 'Todas las ciudades');
+                const cityRows = companyRows.filter(row => matchesTableFilter(cityFilter.value, row.ciudad));
+
+                populateTableFilter(routeFilter, cityRows.map(row => row.ruta), 'Todas las rutas');
+                const routeRows = cityRows.filter(row => matchesTableFilter(routeFilter.value, row.ruta));
+
+                populateTableFilter(
+                    coordinatorFilter,
+                    routeRows.map(row => row.coordinador),
+                    'Todos los coordinadores'
+                );
+            }
+
+            function matchesTableFilter(selectedValue, rowValue) {
+                return selectedValue === '' || selectedValue === (rowValue || '');
+            }
+
+            $.fn.dataTable.ext.search.push(function (settings, searchData, dataIndex) {
+                if (settings.nTable.id !== 'tablaMonitoreoTerminales') {
+                    return true;
+                }
+
+                const row = table.row(dataIndex).data();
+
+                return matchesTableFilter(appliedTableFilters.company, row.empresa)
+                    && matchesTableFilter(appliedTableFilters.city, row.ciudad)
+                    && matchesTableFilter(appliedTableFilters.route, row.ruta)
+                    && matchesTableFilter(appliedTableFilters.coordinator, row.coordinador);
+            });
+
+            function applySelectedTableFilters() {
+                appliedTableFilters.company = companyFilter.value;
+                appliedTableFilters.city = cityFilter.value;
+                appliedTableFilters.route = routeFilter.value;
+                appliedTableFilters.coordinator = coordinatorFilter.value;
+                table.draw();
+            }
+
+            applyTableFiltersButton.addEventListener('click', applySelectedTableFilters);
+
+            [companyFilter, cityFilter, routeFilter].forEach(filter => {
+                filter.addEventListener('change', refreshTableFilterOptions);
+            });
+
+            clearTableFiltersButton.addEventListener('click', function () {
+                [companyFilter, cityFilter, routeFilter, coordinatorFilter].forEach(filter => {
+                    filter.value = '';
+                });
+                attendanceOptions.forEach(option => {
+                    option.checked = false;
+                });
+                refreshTableFilterOptions();
+                appliedTableFilters.company = '';
+                appliedTableFilters.city = '';
+                appliedTableFilters.route = '';
+                appliedTableFilters.coordinator = '';
+                applyAttendanceFilter();
+            });
+
+            refreshTableFilterOptions();
+
             function setGenerateStatus(message, className = 'text-muted') {
                 generateStatus.textContent = message;
                 generateStatus.className = `small mt-3 ${className}`;
@@ -653,12 +802,28 @@
                 document.getElementById('resumenSinAgente').textContent = data.sin_agente ?? 0;
             }
 
+            function filteredRows() {
+                return table.rows({ search: 'applied' }).data().toArray();
+            }
+
+            function updateFilteredSummary() {
+                const rows = filteredRows();
+
+                updateSummary({
+                    total: rows.length,
+                    faltas: rows.filter(row => row.estado === 'FALTA').length,
+                    cumplen: rows.filter(row => row.estado === 'CUMPLE').length,
+                    avisos: rows.filter(row => row.estado === 'AVISO').length,
+                    sin_agente: rows.filter(row => row.estado === 'SIN AGENTE DE VENTA').length
+                });
+            }
+
             function detailRows() {
-                return table.rows().data().toArray().filter(row => row.estado === activeDetailState);
+                return filteredRows().filter(row => row.estado === activeDetailState);
             }
 
             function reportRows() {
-                return table.rows({ search: 'applied' }).data().toArray();
+                return filteredRows();
             }
 
             function exportableRows(rows) {
@@ -818,7 +983,51 @@
                 downloadReport('pdf', this);
             });
 
+            async function validateShareFilters() {
+                const requiredFilters = [
+                    { label: 'Empresa', selected: companyFilter.value, applied: appliedTableFilters.company },
+                    { label: 'Ciudad', selected: cityFilter.value, applied: appliedTableFilters.city },
+                    { label: 'Ruta', selected: routeFilter.value, applied: appliedTableFilters.route },
+                    { label: 'Coordinador', selected: coordinatorFilter.value, applied: appliedTableFilters.coordinator }
+                ];
+                const missingFilters = requiredFilters
+                    .filter(filter => filter.selected === '')
+                    .map(filter => filter.label);
+
+                if (missingFilters.length > 0) {
+                    await Swal.fire({
+                        title: 'Filtros requeridos',
+                        html: `Antes de compartir debe seleccionar: <strong>${missingFilters.join(', ')}</strong>.`,
+                        icon: 'warning',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#405189'
+                    });
+
+                    return false;
+                }
+
+                const hasPendingChanges = requiredFilters.some(filter => filter.selected !== filter.applied);
+
+                if (hasPendingChanges) {
+                    await Swal.fire({
+                        title: 'Debe aplicar los filtros',
+                        text: 'Presione “Aplicar filtro” antes de compartir el informe.',
+                        icon: 'warning',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#405189'
+                    });
+
+                    return false;
+                }
+
+                return true;
+            }
+
             shareMonitoringPdfButton.addEventListener('click', async function () {
+                if (!await validateShareFilters()) {
+                    return;
+                }
+
                 const rows = reportRows();
 
                 if (rows.length === 0) {
@@ -867,13 +1076,37 @@
                 }
             });
 
-            attendanceFilter.addEventListener('change', function () {
-                const value = $.fn.dataTable.util.escapeRegex(this.value);
-                table.column(5).search(value ? `^${value}$` : '', true, false).draw();
+            function applyAttendanceFilter() {
+                const selectedOptions = attendanceOptions.filter(option => option.checked);
+                const selectedStates = selectedOptions.map(option => {
+                    return $.fn.dataTable.util.escapeRegex(option.value);
+                });
+                const labels = selectedOptions.map(option => option.dataset.label);
+                const searchPattern = selectedStates.length > 0 ? `^(${selectedStates.join('|')})$` : '';
+
+                attendanceFilterText.textContent = labels.length === 0
+                    ? 'Todos'
+                    : labels.length === 1 ? labels[0] : `${labels.length} estados seleccionados`;
+                table.column(5).search(searchPattern, true, false).draw();
+            }
+
+            attendanceOptions.forEach(option => {
+                option.addEventListener('change', applyAttendanceFilter);
             });
 
-            table.on('draw', updateReportActionState);
+            showAllAttendanceStatesButton.addEventListener('click', function () {
+                attendanceOptions.forEach(option => {
+                    option.checked = false;
+                });
+                applyAttendanceFilter();
+            });
+
+            table.on('draw', function () {
+                updateReportActionState();
+                updateFilteredSummary();
+            });
             updateReportActionState();
+            updateFilteredSummary();
 
             function selectedMonitoringTimeKey() {
                 if (!monitoringTimeInput.value || !monitoringScheduleTypeInput.value) {
@@ -1061,6 +1294,20 @@
 
             configureTimeButton.addEventListener('click', configureMonitoringTime);
 
+            function showGeneratingMonitoringAlert() {
+                Swal.fire({
+                    title: 'Generando información',
+                    html: `
+                        <p class="mb-1">Estamos consultando las asistencias y preparando el monitoreo.</p>
+                        <small class="text-muted">Este proceso puede tardar unos segundos.</small>
+                    `,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading()
+                });
+            }
+
             async function generateLotobetToken() {
                 Swal.fire({
                     title: 'Generando token Lotobet...',
@@ -1150,6 +1397,7 @@
 
                     await generateLotobetToken();
                     setGenerateStatus('Token generado. Consultando asistencias...', 'text-muted');
+                    showGeneratingMonitoringAlert();
 
                     return generateMonitoring(true, agencyScope);
                 }
@@ -1160,7 +1408,8 @@
                 }
 
                 table.clear().rows.add(data.data || []).draw();
-                updateSummary(data);
+                refreshTableFilterOptions();
+                applySelectedTableFilters();
                 setGenerateStatus(
                     `Monitoreo generado: ${data.total ?? 0} evaluaciones. Alcance: ${data.alcance_label}.`,
                     'text-success'
@@ -1186,9 +1435,11 @@
 
                 generateButton.disabled = true;
                 setGenerateStatus('Consultando asistencias...', 'text-muted');
+                showGeneratingMonitoringAlert();
 
                 try {
                     await generateMonitoring(false, agencyScope);
+                    Swal.close();
                 } catch (error) {
                     Swal.close();
                     setGenerateStatus(error.message || 'No se pudo generar el monitoreo.', 'text-danger');
