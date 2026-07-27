@@ -23,8 +23,10 @@ class MonitoreoTerminalEstadoExport implements FromCollection, ShouldAutoSize, W
             $registro['fecha'] ?? '',
             $registro['hora_apertura'] ?? '',
             ($registro['hora_ponche'] ?? null) ?: 'Sin ponche',
+            ($registro['hora_monitoreo'] ?? null) ?: '-',
             $registro['minutos_tardanza'] ?? '',
             $registro['estado'] ?? '',
+            $this->textoSeguro(($registro['comentario'] ?? null) ?: 'Sin comentario'),
         ]);
     }
 
@@ -38,8 +40,10 @@ class MonitoreoTerminalEstadoExport implements FromCollection, ShouldAutoSize, W
             'Fecha',
             'Hora de apertura',
             'Hora de ponche',
+            'Hora evaluada',
             'Minutos de tardanza',
             'Estado',
+            'Comentario',
         ];
     }
 

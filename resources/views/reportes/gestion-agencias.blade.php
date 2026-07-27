@@ -241,12 +241,12 @@
                                 <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                                     <div>
                                         <h5 class="card-title mb-1">Filtros por agencia</h5>
-                                        <p class="text-muted mb-0">Filtra la visualizacion por empresa, ruta y coordinador. El PDF respetara los filtros de agencia activos.</p>
+                                        <p class="text-muted mb-0">Filtra la visualizacion por empresa, ciudad, ruta y coordinador. El PDF respetara los filtros de agencia activos.</p>
                                     </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="row g-3 align-items-end">
-                                        <div class="col-xl-3 col-lg-4 col-md-6">
+                                        <div class="col-xl col-lg-4 col-md-6">
                                             <label for="filtroEmpresaGestion" class="form-label">Empresa</label>
                                             <select class="form-select" id="filtroEmpresaGestion">
                                                 <option value="">Todas las empresas</option>
@@ -255,7 +255,16 @@
                                                 @endforeach
                                             </select>
                                         </div>
-                                        <div class="col-xl-3 col-lg-4 col-md-6">
+                                        <div class="col-xl col-lg-4 col-md-6">
+                                            <label for="filtroCiudadGestion" class="form-label">Ciudad</label>
+                                            <select class="form-select" id="filtroCiudadGestion">
+                                                <option value="">Todas las ciudades</option>
+                                                @foreach (($filtrosCatalogo['ciudades'] ?? []) as $ciudad)
+                                                    <option value="{{ $ciudad }}">{{ $ciudad }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-xl col-lg-4 col-md-6">
                                             <label for="filtroRutaGestion" class="form-label">Ruta</label>
                                             <select class="form-select" id="filtroRutaGestion">
                                                 <option value="">Todas las rutas</option>
@@ -264,7 +273,7 @@
                                                 @endforeach
                                             </select>
                                         </div>
-                                        <div class="col-xl-3 col-lg-4 col-md-6">
+                                        <div class="col-xl col-lg-4 col-md-6">
                                             <label for="filtroCoordinadorGestion" class="form-label">Coordinador</label>
                                             <select class="form-select" id="filtroCoordinadorGestion">
                                                 <option value="">Todos los coordinadores</option>
@@ -273,7 +282,7 @@
                                                 @endforeach
                                             </select>
                                         </div>
-                                        <div class="col-xl-3 col-lg-12 col-md-6">
+                                        <div class="col-xl col-lg-4 col-md-6">
                                             <button type="button" class="btn btn-light w-100" id="btnLimpiarFiltrosGestion">
                                                 <i class="ri-refresh-line align-bottom me-1"></i>
                                                 Limpiar filtros
@@ -391,7 +400,7 @@
                                     <div class="d-flex flex-wrap align-items-end justify-content-end gap-2 col-xl-5 col-lg-6 col-md-12">
                                         <button type="button" class="btn btn-outline-danger" id="btnPdfGestionAgencias">
                                             <i class="ri-file-pdf-2-line align-bottom me-1"></i>
-                                            Generar PDF
+                                            Informe PDF detallado
                                         </button>
                                         <div class="flex-grow-1">
                                         <label for="filtroEstatusVentas" class="form-label mb-1">Filtrar por estatus</label>
@@ -574,6 +583,7 @@
             const form = document.getElementById('gestionAgenciasForm');
             const filtroEstatusVentas = document.getElementById('filtroEstatusVentas');
             const filtroEmpresaGestion = document.getElementById('filtroEmpresaGestion');
+            const filtroCiudadGestion = document.getElementById('filtroCiudadGestion');
             const filtroRutaGestion = document.getElementById('filtroRutaGestion');
             const filtroCoordinadorGestion = document.getElementById('filtroCoordinadorGestion');
             const btnLimpiarFiltrosGestion = document.getElementById('btnLimpiarFiltrosGestion');
@@ -672,6 +682,7 @@
                     umbral_alerta: umbrales.alerta,
                     umbral_llamada: umbrales.llamada,
                     empresa_filter: filtroEmpresaGestion?.value || '',
+                    ciudad_filter: filtroCiudadGestion?.value || '',
                     ruta_filter: filtroRutaGestion?.value || '',
                     coordinador_filter: filtroCoordinadorGestion?.value || '',
                 });
@@ -1242,6 +1253,10 @@
                         title: 'Cargando datos por empresa',
                         detail: 'Actualizando la tabla y los indicadores del reporte...'
                     },
+                    ciudad: {
+                        title: 'Cargando datos por ciudad',
+                        detail: 'Actualizando la tabla y los indicadores del reporte...'
+                    },
                     ruta: {
                         title: 'Cargando datos por ruta',
                         detail: 'Actualizando la tabla y los indicadores del reporte...'
@@ -1335,6 +1350,7 @@
                                 const umbrales = getUmbralesVentas();
                                 data.estatus_filter = filtroEstatusVentas?.value || '';
                                 data.empresa_filter = filtroEmpresaGestion?.value || '';
+                                data.ciudad_filter = filtroCiudadGestion?.value || '';
                                 data.ruta_filter = filtroRutaGestion?.value || '';
                                 data.coordinador_filter = filtroCoordinadorGestion?.value || '';
                                 data.umbral_aviso = umbrales.aviso;
@@ -1429,16 +1445,18 @@
                 filtroEstatusVentas.addEventListener('change', recargarGestionAgencias);
             }
 
-            [filtroEmpresaGestion, filtroRutaGestion, filtroCoordinadorGestion].forEach((select) => {
+            [filtroEmpresaGestion, filtroCiudadGestion, filtroRutaGestion, filtroCoordinadorGestion].forEach((select) => {
                 if (!select) return;
                 select.addEventListener('change', () => {
                     const loader = select === filtroEmpresaGestion
                         ? 'empresa'
-                        : select === filtroRutaGestion
-                            ? 'ruta'
-                            : select === filtroCoordinadorGestion
-                                ? 'coordinador'
-                                : null;
+                        : select === filtroCiudadGestion
+                            ? 'ciudad'
+                            : select === filtroRutaGestion
+                                ? 'ruta'
+                                : select === filtroCoordinadorGestion
+                                    ? 'coordinador'
+                                    : null;
 
                     recargarGestionAgencias({ loader });
                 });
@@ -1447,6 +1465,7 @@
             if (btnLimpiarFiltrosGestion) {
                 btnLimpiarFiltrosGestion.addEventListener('click', () => {
                     if (filtroEmpresaGestion) filtroEmpresaGestion.value = '';
+                    if (filtroCiudadGestion) filtroCiudadGestion.value = '';
                     if (filtroRutaGestion) filtroRutaGestion.value = '';
                     if (filtroCoordinadorGestion) filtroCoordinadorGestion.value = '';
                     recargarGestionAgencias();
@@ -1458,8 +1477,54 @@
             }
 
             if (btnPdfGestionAgencias) {
-                btnPdfGestionAgencias.addEventListener('click', () => {
+                btnPdfGestionAgencias.addEventListener('click', async () => {
+                    const result = await Swal.fire({
+                        title: 'Configurar informe PDF',
+                        html: `
+                            <p class="text-muted mb-3">
+                                El informe respetara Empresa, Ciudad, Ruta y Coordinador seleccionados.
+                                Elige como deseas consolidar las filas y los graficos.
+                            </p>
+                            <div class="d-grid gap-2 text-start">
+                                <label class="border rounded p-3 d-flex align-items-center gap-2 mb-0">
+                                    <input type="radio" name="agrupacionInformeGestion" value="empresa" class="form-check-input mt-0">
+                                    <span>
+                                        <strong>Por empresa</strong>
+                                        <small class="d-block text-muted">Una fila consolidada por cada empresa.</small>
+                                    </span>
+                                </label>
+                                <label class="border rounded p-3 d-flex align-items-center gap-2 mb-0">
+                                    <input type="radio" name="agrupacionInformeGestion" value="ciudad" class="form-check-input mt-0">
+                                    <span>
+                                        <strong>Por ciudad</strong>
+                                        <small class="d-block text-muted">Compara ciudades y sus cantidades de agencias.</small>
+                                    </span>
+                                </label>
+                                <label class="border rounded p-3 d-flex align-items-center gap-2 mb-0">
+                                    <input type="radio" name="agrupacionInformeGestion" value="ruta" class="form-check-input mt-0" checked>
+                                    <span>
+                                        <strong>Por ruta</strong>
+                                        <small class="d-block text-muted">Detalla las agencias y metricas correspondientes a cada ruta.</small>
+                                    </span>
+                                </label>
+                            </div>
+                        `,
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonText: 'Generar informe',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#002d72',
+                        preConfirm: () => {
+                            return document.querySelector('input[name="agrupacionInformeGestion"]:checked')?.value || 'ruta';
+                        },
+                    });
+
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
                     const params = getPdfBaseParams();
+                    params.set('agrupacion', result.value);
 
                     window.open(`${window.gestionAgenciasData.pdfUrl}?${params.toString()}`, '_blank');
                 });

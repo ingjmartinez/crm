@@ -573,6 +573,18 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('monitoreo-terminales.generar');
         Route::post('/monitoreo-terminales/comentario', [MonitoreoTerminalController::class, 'guardarComentario'])
             ->name('monitoreo-terminales.comentario');
+        Route::post('/monitoreo-terminales/horarios', [MonitoreoTerminalController::class, 'guardarHorario'])
+            ->name('monitoreo-terminales.horarios.store');
+        Route::delete('/monitoreo-terminales/horarios', [MonitoreoTerminalController::class, 'eliminarHorario'])
+            ->name('monitoreo-terminales.horarios.destroy');
+        Route::get('/monitoreo-terminales/agencias-plaza', [MonitoreoTerminalController::class, 'listarAgenciasPlaza'])
+            ->name('monitoreo-terminales.agencias-plaza.index');
+        Route::put('/monitoreo-terminales/agencias-plaza', [MonitoreoTerminalController::class, 'guardarAgenciasPlaza'])
+            ->name('monitoreo-terminales.agencias-plaza.update');
+        Route::post('/monitoreo-terminales/agencias-plaza/reconocer', [MonitoreoTerminalController::class, 'reconocerAgenciasPlaza'])
+            ->name('monitoreo-terminales.agencias-plaza.reconocer');
+        Route::get('/monitoreo-terminales/agencias-plaza/plantilla', [MonitoreoTerminalController::class, 'plantillaAgenciasPlaza'])
+            ->name('monitoreo-terminales.agencias-plaza.plantilla');
         Route::post('/monitoreo-terminales/exportar', [MonitoreoTerminalController::class, 'exportar'])
             ->name('monitoreo-terminales.exportar');
         Route::get('/monitoreo-agencias-plaza', MonitoreoAgenciaPlazaController::class)->name('monitoreo-agencias-plaza.index');

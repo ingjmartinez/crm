@@ -20,8 +20,13 @@
                 </div>
 
                 <div class="card mb-3">
-                    <div class="card-header">
+                    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                         <h5 class="card-title mb-0">Generar monitoreo de asistencia</h5>
+                        <button type="button" id="agenciasPlazaButton" class="btn btn-soft-primary">
+                            <i class="ri-map-pin-user-line align-bottom me-1"></i>
+                            Agencias en plaza
+                            <span id="agenciasPlazaCount" class="badge bg-primary ms-1">{{ $agenciasPlazaCount }}</span>
+                        </button>
                     </div>
                     <div class="card-body">
                         <form id="formGenerarMonitoreo" class="row g-3 align-items-end">
@@ -40,12 +45,12 @@
                                     <option value="FALTA">Falta</option>
                                     <option value="CUMPLE">Cumple</option>
                                     <option value="AVISO">Aviso</option>
-                                    <option value="REQUIERE LLAMADA">Requiere llamada</option>
-                                    <option value="PENDIENTE">Pendiente</option>
+                                    <option value="SIN AGENTE DE VENTA">Sin agente de venta</option>
                                 </select>
                             </div>
                             <div class="col-sm-6 col-xl-3">
                                 <input type="hidden" id="horaMonitoreo">
+                                <input type="hidden" id="tipoHorarioMonitoreo">
                                 <label class="form-label">Hora evaluada</label>
                                 <button type="button" id="configurarHoraButton" class="btn btn-soft-info w-100">
                                     <i class="ri-time-line align-bottom me-1"></i>
@@ -84,22 +89,73 @@
                         </button>
                     </div>
                     <div class="col-6 col-xl">
-                        <button type="button" class="card mb-0 w-100 text-start border-0 detalle-estado-card" data-estado="REQUIERE LLAMADA" title="Ver terminales que requieren llamada">
+                        <button type="button" class="card mb-0 w-100 text-start border-0 detalle-estado-card" data-estado="SIN AGENTE DE VENTA" title="Ver terminales sin agente de venta">
                             <span class="card-body py-3">
-                                <span class="text-muted">Requieren llamada</span>
+                                <span class="text-muted">Sin agente de venta</span>
                                 <span class="d-flex align-items-center justify-content-between">
-                                    <span id="resumenLlamadas" class="h4 mb-0 text-danger">0</span>
-                                    <i class="ri-phone-line text-danger fs-5"></i>
+                                    <span id="resumenSinAgente" class="h4 mb-0 text-danger">0</span>
+                                    <i class="ri-user-unfollow-line text-danger fs-5"></i>
                                 </span>
                             </span>
                         </button>
                     </div>
                 </div>
 
+                <div class="card mb-3">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="ri-information-line text-primary fs-5"></i>
+                        <h5 class="card-title mb-0">Leyenda de estados</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Los minutos se calculan desde la hora de apertura del turno AM o PM seleccionado.
+                        </p>
+                        <div class="row g-3">
+                            <div class="col-md-6 col-xl">
+                                <div class="h-100 border rounded p-3">
+                                    <span class="badge bg-success-subtle text-success fs-6 mb-2">CUMPLE</span>
+                                    <p class="mb-0 small">Ponche registrado hasta 5 minutos después de la apertura.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl">
+                                <div class="h-100 border rounded p-3">
+                                    <span class="badge bg-warning-subtle text-warning fs-6 mb-2">AVISO</span>
+                                    <p class="mb-0 small">Ponche registrado entre 6 y 10 minutos después de la apertura.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl">
+                                <div class="h-100 border rounded p-3">
+                                    <span class="badge bg-danger-subtle text-danger fs-6 mb-2">FALTA</span>
+                                    <p class="mb-0 small">Ponche registrado más de 10 minutos después de la apertura.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl">
+                                <div class="h-100 border rounded p-3">
+                                    <span class="badge bg-danger text-white fs-6 mb-2">SIN AGENTE DE VENTA</span>
+                                    <p class="mb-0 small">No existe ningún ponche registrado para esa terminal en la fecha consultada.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
-                            <div class="card-header"><h5 class="card-title mb-0">Resultado del monitoreo</h5></div>
+                            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                <h5 class="card-title mb-0">Resultado del monitoreo</h5>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button type="button" id="exportarMonitoreoExcelButton" class="btn btn-success btn-sm" disabled>
+                                        <i class="ri-file-excel-2-line align-bottom me-1"></i>Excel
+                                    </button>
+                                    <button type="button" id="exportarMonitoreoPdfButton" class="btn btn-danger btn-sm" disabled>
+                                        <i class="ri-file-pdf-2-line align-bottom me-1"></i>PDF
+                                    </button>
+                                    <button type="button" id="compartirMonitoreoPdfButton" class="btn btn-info btn-sm" disabled>
+                                        <i class="ri-share-forward-line align-bottom me-1"></i>Compartir
+                                    </button>
+                                </div>
+                            </div>
                             <div class="card-body">
                                 <div class="table-responsive">
                                     <table id="tablaMonitoreoTerminales" class="table table-bordered table-striped align-middle w-100">
@@ -209,6 +265,59 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="agenciasPlazaModal" tabindex="-1" aria-labelledby="agenciasPlazaModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="agenciasPlazaModalLabel">Agencias en plaza</h5>
+                        <div class="small text-muted">Seleccione las agencias que participarán en el monitoreo.</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="agenciasPlazaArchivo" class="form-label">Importar terminales</label>
+                        <input type="file" id="agenciasPlazaArchivo" class="form-control" accept=".xlsx,.xls,.csv">
+                        <div class="form-text">El archivo debe contener una columna llamada Terminal.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="agenciasPlazaManual" class="form-label">Terminales manuales</label>
+                        <textarea id="agenciasPlazaManual" class="form-control" rows="3"
+                            placeholder="Escriba o pegue terminales, una por línea o separadas por coma"></textarea>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" id="reconocerAgenciasPlazaButton" class="btn btn-outline-info btn-sm">
+                            <i class="ri-search-eye-line me-1"></i>Reconocer terminales
+                        </button>
+                        <a href="{{ route('tecnologia.monitoreo-terminales.agencias-plaza.plantilla') }}"
+                            class="btn btn-outline-primary btn-sm">
+                            <i class="ri-download-line me-1"></i>Descargar plantilla
+                        </a>
+                        <button type="button" id="limpiarAgenciasPlazaButton" class="btn btn-outline-danger btn-sm ms-auto">
+                            Limpiar selección
+                        </button>
+                    </div>
+
+                    <div id="agenciasPlazaLista" class="border rounded overflow-auto" style="max-height: 300px"></div>
+                    <div id="agenciasPlazaEstado" class="small mt-2" aria-live="polite"></div>
+
+                    <div class="alert alert-info mt-3 mb-0">
+                        Si la selección queda vacía, el monitoreo conservará el comportamiento actual y analizará todas las agencias Lotobet.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" id="guardarAgenciasPlazaButton" class="btn btn-primary">
+                        <i class="ri-save-line align-bottom me-1"></i>Guardar agencias
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -222,12 +331,27 @@
             const detailModalSummary = document.getElementById('detalleEstadoTerminalesResumen');
             const detailModalBody = document.getElementById('detalleEstadoTerminalesBody');
             const detailModalEmpty = document.getElementById('detalleEstadoTerminalesVacio');
+            const exportMonitoringExcelButton = document.getElementById('exportarMonitoreoExcelButton');
+            const exportMonitoringPdfButton = document.getElementById('exportarMonitoreoPdfButton');
+            const shareMonitoringPdfButton = document.getElementById('compartirMonitoreoPdfButton');
+            const plazaModalElement = document.getElementById('agenciasPlazaModal');
+            const plazaModal = new bootstrap.Modal(plazaModalElement);
+            const plazaButton = document.getElementById('agenciasPlazaButton');
+            const plazaCount = document.getElementById('agenciasPlazaCount');
+            const plazaFileInput = document.getElementById('agenciasPlazaArchivo');
+            const plazaManualInput = document.getElementById('agenciasPlazaManual');
+            const plazaRecognizeButton = document.getElementById('reconocerAgenciasPlazaButton');
+            const plazaClearButton = document.getElementById('limpiarAgenciasPlazaButton');
+            const plazaSaveButton = document.getElementById('guardarAgenciasPlazaButton');
+            const plazaList = document.getElementById('agenciasPlazaLista');
+            const plazaStatus = document.getElementById('agenciasPlazaEstado');
             const generateForm = document.getElementById('formGenerarMonitoreo');
             const generateButton = document.getElementById('generarMonitoreoButton');
             const generateStatus = document.getElementById('generarMonitoreoEstado');
             const startDateInput = document.getElementById('fechaInicio');
             const endDateInput = document.getElementById('fechaFin');
             const monitoringTimeInput = document.getElementById('horaMonitoreo');
+            const monitoringScheduleTypeInput = document.getElementById('tipoHorarioMonitoreo');
             const monitoringTimeText = document.getElementById('horaMonitoreoTexto');
             const configureTimeButton = document.getElementById('configurarHoraButton');
             const attendanceFilter = document.getElementById('filtroEstadoAsistencia');
@@ -243,10 +367,16 @@
             const generateTokenUrl = @json(url('/generar-token'));
             const saveUrl = @json(route('tecnologia.monitoreo-terminales.comentario'));
             const exportUrl = @json(route('tecnologia.monitoreo-terminales.exportar'));
-            const monitoringTimes = @json($horariosMonitoreo);
+            const storeMonitoringTimeUrl = @json(route('tecnologia.monitoreo-terminales.horarios.store'));
+            const deleteMonitoringTimeUrl = @json(route('tecnologia.monitoreo-terminales.horarios.destroy'));
+            const plazaIndexUrl = @json(route('tecnologia.monitoreo-terminales.agencias-plaza.index'));
+            const plazaUpdateUrl = @json(route('tecnologia.monitoreo-terminales.agencias-plaza.update'));
+            const plazaRecognizeUrl = @json(route('tecnologia.monitoreo-terminales.agencias-plaza.reconocer'));
+            let monitoringTimes = @json($horariosMonitoreo);
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
             let activeRow = null;
             let activeDetailState = null;
+            let plazaAgencies = new Map();
 
             function escapeHtml(value) {
                 const element = document.createElement('div');
@@ -254,6 +384,182 @@
 
                 return element.innerHTML;
             }
+
+            function setPlazaStatus(message, className = 'text-muted') {
+                plazaStatus.textContent = message;
+                plazaStatus.className = `small mt-2 ${className}`;
+            }
+
+            function updatePlazaCount(count) {
+                plazaCount.textContent = Number(count || 0);
+            }
+
+            function renderPlazaAgencies() {
+                const agencies = [...plazaAgencies.values()].sort((firstAgency, secondAgency) => {
+                    return String(firstAgency.terminal).localeCompare(
+                        String(secondAgency.terminal),
+                        undefined,
+                        { numeric: true }
+                    );
+                });
+
+                if (agencies.length === 0) {
+                    plazaList.innerHTML = `
+                        <div class="text-muted text-center p-3">
+                            No hay agencias seleccionadas. Se analizarán todas las agencias Lotobet.
+                        </div>
+                    `;
+
+                    return;
+                }
+
+                plazaList.innerHTML = agencies.map(agency => `
+                    <label class="d-flex align-items-center gap-2 px-3 py-2 border-bottom mb-0">
+                        <input type="checkbox" class="form-check-input mt-0" data-plaza-agency-id="${Number(agency.id)}" checked>
+                        <span>
+                            <strong>Terminal ${escapeHtml(agency.terminal)}</strong>
+                            <span class="d-block small text-muted">${escapeHtml(agency.agencia)}</span>
+                        </span>
+                    </label>
+                `).join('');
+            }
+
+            async function parsePlazaResponse(response, fallbackMessage) {
+                const data = await response.json();
+
+                if (!response.ok) {
+                    const validationMessage = data.errors ? Object.values(data.errors).flat()[0] : null;
+                    throw new Error(validationMessage || data.message || fallbackMessage);
+                }
+
+                return data;
+            }
+
+            async function loadPlazaAgencies() {
+                const response = await fetch(plazaIndexUrl, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await parsePlazaResponse(response, 'No se pudieron cargar las agencias en plaza.');
+                plazaAgencies = new Map((data.data || []).map(agency => [Number(agency.id), agency]));
+                updatePlazaCount(data.count);
+                renderPlazaAgencies();
+            }
+
+            async function savePlazaAgencies(agencyIds) {
+                const response = await fetch(plazaUpdateUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({ agencias: agencyIds })
+                });
+                const data = await parsePlazaResponse(response, 'No se pudieron guardar las agencias en plaza.');
+                plazaAgencies = new Map((data.data || []).map(agency => [Number(agency.id), agency]));
+                updatePlazaCount(data.count);
+                renderPlazaAgencies();
+
+                return data;
+            }
+
+            plazaButton.addEventListener('click', async function () {
+                plazaFileInput.value = '';
+                plazaManualInput.value = '';
+                plazaList.innerHTML = '<div class="text-muted text-center p-3">Cargando agencias...</div>';
+                setPlazaStatus('');
+                plazaModal.show();
+
+                try {
+                    await loadPlazaAgencies();
+                } catch (error) {
+                    plazaList.innerHTML = '<div class="text-danger text-center p-3">No se pudo cargar la selección.</div>';
+                    setPlazaStatus(error.message, 'text-danger');
+                }
+            });
+
+            plazaRecognizeButton.addEventListener('click', async function () {
+                const formData = new FormData();
+
+                if (plazaFileInput.files[0]) {
+                    formData.append('archivo', plazaFileInput.files[0]);
+                }
+
+                formData.append('terminales_manual', plazaManualInput.value);
+                this.disabled = true;
+                setPlazaStatus('Reconociendo terminales...');
+
+                try {
+                    const response = await fetch(plazaRecognizeUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: formData
+                    });
+                    const data = await parsePlazaResponse(response, 'No se pudieron reconocer las terminales.');
+
+                    (data.data || []).forEach(agency => {
+                        plazaAgencies.set(Number(agency.id), agency);
+                    });
+                    renderPlazaAgencies();
+
+                    const missing = data.no_encontradas || [];
+                    const message = missing.length > 0
+                        ? `${data.encontradas} agencia(s) reconocida(s). No encontradas: ${missing.join(', ')}.`
+                        : `${data.encontradas} agencia(s) reconocida(s) correctamente.`;
+                    setPlazaStatus(message, missing.length > 0 ? 'text-warning' : 'text-success');
+                } catch (error) {
+                    setPlazaStatus(error.message, 'text-danger');
+                } finally {
+                    this.disabled = false;
+                }
+            });
+
+            plazaSaveButton.addEventListener('click', async function () {
+                const agencyIds = [...plazaList.querySelectorAll('[data-plaza-agency-id]:checked')]
+                    .map(input => Number(input.dataset.plazaAgencyId));
+                this.disabled = true;
+                setPlazaStatus('Guardando agencias...');
+
+                try {
+                    const data = await savePlazaAgencies(agencyIds);
+                    setPlazaStatus(data.message, 'text-success');
+                } catch (error) {
+                    setPlazaStatus(error.message, 'text-danger');
+                } finally {
+                    this.disabled = false;
+                }
+            });
+
+            plazaClearButton.addEventListener('click', async function () {
+                const confirmation = await Swal.fire({
+                    title: '¿Limpiar agencias en plaza?',
+                    text: 'Al quedar vacía la selección se analizarán todas las agencias Lotobet.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, limpiar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#d33'
+                });
+
+                if (!confirmation.isConfirmed) {
+                    return;
+                }
+
+                this.disabled = true;
+                setPlazaStatus('Limpiando selección...');
+
+                try {
+                    const data = await savePlazaAgencies([]);
+                    setPlazaStatus(data.message, 'text-success');
+                } catch (error) {
+                    setPlazaStatus(error.message, 'text-danger');
+                } finally {
+                    this.disabled = false;
+                }
+            });
 
             const table = $('#tablaMonitoreoTerminales').DataTable({
                 data: @json($registros),
@@ -291,7 +597,13 @@
                     {
                         data: 'hora_monitoreo',
                         className: 'text-center',
-                        render: data => escapeHtml(data)
+                        render: function (data, type, row) {
+                            if (type !== 'display') {
+                                return `${data} ${row.tipo_horario || ''}`.trim();
+                            }
+
+                            return escapeHtml(`${data} - Horario ${row.tipo_horario}`);
+                        }
                     },
                     {
                         data: 'estado',
@@ -305,8 +617,7 @@
                                 CUMPLE: 'bg-success-subtle text-success',
                                 AVISO: 'bg-warning-subtle text-warning',
                                 FALTA: 'bg-danger-subtle text-danger',
-                                'REQUIERE LLAMADA': 'bg-danger text-white',
-                                PENDIENTE: 'bg-secondary-subtle text-secondary'
+                                'SIN AGENTE DE VENTA': 'bg-danger text-white'
                             }[data] || 'bg-secondary-subtle text-secondary';
 
                             return `<span class="badge ${classes} fs-6 fw-bold px-3 py-2">${escapeHtml(data)}</span>`;
@@ -339,18 +650,45 @@
                 document.getElementById('resumenFaltas').textContent = data.faltas ?? 0;
                 document.getElementById('resumenCumplen').textContent = data.cumplen ?? 0;
                 document.getElementById('resumenAvisos').textContent = data.avisos ?? 0;
-                document.getElementById('resumenLlamadas').textContent = data.llamadas ?? 0;
+                document.getElementById('resumenSinAgente').textContent = data.sin_agente ?? 0;
             }
 
             function detailRows() {
                 return table.rows().data().toArray().filter(row => row.estado === activeDetailState);
             }
 
+            function reportRows() {
+                return table.rows({ search: 'applied' }).data().toArray();
+            }
+
+            function exportableRows(rows) {
+                return rows.map(row => ({
+                    agencia: row.agencia,
+                    terminal: String(row.terminal || ''),
+                    coordinador: row.coordinador,
+                    comentario: row.comentario || null,
+                    fecha: row.fecha,
+                    hora_apertura: row.hora_apertura,
+                    hora_ponche: row.hora_ponche,
+                    hora_monitoreo: row.hora_monitoreo,
+                    tipo_horario: row.tipo_horario,
+                    minutos_tardanza: row.minutos_tardanza,
+                    estado: row.estado
+                }));
+            }
+
+            function updateReportActionState() {
+                const disabled = reportRows().length === 0;
+                exportMonitoringExcelButton.disabled = disabled;
+                exportMonitoringPdfButton.disabled = disabled;
+                shareMonitoringPdfButton.disabled = disabled;
+            }
+
             function renderDetailModal(state) {
                 activeDetailState = state;
                 const rows = detailRows();
-                const requiresCall = state === 'REQUIERE LLAMADA';
-                detailModalTitle.textContent = requiresCall ? 'Terminales que requieren llamada' : 'Terminales con aviso';
+                const withoutSalesAgent = state === 'SIN AGENTE DE VENTA';
+                detailModalTitle.textContent = withoutSalesAgent ? 'Terminales sin agente de venta' : 'Terminales con aviso';
                 detailModalSummary.textContent = `${rows.length} terminal${rows.length === 1 ? '' : 'es'} en el resultado actual.`;
                 detailModalBody.innerHTML = '';
                 detailModalEmpty.classList.toggle('d-none', rows.length > 0);
@@ -369,7 +707,7 @@
                         <td class="text-center">${escapeHtml(row.hora_apertura)}</td>
                         <td class="text-center">${escapeHtml(punch)}</td>
                         <td class="text-center">${escapeHtml(delay)}</td>
-                        <td><span class="badge ${requiresCall ? 'bg-danger' : 'bg-warning-subtle text-warning'}">${escapeHtml(row.estado)}</span></td>
+                        <td><span class="badge ${withoutSalesAgent ? 'bg-danger' : 'bg-warning-subtle text-warning'}">${escapeHtml(row.estado)}</span></td>
                     `;
                     detailModalBody.appendChild(tr);
                 });
@@ -386,6 +724,48 @@
                 });
             });
 
+            async function requestExport(format, state, rows) {
+                const response = await fetch(exportUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/octet-stream, application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({
+                        estado: state,
+                        formato: format,
+                        registros: exportableRows(rows)
+                    })
+                });
+
+                if (!response.ok) {
+                    const contentType = response.headers.get('content-type') || '';
+                    const error = contentType.includes('application/json') ? await response.json() : null;
+                    const validationMessage = error?.errors ? Object.values(error.errors).flat()[0] : null;
+                    throw new Error(validationMessage || error?.message || 'No se pudo generar el archivo.');
+                }
+
+                const disposition = response.headers.get('content-disposition') || '';
+                const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+
+                return {
+                    blob: await response.blob(),
+                    fileName: fileNameMatch?.[1] || `monitoreo.${format === 'excel' ? 'xlsx' : 'pdf'}`
+                };
+            }
+
+            function downloadBlob(blob, fileName) {
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(objectUrl);
+            }
+
             async function downloadDetail(format, button) {
                 const rows = detailRows();
 
@@ -396,49 +776,8 @@
                 button.disabled = true;
 
                 try {
-                    const response = await fetch(exportUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/octet-stream, application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken
-                        },
-                        body: JSON.stringify({
-                            estado: activeDetailState,
-                            formato: format,
-                            registros: rows.map(row => ({
-                                agencia: row.agencia,
-                                terminal: String(row.terminal || ''),
-                                coordinador: row.coordinador,
-                                fecha: row.fecha,
-                                hora_apertura: row.hora_apertura,
-                                hora_ponche: row.hora_ponche,
-                                minutos_tardanza: row.minutos_tardanza,
-                                estado: row.estado
-                            }))
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const contentType = response.headers.get('content-type') || '';
-                        const error = contentType.includes('application/json') ? await response.json() : null;
-                        const validationMessage = error?.errors ? Object.values(error.errors).flat()[0] : null;
-                        throw new Error(validationMessage || error?.message || 'No se pudo generar la descarga.');
-                    }
-
-                    const blob = await response.blob();
-                    const disposition = response.headers.get('content-disposition') || '';
-                    const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
-                    const extension = format === 'excel' ? 'xlsx' : 'pdf';
-                    const fallbackName = `monitoreo_${activeDetailState.toLowerCase().replaceAll(' ', '_')}.${extension}`;
-                    const objectUrl = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = objectUrl;
-                    link.download = fileNameMatch?.[1] || fallbackName;
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                    URL.revokeObjectURL(objectUrl);
+                    const file = await requestExport(format, activeDetailState, rows);
+                    downloadBlob(file.blob, file.fileName);
                 } catch (error) {
                     await Swal.fire('Error', error.message || 'No se pudo generar la descarga.', 'error');
                 } finally {
@@ -452,50 +791,268 @@
                 });
             });
 
+            async function downloadReport(format, button) {
+                const rows = reportRows();
+
+                if (rows.length === 0) {
+                    return;
+                }
+
+                button.disabled = true;
+
+                try {
+                    const file = await requestExport(format, 'TODOS', rows);
+                    downloadBlob(file.blob, file.fileName);
+                } catch (error) {
+                    await Swal.fire('Error', error.message || 'No se pudo generar el informe.', 'error');
+                } finally {
+                    updateReportActionState();
+                }
+            }
+
+            exportMonitoringExcelButton.addEventListener('click', function () {
+                downloadReport('excel', this);
+            });
+
+            exportMonitoringPdfButton.addEventListener('click', function () {
+                downloadReport('pdf', this);
+            });
+
+            shareMonitoringPdfButton.addEventListener('click', async function () {
+                const rows = reportRows();
+
+                if (rows.length === 0) {
+                    return;
+                }
+
+                this.disabled = true;
+
+                try {
+                    const generated = await requestExport('pdf', 'TODOS', rows);
+                    const file = new File([generated.blob], generated.fileName, { type: 'application/pdf' });
+
+                    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+                        try {
+                            await navigator.share({
+                                title: 'Informe de monitoreo de terminales',
+                                text: 'Informe de monitoreo de terminales.',
+                                files: [file]
+                            });
+                        } catch (error) {
+                            if (error.name === 'AbortError') {
+                                return;
+                            }
+
+                            downloadBlob(generated.blob, generated.fileName);
+                            await Swal.fire(
+                                'PDF descargado',
+                                'El sistema no pudo abrir el menú para compartir. Puedes enviar el archivo descargado desde la aplicación que prefieras.',
+                                'info'
+                            );
+                        }
+                    } else {
+                        downloadBlob(generated.blob, generated.fileName);
+                        await Swal.fire(
+                            'PDF descargado',
+                            'Este navegador no permite compartir archivos directamente. Puedes enviarlo desde la aplicación que prefieras.',
+                            'info'
+                        );
+                    }
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        await Swal.fire('Error', error.message || 'No se pudo compartir el informe.', 'error');
+                    }
+                } finally {
+                    updateReportActionState();
+                }
+            });
+
             attendanceFilter.addEventListener('change', function () {
                 const value = $.fn.dataTable.util.escapeRegex(this.value);
                 table.column(5).search(value ? `^${value}$` : '', true, false).draw();
             });
 
-            function formatMonitoringTime(value) {
-                const [hours, minutes] = value.split(':').map(Number);
-                const period = hours >= 12 ? 'PM' : 'AM';
-                const displayHours = hours % 12 || 12;
+            table.on('draw', updateReportActionState);
+            updateReportActionState();
 
-                return `${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+            function selectedMonitoringTimeKey() {
+                if (!monitoringTimeInput.value || !monitoringScheduleTypeInput.value) {
+                    return '';
+                }
+
+                return `${monitoringTimeInput.value}|${monitoringScheduleTypeInput.value}`;
+            }
+
+            async function updateMonitoringTime(method, value, scheduleType) {
+                const response = await fetch(
+                    method === 'POST' ? storeMonitoringTimeUrl : deleteMonitoringTimeUrl,
+                    {
+                        method,
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: JSON.stringify({
+                            hora: value,
+                            tipo_horario: scheduleType
+                        })
+                    }
+                );
+                const data = await response.json();
+
+                if (!response.ok) {
+                    const validationMessage = data.errors ? Object.values(data.errors).flat()[0] : null;
+                    throw new Error(validationMessage || data.message || 'No se pudo actualizar el horario.');
+                }
+
+                monitoringTimes = data.data;
+
+                return data.message;
             }
 
             async function configureMonitoringTime() {
-                if (Object.keys(monitoringTimes).length === 0) {
-                    await Swal.fire(
-                        'Sin horarios configurados',
-                        'No hay horarios disponibles en las agencias de Lotobet.',
-                        'warning'
-                    );
-
-                    return false;
-                }
-
                 const result = await Swal.fire({
                     title: 'Configurar hora evaluada',
-                    text: 'Seleccione una de las horas configuradas en las agencias.',
-                    input: 'select',
-                    inputOptions: monitoringTimes,
-                    inputPlaceholder: 'Seleccione un horario',
-                    inputValue: monitoringTimeInput.value,
+                    html: `
+                        <p class="text-muted mb-3">Seleccione, agregue o elimine los horarios disponibles para el monitoreo.</p>
+                        <select id="swalHorarioSeleccionado" class="form-select mb-3" aria-label="Horario evaluado"></select>
+                        <div class="input-group mb-3">
+                            <input type="time" id="swalNuevoHorario" class="form-control" aria-label="Nuevo horario">
+                            <select id="swalNuevoTipoHorario" class="form-select" aria-label="Tipo de horario">
+                                <option value="AM">Horario AM</option>
+                                <option value="PM">Horario PM</option>
+                            </select>
+                            <button type="button" id="swalAgregarHorario" class="btn btn-primary">
+                                <i class="ri-add-line align-bottom me-1"></i>Agregar
+                            </button>
+                        </div>
+                        <div id="swalHorariosLista" class="border rounded text-start overflow-auto" style="max-height: 220px"></div>
+                        <div id="swalHorarioEstado" class="small text-start mt-2" aria-live="polite"></div>
+                    `,
                     showCancelButton: true,
                     confirmButtonText: 'Aplicar hora',
                     cancelButtonText: 'Cancelar',
                     confirmButtonColor: '#405189',
-                    inputValidator: value => !value ? 'Debe seleccionar un horario.' : undefined
+                    didOpen: () => {
+                        const selectedInput = document.getElementById('swalHorarioSeleccionado');
+                        const newTimeInput = document.getElementById('swalNuevoHorario');
+                        const newScheduleTypeInput = document.getElementById('swalNuevoTipoHorario');
+                        const addButton = document.getElementById('swalAgregarHorario');
+                        const list = document.getElementById('swalHorariosLista');
+                        const status = document.getElementById('swalHorarioEstado');
+
+                        const renderOptions = preferredValue => {
+                            const selectedValue = preferredValue || selectedInput.value || selectedMonitoringTimeKey();
+                            const entries = Object.entries(monitoringTimes);
+                            selectedInput.innerHTML = '<option value="">Seleccione un horario</option>';
+                            list.innerHTML = '';
+
+                            entries.forEach(([value, label]) => {
+                                const option = document.createElement('option');
+                                option.value = value;
+                                option.textContent = label;
+                                option.selected = value === selectedValue;
+                                selectedInput.appendChild(option);
+
+                                const row = document.createElement('div');
+                                row.className = 'd-flex align-items-center justify-content-between gap-2 px-3 py-2 border-bottom';
+                                row.innerHTML = `
+                                    <span>${escapeHtml(label)}</span>
+                                    <button type="button" class="btn btn-sm btn-soft-danger" data-delete-key="${escapeHtml(value)}" title="Eliminar horario">
+                                        <i class="ri-delete-bin-line"></i>
+                                    </button>
+                                `;
+                                list.appendChild(row);
+                            });
+
+                            if (entries.length === 0) {
+                                list.innerHTML = '<div class="text-muted text-center p-3">No hay horarios configurados.</div>';
+                            }
+
+                            list.querySelectorAll('[data-delete-key]').forEach(button => {
+                                button.addEventListener('click', async function () {
+                                    const key = this.dataset.deleteKey;
+                                    const [value, scheduleType] = key.split('|');
+                                    this.disabled = true;
+                                    status.textContent = 'Eliminando horario...';
+                                    status.className = 'small text-start mt-2 text-muted';
+
+                                    try {
+                                        const message = await updateMonitoringTime('DELETE', value, scheduleType);
+
+                                        if (selectedMonitoringTimeKey() === key) {
+                                            monitoringTimeInput.value = '';
+                                            monitoringScheduleTypeInput.value = '';
+                                            monitoringTimeText.textContent = 'Configurar hora';
+                                            configureTimeButton.classList.remove('btn-soft-success');
+                                            configureTimeButton.classList.add('btn-soft-info');
+                                        }
+
+                                        renderOptions();
+                                        status.textContent = message;
+                                        status.className = 'small text-start mt-2 text-success';
+                                    } catch (error) {
+                                        this.disabled = false;
+                                        status.textContent = error.message;
+                                        status.className = 'small text-start mt-2 text-danger';
+                                    }
+                                });
+                            });
+                        };
+
+                        addButton.addEventListener('click', async function () {
+                            if (!newTimeInput.value) {
+                                status.textContent = 'Seleccione la hora que desea agregar.';
+                                status.className = 'small text-start mt-2 text-danger';
+
+                                return;
+                            }
+
+                            this.disabled = true;
+                            status.textContent = 'Agregando horario...';
+                            status.className = 'small text-start mt-2 text-muted';
+
+                            try {
+                                const value = newTimeInput.value;
+                                const scheduleType = newScheduleTypeInput.value;
+                                const key = `${value}|${scheduleType}`;
+                                const message = await updateMonitoringTime('POST', value, scheduleType);
+                                newTimeInput.value = '';
+                                renderOptions(key);
+                                status.textContent = message;
+                                status.className = 'small text-start mt-2 text-success';
+                            } catch (error) {
+                                status.textContent = error.message;
+                                status.className = 'small text-start mt-2 text-danger';
+                            } finally {
+                                this.disabled = false;
+                            }
+                        });
+
+                        renderOptions(selectedMonitoringTimeKey());
+                    },
+                    preConfirm: () => {
+                        const value = document.getElementById('swalHorarioSeleccionado').value;
+
+                        if (!value) {
+                            Swal.showValidationMessage('Debe seleccionar un horario.');
+
+                            return false;
+                        }
+
+                        return value;
+                    }
                 });
 
                 if (!result.isConfirmed) {
                     return false;
                 }
 
-                monitoringTimeInput.value = result.value;
-                monitoringTimeText.textContent = formatMonitoringTime(result.value);
+                const [monitoringTime, scheduleType] = result.value.split('|');
+                monitoringTimeInput.value = monitoringTime;
+                monitoringScheduleTypeInput.value = scheduleType;
+                monitoringTimeText.textContent = monitoringTimes[result.value];
                 configureTimeButton.classList.remove('btn-soft-info');
                 configureTimeButton.classList.add('btn-soft-success');
 
@@ -525,11 +1082,49 @@
                 Swal.close();
             }
 
-            async function generateMonitoring(tokenRetryAttempted = false) {
+            async function selectAgencyScope() {
+                const configuredAgencies = Number(plazaCount.textContent || 0);
+                const result = await Swal.fire({
+                    title: '¿Qué agencias deseas evaluar?',
+                    html: `
+                        <div class="d-grid gap-2 text-start">
+                            <label class="border rounded p-3 d-flex align-items-center gap-2 mb-0">
+                                <input type="radio" name="swalAlcanceAgencias" value="todas" class="form-check-input mt-0" checked>
+                                <span>
+                                    <strong>Todas las agencias</strong>
+                                    <small class="d-block text-muted">Genera el monitoreo completo.</small>
+                                </span>
+                            </label>
+                            <label class="border rounded p-3 d-flex align-items-center gap-2 mb-0 ${configuredAgencies === 0 ? 'opacity-50' : ''}">
+                                <input type="radio" name="swalAlcanceAgencias" value="plaza" class="form-check-input mt-0" ${configuredAgencies === 0 ? 'disabled' : ''}>
+                                <span>
+                                    <strong>Solo agencias en plaza (${configuredAgencies})</strong>
+                                    <small class="d-block text-muted">
+                                        ${configuredAgencies === 0 ? 'Primero agregue agencias en plaza.' : 'Utiliza únicamente la selección configurada.'}
+                                    </small>
+                                </span>
+                            </label>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Continuar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#405189',
+                    preConfirm: () => {
+                        return document.querySelector('input[name="swalAlcanceAgencias"]:checked')?.value || 'todas';
+                    }
+                });
+
+                return result.isConfirmed ? result.value : null;
+            }
+
+            async function generateMonitoring(tokenRetryAttempted = false, agencyScope = 'todas') {
                 const query = new URLSearchParams({
                     fecha_inicio: startDateInput.value,
                     fecha_fin: endDateInput.value,
-                    hora_monitoreo: monitoringTimeInput.value
+                    hora_monitoreo: monitoringTimeInput.value,
+                    tipo_horario: monitoringScheduleTypeInput.value,
+                    alcance_agencias: agencyScope
                 });
                 const response = await fetch(`${generateUrl}?${query.toString()}`, {
                     headers: { 'Accept': 'application/json' }
@@ -556,7 +1151,7 @@
                     await generateLotobetToken();
                     setGenerateStatus('Token generado. Consultando asistencias...', 'text-muted');
 
-                    return generateMonitoring(true);
+                    return generateMonitoring(true, agencyScope);
                 }
 
                 if (!response.ok) {
@@ -566,14 +1161,25 @@
 
                 table.clear().rows.add(data.data || []).draw();
                 updateSummary(data);
-                setGenerateStatus(`Monitoreo generado: ${data.total ?? 0} evaluaciones.`, 'text-success');
+                setGenerateStatus(
+                    `Monitoreo generado: ${data.total ?? 0} evaluaciones. Alcance: ${data.alcance_label}.`,
+                    'text-success'
+                );
             }
 
             generateForm.addEventListener('submit', async function (event) {
                 event.preventDefault();
 
-                if (!monitoringTimeInput.value && !await configureMonitoringTime()) {
+                if ((!monitoringTimeInput.value || !monitoringScheduleTypeInput.value) && !await configureMonitoringTime()) {
                     setGenerateStatus('Debe configurar la hora que desea evaluar.', 'text-warning');
+
+                    return;
+                }
+
+                const agencyScope = await selectAgencyScope();
+
+                if (agencyScope === null) {
+                    setGenerateStatus('Generación cancelada.', 'text-warning');
 
                     return;
                 }
@@ -582,7 +1188,7 @@
                 setGenerateStatus('Consultando asistencias...', 'text-muted');
 
                 try {
-                    await generateMonitoring();
+                    await generateMonitoring(false, agencyScope);
                 } catch (error) {
                     Swal.close();
                     setGenerateStatus(error.message || 'No se pudo generar el monitoreo.', 'text-danger');

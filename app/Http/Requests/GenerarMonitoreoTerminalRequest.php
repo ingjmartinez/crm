@@ -20,6 +20,8 @@ class GenerarMonitoreoTerminalRequest extends FormRequest
             'fecha_inicio' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'fecha_fin' => ['required', 'date_format:Y-m-d', 'after_or_equal:fecha_inicio', 'before_or_equal:today'],
             'hora_monitoreo' => ['required', 'date_format:H:i'],
+            'tipo_horario' => ['required', 'in:AM,PM'],
+            'alcance_agencias' => ['nullable', 'in:todas,plaza'],
         ];
     }
 
@@ -61,6 +63,9 @@ class GenerarMonitoreoTerminalRequest extends FormRequest
             'fecha_fin.before_or_equal' => 'La fecha final no puede ser futura.',
             'hora_monitoreo.required' => 'Debe configurar la hora que desea evaluar.',
             'hora_monitoreo.date_format' => 'La hora evaluada debe tener un formato válido.',
+            'tipo_horario.required' => 'Debe indicar si evaluará el horario AM o PM.',
+            'tipo_horario.in' => 'El tipo de horario seleccionado no es válido.',
+            'alcance_agencias.in' => 'El alcance de agencias seleccionado no es válido.',
         ];
     }
 }

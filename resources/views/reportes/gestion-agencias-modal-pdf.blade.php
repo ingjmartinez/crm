@@ -98,6 +98,7 @@
         <p class="filters">
             Filtros globales:
             Empresa: {{ $filtrosActivos['empresa'] ?? 'Todas' }} |
+            Ciudad: {{ $filtrosActivos['ciudad'] ?? 'Todas' }} |
             Ruta: {{ $filtrosActivos['ruta'] ?? 'Todas' }} |
             Coordinador: {{ $filtrosActivos['coordinador'] ?? 'Todos' }}
         </p>

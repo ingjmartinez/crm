@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>Monitoreo de terminales - {{ $estado }}</title>
+    <title>Monitoreo de terminales - {{ $estado === 'TODOS' ? 'Informe completo' : $estado }}</title>
     <style>
         @page { margin: 24px; }
         body { color: #1f2937; font-family: DejaVu Sans, sans-serif; font-size: 10px; }
@@ -16,7 +16,15 @@
     </style>
 </head>
 <body>
-    <h1>{{ $estado === 'AVISO' ? 'Terminales con aviso' : 'Terminales que requieren llamada' }}</h1>
+    <h1>
+        @if ($estado === 'TODOS')
+            Informe de monitoreo de terminales
+        @elseif ($estado === 'AVISO')
+            Terminales con aviso
+        @else
+            Terminales que requieren llamada
+        @endif
+    </h1>
     <p>Generado: {{ $generadoEn->format('d/m/Y h:i:s A') }} | Registros: {{ number_format($registros->count()) }}</p>
 
     <table>
@@ -28,8 +36,10 @@
                 <th>Fecha</th>
                 <th>Apertura</th>
                 <th>Ponche</th>
+                <th>Evaluada</th>
                 <th>Tardanza</th>
                 <th>Estado</th>
+                <th>Comentario</th>
             </tr>
         </thead>
         <tbody>
@@ -41,8 +51,10 @@
                     <td>{{ $registro['fecha'] }}</td>
                     <td class="text-center">{{ $registro['hora_apertura'] }}</td>
                     <td class="text-center">{{ ($registro['hora_ponche'] ?? null) ?: 'Sin ponche' }}</td>
+                    <td class="text-center">{{ ($registro['hora_monitoreo'] ?? null) ?: '-' }}</td>
                     <td class="text-center">{{ ($registro['minutos_tardanza'] ?? null) === null ? '-' : $registro['minutos_tardanza'].' min' }}</td>
                     <td>{{ $registro['estado'] }}</td>
+                    <td>{{ ($registro['comentario'] ?? null) ?: 'Sin comentario' }}</td>
                 </tr>
             @endforeach
         </tbody>

@@ -18,6 +18,7 @@ use ZipArchive;
 class GestionAgenciasReporteController extends Controller
 {
     private const IMPORT_CHUNK_SIZE = 1000;
+
     private const REPORT_TEXT_COLLATION = 'utf8mb4_unicode_ci';
 
     public function index(): View
@@ -118,6 +119,7 @@ class GestionAgenciasReporteController extends Controller
                     ->orWhere('gav.usuario_venta', 'like', "%{$search}%")
                     ->orWhere('emp.nombre_empleado', 'like', "%{$search}%")
                     ->orWhere('agl.empresa', 'like', "%{$search}%")
+                    ->orWhere('agl.ciudad', 'like', "%{$search}%")
                     ->orWhere('agl.ruta', 'like', "%{$search}%")
                     ->orWhere('agl.coordinador', 'like', "%{$search}%");
             });
@@ -179,15 +181,27 @@ class GestionAgenciasReporteController extends Controller
         $umbrales = $this->umbralesVenta($request);
         $filtrosAgencia = $this->filtrosAgencia($request);
         $modalScope = trim((string) $request->input('modal_scope', ''));
+        $agrupacion = trim((string) $request->input('agrupacion', 'ruta'));
         $horaServidor = now();
 
         if ($modalScope !== '') {
             return $this->pdfDetalleModal($request, $filtrosAgencia, $umbrales, $horaServidor);
         }
 
+        if (! in_array($agrupacion, ['empresa', 'ciudad', 'ruta'], true)) {
+            $agrupacion = 'ruta';
+        }
+
         $resumen = $this->resumenDesdeTabla(null, null, null, $filtrosAgencia);
         $estatusResumen = $this->conteoEstatusTerminales($umbrales, $horaServidor, $filtrosAgencia);
         $tendenciaVentasHora = $this->tendenciaVentasPorHoraDesdeTabla($filtrosAgencia);
+        $datosInforme = $this->construirDatosInformePdf(
+            $agrupacion,
+            $this->ventasPorAgenciaDesdeTabla($filtrosAgencia),
+            $this->agenciasSinVentasDesdeTabla($filtrosAgencia),
+            $this->detalleEstatusTerminales($umbrales, $horaServidor, $filtrosAgencia),
+            $this->ventaPorHoraAgrupadaDesdeTabla($agrupacion, $filtrosAgencia)
+        );
 
         $pdf = Pdf::loadView('reportes.gestion-agencias-pdf', [
             'resumen' => $resumen,
@@ -196,6 +210,12 @@ class GestionAgenciasReporteController extends Controller
             'tendenciaVentasHora' => $tendenciaVentasHora,
             'filtrosAgencia' => $filtrosAgencia,
             'horaServidor' => $horaServidor,
+            'agrupacion' => $agrupacion,
+            'agrupacionLabel' => ucfirst($agrupacion),
+            'resumenAgrupado' => $datosInforme['resumen'],
+            'detalleAgencias' => $datosInforme['detalle'],
+            'detalleAgenciasTotal' => $datosInforme['detalle_total'],
+            'detalleAgenciasLimite' => $datosInforme['detalle_limite'],
         ])
             ->setPaper('letter', 'landscape')
             ->setOptions([
@@ -204,7 +224,9 @@ class GestionAgenciasReporteController extends Controller
                 'isHtml5ParserEnabled' => true,
             ]);
 
-        return $pdf->download('reporte_gestion_agencias_' . $horaServidor->format('Ymd_His') . '.pdf');
+        return $pdf->download(
+            'reporte_gestion_agencias_'.$agrupacion.'_'.$horaServidor->format('Ymd_His').'.pdf'
+        );
     }
 
     private function pdfDetalleModal(Request $request, array $filtrosAgencia, array $umbrales, Carbon $horaServidor)
@@ -233,12 +255,12 @@ class GestionAgenciasReporteController extends Controller
         } elseif ($modalScope === 'estatus') {
             $estatus = trim((string) $request->input('modal_status', ''));
 
-            if (!in_array($estatus, ['Aviso', 'En Alerta', 'Requiere llamada', 'Al dia'], true)) {
+            if (! in_array($estatus, ['Aviso', 'En Alerta', 'Requiere llamada', 'Al dia'], true)) {
                 abort(404);
             }
 
             $detalle = $this->detalleEstatusTerminales($umbrales, $horaServidor, $filtrosAgencia);
-            $titulo = 'Agencias en ' . $estatus;
+            $titulo = 'Agencias en '.$estatus;
             $subtitulo = 'Terminales agrupadas por estatus de ultima transaccion.';
             $columnas = ['Agencia', 'Terminal', 'Ruta', 'Cedula', 'Nombre', 'Coordinador', 'Tipo', 'Ultima transaccion'];
             $rows = $this->filtrarDetalleModalRows(
@@ -267,7 +289,7 @@ class GestionAgenciasReporteController extends Controller
                 'isHtml5ParserEnabled' => true,
             ]);
 
-        return $pdf->download('reporte_gestion_agencias_detalle_' . $horaServidor->format('Ymd_His') . '.pdf');
+        return $pdf->download('reporte_gestion_agencias_detalle_'.$horaServidor->format('Ymd_His').'.pdf');
     }
 
     private function reemplazarTablaReporte(callable $importador): void
@@ -295,6 +317,7 @@ class GestionAgenciasReporteController extends Controller
     {
         return [
             'empresa' => trim((string) $request->input('empresa_filter', '')),
+            'ciudad' => trim((string) $request->input('ciudad_filter', '')),
             'ruta' => trim((string) $request->input('ruta_filter', '')),
             'coordinador' => trim((string) $request->input('coordinador_filter', '')),
         ];
@@ -311,6 +334,14 @@ class GestionAgenciasReporteController extends Controller
                 ->distinct()
                 ->orderBy('agl.empresa')
                 ->pluck('agl.empresa')
+                ->values()
+                ->all(),
+            'ciudades' => (clone $base)
+                ->whereNotNull('agl.ciudad')
+                ->where('agl.ciudad', '<>', '')
+                ->distinct()
+                ->orderBy('agl.ciudad')
+                ->pluck('agl.ciudad')
                 ->values()
                 ->all(),
             'rutas' => (clone $base)
@@ -388,6 +419,7 @@ class GestionAgenciasReporteController extends Controller
             })
             ->selectRaw("{$terminalClaveSql} as terminal_clave")
             ->selectRaw("MAX(NULLIF(TRIM(a.empresa), '')) as empresa")
+            ->selectRaw("MAX(NULLIF(TRIM(a.ciudad), '')) as ciudad")
             ->selectRaw("MAX(NULLIF(TRIM(a.ruta), '')) as ruta")
             ->selectRaw("MAX(NULLIF({$coordinadorNombreSql}, '')) as coordinador")
             ->whereNotNull('a.terminal')
@@ -399,6 +431,7 @@ class GestionAgenciasReporteController extends Controller
     {
         $mapa = [
             'empresa' => 'agl.empresa',
+            'ciudad' => 'agl.ciudad',
             'ruta' => 'agl.ruta',
             'coordinador' => 'agl.coordinador',
         ];
@@ -419,11 +452,16 @@ class GestionAgenciasReporteController extends Controller
     private function aplicarFiltrosAgenciaTablaAgencias($query, array $filtros = [])
     {
         $empresa = trim((string) ($filtros['empresa'] ?? ''));
+        $ciudad = trim((string) ($filtros['ciudad'] ?? ''));
         $ruta = trim((string) ($filtros['ruta'] ?? ''));
         $coordinador = trim((string) ($filtros['coordinador'] ?? ''));
 
         if ($empresa !== '') {
             $query->whereRaw("TRIM(COALESCE(empresa, '')) = ?", [$empresa]);
+        }
+
+        if ($ciudad !== '') {
+            $query->whereRaw("TRIM(COALESCE(ciudad, '')) = ?", [$ciudad]);
         }
 
         if ($ruta !== '') {
@@ -524,6 +562,8 @@ class GestionAgenciasReporteController extends Controller
                 'gav.terminal',
                 'gav.usuario_venta',
                 'emp.nombre_empleado',
+                'agl.empresa',
+                'agl.ciudad',
                 'agl.ruta',
                 'agl.coordinador',
                 DB::raw("{$estatusSql} as estatus_analisis"),
@@ -539,13 +579,16 @@ class GestionAgenciasReporteController extends Controller
         foreach ($rows as $row) {
             $estatus = (string) $row->estatus_analisis;
 
-            if (!array_key_exists($estatus, $detalle)) {
+            if (! array_key_exists($estatus, $detalle)) {
                 continue;
             }
 
             $detalle[$estatus][] = [
                 'agencia' => $row->agencia,
                 'terminal' => $row->terminal,
+                'clave' => $this->claveAgenciaReporte((string) $row->terminal, (string) $row->agencia),
+                'empresa' => $row->empresa ?: 'Sin empresa',
+                'ciudad' => $row->ciudad ?: 'Sin ciudad',
                 'ruta' => $row->ruta ?: 'Sin ruta',
                 'cedula' => $row->usuario_venta,
                 'nombre' => $row->nombre_empleado ?: 'Actualizar en la maestra de empleado',
@@ -562,7 +605,7 @@ class GestionAgenciasReporteController extends Controller
     {
         $query = $this->baseVentasConAgenciaQuery($filtros);
 
-        if (!(clone $query)->exists()) {
+        if (! (clone $query)->exists()) {
             return null;
         }
 
@@ -614,6 +657,10 @@ class GestionAgenciasReporteController extends Controller
             ->selectRaw('gav.terminal_clave as terminal_clave')
             ->selectRaw('MAX(gav.agencia) as agencia')
             ->selectRaw('MAX(gav.terminal) as terminal')
+            ->selectRaw('MAX(agl.empresa) as empresa')
+            ->selectRaw('MAX(agl.ciudad) as ciudad')
+            ->selectRaw('MAX(agl.ruta) as ruta')
+            ->selectRaw('MAX(agl.coordinador) as coordinador')
             ->selectRaw('SUM(COALESCE(gav.total_apostado, 0)) as total_general')
             ->selectRaw("SUM(CASE WHEN gav.tipo = 'Tradicional' THEN COALESCE(gav.total_apostado, 0) ELSE 0 END) as total_tradicional")
             ->selectRaw("SUM(CASE WHEN gav.tipo = 'No Tradicional' THEN COALESCE(gav.total_apostado, 0) ELSE 0 END) as total_no_tradicional")
@@ -653,8 +700,13 @@ class GestionAgenciasReporteController extends Controller
                 return [
                     'agencia' => $agencia,
                     'terminal' => $terminal,
-                    'label' => trim($terminal . ' - ' . $agencia, ' -'),
-                    'busqueda' => strtolower(trim($terminal . ' ' . $agencia)),
+                    'clave' => $this->claveAgenciaReporte($terminal, $agencia),
+                    'empresa' => trim((string) ($row->empresa ?? '')) ?: 'Sin empresa',
+                    'ciudad' => trim((string) ($row->ciudad ?? '')) ?: 'Sin ciudad',
+                    'ruta' => trim((string) ($row->ruta ?? '')) ?: 'Sin ruta',
+                    'coordinador' => trim((string) ($row->coordinador ?? '')) ?: 'Sin coordinador',
+                    'label' => trim($terminal.' - '.$agencia, ' -'),
+                    'busqueda' => strtolower(trim($terminal.' '.$agencia)),
                     'tradicional' => [
                         'total' => round((float) ($row->total_tradicional ?? 0), 2),
                         'ultima' => $this->ultimaTransaccionAgrupada($tradicional),
@@ -676,7 +728,7 @@ class GestionAgenciasReporteController extends Controller
             ->selectRaw('MIN(gav.fecha_transaccion) as primera_venta, MAX(gav.fecha_transaccion) as ultima_venta')
             ->first();
 
-        if (!$rango || !$rango->primera_venta || !$rango->ultima_venta) {
+        if (! $rango || ! $rango->primera_venta || ! $rango->ultima_venta) {
             return [
                 'labels' => [],
                 'series' => [],
@@ -704,7 +756,7 @@ class GestionAgenciasReporteController extends Controller
         $series = [];
         $acumulado = 0.0;
         $cursor = $inicio->copy();
-        $usarFechaEnLabel = !$inicio->isSameDay($fin);
+        $usarFechaEnLabel = ! $inicio->isSameDay($fin);
 
         while ($cursor->lessThanOrEqualTo($fin)) {
             $key = $cursor->format('Y-m-d H:00:00');
@@ -723,9 +775,193 @@ class GestionAgenciasReporteController extends Controller
         ];
     }
 
+    /** @return array<string, float> */
+    private function ventaPorHoraAgrupadaDesdeTabla(string $agrupacion, array $filtros = []): array
+    {
+        $columnas = [
+            'empresa' => ['columna' => 'agl.empresa', 'vacio' => 'Sin empresa'],
+            'ciudad' => ['columna' => 'agl.ciudad', 'vacio' => 'Sin ciudad'],
+            'ruta' => ['columna' => 'agl.ruta', 'vacio' => 'Sin ruta'],
+        ];
+        $configuracion = $columnas[$agrupacion] ?? $columnas['ruta'];
+        $expresionGrupo = "COALESCE(NULLIF(TRIM({$configuracion['columna']}), ''), '{$configuracion['vacio']}')";
+
+        return $this->baseVentasConAgenciaQuery($filtros)
+            ->whereNotNull('gav.fecha_transaccion')
+            ->selectRaw("{$expresionGrupo} as grupo")
+            ->selectRaw('SUM(COALESCE(gav.total_apostado, 0)) as total_vendido')
+            ->selectRaw("COUNT(DISTINCT DATE_FORMAT(gav.fecha_transaccion, '%Y-%m-%d %H:00:00')) as horas_con_ventas")
+            ->groupByRaw($expresionGrupo)
+            ->get()
+            ->mapWithKeys(function ($row): array {
+                $horas = (int) ($row->horas_con_ventas ?? 0);
+                $promedio = $horas > 0 ? (float) $row->total_vendido / $horas : 0;
+
+                return [(string) $row->grupo => round($promedio, 2)];
+            })
+            ->all();
+    }
+
+    /**
+     * @param  array<string, array<int, array<string, mixed>>>  $detalleEstatus
+     * @param  array<string, float>  $ventaPorHoraGrupo
+     * @return array{
+     *     resumen: \Illuminate\Support\Collection<int, array<string, mixed>>,
+     *     detalle: \Illuminate\Support\Collection<int, array<string, mixed>>,
+     *     detalle_total: int,
+     *     detalle_limite: int
+     * }
+     */
+    private function construirDatosInformePdf(
+        string $agrupacion,
+        $ventas,
+        $sinVentas,
+        array $detalleEstatus,
+        array $ventaPorHoraGrupo
+    ): array {
+        $campos = [
+            'empresa' => ['campo' => 'empresa', 'vacio' => 'Sin empresa'],
+            'ciudad' => ['campo' => 'ciudad', 'vacio' => 'Sin ciudad'],
+            'ruta' => ['campo' => 'ruta', 'vacio' => 'Sin ruta'],
+        ];
+        $configuracion = $campos[$agrupacion] ?? $campos['ruta'];
+        $estatusPorAgencia = collect();
+
+        foreach ($detalleEstatus as $estatus => $rows) {
+            foreach ($rows as $row) {
+                $clave = (string) ($row['clave'] ?? '');
+
+                if ($clave === '') {
+                    continue;
+                }
+
+                $estatusPorAgencia->put($clave, [
+                    'estatus' => $estatus,
+                    'fecha' => $row['fecha'] ?? 'N/D',
+                ]);
+            }
+        }
+        $grupos = [];
+        $detalle = collect();
+        $crearGrupo = function (string $grupo) use (&$grupos, $ventaPorHoraGrupo): void {
+            if (isset($grupos[$grupo])) {
+                return;
+            }
+
+            $grupos[$grupo] = [
+                'grupo' => $grupo,
+                'total_agencias' => 0,
+                'con_ventas' => 0,
+                'sin_ventas' => 0,
+                'venta_por_hora' => (float) ($ventaPorHoraGrupo[$grupo] ?? 0),
+                'total_vendido' => 0.0,
+                'al_dia' => 0,
+                'aviso' => 0,
+                'en_alerta' => 0,
+                'requiere_llamada' => 0,
+            ];
+        };
+        $campoGrupo = $configuracion['campo'];
+        $grupoVacio = $configuracion['vacio'];
+
+        foreach (collect($ventas) as $venta) {
+            $grupo = trim((string) data_get($venta, $campoGrupo, '')) ?: $grupoVacio;
+            $crearGrupo($grupo);
+            $clave = (string) data_get($venta, 'clave', '');
+            $estatusData = $estatusPorAgencia->get($clave, [
+                'estatus' => 'Sin clasificar',
+                'fecha' => 'N/D',
+            ]);
+            $estatusCampo = match ($estatusData['estatus']) {
+                'Al dia' => 'al_dia',
+                'Aviso' => 'aviso',
+                'En Alerta' => 'en_alerta',
+                'Requiere llamada' => 'requiere_llamada',
+                default => null,
+            };
+
+            $grupos[$grupo]['con_ventas']++;
+            $grupos[$grupo]['total_agencias']++;
+            $grupos[$grupo]['total_vendido'] += (float) data_get($venta, 'total', 0);
+
+            if ($estatusCampo !== null) {
+                $grupos[$grupo][$estatusCampo]++;
+            }
+
+            $detalle->push([
+                'grupo' => $grupo,
+                'terminal' => data_get($venta, 'terminal', ''),
+                'agencia' => data_get($venta, 'agencia', ''),
+                'empresa' => data_get($venta, 'empresa', 'Sin empresa'),
+                'ciudad' => data_get($venta, 'ciudad', 'Sin ciudad'),
+                'ruta' => data_get($venta, 'ruta', 'Sin ruta'),
+                'coordinador' => data_get($venta, 'coordinador', 'Sin coordinador'),
+                'estatus' => $estatusData['estatus'],
+                'ultima_venta' => $estatusData['fecha'],
+                'total_vendido' => (float) data_get($venta, 'total', 0),
+            ]);
+        }
+
+        foreach (collect($sinVentas) as $agencia) {
+            $grupo = trim((string) data_get($agencia, $campoGrupo, '')) ?: $grupoVacio;
+            $crearGrupo($grupo);
+            $grupos[$grupo]['sin_ventas']++;
+            $grupos[$grupo]['total_agencias']++;
+            $detalle->push([
+                'grupo' => $grupo,
+                'terminal' => data_get($agencia, 'terminal', ''),
+                'agencia' => data_get($agencia, 'nombre_agencia', data_get($agencia, 'agencia_id', '')),
+                'empresa' => data_get($agencia, 'empresa', 'Sin empresa'),
+                'ciudad' => data_get($agencia, 'ciudad', 'Sin ciudad'),
+                'ruta' => data_get($agencia, 'ruta', 'Sin ruta'),
+                'coordinador' => data_get($agencia, 'coordinador', 'Sin coordinador'),
+                'estatus' => 'Sin ventas',
+                'ultima_venta' => 'N/D',
+                'total_vendido' => 0.0,
+            ]);
+        }
+
+        $detalleLimite = 200;
+        $detalleOrdenado = $detalle
+            ->sortBy(fn (array $row): string => mb_strtolower(
+                $row['grupo'].'|'.$row['terminal'].'|'.$row['agencia']
+            ))
+            ->values();
+
+        return [
+            'resumen' => collect($grupos)
+                ->map(function (array $grupo): array {
+                    $totalAgencias = (int) $grupo['total_agencias'];
+                    $cumplimiento = $totalAgencias > 0
+                        ? round(((int) $grupo['con_ventas'] / $totalAgencias) * 100, 2)
+                        : 0.0;
+                    $grupo['total_vendido'] = round((float) $grupo['total_vendido'], 2);
+                    $grupo['cumplimiento_porcentaje'] = $cumplimiento;
+                    $grupo['cumplimiento_color'] = $this->colorCumplimiento($cumplimiento);
+
+                    return $grupo;
+                })
+                ->sortBy(fn (array $grupo): string => mb_strtolower($grupo['grupo']))
+                ->values(),
+            'detalle' => $detalleOrdenado->take($detalleLimite),
+            'detalle_total' => $detalleOrdenado->count(),
+            'detalle_limite' => $detalleLimite,
+        ];
+    }
+
+    private function colorCumplimiento(float $porcentaje): string
+    {
+        return match (true) {
+            $porcentaje > 90 => 'verde',
+            $porcentaje >= 80 => 'naranja',
+            $porcentaje >= 75 => 'amarillo',
+            default => 'rojo',
+        };
+    }
+
     private function ultimaTransaccionAgrupada($fila): ?array
     {
-        if (!$fila) {
+        if (! $fila) {
             return null;
         }
 
@@ -754,22 +990,23 @@ class GestionAgenciasReporteController extends Controller
     {
         $path = $archivo->getRealPath();
 
-        if (!$path) {
+        if (! $path) {
             throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'No se pudo leer el archivo ' . $tipo . '.',
+                $this->campoArchivo($tipo) => 'No se pudo leer el archivo '.$tipo.'.',
             ]);
         }
 
         if ($this->esCsv($archivo)) {
             $this->limpiarCsv($archivo, $tipo, $columnasRequeridas);
+
             return;
         }
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
 
         if ($zip->open($path) !== true) {
             throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'No se pudo abrir el archivo ' . $tipo . '.',
+                $this->campoArchivo($tipo) => 'No se pudo abrir el archivo '.$tipo.'.',
             ]);
         }
 
@@ -780,7 +1017,7 @@ class GestionAgenciasReporteController extends Controller
 
             if ($sheetXml === false) {
                 throw ValidationException::withMessages([
-                    $this->campoArchivo($tipo) => 'No se pudo leer la hoja principal del archivo ' . $tipo . '.',
+                    $this->campoArchivo($tipo) => 'No se pudo leer la hoja principal del archivo '.$tipo.'.',
                 ]);
             }
 
@@ -811,9 +1048,9 @@ class GestionAgenciasReporteController extends Controller
     {
         $path = $archivo->getRealPath();
 
-        if (!$path) {
+        if (! $path) {
             throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'No se pudo leer el archivo ' . $tipo . '.',
+                $this->campoArchivo($tipo) => 'No se pudo leer el archivo '.$tipo.'.',
             ]);
         }
 
@@ -822,7 +1059,7 @@ class GestionAgenciasReporteController extends Controller
 
         if ($handle === false) {
             throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'No se pudo abrir el archivo ' . $tipo . '.',
+                $this->campoArchivo($tipo) => 'No se pudo abrir el archivo '.$tipo.'.',
             ]);
         }
 
@@ -830,9 +1067,9 @@ class GestionAgenciasReporteController extends Controller
             $primeraLinea = fgets($handle);
             $headers = $primeraLinea !== false ? str_getcsv($primeraLinea, $delimiter) : false;
 
-            if (!$headers) {
+            if (! $headers) {
                 throw ValidationException::withMessages([
-                    $this->campoArchivo($tipo) => 'El archivo ' . $tipo . ' no contiene encabezados validos.',
+                    $this->campoArchivo($tipo) => 'El archivo '.$tipo.' no contiene encabezados validos.',
                 ]);
             }
 
@@ -936,7 +1173,7 @@ class GestionAgenciasReporteController extends Controller
             return $terminal;
         }
 
-        return '0' . $terminal;
+        return '0'.$terminal;
     }
 
     private function claveAgenciaReporte(string $terminal, string $agencia): string
@@ -964,12 +1201,14 @@ class GestionAgenciasReporteController extends Controller
         $this->aplicarFiltrosAgenciaTablaAgencias($query, $filtros);
 
         return $query
-            ->get(['id', 'agencia', 'nombre_agencia', 'terminal', 'ruta'])
+            ->get(['id', 'agencia', 'nombre_agencia', 'terminal', 'empresa', 'ciudad', 'ruta'])
             ->map(function (Agencia $agencia) {
                 $terminal = $this->formatearTerminalConsulta($agencia->terminal);
+                $empresa = trim((string) ($agencia->empresa ?? ''));
+                $ciudad = trim((string) ($agencia->ciudad ?? ''));
                 $ruta = trim((string) ($agencia->ruta ?? ''));
                 $coordinador = $agencia->coordinadoresOperadores
-                    ->map(fn ($coordinador) => trim((string) ($coordinador->nombre ?? '') . ' ' . (string) ($coordinador->apellido ?? '')))
+                    ->map(fn ($coordinador) => trim((string) ($coordinador->nombre ?? '').' '.(string) ($coordinador->apellido ?? '')))
                     ->filter()
                     ->unique()
                     ->implode(', ');
@@ -978,6 +1217,8 @@ class GestionAgenciasReporteController extends Controller
                     'agencia_id' => $agencia->agencia,
                     'nombre_agencia' => $agencia->nombre_agencia,
                     'terminal' => $terminal,
+                    'empresa' => $empresa !== '' ? $empresa : 'Sin empresa',
+                    'ciudad' => $ciudad !== '' ? $ciudad : 'Sin ciudad',
                     'ruta' => $ruta !== '' ? $ruta : 'Sin ruta',
                     'cedula' => '',
                     'nombre' => 'Sin venta registrada',
@@ -992,6 +1233,8 @@ class GestionAgenciasReporteController extends Controller
                 'agencia_id' => $agencia['agencia_id'],
                 'nombre_agencia' => $agencia['nombre_agencia'],
                 'terminal' => $agencia['terminal'],
+                'empresa' => $agencia['empresa'],
+                'ciudad' => $agencia['ciudad'],
                 'ruta' => $agencia['ruta'],
                 'cedula' => $agencia['cedula'],
                 'nombre' => $agencia['nombre'],
@@ -1039,8 +1282,8 @@ class GestionAgenciasReporteController extends Controller
                 return [
                     'agencia' => $agencia,
                     'terminal' => $terminal,
-                    'label' => trim($terminal . ' - ' . $agencia, ' -'),
-                    'busqueda' => strtolower(trim($terminal . ' ' . $agencia)),
+                    'label' => trim($terminal.' - '.$agencia, ' -'),
+                    'busqueda' => strtolower(trim($terminal.' '.$agencia)),
                     'tradicional' => [
                         'total' => round((float) $tradicional->sum('total_apostado'), 2),
                         'ultima' => $ultimaTradicional,
@@ -1062,7 +1305,7 @@ class GestionAgenciasReporteController extends Controller
             ->sortByDesc('fecha_orden')
             ->first();
 
-        if (!$fila) {
+        if (! $fila) {
             return null;
         }
 
@@ -1101,7 +1344,7 @@ class GestionAgenciasReporteController extends Controller
         $ultimoEncabezado = $encabezadosEsperados[$totalEsperados - 1];
         $campoPegado = (string) ($headers[$totalEsperados - 1] ?? '');
 
-        if (!$this->primeraLineaTieneRegistroPegado($headers, $encabezadosEsperados, $campoPegado, $ultimoEncabezado)) {
+        if (! $this->primeraLineaTieneRegistroPegado($headers, $encabezadosEsperados, $campoPegado, $ultimoEncabezado)) {
             return [$headers, null];
         }
 
@@ -1179,14 +1422,14 @@ class GestionAgenciasReporteController extends Controller
         $workbook = simplexml_load_string($workbookXml);
         $rels = simplexml_load_string($relsXml);
 
-        if (!$workbook || !$rels) {
+        if (! $workbook || ! $rels) {
             return 'xl/worksheets/sheet1.xml';
         }
 
         $sheets = $workbook->sheets->sheet ?? [];
         $firstSheet = $sheets[0] ?? null;
 
-        if (!$firstSheet) {
+        if (! $firstSheet) {
             return 'xl/worksheets/sheet1.xml';
         }
 
@@ -1205,7 +1448,7 @@ class GestionAgenciasReporteController extends Controller
                 return ltrim($target, '/');
             }
 
-            return 'xl/' . ltrim($target, '/');
+            return 'xl/'.ltrim($target, '/');
         }
 
         return 'xl/worksheets/sheet1.xml';
@@ -1243,7 +1486,7 @@ class GestionAgenciasReporteController extends Controller
     {
         $row = [];
 
-        if (!preg_match_all('/<c\b([^>]*)>(.*?)<\/c>/s', $rowXml, $matches, PREG_SET_ORDER)) {
+        if (! preg_match_all('/<c\b([^>]*)>(.*?)<\/c>/s', $rowXml, $matches, PREG_SET_ORDER)) {
             return $row;
         }
 
@@ -1252,14 +1495,14 @@ class GestionAgenciasReporteController extends Controller
             $content = $match[2];
             $reference = $this->atributoXml($attributes, 'r');
 
-            if (!preg_match('/^([A-Z]+)/', $reference, $referenceMatch)) {
+            if (! preg_match('/^([A-Z]+)/', $reference, $referenceMatch)) {
                 continue;
             }
 
             $column = $referenceMatch[1];
             $columnIndex = $this->indiceColumna($column);
 
-            if ($columnasPermitidas !== null && !isset($columnasPermitidas[$columnIndex])) {
+            if ($columnasPermitidas !== null && ! isset($columnasPermitidas[$columnIndex])) {
                 continue;
             }
 
@@ -1301,7 +1544,7 @@ class GestionAgenciasReporteController extends Controller
 
     private function atributoXml(string $attributes, string $name): string
     {
-        return preg_match('/\b' . preg_quote($name, '/') . '="([^"]*)"/', $attributes, $match)
+        return preg_match('/\b'.preg_quote($name, '/').'="([^"]*)"/', $attributes, $match)
             ? html_entity_decode($match[1], ENT_QUOTES | ENT_XML1, 'UTF-8')
             : '';
     }
@@ -1319,7 +1562,7 @@ class GestionAgenciasReporteController extends Controller
 
     private function extraerTextos(string $xml): string
     {
-        if (!preg_match_all('/<t(?:\s[^>]*)?>(.*?)<\/t>/s', $xml, $matches)) {
+        if (! preg_match_all('/<t(?:\s[^>]*)?>(.*?)<\/t>/s', $xml, $matches)) {
             return '';
         }
 
@@ -1342,6 +1585,7 @@ class GestionAgenciasReporteController extends Controller
 
             if ($columna === null) {
                 $faltantes[] = $nombre;
+
                 continue;
             }
 
@@ -1350,7 +1594,7 @@ class GestionAgenciasReporteController extends Controller
 
         if ($faltantes) {
             throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'En ' . $tipo . ' faltan estas columnas: ' . implode(', ', $faltantes) . '.',
+                $this->campoArchivo($tipo) => 'En '.$tipo.' faltan estas columnas: '.implode(', ', $faltantes).'.',
             ]);
         }
 
@@ -1370,6 +1614,7 @@ class GestionAgenciasReporteController extends Controller
 
             if ($columna === null) {
                 $faltantes[] = $nombre;
+
                 continue;
             }
 
@@ -1378,7 +1623,7 @@ class GestionAgenciasReporteController extends Controller
 
         if ($faltantes) {
             throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'En ' . $tipo . ' faltan estas columnas: ' . implode(', ', $faltantes) . '.',
+                $this->campoArchivo($tipo) => 'En '.$tipo.' faltan estas columnas: '.implode(', ', $faltantes).'.',
             ]);
         }
 
