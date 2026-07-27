@@ -261,6 +261,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Movimientos por Ruta',
+                'descripcion' => 'Analiza retiros y depositos por ruta desde el informe de transacciones.',
+                'url' => '/operaciones/movimientos-rutas',
+                'icono' => 'ri-exchange-dollar-line',
+                'categoria' => 'Rutas',
+                'tags' => ['rutas', 'retiros', 'depositos', 'transacciones'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Deposito Ruta',
                 'descripcion' => 'Consulta los comprobantes bancarios recibidos desde el chatbot.',
                 'url' => '/operaciones/deposito-ruta',
