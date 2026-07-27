@@ -22,11 +22,18 @@
                 <div class="card mb-3">
                     <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                         <h5 class="card-title mb-0">Generar monitoreo de asistencia</h5>
-                        <button type="button" id="agenciasPlazaButton" class="btn btn-soft-primary">
-                            <i class="ri-map-pin-user-line align-bottom me-1"></i>
-                            Agencias en plaza
-                            <span id="agenciasPlazaCount" class="badge bg-primary ms-1">{{ $agenciasPlazaCount }}</span>
-                        </button>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" id="generarTokenLotobetButton"
+                                class="btn btn-warning text-dark fw-semibold shadow-sm">
+                                <i class="ri-key-2-line align-bottom me-1"></i>
+                                Generar token
+                            </button>
+                            <button type="button" id="agenciasPlazaButton" class="btn btn-soft-primary">
+                                <i class="ri-map-pin-user-line align-bottom me-1"></i>
+                                Agencias en plaza
+                                <span id="agenciasPlazaCount" class="badge bg-primary ms-1">{{ $agenciasPlazaCount }}</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <form id="formGenerarMonitoreo" class="row g-3 align-items-end">
@@ -401,6 +408,7 @@
             const plazaStatus = document.getElementById('agenciasPlazaEstado');
             const generateForm = document.getElementById('formGenerarMonitoreo');
             const generateButton = document.getElementById('generarMonitoreoButton');
+            const generateTokenButton = document.getElementById('generarTokenLotobetButton');
             const generateStatus = document.getElementById('generarMonitoreoEstado');
             const startDateInput = document.getElementById('fechaInicio');
             const endDateInput = document.getElementById('fechaFin');
@@ -426,7 +434,7 @@
             const commentStatus = document.getElementById('comentarioEstado');
             const saveButton = document.getElementById('guardarComentarioButton');
             const generateUrl = @json(route('tecnologia.monitoreo-terminales.generar'));
-            const generateTokenUrl = @json(url('/generar-token'));
+            const generateTokenUrl = @json(route('token.generate'));
             const saveUrl = @json(route('tecnologia.monitoreo-terminales.comentario'));
             const exportUrl = @json(route('tecnologia.monitoreo-terminales.exportar'));
             const storeMonitoringTimeUrl = @json(route('tecnologia.monitoreo-terminales.horarios.store'));
@@ -1308,6 +1316,18 @@
                 });
             }
 
+            async function parseMonitoringJsonResponse(response, fallbackMessage) {
+                const responseText = await response.text();
+
+                try {
+                    return responseText === '' ? {} : JSON.parse(responseText);
+                } catch (error) {
+                    return {
+                        message: `${fallbackMessage} El servidor respondió HTTP ${response.status} sin un JSON válido.`
+                    };
+                }
+            }
+
             async function generateLotobetToken() {
                 Swal.fire({
                     title: 'Generando token Lotobet...',
@@ -1320,14 +1340,39 @@
                 const response = await fetch(generateTokenUrl, {
                     headers: { 'Accept': 'application/json' }
                 });
-                const data = await response.json();
+                const data = await parseMonitoringJsonResponse(
+                    response,
+                    'No se pudo interpretar la respuesta al generar el token.'
+                );
 
                 if (!response.ok) {
                     throw new Error(data.message || 'No se pudo generar el token de Lotobet.');
                 }
 
                 Swal.close();
+
+                return data;
             }
+
+            generateTokenButton.addEventListener('click', async function () {
+                this.disabled = true;
+
+                try {
+                    const data = await generateLotobetToken();
+                    setGenerateStatus('Token de Lotobet generado correctamente.', 'text-success');
+                    await Swal.fire(
+                        'Token generado',
+                        data.success || 'El token de Lotobet fue generado correctamente.',
+                        'success'
+                    );
+                } catch (error) {
+                    Swal.close();
+                    setGenerateStatus(error.message || 'No se pudo generar el token de Lotobet.', 'text-danger');
+                    await Swal.fire('Error al generar token', error.message || 'No se pudo generar el token de Lotobet.', 'error');
+                } finally {
+                    this.disabled = false;
+                }
+            });
 
             async function selectAgencyScope() {
                 const configuredAgencies = Number(plazaCount.textContent || 0);
@@ -1376,7 +1421,10 @@
                 const response = await fetch(`${generateUrl}?${query.toString()}`, {
                     headers: { 'Accept': 'application/json' }
                 });
-                const data = await response.json();
+                const data = await parseMonitoringJsonResponse(
+                    response,
+                    'No se pudo interpretar la respuesta del monitoreo.'
+                );
 
                 if (response.status === 409 && data.code === 'LOTOBET_TOKEN_REQUIRED' && !tokenRetryAttempted) {
                     const confirmation = await Swal.fire({

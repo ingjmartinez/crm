@@ -2,21 +2,24 @@
 
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
-use DateTime;
 use App\Models\Token;
 use App\Services\Lotobet\LotobetSessionService;
+use Carbon\Carbon;
+use DateTime;
 use Illuminate\Http\JsonResponse;
 
 class TokenController extends Controller
 {
+    public function __construct(private LotobetSessionService $lotobetSessionService) {}
+
     public function generateToken(): JsonResponse
     {
         try {
-            app(LotobetSessionService::class)->generateToken();
+            $this->lotobetSessionService->clearSession();
+            $this->lotobetSessionService->generateToken();
 
             return response()->json([
-                'success' => 'Token generado y guardado correctamente.'
+                'success' => 'Token generado y guardado correctamente.',
             ]);
         } catch (\Throwable $e) {
             return response()->json([
@@ -29,7 +32,7 @@ class TokenController extends Controller
     {
         $curl = curl_init();
 
-        curl_setopt_array($curl, array(
+        curl_setopt_array($curl, [
             CURLOPT_URL => 'http://contable.apploteka.com/api/finan/sessions',
             CURLOPT_PROXY => '',
             CURLOPT_NOPROXY => '*',
@@ -47,18 +50,18 @@ class TokenController extends Controller
                     "password": "mnXd5pSyF3HXjCC4"
                 }
             }',
-            CURLOPT_HTTPHEADER => array(
+            CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
-                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682'
-            ),
-        ));
+                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682',
+            ],
+        ]);
 
         $response = curl_exec($curl);
 
         curl_close($curl);
 
         return response()->json([
-            'success' => 'Sesión iniciada correctamente.'
+            'success' => 'Sesión iniciada correctamente.',
         ]);
     }
 
@@ -66,7 +69,7 @@ class TokenController extends Controller
     {
         $curl = curl_init();
 
-        curl_setopt_array($curl, array(
+        curl_setopt_array($curl, [
             CURLOPT_URL => 'https://bjoselitoadapi.lotobet.bet/api/v1/MfgFGBXCFF/JCtLkiQNHi/QTpWZl9XId',
             CURLOPT_PROXY => '',
             CURLOPT_NOPROXY => '*',
@@ -78,13 +81,13 @@ class TokenController extends Controller
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_HTTPHEADER => array(
+            CURLOPT_HTTPHEADER => [
                 'AhfCC: VJgej8Mn2yFYNXEr',
-                'AhfVB: tnusa4hPNsSbAVPQ'
-            ),
+                'AhfVB: tnusa4hPNsSbAVPQ',
+            ],
             CURLOPT_SSL_VERIFYHOST => 0,
             CURLOPT_SSL_VERIFYPEER => 0,
-        ));
+        ]);
 
         $response = curl_exec($curl);
         $curlError = curl_error($curl);
@@ -100,7 +103,7 @@ class TokenController extends Controller
             ], 502);
         }
 
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             return response()->json([
                 'message' => 'La API de token flash devolvio una respuesta invalida.',
             ], 502);
@@ -110,27 +113,27 @@ class TokenController extends Controller
         $fechaString = data_get($data, 'Content.DateExpire');
         $fecha = $this->parseTokenExpiry($fechaString);
 
-        if (!is_string($tokenValue) || trim($tokenValue) === '' || !$fecha) {
+        if (! is_string($tokenValue) || trim($tokenValue) === '' || ! $fecha) {
             return response()->json([
                 'message' => data_get($data, 'msg')
                     ?: data_get($data, 'message')
-                    ?: ('No se pudo generar el token flash' . ($httpCode > 0 ? " (HTTP {$httpCode})" : '') . '.'),
+                    ?: ('No se pudo generar el token flash'.($httpCode > 0 ? " (HTTP {$httpCode})" : '').'.'),
             ], $httpCode >= 400 ? $httpCode : 502);
         }
 
         Token::query()->updateOrCreate(['id' => 2], [
             'token' => $tokenValue,
-            'fecha' => $fecha->format('Y-m-d H:i:s')
+            'fecha' => $fecha->format('Y-m-d H:i:s'),
         ]);
 
         return response()->json([
-            'success' => 'Token generado y guardado correctamente.'
+            'success' => 'Token generado y guardado correctamente.',
         ]);
     }
 
     private function parseTokenExpiry($fechaString): ?Carbon
     {
-        if (!is_string($fechaString) || trim($fechaString) === '') {
+        if (! is_string($fechaString) || trim($fechaString) === '') {
             return null;
         }
 

@@ -175,7 +175,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/api-centros-costo/sync', [Api::class, 'syncCentrosCosto']);
     Route::delete('/api-centros-costo/empresa', [Api::class, 'deleteCentrosCostoByEmpresa']);
 
-    Route::get('/generar-token', [TokenController::class, 'generateToken']);
+    Route::get('/generar-token', [TokenController::class, 'generateToken'])->name('token.generate');
     Route::get('/iniciar-session', [TokenController::class, 'iniciarSession']);
     Route::get('/login-flash', [TokenController::class, 'loginFlash']);
     Route::get('/auto-proceso/{sistema}/config', [AutoProcesoConfigController::class, 'show']);

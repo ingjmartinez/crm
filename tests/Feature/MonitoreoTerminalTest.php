@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Exceptions\LotobetTokenRequiredException;
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\ForcePasswordChange;
+use App\Models\Token;
 use App\Services\AsistenciaTerminalEndpointService;
+use App\Services\Lotobet\LotobetSessionService;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
@@ -176,6 +178,10 @@ class MonitoreoTerminalTest extends TestCase
             ->assertSee('Configurar hora')
             ->assertSee('Hora evaluada')
             ->assertSee('Agencias en plaza')
+            ->assertSee('generarTokenLotobetButton', false)
+            ->assertSee('btn btn-warning text-dark fw-semibold shadow-sm', false)
+            ->assertSee("generateTokenButton.addEventListener('click'", false)
+            ->assertSee('Generar token')
             ->assertSee('¿Qué agencias deseas evaluar?', false)
             ->assertSee('Todas las agencias')
             ->assertSee('Solo agencias en plaza')
@@ -192,7 +198,20 @@ class MonitoreoTerminalTest extends TestCase
             ->assertSee('tablaMonitoreoTerminales', false)
             ->assertSee('comentarioTerminalModal', false)
             ->assertSee('LOTOBET_TOKEN_REQUIRED', false)
+            ->assertSee('const generateTokenUrl =', false)
+            ->assertSee('parseMonitoringJsonResponse', false)
             ->assertSee('/generar-token', false);
+    }
+
+    public function test_manual_token_endpoint_clears_the_expired_session_before_generating_a_new_token(): void
+    {
+        $service = $this->mock(LotobetSessionService::class);
+        $service->shouldReceive('clearSession')->once();
+        $service->shouldReceive('generateToken')->once()->andReturn(new Token);
+
+        $this->getJson(route('token.generate'))
+            ->assertOk()
+            ->assertJsonPath('success', 'Token generado y guardado correctamente.');
     }
 
     public function test_page_loads_monitoring_times_from_agency_and_daily_schedules(): void
@@ -866,6 +885,60 @@ class MonitoreoTerminalTest extends TestCase
         });
 
         $this->expectException(LotobetTokenRequiredException::class);
+
+        app(AsistenciaTerminalEndpointService::class)->terminalesConPonche('2026-07-22');
+    }
+
+    public function test_attendance_service_requests_a_new_token_when_lotobet_rejects_the_current_one(): void
+    {
+        Schema::create('tokens', function (Blueprint $table): void {
+            $table->unsignedInteger('id')->primary();
+            $table->string('token');
+            $table->dateTime('fecha');
+        });
+        DB::table('tokens')->insert([
+            'id' => 1,
+            'token' => 'token-rechazado',
+            'fecha' => '2026-07-23 00:00:00',
+        ]);
+
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://ltkadapi.lotobet.bet/*' => Http::response([
+                'code' => 401,
+                'message' => 'Token inválido.',
+            ]),
+        ]);
+
+        $this->expectException(LotobetTokenRequiredException::class);
+        $this->expectExceptionMessage('Token inválido.');
+
+        app(AsistenciaTerminalEndpointService::class)->terminalesConPonche('2026-07-22');
+    }
+
+    public function test_attendance_service_detects_an_expired_session_even_when_lotobet_returns_http_200(): void
+    {
+        Schema::create('tokens', function (Blueprint $table): void {
+            $table->unsignedInteger('id')->primary();
+            $table->string('token');
+            $table->dateTime('fecha');
+        });
+        DB::table('tokens')->insert([
+            'id' => 1,
+            'token' => 'token-aparentemente-vigente',
+            'fecha' => '2026-07-23 00:00:00',
+        ]);
+
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://ltkadapi.lotobet.bet/*' => Http::response([
+                'code' => 200,
+                'message' => 'Token vencido. Debe iniciar sesión nuevamente y volver a consultar.',
+            ]),
+        ]);
+
+        $this->expectException(LotobetTokenRequiredException::class);
+        $this->expectExceptionMessage('Token vencido. Debe iniciar sesión nuevamente y volver a consultar.');
 
         app(AsistenciaTerminalEndpointService::class)->terminalesConPonche('2026-07-22');
     }

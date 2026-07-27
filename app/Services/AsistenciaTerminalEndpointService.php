@@ -44,9 +44,21 @@ class AsistenciaTerminalEndpointService
             ])
             ->get("https://ltkadapi.lotobet.bet/api/V1/var4XZ3ojQiPZq5BpI/{$token->token}/{$fecha}/05");
 
-        $response->throw();
         $payload = $response->json();
-        $this->validarRespuesta($payload, 'Lotobet');
+
+        if (in_array($response->status(), [401, 403], true)) {
+            throw new LotobetTokenRequiredException('La API de Lotobet rechazó el token actual.');
+        }
+
+        if (is_array($payload)) {
+            $this->validarRespuesta($payload, 'Lotobet');
+        }
+
+        $response->throw();
+
+        if (! is_array($payload)) {
+            throw new RuntimeException('La API de Lotobet devolvió una respuesta inválida.');
+        }
 
         return $payload['Content'] ?? [];
     }
@@ -92,10 +104,35 @@ class AsistenciaTerminalEndpointService
     private function validarRespuesta(array $payload, string $fuente): void
     {
         $code = isset($payload['code']) ? strtolower(trim((string) $payload['code'])) : null;
+        $message = (string) ($payload['msg'] ?? $payload['message'] ?? "Respuesta inválida de {$fuente}.");
+
+        if ($this->respuestaRequiereToken($code, $message)) {
+            throw new LotobetTokenRequiredException($message);
+        }
 
         if ($code !== null && ! in_array($code, ['0', '00', '200', 'ok', 'success'], true)) {
-            throw new RuntimeException((string) ($payload['msg'] ?? $payload['message'] ?? "Respuesta inválida de {$fuente}."));
+            throw new RuntimeException($message);
         }
+    }
+
+    private function respuestaRequiereToken(?string $code, string $message): bool
+    {
+        if (in_array($code, ['401', '403', 'unauthorized'], true)) {
+            return true;
+        }
+
+        $normalizedMessage = strtolower($message);
+        $mentionsSession = str_contains($normalizedMessage, 'token')
+            || str_contains($normalizedMessage, 'sesión')
+            || str_contains($normalizedMessage, 'sesion');
+        $indicatesExpiration = str_contains($normalizedMessage, 'venc')
+            || str_contains($normalizedMessage, 'expir')
+            || str_contains($normalizedMessage, 'invál')
+            || str_contains($normalizedMessage, 'inval')
+            || str_contains($normalizedMessage, 'rechaz')
+            || str_contains($normalizedMessage, 'unauthorized');
+
+        return $mentionsSession && $indicatesExpiration;
     }
 
     private function normalizarTerminal(string $terminal): string
