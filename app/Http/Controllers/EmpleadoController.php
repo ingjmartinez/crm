@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Empleado;
 use Illuminate\Http\Request;
 use App\Models\VwUsuariosUnion;
+use App\Services\CoordinadorEmpleadoMatcher;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -12,6 +13,10 @@ use Illuminate\Support\Facades\Log;
 
 class EmpleadoController extends Controller
 {
+    public function __construct(private readonly CoordinadorEmpleadoMatcher $coordinadorEmpleadoMatcher)
+    {
+    }
+
     public function index()
     {
         return view('empleado.index');
@@ -311,12 +316,15 @@ class EmpleadoController extends Controller
             return response()->json(['error' => 'Error guardando empleados en la base de datos.'], 500);
         }
 
+        $coordinadoresVinculados = $this->coordinadorEmpleadoMatcher->vincularPendientesPorCedula();
+
         if ($procesados === 0) {
             return response()->json([
                 'message' => 'No se recibieron registros validos para sincronizar.',
                 'total' => count($empleados),
                 'procesados' => 0,
                 'omitidos' => $omitidos,
+                'coordinadores_vinculados' => $coordinadoresVinculados,
             ]);
         }
 
@@ -327,6 +335,7 @@ class EmpleadoController extends Controller
             'total' => count($empleados),
             'procesados' => $procesados,
             'omitidos' => $omitidos,
+            'coordinadores_vinculados' => $coordinadoresVinculados,
         ]);
     }
 

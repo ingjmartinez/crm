@@ -61,6 +61,10 @@
             text-align: center;
         }
 
+        #tablaCoordinadorOperador > tbody > tr.coordinador-sin-maestra > td {
+            background-color: #fff7e6 !important;
+        }
+
         @media (max-width: 991.98px) {
             .coordinador-create-form {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -235,13 +239,24 @@
                                         </thead>
                                         <tbody>
                                             @forelse($registros as $item)
-                                                <tr data-search="{{ strtolower(trim($item->nombre . ' ' . $item->apellido . ' ' . $item->cedula . ' ' . preg_replace('/\D+/', '', (string) $item->cedula))) }}">
+                                                <tr
+                                                    @class(['coordinador-sin-maestra' => ! $item->cedula_en_maestra])
+                                                    data-cedula-en-maestra="{{ $item->cedula_en_maestra ? '1' : '0' }}"
+                                                    data-search="{{ strtolower(trim($item->nombre . ' ' . $item->apellido . ' ' . $item->cedula . ' ' . preg_replace('/\D+/', '', (string) $item->cedula))) }}">
                                                     <td class="text-center">{{ $item->id }}</td>
                                                     <td class="text-center">{{ $item->empleado?->empleadoid ?: 'Sin asignar' }}</td>
                                                     <td>{{ $item->nombre }}</td>
                                                     <td>{{ $item->apellido }}</td>
                                                     <td>{{ $item->correo }}</td>
-                                                    <td>{{ $item->cedula }}</td>
+                                                    <td>
+                                                        {{ $item->cedula }}
+                                                        @if (! $item->cedula_en_maestra)
+                                                            <span class="badge bg-warning-subtle text-warning-emphasis ms-1"
+                                                                title="La cédula no aparece en la maestra de empleados">
+                                                                No está en maestra
+                                                            </span>
+                                                        @endif
+                                                    </td>
                                                     <td>{{ $item->telefono }}</td>
                                                     <td class="text-capitalize">{{ $item->puesto }}</td>
                                                     <td class="text-center">

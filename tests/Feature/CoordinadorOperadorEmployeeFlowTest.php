@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\ForcePasswordChange;
+use App\Services\CoordinadorEmpleadoMatcher;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -343,6 +344,100 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             ->assertSee('ID empleado')
             ->assertSee('Sin asignar')
             ->assertSee('Asignar empleado');
+    }
+
+    public function test_coordinator_row_is_highlighted_only_when_its_cedula_is_not_in_employee_master(): void
+    {
+        $employeeId = $this->insertEmployee();
+
+        DB::table('coordinador_operador')->insert([
+            [
+                'empleado_id' => null,
+                'nombre' => 'Cedula',
+                'apellido' => 'Coincidente',
+                'cedula' => '001-1111111-1',
+                'puesto' => 'coordinador',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'empleado_id' => $employeeId,
+                'nombre' => 'Cedula',
+                'apellido' => 'Sin Coincidencia',
+                'cedula' => '00222222222',
+                'puesto' => 'coordinador',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->get(route('coordinador-operador.index'));
+
+        $response
+            ->assertOk()
+            ->assertSee('data-cedula-en-maestra="1"', false)
+            ->assertSee('data-cedula-en-maestra="0"', false)
+            ->assertSee('No está en maestra');
+
+        $this->assertSame(1, substr_count($response->getContent(), 'class="coordinador-sin-maestra"'));
+    }
+
+    public function test_pending_coordinator_is_linked_by_cedula_and_displays_employee_code(): void
+    {
+        $employeeId = $this->insertEmployee([
+            'empleadoid' => 8450,
+            'cedula' => '001-1111111-1',
+        ]);
+
+        $coordinadorId = DB::table('coordinador_operador')->insertGetId([
+            'empleado_id' => null,
+            'nombre' => 'Ana',
+            'apellido' => 'Pérez',
+            'cedula' => '00111111111',
+            'puesto' => 'coordinador',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $vinculados = app(CoordinadorEmpleadoMatcher::class)->vincularPendientesPorCedula();
+
+        $this->assertSame(1, $vinculados);
+        $this->assertDatabaseHas('coordinador_operador', [
+            'id' => $coordinadorId,
+            'empleado_id' => $employeeId,
+        ]);
+
+        $this->get(route('coordinador-operador.index'))
+            ->assertOk()
+            ->assertSee('8450')
+            ->assertDontSee('Sin asignar')
+            ->assertSee('Actualizar desde maestra');
+    }
+
+    public function test_pending_coordinator_is_not_linked_when_cedula_is_duplicated_in_employee_master(): void
+    {
+        $this->insertEmployee();
+        $this->insertEmployee([
+            'empleadoid' => 1002,
+        ]);
+
+        $coordinadorId = DB::table('coordinador_operador')->insertGetId([
+            'empleado_id' => null,
+            'nombre' => 'Cedula',
+            'apellido' => 'Duplicada',
+            'cedula' => '00111111111',
+            'puesto' => 'coordinador',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $vinculados = app(CoordinadorEmpleadoMatcher::class)->vincularPendientesPorCedula();
+
+        $this->assertSame(0, $vinculados);
+        $this->assertDatabaseHas('coordinador_operador', [
+            'id' => $coordinadorId,
+            'empleado_id' => null,
+        ]);
     }
 
     /** @param array<string, mixed> $overrides */

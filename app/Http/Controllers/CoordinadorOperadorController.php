@@ -60,6 +60,27 @@ class CoordinadorOperadorController extends Controller
             ->paginate(15)
             ->appends($request->query());
 
+        $cedulasCoordinadores = $registros->getCollection()
+            ->map(fn (CoordinadorOperador $registro): string => $this->normalizarCedula($registro->cedula))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $cedulasEnMaestra = DB::table('empleados')
+            ->whereNotNull('cedula')
+            ->whereIn(
+                DB::raw("REPLACE(REPLACE(REPLACE(TRIM(CAST(cedula AS CHAR)), '-', ''), ' ', ''), '.', '')"),
+                $cedulasCoordinadores
+            )
+            ->pluck('cedula')
+            ->map(fn ($cedula): string => $this->normalizarCedula($cedula))
+            ->flip();
+
+        $registros->getCollection()->each(function (CoordinadorOperador $registro) use ($cedulasEnMaestra): void {
+            $cedula = $this->normalizarCedula($registro->cedula);
+            $registro->setAttribute('cedula_en_maestra', $cedula !== '' && $cedulasEnMaestra->has($cedula));
+        });
+
         $agencias = Agencia::select('id', 'agencia', 'nombre_agencia')
             ->addSelect('terminal')
             ->orderBy('agencia')
@@ -250,6 +271,11 @@ class CoordinadorOperadorController extends Controller
                     ->orWhereRaw("TRIM(CAST(fechasalida AS CHAR)) = ''")
                     ->orWhereRaw("TRIM(CAST(fechasalida AS CHAR)) = '0000-00-00'");
             });
+    }
+
+    private function normalizarCedula(mixed $cedula): string
+    {
+        return preg_replace('/\D+/', '', (string) $cedula);
     }
 
     /**
