@@ -22,8 +22,10 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             ExpireInactiveSession::class,
         ]);
 
+        Schema::dropIfExists('coordinador_operador_agencia');
         Schema::dropIfExists('coordinador_operador');
         Schema::dropIfExists('empleados');
+        Schema::dropIfExists('agencias');
 
         Schema::create('empleados', function (Blueprint $table): void {
             $table->increments('id');
@@ -40,13 +42,28 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
 
         Schema::create('coordinador_operador', function (Blueprint $table): void {
             $table->id();
+            $table->unsignedBigInteger('empleado_id')->nullable()->unique();
             $table->string('nombre', 100);
             $table->string('apellido', 100);
             $table->string('correo', 150)->nullable();
-            $table->string('cedula', 11)->unique();
+            $table->string('cedula', 11)->nullable()->unique();
             $table->string('telefono', 10)->nullable();
             $table->string('puesto');
             $table->timestamps();
+        });
+
+        Schema::create('coordinador_operador_agencia', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('coordinador_operador_id');
+            $table->unsignedBigInteger('agencia_id');
+            $table->timestamps();
+        });
+
+        Schema::create('agencias', function (Blueprint $table): void {
+            $table->id();
+            $table->string('agencia')->nullable();
+            $table->string('nombre_agencia')->nullable();
+            $table->string('terminal')->nullable();
         });
     }
 
@@ -111,6 +128,7 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             ->assertSessionHas('success');
 
         $this->assertDatabaseHas('coordinador_operador', [
+            'empleado_id' => $employeeId,
             'nombre' => 'Ana',
             'apellido' => 'Pérez',
             'correo' => 'ana@example.com',
@@ -168,6 +186,7 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
 
         $this->assertDatabaseHas('coordinador_operador', [
             'id' => $coordinadorId,
+            'empleado_id' => $employeeId,
             'nombre' => 'Ana María',
             'correo' => 'nuevo@example.com',
             'cedula' => '00111111111',
@@ -207,6 +226,123 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             'nombre' => 'Ana',
             'apellido' => 'Pérez',
         ]);
+    }
+
+    public function test_employee_can_be_assigned_to_an_unassigned_pool_without_losing_agencies(): void
+    {
+        $employeeId = $this->insertEmployee();
+        $poolId = DB::table('coordinador_operador')->insertGetId([
+            'empleado_id' => null,
+            'nombre' => 'Pool Este',
+            'apellido' => 'Sin coordinador',
+            'cedula' => null,
+            'puesto' => 'coordinador',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('coordinador_operador_agencia')->insert([
+            [
+                'coordinador_operador_id' => $poolId,
+                'agencia_id' => 10,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'coordinador_operador_id' => $poolId,
+                'agencia_id' => 11,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->put(route('coordinador-operador.update', $poolId), [
+            'empresa' => 'Consorcio Joselito',
+            'departamento' => 'Operaciones',
+            'empleado_id' => $employeeId,
+        ]);
+
+        $response
+            ->assertRedirect(route('coordinador-operador.index'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('coordinador_operador', [
+            'id' => $poolId,
+            'empleado_id' => $employeeId,
+            'nombre' => 'Ana',
+            'cedula' => '00111111111',
+        ]);
+        $this->assertDatabaseCount('coordinador_operador', 1);
+        $this->assertDatabaseCount('coordinador_operador_agencia', 2);
+        $this->assertDatabaseHas('coordinador_operador_agencia', [
+            'coordinador_operador_id' => $poolId,
+            'agencia_id' => 10,
+        ]);
+        $this->assertDatabaseHas('coordinador_operador_agencia', [
+            'coordinador_operador_id' => $poolId,
+            'agencia_id' => 11,
+        ]);
+    }
+
+    public function test_employee_assigned_to_another_pool_cannot_be_reassigned_implicitly(): void
+    {
+        $employeeId = $this->insertEmployee();
+        DB::table('coordinador_operador')->insert([
+            'empleado_id' => $employeeId,
+            'nombre' => 'Ana',
+            'apellido' => 'Pérez',
+            'cedula' => '00111111111',
+            'puesto' => 'coordinador',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $unassignedPoolId = DB::table('coordinador_operador')->insertGetId([
+            'empleado_id' => null,
+            'nombre' => 'Pool Norte',
+            'apellido' => 'Sin coordinador',
+            'cedula' => null,
+            'puesto' => 'coordinador',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->from(route('coordinador-operador.index'))
+            ->put(route('coordinador-operador.update', $unassignedPoolId), [
+                'empresa' => 'Consorcio Joselito',
+                'departamento' => 'Operaciones',
+                'empleado_id' => $employeeId,
+            ]);
+
+        $response
+            ->assertRedirect(route('coordinador-operador.index'))
+            ->assertSessionHasErrors('empleado_id');
+
+        $this->assertDatabaseHas('coordinador_operador', [
+            'id' => $unassignedPoolId,
+            'empleado_id' => null,
+            'nombre' => 'Pool Norte',
+            'cedula' => null,
+        ]);
+        $this->assertDatabaseCount('coordinador_operador', 2);
+    }
+
+    public function test_unassigned_pool_shows_the_assign_employee_action(): void
+    {
+        DB::table('coordinador_operador')->insert([
+            'empleado_id' => null,
+            'nombre' => 'Pool Este',
+            'apellido' => 'Sin coordinador',
+            'cedula' => null,
+            'puesto' => 'coordinador',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->get(route('coordinador-operador.index'))
+            ->assertOk()
+            ->assertSee('ID empleado')
+            ->assertSee('Sin asignar')
+            ->assertSee('Asignar empleado');
     }
 
     /** @param array<string, mixed> $overrides */

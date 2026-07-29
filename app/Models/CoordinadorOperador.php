@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class CoordinadorOperador extends Model
 {
@@ -12,6 +14,7 @@ class CoordinadorOperador extends Model
     protected $table = 'coordinador_operador';
 
     protected $fillable = [
+        'empleado_id',
         'nombre',
         'apellido',
         'correo',
@@ -24,10 +27,19 @@ class CoordinadorOperador extends Model
     {
         $cedula = preg_replace('/\D/', '', (string) $value);
 
+        if ($cedula === '') {
+            return '';
+        }
+
         return str_pad($cedula, 11, '0', STR_PAD_LEFT);
     }
 
-    public function agencias()
+    public function empleado(): BelongsTo
+    {
+        return $this->belongsTo(Empleado::class);
+    }
+
+    public function agencias(): BelongsToMany
     {
         return $this->belongsToMany(
             Agencia::class,

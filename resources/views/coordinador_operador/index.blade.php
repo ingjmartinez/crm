@@ -13,6 +13,10 @@
             font-size: .82rem;
         }
 
+        .coordinador-form-context {
+            grid-column: 1 / -1;
+        }
+
         .employee-picker {
             position: relative;
         }
@@ -92,7 +96,7 @@
                     <div class="col-lg-12">
                         <div class="card">
                             <div class="card-header">
-                                <h5 class="card-title mb-0">Crear coordinador</h5>
+                                <h5 class="card-title mb-0" id="coordinador_form_title">Crear coordinador</h5>
                             </div>
                             <div class="card-body">
                                 @if ($errors->any())
@@ -114,6 +118,13 @@
                                     @csrf
                                     <input type="hidden" name="_method" id="coordinador_form_method" value="PUT" {{ $registroEdicionId ? '' : 'disabled' }}>
                                     <input type="hidden" name="registro_id" id="coordinador_record_id" value="{{ $registroEdicionId ?: '' }}">
+                                    <div class="alert alert-info py-2 mb-0 coordinador-form-context {{ $registroEdicionId ? '' : 'd-none' }}"
+                                        id="coordinador_form_context">
+                                        <div class="d-flex align-items-center justify-content-between gap-2">
+                                            <span id="coordinador_form_context_text">Seleccione el empleado que será responsable de este pool.</span>
+                                            <button type="button" class="btn btn-sm btn-light" id="cancelar_asignacion_empleado">Cancelar</button>
+                                        </div>
+                                    </div>
 
                                     <div>
                                         <label class="form-label mb-1" for="empresa_create">Empresa</label>
@@ -211,6 +222,7 @@
                                         <thead class="table-light">
                                             <tr>
                                                 <th class="text-center" style="width:80px;">ID</th>
+                                                <th class="text-center">ID empleado</th>
                                                 <th>Nombre</th>
                                                 <th>Apellido</th>
                                                 <th>Correo</th>
@@ -218,13 +230,14 @@
                                                 <th>Teléfono</th>
                                                 <th>Puesto</th>
                                                 <th class="text-center">Agencias Asignadas</th>
-                                                <th class="text-center" style="width:140px;">Acciones</th>
+                                                <th class="text-center" style="width:180px;">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @forelse($registros as $item)
                                                 <tr data-search="{{ strtolower(trim($item->nombre . ' ' . $item->apellido . ' ' . $item->cedula . ' ' . preg_replace('/\D+/', '', (string) $item->cedula))) }}">
                                                     <td class="text-center">{{ $item->id }}</td>
+                                                    <td class="text-center">{{ $item->empleado?->empleadoid ?: 'Sin asignar' }}</td>
                                                     <td>{{ $item->nombre }}</td>
                                                     <td>{{ $item->apellido }}</td>
                                                     <td>{{ $item->correo }}</td>
@@ -243,6 +256,15 @@
                                                     </td>
                                                     <td class="text-center">
                                                         <div class="d-flex justify-content-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                class="btn btn-primary btn-sm btn-asignar-empleado"
+                                                                title="{{ $item->empleado_id ? 'Actualizar desde maestra' : 'Asignar empleado' }}"
+                                                                data-id="{{ $item->id }}"
+                                                                data-nombre="{{ $item->nombre }} {{ $item->apellido }}"
+                                                                data-tiene-empleado="{{ $item->empleado_id ? '1' : '0' }}">
+                                                                <i class="{{ $item->empleado_id ? 'ri-refresh-line' : 'ri-user-add-line' }}"></i>
+                                                            </button>
                                                             <button
                                                                 type="button"
                                                                 class="btn btn-info btn-sm btn-asignar-agencias"
@@ -265,7 +287,7 @@
                                                 </tr>
                                             @empty
                                                 <tr>
-                                                    <td colspan="9" class="text-center text-muted">No hay registros disponibles.</td>
+                                                    <td colspan="10" class="text-center text-muted">No hay registros disponibles.</td>
                                                 </tr>
                                             @endforelse
                                         </tbody>
@@ -390,9 +412,13 @@
         const initialDepartment = @json(old('departamento', ''));
         const coordinatorBaseUrl = @json(url('/coordinador-operador'));
         const coordinatorForm = document.getElementById('coordinador_create_form');
+        const coordinatorFormTitle = document.getElementById('coordinador_form_title');
+        const coordinatorFormContext = document.getElementById('coordinador_form_context');
+        const coordinatorFormContextText = document.getElementById('coordinador_form_context_text');
         const coordinatorFormMethod = document.getElementById('coordinador_form_method');
         const coordinatorRecordId = document.getElementById('coordinador_record_id');
         const coordinatorSubmitButton = document.getElementById('coordinador_submit_button');
+        const cancelEmployeeAssignment = document.getElementById('cancelar_asignacion_empleado');
         const employeeCompany = document.getElementById('empresa_create');
         const departmentSelect = document.getElementById('departamento_create');
         const employeePicker = document.getElementById('employee_picker');
@@ -404,6 +430,9 @@
         const employeeEmail = document.getElementById('correo_create');
         let employeeSearchTimer;
         let employeeRequestController;
+        let explicitAssignmentTarget = coordinatorRecordId.value
+            ? { id: Number(coordinatorRecordId.value), name: 'el pool seleccionado', hasEmployee: false }
+            : null;
 
         function closeEmployeeResults() {
             employeeResults.classList.remove('is-open');
@@ -419,21 +448,40 @@
         }
 
         function setCoordinatorCreateMode() {
+            explicitAssignmentTarget = null;
             coordinatorForm.action = coordinatorBaseUrl;
             coordinatorFormMethod.disabled = true;
             coordinatorRecordId.value = '';
             coordinatorSubmitButton.textContent = 'Guardar';
+            coordinatorFormTitle.textContent = 'Crear coordinador';
+            coordinatorFormContext.classList.add('d-none');
         }
 
-        function setCoordinatorUpdateMode(coordinator) {
+        function setCoordinatorUpdateMode(coordinator, isExplicitAssignment = false) {
             coordinatorForm.action = `${coordinatorBaseUrl}/${coordinator.id}`;
             coordinatorFormMethod.disabled = false;
             coordinatorRecordId.value = coordinator.id;
             coordinatorSubmitButton.textContent = 'Actualizar';
+
+            if (!isExplicitAssignment) {
+                return;
+            }
+
+            explicitAssignmentTarget = coordinator;
+            const actionText = coordinator.hasEmployee ? 'Actualizar desde maestra' : 'Asignar empleado';
+            coordinatorFormTitle.textContent = actionText;
+            coordinatorSubmitButton.textContent = actionText;
+            coordinatorFormContextText.textContent = coordinator.hasEmployee
+                ? `Los datos de ${coordinator.name} se actualizarán desde la maestra sin modificar sus agencias.`
+                : `Seleccione el empleado responsable de ${coordinator.name}. Sus agencias permanecerán asignadas al mismo pool.`;
+            coordinatorFormContext.classList.remove('d-none');
         }
 
-        function clearSelectedEmployee(clearSearch = true) {
-            setCoordinatorCreateMode();
+        function clearSelectedEmployee(clearSearch = true, resetMode = true) {
+            if (resetMode) {
+                setCoordinatorCreateMode();
+            }
+
             employeeId.value = '';
             employeeName.value = '';
             employeeCedula.value = '';
@@ -476,7 +524,18 @@
         }
 
         function selectEmployee(employee) {
-            setCoordinatorCreateMode();
+            if (explicitAssignmentTarget && employee.coordinador
+                && Number(employee.coordinador.id) !== Number(explicitAssignmentTarget.id)) {
+                showEmployeeMessage('Este empleado ya está asignado a otro coordinador o pool.');
+                return;
+            }
+
+            const assignmentTarget = explicitAssignmentTarget;
+
+            if (!assignmentTarget) {
+                setCoordinatorCreateMode();
+            }
+
             employeeId.value = employee.id;
             employeeSearch.value = employee.nombre;
             employeeName.value = employee.nombre;
@@ -484,7 +543,9 @@
             employeeEmail.value = employee.correo || '';
             closeEmployeeResults();
 
-            if (employee.coordinador) {
+            if (assignmentTarget) {
+                setCoordinatorUpdateMode(assignmentTarget, true);
+            } else if (employee.coordinador) {
                 setCoordinatorUpdateMode(employee.coordinador);
             }
         }
@@ -569,7 +630,7 @@
                 employeeRequestController.abort();
             }
 
-            clearSelectedEmployee();
+            clearSelectedEmployee(true, !explicitAssignmentTarget);
             populateDepartments();
             employeeSearch.disabled = true;
             employeeSearch.placeholder = 'Seleccione un departamento';
@@ -578,7 +639,7 @@
 
         departmentSelect.addEventListener('change', function () {
             clearTimeout(employeeSearchTimer);
-            clearSelectedEmployee();
+            clearSelectedEmployee(true, !explicitAssignmentTarget);
             employeeSearch.disabled = !departmentSelect.value;
             employeeSearch.placeholder = departmentSelect.value
                 ? 'Buscar por nombre, cédula o ID'
@@ -598,9 +659,33 @@
         });
 
         employeeSearch.addEventListener('input', function () {
-            clearSelectedEmployee(false);
+            clearSelectedEmployee(false, !explicitAssignmentTarget);
             clearTimeout(employeeSearchTimer);
             employeeSearchTimer = setTimeout(loadEmployees, 300);
+        });
+
+        document.querySelectorAll('.btn-asignar-empleado').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const target = {
+                    id: Number(button.dataset.id),
+                    name: button.dataset.nombre || 'el pool seleccionado',
+                    hasEmployee: button.dataset.tieneEmpleado === '1'
+                };
+
+                clearSelectedEmployee(true, false);
+                setCoordinatorUpdateMode(target, true);
+                employeeCompany.focus();
+                coordinatorForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        });
+
+        cancelEmployeeAssignment.addEventListener('click', function () {
+            clearSelectedEmployee();
+            employeeCompany.value = '';
+            populateDepartments();
+            employeeSearch.disabled = true;
+            employeeSearch.placeholder = 'Seleccione un departamento';
+            closeEmployeeResults();
         });
 
         document.addEventListener('click', function (event) {
@@ -624,7 +709,7 @@
             };
 
             if (typeof Swal === 'undefined') {
-                if (confirm('Este empleado ya está registrado como coordinador. ¿Desea actualizarlo?')) {
+                if (confirm('¿Desea asignar este empleado sin modificar las agencias del pool?')) {
                     submitUpdate();
                 }
                 return;
@@ -632,10 +717,10 @@
 
             Swal.fire({
                 icon: 'question',
-                title: 'Actualizar coordinador',
-                text: 'Este empleado ya está registrado. ¿Desea guardar los cambios?',
+                title: explicitAssignmentTarget?.hasEmployee ? 'Actualizar desde maestra' : 'Asignar empleado',
+                text: 'Se actualizará el responsable y se conservarán todas las agencias del pool.',
                 showCancelButton: true,
-                confirmButtonText: 'Sí, actualizar',
+                confirmButtonText: 'Sí, continuar',
                 cancelButtonText: 'Cancelar',
                 confirmButtonColor: '#0ab39c',
                 cancelButtonColor: '#74788d'
@@ -647,6 +732,10 @@
         });
 
         populateDepartments(initialDepartment);
+
+        if (explicitAssignmentTarget) {
+            setCoordinatorUpdateMode(explicitAssignmentTarget, true);
+        }
 
         if (employeeCompany.value && departmentSelect.value) {
             employeeSearch.disabled = false;

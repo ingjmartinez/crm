@@ -28,7 +28,10 @@ class CoordinadorOperadorController extends Controller
         $buscarDigits = preg_replace('/\D+/', '', $buscar);
         $buscarCedulaSinCeros = ltrim((string) $buscarDigits, '0');
 
-        $registrosQuery = CoordinadorOperador::with('agencias:id,agencia,nombre_agencia,terminal')
+        $registrosQuery = CoordinadorOperador::with([
+            'agencias:id,agencia,nombre_agencia,terminal',
+            'empleado:id,empleadoid',
+        ])
             ->withCount('agencias');
 
         if ($buscar !== '') {
@@ -37,7 +40,10 @@ class CoordinadorOperadorController extends Controller
                     ->orWhere('apellido', 'like', "%{$buscar}%")
                     ->orWhereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) LIKE ?", ["%{$buscar}%"])
                     ->orWhere('correo', 'like', "%{$buscar}%")
-                    ->orWhere('puesto', 'like', "%{$buscar}%");
+                    ->orWhere('puesto', 'like', "%{$buscar}%")
+                    ->orWhereHas('empleado', function ($empleadoQuery) use ($buscar): void {
+                        $empleadoQuery->where('empleadoid', 'like', "%{$buscar}%");
+                    });
 
                 if ($buscarDigits !== '') {
                     $query->orWhereRaw('CAST(cedula AS CHAR) LIKE ?', ["%{$buscarDigits}%"]);
@@ -132,16 +138,28 @@ class CoordinadorOperadorController extends Controller
             ->limit(30)
             ->get();
 
-        $coordinadoresPorCedula = CoordinadorOperador::query()
-            ->whereIn('cedula', $empleados
-                ->map(fn ($empleado) => preg_replace('/\D+/', '', (string) $empleado->cedula))
-                ->filter())
-            ->get(['id', 'cedula'])
+        $empleadoIds = $empleados->pluck('id')->map(fn ($id) => (int) $id);
+        $cedulas = $empleados
+            ->map(fn ($empleado) => preg_replace('/\D+/', '', (string) $empleado->cedula))
+            ->filter();
+
+        $coordinadores = CoordinadorOperador::query()
+            ->where(function ($query) use ($empleadoIds, $cedulas): void {
+                $query->whereIn('empleado_id', $empleadoIds)
+                    ->orWhereIn('cedula', $cedulas);
+            })
+            ->get(['id', 'empleado_id', 'cedula']);
+
+        $coordinadoresPorEmpleado = $coordinadores
+            ->whereNotNull('empleado_id')
+            ->keyBy('empleado_id');
+        $coordinadoresPorCedula = $coordinadores
             ->keyBy(fn (CoordinadorOperador $coordinador) => preg_replace('/\D+/', '', $coordinador->cedula));
 
-        $data = $empleados->map(function ($empleado) use ($coordinadoresPorCedula): array {
+        $data = $empleados->map(function ($empleado) use ($coordinadoresPorEmpleado, $coordinadoresPorCedula): array {
             $cedula = preg_replace('/\D+/', '', (string) $empleado->cedula);
-            $coordinador = $coordinadoresPorCedula->get($cedula);
+            $coordinador = $coordinadoresPorEmpleado->get((int) $empleado->id)
+                ?? $coordinadoresPorCedula->get($cedula);
 
             return [
                 'id' => (int) $empleado->id,
@@ -160,12 +178,6 @@ class CoordinadorOperadorController extends Controller
     public function store(StoreCoordinadorOperadorRequest $request): RedirectResponse
     {
         $payload = $this->payloadDesdeEmpleado($request->validated());
-
-        if (CoordinadorOperador::query()->where('cedula', $payload['cedula'])->exists()) {
-            throw ValidationException::withMessages([
-                'empleado_id' => 'Este empleado ya está registrado como coordinador. Debe actualizar el registro existente.',
-            ]);
-        }
 
         CoordinadorOperador::create($payload);
 
@@ -242,7 +254,7 @@ class CoordinadorOperadorController extends Controller
 
     /**
      * @param  array{empresa: string, departamento: string, empleado_id: int}  $seleccion
-     * @return array{nombre: string, apellido: string, correo: ?string, cedula: string, telefono: ?string, puesto: string}
+     * @return array{empleado_id: int, nombre: string, apellido: string, correo: ?string, cedula: string, telefono: ?string, puesto: string}
      */
     private function payloadDesdeEmpleado(array $seleccion, ?CoordinadorOperador $registroActual = null): array
     {
@@ -252,7 +264,7 @@ class CoordinadorOperadorController extends Controller
             ->where('id', $seleccion['empleado_id'])
             ->where('companyid', $companyId)
             ->whereRaw('TRIM(CAST(depto AS CHAR)) = ?', [$departamento])
-            ->first(['nombres', 'apellidos', 'cedula', 'email', 'tel1']);
+            ->first(['id', 'nombres', 'apellidos', 'cedula', 'email', 'tel1']);
 
         $cedula = preg_replace('/\D+/', '', (string) ($empleado->cedula ?? ''));
 
@@ -263,19 +275,23 @@ class CoordinadorOperadorController extends Controller
         }
 
         $otroCoordinador = CoordinadorOperador::query()
-            ->where('cedula', $cedula)
+            ->where(function ($query) use ($empleado, $cedula): void {
+                $query->where('empleado_id', $empleado->id)
+                    ->orWhere('cedula', $cedula);
+            })
             ->when($registroActual, fn ($query) => $query->whereKeyNot($registroActual->getKey()))
             ->exists();
 
         if ($otroCoordinador) {
             throw ValidationException::withMessages([
-                'empleado_id' => 'La cédula seleccionada pertenece a otro coordinador.',
+                'empleado_id' => 'El empleado seleccionado ya pertenece a otro coordinador o pool.',
             ]);
         }
 
         $telefono = preg_replace('/\D+/', '', (string) ($empleado->tel1 ?? ''));
 
         return [
+            'empleado_id' => (int) $empleado->id,
             'nombre' => trim(preg_replace('/\s+/', ' ', (string) $empleado->nombres)),
             'apellido' => trim(preg_replace('/\s+/', ' ', (string) $empleado->apellidos)),
             'correo' => ($correo = trim((string) ($empleado->email ?? ''))) !== '' ? mb_substr($correo, 0, 150) : null,
