@@ -243,6 +243,7 @@ class EmpleadoController extends Controller
                 ->get('https://apisj.azurewebsites.net/ApiSJ/RRHH/Empleados/Listar', [
                     'strToken' => '87eb2d56-25f3-4d46-9cb0-73c07a550bd2',
                     'intIdEmpresa' => $empresa,
+                    'strFiltros' => json_encode([['CompanyId', $empresa]]),
                 ]);
         } catch (\Throwable $e) {
             Log::error('Error consultando API de empleados', [
