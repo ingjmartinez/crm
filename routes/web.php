@@ -12,6 +12,7 @@ use App\Http\Controllers\ContabilidadComisionController;
 use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\ContabilidadFlujoRutaController;
+use App\Http\Controllers\ContabilidadGastoIncentivoAgenciaController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\CruceUsuarioSeguimientoController;
 use App\Http\Controllers\EmpleadoController;
@@ -159,6 +160,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::get('/reportes/flujo-ruta', [ContabilidadFlujoRutaController::class, 'index'])->name('reportes.flujo-ruta');
         Route::get('/reportes/flujo-ruta/meta', [ContabilidadFlujoRutaController::class, 'meta'])->name('reportes.flujo-ruta.meta');
         Route::get('/reportes/flujo-ruta/data', [ContabilidadFlujoRutaController::class, 'data'])->name('reportes.flujo-ruta.data');
+        Route::get('/reportes/gastos-por-agencia-incentivo', [ContabilidadGastoIncentivoAgenciaController::class, 'index'])
+            ->name('reportes.gastos-incentivo-agencia');
+        Route::get('/reportes/gastos-por-agencia-incentivo/data', [ContabilidadGastoIncentivoAgenciaController::class, 'data'])
+            ->name('reportes.gastos-incentivo-agencia.data');
     });
 
     Route::get('/api-cuentas', [Api::class, 'getCuentas']);

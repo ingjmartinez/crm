@@ -182,6 +182,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Gastos por Agencia de Incentivo',
+                'descripcion' => 'Distribuye el incentivo ganado por cada agente entre las agencias según sus ventas.',
+                'url' => '/contabilidad/reportes/gastos-por-agencia-incentivo',
+                'icono' => 'ri-scales-3-line',
+                'categoria' => 'Reportes',
+                'tags' => ['gastos', 'agencias', 'incentivos', 'contabilidad'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Electricidad',
                 'descripcion' => 'Gestiona facturas, averias y seguimiento electrico de agencias.',
                 'url' => '/contabilidad/electricidad',
