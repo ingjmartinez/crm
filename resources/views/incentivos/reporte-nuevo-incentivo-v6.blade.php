@@ -1005,14 +1005,24 @@
                                     </table>
                                 </div>
                                 <div class="row g-2 align-items-end mt-1">
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <label class="form-label" for="calendarioAlcanceTerminales">Aplicar en</label>
                                         <select class="form-select" id="calendarioAlcanceTerminales">
                                             <option value="periodo">Todos los dias del periodo</option>
+                                            <option value="desde">Desde una fecha hasta el final</option>
+                                            <option value="rango">Rango de fechas</option>
                                             <option value="seleccionados">Solo los dias marcados arriba</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-4 ms-auto">
+                                    <div class="col-md-3 d-none" id="calendarioFechaInicioContainer">
+                                        <label class="form-label" for="calendarioFechaInicioMasiva">Fecha inicial</label>
+                                        <input type="date" class="form-control" id="calendarioFechaInicioMasiva">
+                                    </div>
+                                    <div class="col-md-3 d-none" id="calendarioFechaFinContainer">
+                                        <label class="form-label" for="calendarioFechaFinMasiva">Fecha final</label>
+                                        <input type="date" class="form-control" id="calendarioFechaFinMasiva">
+                                    </div>
+                                    <div class="col-md-3 ms-auto">
                                         <button type="button" class="btn btn-primary w-100" id="btnAplicarTerminalesReconocidas">
                                             Aplicar a terminales cargadas
                                         </button>
@@ -1448,6 +1458,7 @@
                 calendarPaymentDates = Array.isArray(response.fechas) ? response.fechas : [];
                 calendarPaymentRows = Array.isArray(response.terminales) ? response.terminales : [];
                 calendarPaymentPagination = response.paginacion || calendarPaymentPagination;
+                syncCalendarBulkDateBounds();
                 if (!preserveDirtyAssignments) {
                     calendarDirtyAssignments.clear();
                 }
@@ -1552,17 +1563,71 @@
             .catch((error) => Swal.fire({ title: 'Error', text: error.message || String(error), icon: 'error' }));
     }
 
+    function updateCalendarBulkDateControls() {
+        const scope = document.getElementById('calendarioAlcanceTerminales').value;
+        document.getElementById('calendarioFechaInicioContainer').classList.toggle(
+            'd-none',
+            !['desde', 'rango'].includes(scope)
+        );
+        document.getElementById('calendarioFechaFinContainer').classList.toggle('d-none', scope !== 'rango');
+    }
+
+    function syncCalendarBulkDateBounds() {
+        const firstDate = calendarPaymentDates[0] || '';
+        const lastDate = calendarPaymentDates[calendarPaymentDates.length - 1] || '';
+        const startInput = document.getElementById('calendarioFechaInicioMasiva');
+        const endInput = document.getElementById('calendarioFechaFinMasiva');
+
+        [startInput, endInput].forEach((input) => {
+            input.min = firstDate;
+            input.max = lastDate;
+        });
+        if (!startInput.value || startInput.value < firstDate || startInput.value > lastDate) {
+            startInput.value = firstDate;
+        }
+        if (!endInput.value || endInput.value < firstDate || endInput.value > lastDate) {
+            endInput.value = lastDate;
+        }
+        updateCalendarBulkDateControls();
+    }
+
+    function getRecognizedCalendarDates() {
+        const scope = document.getElementById('calendarioAlcanceTerminales').value;
+        if (scope === 'seleccionados') {
+            return [...document.querySelectorAll('.calendar-date-check:checked')].map(checkbox => checkbox.value);
+        }
+        if (scope === 'periodo') {
+            return [...calendarPaymentDates];
+        }
+
+        const startDate = document.getElementById('calendarioFechaInicioMasiva').value;
+        const endDate = scope === 'rango'
+            ? document.getElementById('calendarioFechaFinMasiva').value
+            : calendarPaymentDates[calendarPaymentDates.length - 1];
+
+        if (!startDate || !endDate) {
+            Swal.fire({ title: 'Fechas requeridas', text: 'Selecciona las fechas que deseas aplicar.', icon: 'warning' });
+            return null;
+        }
+        if (startDate > endDate) {
+            Swal.fire({ title: 'Rango invalido', text: 'La fecha inicial no puede ser posterior a la fecha final.', icon: 'warning' });
+            return null;
+        }
+
+        return calendarPaymentDates.filter(date => date >= startDate && date <= endDate);
+    }
+
     function applyRecognizedCalendarTerminals() {
         const selectedTerminals = [...document.querySelectorAll('.calendario-terminal-reconocida:checked')]
             .map(checkbox => calendarRecognizedTerminals[Number(checkbox.value)])
             .filter(Boolean);
-        const scope = document.getElementById('calendarioAlcanceTerminales').value;
-        const dates = scope === 'seleccionados'
-            ? [...document.querySelectorAll('.calendar-date-check:checked')].map(checkbox => checkbox.value)
-            : [...calendarPaymentDates];
+        const dates = getRecognizedCalendarDates();
 
         if (!selectedTerminals.length) {
             Swal.fire({ title: 'Seleccion requerida', text: 'Selecciona al menos una terminal reconocida.', icon: 'warning' });
+            return;
+        }
+        if (dates === null) {
             return;
         }
         if (!dates.length) {
@@ -6056,6 +6121,10 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
     document.querySelector('#btnAplicarTerminalesReconocidas').addEventListener('click', function() {
         applyRecognizedCalendarTerminals();
+    });
+
+    document.querySelector('#calendarioAlcanceTerminales').addEventListener('change', function() {
+        updateCalendarBulkDateControls();
     });
 
     document.querySelector('#calendarioSeleccionarTerminalesReconocidas').addEventListener('change', function() {

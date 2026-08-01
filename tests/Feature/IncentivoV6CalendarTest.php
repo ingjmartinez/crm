@@ -461,6 +461,11 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('btnReconocerTerminalesCalendario', $v6);
         $this->assertStringContainsString('btnAplicarTerminalesReconocidas', $v6);
         $this->assertStringContainsString('calendarRecognizedTerminals', $v6);
+        $this->assertStringContainsString('calendarioFechaInicioMasiva', $v6);
+        $this->assertStringContainsString('calendarioFechaFinMasiva', $v6);
+        $this->assertStringContainsString('getRecognizedCalendarDates', $v6);
+        $this->assertStringContainsString('<option value="desde">', $v6);
+        $this->assertStringContainsString('<option value="rango">', $v6);
     }
 
     /**
