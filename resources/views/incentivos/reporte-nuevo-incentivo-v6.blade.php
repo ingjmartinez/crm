@@ -1488,10 +1488,13 @@
         const summary = document.getElementById('calendarioTerminalesResumen');
         const tbody = document.getElementById('calendarioTerminalesReconocidasBody');
         const missing = Array.isArray(response.terminales_no_encontradas) ? response.terminales_no_encontradas : [];
+        const found = Number(response.encontradas || 0);
+        const matches = Number(response.coincidencias || calendarRecognizedTerminals.length);
 
         summary.innerHTML = `
-            <strong>${Number(response.encontradas || 0).toLocaleString('en-US')} terminales encontradas</strong>
+            <strong>${found.toLocaleString('en-US')} terminales encontradas</strong>
             de ${Number(response.terminales_unicas || 0).toLocaleString('en-US')} unicas.
+            ${matches > found ? `<span class="text-primary ms-2">${matches.toLocaleString('en-US')} asignaciones preparadas entre Lotobet y Lotonet.</span>` : ''}
             ${missing.length ? `<span class="text-danger ms-2">No encontradas: ${escapeHtml(missing.join(', '))}</span>` : '<span class="text-success ms-2">Todas fueron reconocidas.</span>'}
         `;
         tbody.innerHTML = calendarRecognizedTerminals.map((terminal, index) => `

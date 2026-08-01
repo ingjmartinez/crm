@@ -291,13 +291,17 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertJsonPath('terminales_leidas', 63)
             ->assertJsonPath('terminales_unicas', 62)
             ->assertJsonPath('encontradas', 60)
-            ->assertJsonCount(60, 'terminales')
-            ->assertJsonPath('terminales.59.sistema', 'Lotonet')
+            ->assertJsonPath('coincidencias', 120)
+            ->assertJsonCount(120, 'terminales')
+            ->assertJsonPath('terminales.118.terminal', '4060')
+            ->assertJsonPath('terminales.118.sistema', 'Lotobet')
+            ->assertJsonPath('terminales.119.terminal', '4060')
+            ->assertJsonPath('terminales.119.sistema', 'Lotonet')
             ->assertJsonPath('terminales_no_encontradas.0', '4999')
             ->assertJsonPath('terminales_no_encontradas.1', '9999');
     }
 
-    public function test_calendar_recognizes_terminals_from_csv_and_respects_system_filter(): void
+    public function test_calendar_recognizes_active_terminals_from_csv_and_uses_selected_system(): void
     {
         $this->actingAs(User::factory()->make(['id' => 55]));
         DB::table('agencias')->insert([
@@ -324,10 +328,38 @@ class IncentivoV6CalendarTest extends TestCase
         ], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('total_filas', 2)
-            ->assertJsonPath('encontradas', 1)
+            ->assertJsonPath('encontradas', 2)
+            ->assertJsonCount(2, 'terminales')
             ->assertJsonPath('terminales.0.terminal', '5001')
             ->assertJsonPath('terminales.0.sistema', 'Lotobet')
-            ->assertJsonPath('terminales_no_encontradas.0', '5002');
+            ->assertJsonPath('terminales.1.terminal', '5002')
+            ->assertJsonPath('terminales.1.sistema', 'Lotobet')
+            ->assertJsonCount(0, 'terminales_no_encontradas');
+    }
+
+    public function test_calendar_recognizes_an_active_terminal_without_system(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+        DB::table('agencias')->insert([
+            'terminal' => '05892',
+            'sistema' => null,
+            'empresa' => 'Negosur',
+            'nombre_agencia' => 'Oviedo-36 Ltk',
+            'estatus' => 1,
+        ]);
+
+        $this->postJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer'), [
+            'terminales_manual' => '05892',
+            'sistema' => 'Lotonet',
+        ])
+            ->assertOk()
+            ->assertJsonPath('encontradas', 1)
+            ->assertJsonPath('coincidencias', 1)
+            ->assertJsonPath('terminales.0.terminal', '05892')
+            ->assertJsonPath('terminales.0.sistema', 'Lotonet')
+            ->assertJsonPath('terminales.0.agencia', 'Oviedo-36 Ltk')
+            ->assertJsonPath('terminales.0.empresa', 'Negosur')
+            ->assertJsonCount(0, 'terminales_no_encontradas');
     }
 
     public function test_calendar_terminal_recognition_requires_a_file_or_manual_list(): void

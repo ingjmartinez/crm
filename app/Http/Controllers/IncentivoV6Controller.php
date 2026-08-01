@@ -230,16 +230,36 @@ class IncentivoV6Controller extends Controller
             ], 422);
         }
 
-        $agencias = $this->terminalesActivas($request->string('sistema', 'Todos')->toString())
-            ->filter(fn (Agencia $agencia): bool => $terminalesUnicas->contains((string) $agencia->terminal))
-            ->map(fn (Agencia $agencia): array => [
-                'sistema' => (string) $agencia->sistema_normalizado,
+        $agenciasActivas = collect();
+        foreach ($terminalesUnicas->chunk(1000) as $terminalesChunk) {
+            $agenciasActivas = $agenciasActivas->merge(
+                Agencia::query()
+                    ->where('estatus', 1)
+                    ->whereIn(DB::raw('TRIM(CAST(terminal AS CHAR))'), $terminalesChunk->all())
+                    ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')
+                    ->selectRaw("COALESCE(NULLIF(TRIM(nombre_agencia), ''), NULLIF(TRIM(agencia), ''), 'SIN AGENCIA') AS nombre_agencia")
+                    ->selectRaw("COALESCE(NULLIF(TRIM(empresa), ''), 'Sin empresa') AS empresa")
+                    ->get()
+            );
+        }
+
+        $agenciasActivas = $agenciasActivas
+            ->unique(fn (Agencia $agencia): string => (string) $agencia->terminal)
+            ->sortBy(fn (Agencia $agencia): string => (string) $agencia->terminal, SORT_NATURAL)
+            ->values();
+        $terminalesEncontradas = $agenciasActivas->pluck('terminal')->unique()->values();
+        $sistemaSeleccionado = $request->string('sistema', 'Todos')->toString();
+        $sistemas = $sistemaSeleccionado === 'Todos'
+            ? collect(IncentivoTerminalTipoPago::SISTEMAS)
+            : collect([$sistemaSeleccionado]);
+        $agencias = $agenciasActivas
+            ->flatMap(fn (Agencia $agencia): Collection => $sistemas->map(fn (string $sistema): array => [
+                'sistema' => $sistema,
                 'terminal' => (string) $agencia->terminal,
                 'agencia' => (string) $agencia->nombre_agencia,
                 'empresa' => (string) $agencia->empresa,
-            ])
+            ]))
             ->values();
-        $terminalesEncontradas = $agencias->pluck('terminal')->unique()->values();
 
         return response()->json([
             'ok' => true,
