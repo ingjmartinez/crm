@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\IncentivoTerminalTipoPago;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -34,7 +35,8 @@ class IncentivoV6Calculator
         $dailySales = $this->dailySales($fechaInicio, $fechaFin, $sistema, $excludedTerminals);
         $agencies = $this->agenciesByTerminal($dailySales->pluck('terminal')->unique()->values());
         $assignments = IncentivoTerminalTipoPago::query()
-            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->whereDate('fecha', '>=', $fechaInicio)
+            ->whereDate('fecha', '<=', $fechaFin)
             ->when($sistema !== 'Todos', fn ($query) => $query->where('sistema', $sistema))
             ->get()
             ->keyBy(fn (IncentivoTerminalTipoPago $item): string => $this->calendarKey(
@@ -152,6 +154,13 @@ class IncentivoV6Calculator
         $payload['meta']['modo_tipos_pago'] = 'calendario_diario_terminal';
         $payload['meta']['configuraciones_diarias_aplicadas'] = $configuredTerminalDays;
         $payload['meta']['distribucion_tipos_pago'] = $typeDistribution;
+        $payload['meta']['detalle_calendario_tipos_pago'] = $this->calendarPaymentTypeBreakdown(
+            $dailySales,
+            $assignments,
+            $fechaInicio,
+            $fechaFin,
+            $defaultPaymentType
+        );
         $payload['meta']['resumen_empresas'] = collect($payload['data'])
             ->groupBy(fn (array $row): string => (string) ($row['empresa'] ?? 'Agencias por asignar empresa'))
             ->map(function (Collection $rows, string $company): array {
@@ -167,6 +176,104 @@ class IncentivoV6Calculator
         $payload = $this->updateCoordinatorAmounts($payload);
 
         return $payload;
+    }
+
+    /**
+     * @return array<string, array{agencias: int, rangos: array<int, array{desde: string, hasta: string, agencias: int}>}>
+     */
+    private function calendarPaymentTypeBreakdown(
+        Collection $dailySales,
+        Collection $assignments,
+        string $startDate,
+        string $endDate,
+        string $defaultPaymentType
+    ): array {
+        $salesDatesByTerminal = [];
+
+        foreach ($dailySales as $sale) {
+            $terminalKey = $this->terminalKey((string) $sale->sistema, (string) $sale->terminal);
+            $salesDatesByTerminal[$terminalKey]['sistema'] = (string) $sale->sistema;
+            $salesDatesByTerminal[$terminalKey]['terminal'] = trim((string) $sale->terminal);
+            $salesDatesByTerminal[$terminalKey]['fechas'][(string) $sale->fecha_venta] = true;
+        }
+
+        $terminalsByType = collect(IncentivoTerminalTipoPago::TIPOS_PAGO)
+            ->mapWithKeys(fn (string $type): array => [$type => []])
+            ->all();
+        $rangeTerminalsByType = collect(IncentivoTerminalTipoPago::TIPOS_PAGO)
+            ->mapWithKeys(fn (string $type): array => [$type => []])
+            ->all();
+
+        foreach ($salesDatesByTerminal as $terminalKey => $terminalData) {
+            $currentType = null;
+            $rangeStart = null;
+            $rangeEnd = null;
+            $hasSalesInRange = false;
+
+            $finishRange = function () use (
+                &$currentType,
+                &$rangeStart,
+                &$rangeEnd,
+                &$hasSalesInRange,
+                &$terminalsByType,
+                &$rangeTerminalsByType,
+                $terminalKey
+            ): void {
+                if ($currentType === null || ! $hasSalesInRange || $rangeStart === null || $rangeEnd === null) {
+                    return;
+                }
+
+                $rangeKey = $rangeStart.'|'.$rangeEnd;
+                $terminalsByType[$currentType][$terminalKey] = true;
+                $rangeTerminalsByType[$currentType][$rangeKey][$terminalKey] = true;
+            };
+
+            for ($dateString = $startDate; $dateString <= $endDate; $dateString = CarbonImmutable::parse($dateString)->addDay()->toDateString()) {
+                $assignment = $assignments->get($this->calendarKey(
+                    (string) $terminalData['sistema'],
+                    (string) $terminalData['terminal'],
+                    $dateString
+                ));
+                $paymentType = $assignment
+                    ? $this->validPaymentType((string) $assignment->tipo_pago)
+                    : $defaultPaymentType;
+
+                if ($currentType !== $paymentType) {
+                    $finishRange();
+                    $currentType = $paymentType;
+                    $rangeStart = $dateString;
+                    $hasSalesInRange = false;
+                }
+
+                $rangeEnd = $dateString;
+                $hasSalesInRange = $hasSalesInRange || isset($terminalData['fechas'][$dateString]);
+            }
+
+            $finishRange();
+        }
+
+        return collect(IncentivoTerminalTipoPago::TIPOS_PAGO)
+            ->mapWithKeys(function (string $paymentType) use ($terminalsByType, $rangeTerminalsByType): array {
+                $ranges = collect($rangeTerminalsByType[$paymentType])
+                    ->map(function (array $terminals, string $rangeKey): array {
+                        [$from, $to] = explode('|', $rangeKey, 2);
+
+                        return [
+                            'desde' => $from,
+                            'hasta' => $to,
+                            'agencias' => count($terminals),
+                        ];
+                    })
+                    ->sortBy(fn (array $range): string => $range['desde'].'|'.$range['hasta'])
+                    ->values()
+                    ->all();
+
+                return [$paymentType => [
+                    'agencias' => count($terminalsByType[$paymentType]),
+                    'rangos' => $ranges,
+                ]];
+            })
+            ->all();
     }
 
     /**

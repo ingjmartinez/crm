@@ -252,12 +252,12 @@ class IncentivoV6Controller extends Controller
             ? collect(IncentivoTerminalTipoPago::SISTEMAS)
             : collect([$sistemaSeleccionado]);
         $agencias = $agenciasRegistradas
-            ->flatMap(fn (Agencia $agencia): Collection => $sistemas->map(fn (string $sistema): array => [
-                'sistema' => $sistema,
+            ->map(fn (Agencia $agencia): array => [
                 'terminal' => (string) $agencia->terminal,
                 'agencia' => (string) $agencia->nombre_agencia,
                 'empresa' => (string) $agencia->empresa,
-            ]))
+                'sistemas' => $sistemas->values()->all(),
+            ])
             ->values();
 
         return response()->json([
@@ -267,6 +267,7 @@ class IncentivoV6Controller extends Controller
             'terminales_unicas' => $terminalesUnicas->count(),
             'encontradas' => $terminalesEncontradas->count(),
             'coincidencias' => $agencias->count(),
+            'asignaciones_preparadas' => $agencias->count() * $sistemas->count(),
             'terminales' => $agencias,
             'terminales_no_encontradas' => $terminalesUnicas->diff($terminalesEncontradas)->values(),
         ]);

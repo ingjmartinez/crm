@@ -291,14 +291,13 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertJsonPath('terminales_leidas', 63)
             ->assertJsonPath('terminales_unicas', 62)
             ->assertJsonPath('encontradas', 61)
-            ->assertJsonPath('coincidencias', 122)
-            ->assertJsonCount(122, 'terminales')
-            ->assertJsonPath('terminales.118.terminal', '4060')
-            ->assertJsonPath('terminales.118.sistema', 'Lotobet')
-            ->assertJsonPath('terminales.119.terminal', '4060')
-            ->assertJsonPath('terminales.119.sistema', 'Lotonet')
-            ->assertJsonPath('terminales.120.terminal', '4999')
-            ->assertJsonPath('terminales.121.terminal', '4999')
+            ->assertJsonPath('coincidencias', 61)
+            ->assertJsonPath('asignaciones_preparadas', 122)
+            ->assertJsonCount(61, 'terminales')
+            ->assertJsonPath('terminales.59.terminal', '4060')
+            ->assertJsonPath('terminales.59.sistemas.0', 'Lotobet')
+            ->assertJsonPath('terminales.59.sistemas.1', 'Lotonet')
+            ->assertJsonPath('terminales.60.terminal', '4999')
             ->assertJsonPath('terminales_no_encontradas.0', '9999');
     }
 
@@ -332,9 +331,9 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertJsonPath('encontradas', 2)
             ->assertJsonCount(2, 'terminales')
             ->assertJsonPath('terminales.0.terminal', '5001')
-            ->assertJsonPath('terminales.0.sistema', 'Lotobet')
+            ->assertJsonPath('terminales.0.sistemas.0', 'Lotobet')
             ->assertJsonPath('terminales.1.terminal', '5002')
-            ->assertJsonPath('terminales.1.sistema', 'Lotobet')
+            ->assertJsonPath('terminales.1.sistemas.0', 'Lotobet')
             ->assertJsonCount(0, 'terminales_no_encontradas');
     }
 
@@ -357,7 +356,7 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertJsonPath('encontradas', 1)
             ->assertJsonPath('coincidencias', 1)
             ->assertJsonPath('terminales.0.terminal', '05892')
-            ->assertJsonPath('terminales.0.sistema', 'Lotonet')
+            ->assertJsonPath('terminales.0.sistemas.0', 'Lotonet')
             ->assertJsonPath('terminales.0.agencia', 'Oviedo-36 Ltk')
             ->assertJsonPath('terminales.0.empresa', 'Negosur')
             ->assertJsonCount(0, 'terminales_no_encontradas');
@@ -434,11 +433,88 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertSame(1, $payload['meta']['distribucion_tipos_pago']['tramos_60']['agencias']);
         $this->assertSame(1, $payload['meta']['distribucion_tipos_pago']['tramos_80']['agencias']);
         $this->assertSame(1, $payload['meta']['distribucion_tipos_pago']['tramos_80']['agencias_por_empresa']['Grupo Joselito']);
+        $this->assertSame([
+            'agencias' => 1,
+            'rangos' => [[
+                'desde' => '2026-07-10',
+                'hasta' => '2026-07-12',
+                'agencias' => 1,
+            ]],
+        ], $payload['meta']['detalle_calendario_tipos_pago']['tramos_60']);
+        $this->assertSame([
+            'agencias' => 1,
+            'rangos' => [[
+                'desde' => '2026-07-06',
+                'hasta' => '2026-07-09',
+                'agencias' => 1,
+            ]],
+        ], $payload['meta']['detalle_calendario_tipos_pago']['tramos_80']);
         $this->assertCount(2, $payload['data'][0]['tipos_pago_detalle']);
         $this->assertSame(
             ['tramos_80', 'tramos_60'],
             array_column($payload['data'][0]['tipos_pago_detalle'], 'tipo_pago')
         );
+    }
+
+    public function test_calendar_pdf_breakdown_groups_agencies_with_the_same_effective_range(): void
+    {
+        foreach (['2001', '2002', '2003'] as $index => $terminal) {
+            DB::table('agencias')->insert([
+                'terminal' => $terminal,
+                'sistema' => 'Lotobet',
+                'empresa' => 'Grupo Joselito',
+            ]);
+            DB::table('vt_usuarios_bet')->insert([
+                'agencia_id' => $terminal,
+                'cedula' => '0011234567'.($index + 1),
+                'fecha' => '2026-07-15',
+                'monto' => 100000,
+            ]);
+
+            $firstPaymentDay = $terminal === '2003' ? 12 : 10;
+            foreach (range($firstPaymentDay, 31) as $day) {
+                IncentivoTerminalTipoPago::query()->create([
+                    'sistema' => 'Lotobet',
+                    'terminal' => $terminal,
+                    'fecha' => sprintf('2026-07-%02d', $day),
+                    'tipo_pago' => 'tramos_80',
+                ]);
+            }
+        }
+
+        $payload = app(IncentivoV6Calculator::class)->applyDailyPaymentTypes([
+            'meta' => [
+                'coordinador_detalle_usuarios' => [],
+                'coordinador_monto_usuarios' => [],
+            ],
+            'data' => collect(['2001', '2002', '2003'])->map(fn (string $terminal, int $index): array => [
+                'cedula' => '0011234567'.($index + 1),
+                'empresa' => 'Grupo Joselito',
+                'ventas_mes_actual' => '100,000',
+                'nuevo_incentivo' => '1,000',
+            ])->all(),
+        ], [
+            'fecha_ini' => '2026-07-01',
+            'fecha_fin' => '2026-07-31',
+            'sistema' => 'Lotobet',
+            'tipo_pago' => 'tramos_60',
+            'min_dias_venta' => 1,
+            'terminales_excluidas' => [],
+        ], $this->paymentRanges());
+
+        $this->assertSame(3, $payload['meta']['detalle_calendario_tipos_pago']['tramos_80']['agencias']);
+        $this->assertSame([
+            [
+                'desde' => '2026-07-10',
+                'hasta' => '2026-07-31',
+                'agencias' => 2,
+            ],
+            [
+                'desde' => '2026-07-12',
+                'hasta' => '2026-07-31',
+                'agencias' => 1,
+            ],
+        ], $payload['meta']['detalle_calendario_tipos_pago']['tramos_80']['rangos']);
     }
 
     public function test_v6_view_contains_calendar_without_changing_v5_view(): void
@@ -459,10 +535,15 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('calendarioPaginaSiguiente', $v6);
         $this->assertStringContainsString('document.createDocumentFragment()', $v6);
         $this->assertStringContainsString('btnReconocerTerminalesCalendario', $v6);
+        $this->assertStringContainsString('btnLimpiarTerminalesCalendario', $v6);
+        $this->assertStringContainsString('clearRecognizedCalendarTerminalScenario', $v6);
         $this->assertStringContainsString('btnAplicarTerminalesReconocidas', $v6);
         $this->assertStringContainsString('calendarRecognizedTerminals', $v6);
         $this->assertStringContainsString('calendarioFechaInicioMasiva', $v6);
         $this->assertStringContainsString('calendarioFechaFinMasiva', $v6);
+        $this->assertStringContainsString('btnDetalleCalendarioPdf', $v6);
+        $this->assertStringContainsString('generarPdfDetalleCalendario', $v6);
+        $this->assertStringNotContainsString('<th>Sistema</th>', $v6);
         $this->assertStringContainsString('getRecognizedCalendarDates', $v6);
         $this->assertStringContainsString('<option value="desde">', $v6);
         $this->assertStringContainsString('<option value="rango">', $v6);

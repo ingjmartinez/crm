@@ -340,6 +340,7 @@
                                     <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
                                     <button type="button" class="btn btn-info" id="btnValidacionGerencial">Validacion Gerencial</button>
                                     <button type="button" class="btn btn-info" id="btnInformeGerencialProceso">Informe Gerencial PDF</button>
+                                    <button type="button" class="btn btn-info" id="btnDetalleCalendarioPdf">Detalle Calendario PDF</button>
                                     <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
                                     <button type="button" class="btn btn-success" id="btnConsultarDesvinculados">Usu. Desvinculados</button>
                                 </div>
@@ -981,10 +982,15 @@
                                         <i class="ri-search-eye-line me-1"></i>Reconocer
                                     </button>
                                 </div>
-                                <div class="col-lg-3">
+                                <div class="col-lg-2">
                                     <a href="/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas/plantilla" class="btn btn-outline-secondary w-100">
                                         <i class="ri-download-line me-1"></i>Descargar plantilla
                                     </a>
+                                </div>
+                                <div class="col-lg-1">
+                                    <button type="button" class="btn btn-outline-danger w-100 px-1" id="btnLimpiarTerminalesCalendario">
+                                        <i class="ri-delete-bin-line me-1"></i>Limpiar
+                                    </button>
                                 </div>
                             </div>
 
@@ -996,7 +1002,6 @@
                                             <tr>
                                                 <th style="width: 42px;"><input type="checkbox" class="form-check-input" id="calendarioSeleccionarTerminalesReconocidas" checked></th>
                                                 <th>Terminal</th>
-                                                <th>Sistema</th>
                                                 <th>Agencia</th>
                                                 <th>Empresa</th>
                                             </tr>
@@ -1500,19 +1505,16 @@
         const tbody = document.getElementById('calendarioTerminalesReconocidasBody');
         const missing = Array.isArray(response.terminales_no_encontradas) ? response.terminales_no_encontradas : [];
         const found = Number(response.encontradas || 0);
-        const matches = Number(response.coincidencias || calendarRecognizedTerminals.length);
 
         summary.innerHTML = `
             <strong>${found.toLocaleString('en-US')} terminales encontradas</strong>
             de ${Number(response.terminales_unicas || 0).toLocaleString('en-US')} unicas.
-            ${matches > found ? `<span class="text-primary ms-2">${matches.toLocaleString('en-US')} asignaciones preparadas entre Lotobet y Lotonet.</span>` : ''}
             ${missing.length ? `<span class="text-danger ms-2">No encontradas: ${escapeHtml(missing.join(', '))}</span>` : '<span class="text-success ms-2">Todas fueron reconocidas.</span>'}
         `;
         tbody.innerHTML = calendarRecognizedTerminals.map((terminal, index) => `
             <tr>
                 <td><input type="checkbox" class="form-check-input calendario-terminal-reconocida" value="${index}" checked></td>
                 <td class="fw-semibold">${escapeHtml(terminal.terminal)}</td>
-                <td><span class="badge bg-light text-dark">${escapeHtml(terminal.sistema)}</span></td>
                 <td>${escapeHtml(terminal.agencia)}</td>
                 <td>${escapeHtml(terminal.empresa)}</td>
             </tr>
@@ -1561,6 +1563,16 @@
                 renderRecognizedCalendarTerminals(response);
             })
             .catch((error) => Swal.fire({ title: 'Error', text: error.message || String(error), icon: 'error' }));
+    }
+
+    function clearRecognizedCalendarTerminalScenario() {
+        document.getElementById('calendarioTerminalesArchivo').value = '';
+        document.getElementById('calendarioTerminalesManual').value = '';
+        document.getElementById('calendarioTerminalesResumen').innerHTML = '';
+        document.getElementById('calendarioTerminalesReconocidasBody').innerHTML = '';
+        document.getElementById('calendarioTerminalesResultado').classList.add('d-none');
+        document.getElementById('calendarioSeleccionarTerminalesReconocidas').checked = true;
+        calendarRecognizedTerminals = [];
     }
 
     function updateCalendarBulkDateControls() {
@@ -1638,7 +1650,12 @@
         const type = document.getElementById('calendarioTipoMasivo').value;
         const projectedKeys = new Set(calendarDirtyAssignments.keys());
         selectedTerminals.forEach((terminal) => {
-            dates.forEach((date) => projectedKeys.add(calendarPaymentKey(terminal.sistema, terminal.terminal, date)));
+            const systems = Array.isArray(terminal.sistemas) && terminal.sistemas.length
+                ? terminal.sistemas
+                : [terminal.sistema].filter(Boolean);
+            systems.forEach((system) => {
+                dates.forEach((date) => projectedKeys.add(calendarPaymentKey(system, terminal.terminal, date)));
+            });
         });
 
         if (projectedKeys.size > 10000) {
@@ -1647,17 +1664,22 @@
         }
 
         selectedTerminals.forEach((terminal) => {
-            dates.forEach((date) => {
-                const assignment = {
-                    sistema: terminal.sistema,
-                    terminal: terminal.terminal,
-                    fecha: date,
-                    tipo_pago: type || null,
-                };
-                calendarDirtyAssignments.set(
-                    calendarPaymentKey(assignment.sistema, assignment.terminal, assignment.fecha),
-                    assignment
-                );
+            const systems = Array.isArray(terminal.sistemas) && terminal.sistemas.length
+                ? terminal.sistemas
+                : [terminal.sistema].filter(Boolean);
+            systems.forEach((system) => {
+                dates.forEach((date) => {
+                    const assignment = {
+                        sistema: system,
+                        terminal: terminal.terminal,
+                        fecha: date,
+                        tipo_pago: type || null,
+                    };
+                    calendarDirtyAssignments.set(
+                        calendarPaymentKey(assignment.sistema, assignment.terminal, assignment.fecha),
+                        assignment
+                    );
+                });
             });
         });
 
@@ -3223,6 +3245,115 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 });
             }
         }, 150);
+    }
+
+    function generarPdfDetalleCalendario() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        if (typeof pdfMake === 'undefined') {
+            Swal.fire({ title: 'Error', text: 'No se encontro la libreria para generar PDF.', icon: 'error' });
+            return;
+        }
+
+        const detail = cachedMeta?.detalle_calendario_tipos_pago || {};
+        const paymentTypes = ['tramos_60', 'tramos_70', 'tramos_80'];
+        const fechaIni = document.getElementById('ni_fecha_ini')?.value || '';
+        const fechaFin = document.getElementById('ni_fecha_fin')?.value || '';
+        const sistema = document.getElementById('ni_sistema')?.value || 'Todos';
+
+        const content = [
+            { text: 'Detalle del Calendario de Pagos', style: 'title' },
+            { text: 'Agencias calculadas por tipo de pago y rango efectivo', style: 'subtitle' },
+            {
+                columns: [
+                    { text: `Periodo: ${formatDateDisplay(fechaIni)} al ${formatDateDisplay(fechaFin)}` },
+                    { text: `Sistema: ${sistema}`, alignment: 'center' },
+                    { text: `Generado: ${new Date().toLocaleString('es-DO')}`, alignment: 'right' },
+                ],
+                margin: [0, 10, 0, 12],
+                fontSize: 9,
+            },
+        ];
+
+        paymentTypes.forEach((paymentType) => {
+            const typeDetail = detail?.[paymentType] || {};
+            const ranges = Array.isArray(typeDetail?.rangos) ? typeDetail.rangos : [];
+            const totalAgencies = Number(typeDetail?.agencias || 0);
+            const label = paymentType.replace('tramos_', '');
+            const tableBody = [
+                [
+                    { text: 'Rango de aplicacion', style: 'tableHeader' },
+                    { text: 'Agencias', style: 'tableHeader', alignment: 'right' },
+                ],
+                ...(ranges.length ? ranges.map((range) => [
+                    range.desde === range.hasta
+                        ? formatDateDisplay(range.desde)
+                        : `${formatDateDisplay(range.desde)} al ${formatDateDisplay(range.hasta)}`,
+                    { text: Number(range.agencias || 0).toLocaleString('en-US'), alignment: 'right' },
+                ]) : [[
+                    { text: 'Sin agencias calculadas en este tipo', color: '#6c757d' },
+                    { text: '0', alignment: 'right', color: '#6c757d' },
+                ]]),
+            ];
+
+            content.push(
+                {
+                    text: `Pago ${label}: ${totalAgencies.toLocaleString('en-US')} agencias calculadas`,
+                    style: 'sectionTitle',
+                    margin: [0, 8, 0, 5],
+                },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['*', '25%'],
+                        body: tableBody,
+                    },
+                    layout: {
+                        fillColor: function (rowIndex) {
+                            if (rowIndex === 0) return '#eef2f7';
+                            return rowIndex % 2 === 0 ? '#fbfcfd' : null;
+                        },
+                        hLineColor: function () { return '#d9dee3'; },
+                        vLineColor: function () { return '#d9dee3'; },
+                    },
+                    margin: [0, 0, 0, 8],
+                }
+            );
+        });
+
+        content.push({
+            text: 'Los totales representan terminales unicas con ventas calculadas. Una terminal puede aparecer en mas de un tipo cuando su configuracion cambio durante el periodo.',
+            fontSize: 8,
+            color: '#495057',
+            margin: [0, 10, 0, 0],
+        });
+
+        const docDefinition = {
+            pageSize: 'LETTER',
+            pageMargins: [36, 36, 36, 42],
+            footer: function (currentPage, pageCount) {
+                return {
+                    text: `Pagina ${currentPage} de ${pageCount}`,
+                    alignment: 'right',
+                    margin: [0, 0, 36, 0],
+                    fontSize: 8,
+                    color: '#6c757d',
+                };
+            },
+            content,
+            styles: {
+                title: { fontSize: 16, bold: true, color: '#212529' },
+                subtitle: { fontSize: 10, color: '#495057' },
+                sectionTitle: { fontSize: 11, bold: true, color: '#1f2937' },
+                tableHeader: { bold: true, fontSize: 9, color: '#212529' },
+            },
+            defaultStyle: { fontSize: 9 },
+        };
+
+        pdfMake.createPdf(docDefinition).download(`detalle_calendario_pagos_v6_${fechaFin || 'incentivos'}.pdf`);
     }
 
     function seleccionarPdfInformeGerencialProceso() {
@@ -5891,6 +6022,10 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             seleccionarPdfInformeGerencialProceso();
         });
 
+        document.querySelector('#btnDetalleCalendarioPdf').addEventListener('click', function() {
+            generarPdfDetalleCalendario();
+        });
+
         document.querySelector('#btnExportCoordinadoresExcel').addEventListener('click', function() {
             exportCoordinadoresExcel();
         });
@@ -6117,6 +6252,10 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
     document.querySelector('#btnReconocerTerminalesCalendario').addEventListener('click', function() {
         recognizeCalendarTerminals();
+    });
+
+    document.querySelector('#btnLimpiarTerminalesCalendario').addEventListener('click', function() {
+        clearRecognizedCalendarTerminalScenario();
     });
 
     document.querySelector('#btnAplicarTerminalesReconocidas').addEventListener('click', function() {
