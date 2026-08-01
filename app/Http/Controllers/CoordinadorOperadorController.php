@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\CoordinadorOperadorExport;
 use App\Http\Requests\SearchCoordinadorEmpleadoRequest;
 use App\Http\Requests\StoreCoordinadorOperadorRequest;
 use App\Http\Requests\UpdateCoordinadorOperadorRequest;
 use App\Models\Agencia;
 use App\Models\CoordinadorOperador;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -14,6 +16,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class CoordinadorOperadorController extends Controller
 {
@@ -34,26 +38,7 @@ class CoordinadorOperadorController extends Controller
         ])
             ->withCount('agencias');
 
-        if ($buscar !== '') {
-            $registrosQuery->where(function ($query) use ($buscar, $buscarDigits, $buscarCedulaSinCeros): void {
-                $query->where('nombre', 'like', "%{$buscar}%")
-                    ->orWhere('apellido', 'like', "%{$buscar}%")
-                    ->orWhereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) LIKE ?", ["%{$buscar}%"])
-                    ->orWhere('correo', 'like', "%{$buscar}%")
-                    ->orWhere('puesto', 'like', "%{$buscar}%")
-                    ->orWhereHas('empleado', function ($empleadoQuery) use ($buscar): void {
-                        $empleadoQuery->where('empleadoid', 'like', "%{$buscar}%");
-                    });
-
-                if ($buscarDigits !== '') {
-                    $query->orWhereRaw('CAST(cedula AS CHAR) LIKE ?', ["%{$buscarDigits}%"]);
-
-                    if ($buscarCedulaSinCeros !== '') {
-                        $query->orWhereRaw('CAST(CAST(cedula AS UNSIGNED) AS CHAR) LIKE ?', ["%{$buscarCedulaSinCeros}%"]);
-                    }
-                }
-            });
-        }
+        $this->aplicarBusqueda($registrosQuery, $buscar, $buscarDigits, $buscarCedulaSinCeros);
 
         $registros = $registrosQuery
             ->orderByDesc('id')
@@ -120,6 +105,29 @@ class CoordinadorOperadorController extends Controller
             'empresas',
             'departamentos'
         ));
+    }
+
+    public function export(Request $request): BinaryFileResponse
+    {
+        $buscar = trim((string) $request->query('buscar', ''));
+        $buscarDigits = preg_replace('/\D+/', '', $buscar);
+        $buscarCedulaSinCeros = ltrim((string) $buscarDigits, '0');
+        $query = CoordinadorOperador::with([
+            'agencias:id,agencia,nombre_agencia,terminal',
+            'empleado:id,empleadoid',
+        ]);
+
+        $this->aplicarBusqueda($query, $buscar, $buscarDigits, $buscarCedulaSinCeros);
+
+        $coordinadores = $query
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get();
+
+        return Excel::download(
+            new CoordinadorOperadorExport($coordinadores),
+            'coordinadores_terminales_'.now()->format('Y-m-d_His').'.xlsx'
+        );
     }
 
     public function create(): RedirectResponse
@@ -271,6 +279,36 @@ class CoordinadorOperadorController extends Controller
                     ->orWhereRaw("TRIM(CAST(fechasalida AS CHAR)) = ''")
                     ->orWhereRaw("TRIM(CAST(fechasalida AS CHAR)) = '0000-00-00'");
             });
+    }
+
+    private function aplicarBusqueda(
+        EloquentBuilder $query,
+        string $buscar,
+        string $buscarDigits,
+        string $buscarCedulaSinCeros
+    ): void {
+        if ($buscar === '') {
+            return;
+        }
+
+        $query->where(function (EloquentBuilder $query) use ($buscar, $buscarDigits, $buscarCedulaSinCeros): void {
+            $query->where('nombre', 'like', "%{$buscar}%")
+                ->orWhere('apellido', 'like', "%{$buscar}%")
+                ->orWhereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) LIKE ?", ["%{$buscar}%"])
+                ->orWhere('correo', 'like', "%{$buscar}%")
+                ->orWhere('puesto', 'like', "%{$buscar}%")
+                ->orWhereHas('empleado', function (EloquentBuilder $empleadoQuery) use ($buscar): void {
+                    $empleadoQuery->where('empleadoid', 'like', "%{$buscar}%");
+                });
+
+            if ($buscarDigits !== '') {
+                $query->orWhereRaw('CAST(cedula AS CHAR) LIKE ?', ["%{$buscarDigits}%"]);
+
+                if ($buscarCedulaSinCeros !== '') {
+                    $query->orWhereRaw('CAST(CAST(cedula AS UNSIGNED) AS CHAR) LIKE ?', ["%{$buscarCedulaSinCeros}%"]);
+                }
+            }
+        });
     }
 
     private function normalizarCedula(mixed $cedula): string

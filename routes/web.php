@@ -13,6 +13,7 @@ use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\ContabilidadFlujoRutaController;
 use App\Http\Controllers\ContabilidadGastoIncentivoAgenciaController;
+use App\Http\Controllers\ContabilidadValidadorAgenciaController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\CruceUsuarioSeguimientoController;
 use App\Http\Controllers\EmpleadoController;
@@ -141,6 +142,14 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::put('/electricidad/averias-dia/{id}/observaciones', [ContabilidadElectricidadController::class, 'updateAveriasDiaObservaciones'])->name('electricidad.averias-dia.update-observaciones');
         Route::delete('/electricidad/averias-dia/{id}', [ContabilidadElectricidadController::class, 'destroyAveriasDia'])->name('electricidad.averias-dia.destroy');
         Route::view('/centro-costo', 'contabilidad.centro-costo')->name('centro-costo');
+        Route::get('/validador-agencia', [ContabilidadValidadorAgenciaController::class, 'index'])
+            ->name('validador-agencia');
+        Route::post('/validador-agencia/procesar', [ContabilidadValidadorAgenciaController::class, 'procesar'])
+            ->name('validador-agencia.procesar');
+        Route::post('/validador-agencia/detalles/{validadorAgenciaDetalle}/aplicar', [ContabilidadValidadorAgenciaController::class, 'aplicar'])
+            ->name('validador-agencia.aplicar');
+        Route::get('/validador-agencia/{companyId}/{terminal}/historial', [ContabilidadValidadorAgenciaController::class, 'historial'])
+            ->name('validador-agencia.historial');
         Route::view('/movimiento-mayor', 'contabilidad.movimiento-mayor')->name('movimiento-mayor');
         Route::get('/reportes/comisiones', [ContabilidadComisionController::class, 'index'])->name('reportes.comisiones');
         Route::post('/reportes/comisiones/calcular-todas', [ContabilidadComisionController::class, 'calcularTodas'])->name('reportes.comisiones.calcular-todas');
@@ -423,6 +432,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('superadmin.sesiones.index');
     Route::get('coordinador-operador/empleados', [CoordinadorOperadorController::class, 'empleados'])
         ->name('coordinador-operador.empleados');
+    Route::get('coordinador-operador/exportar/excel', [CoordinadorOperadorController::class, 'export'])
+        ->name('coordinador-operador.export');
     Route::resource('coordinador-operador', CoordinadorOperadorController::class)->except(['show', 'edit']);
     Route::post('coordinador-operador/{coordinador_operador}/asignar-agencias', [CoordinadorOperadorController::class, 'asignarAgencias'])
         ->name('coordinador-operador.asignar-agencias');
@@ -553,6 +564,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('incentivos.reporte-nuevo-incentivo-v6.reporte');
     Route::get('/incentivos/reporte-nuevo-incentivo-v6/calendario', [IncentivoV6Controller::class, 'calendario'])
         ->name('incentivos.reporte-nuevo-incentivo-v6.calendario');
+    Route::post('/incentivos/reporte-nuevo-incentivo-v6/calendario/terminales/reconocer', [IncentivoV6Controller::class, 'reconocerTerminalesCalendario'])
+        ->name('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer');
     Route::put('/incentivos/reporte-nuevo-incentivo-v6/calendario', [IncentivoV6Controller::class, 'guardarCalendario'])
         ->name('incentivos.reporte-nuevo-incentivo-v6.calendario.guardar');
     Route::get('/incentivos/reporte-pago-incentivos', [IncentivosController::class, 'reportePagoIncentivos']);

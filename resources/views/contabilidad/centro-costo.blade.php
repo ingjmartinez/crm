@@ -27,6 +27,10 @@
                                 <div class="d-flex justify-content-between align-items-center">
                                     <h5 class="card-title mb-0">Centros de Costo</h5>
                                     <div class="d-flex gap-2">
+                                        <a href="{{ route('contabilidad.validador-agencia') }}" class="btn btn-success">
+                                            <i class="ri-file-search-line align-bottom me-1"></i>
+                                            Validador de Agencia
+                                        </a>
                                         <button type="button" class="btn btn-primary" id="btnConsultarCentros">
                                             Consultar data (168)
                                         </button>

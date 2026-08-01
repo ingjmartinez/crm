@@ -6,6 +6,7 @@ use App\Models\IncentivoTerminalTipoPago;
 use App\Models\User;
 use App\Services\IncentivoV6Calculator;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -258,6 +259,88 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertJsonPath('paginacion.hasta', 50);
     }
 
+    public function test_calendar_recognizes_manual_terminals_across_pages_and_reports_missing_ones(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+        DB::table('agencias')->insert(collect(range(1, 60))->map(fn (int $number): array => [
+            'terminal' => (string) (4000 + $number),
+            'sistema' => $number === 60 ? 'LOTENET' : 'LOTOBET',
+            'empresa' => 'Grupo Central',
+            'nombre_agencia' => 'Agencia '.$number,
+            'estatus' => 1,
+        ])->push([
+            'terminal' => '4999',
+            'sistema' => 'LOTOBET',
+            'empresa' => 'Grupo Central',
+            'nombre_agencia' => 'Agencia Inactiva',
+            'estatus' => 0,
+        ])->all());
+
+        $terminales = collect(range(1, 60))
+            ->map(fn (int $number): string => (string) (4000 + $number))
+            ->push('4001')
+            ->push('4999')
+            ->push('9999')
+            ->implode("\n");
+
+        $this->postJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer'), [
+            'terminales_manual' => $terminales,
+            'sistema' => 'Todos',
+        ])
+            ->assertOk()
+            ->assertJsonPath('terminales_leidas', 63)
+            ->assertJsonPath('terminales_unicas', 62)
+            ->assertJsonPath('encontradas', 60)
+            ->assertJsonCount(60, 'terminales')
+            ->assertJsonPath('terminales.59.sistema', 'Lotonet')
+            ->assertJsonPath('terminales_no_encontradas.0', '4999')
+            ->assertJsonPath('terminales_no_encontradas.1', '9999');
+    }
+
+    public function test_calendar_recognizes_terminals_from_csv_and_respects_system_filter(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+        DB::table('agencias')->insert([
+            [
+                'terminal' => '5001',
+                'sistema' => 'LOTOBET',
+                'empresa' => 'Grupo Bet',
+                'nombre_agencia' => 'Agencia Bet',
+                'estatus' => 1,
+            ],
+            [
+                'terminal' => '5002',
+                'sistema' => 'LOTENET',
+                'empresa' => 'Grupo Net',
+                'nombre_agencia' => 'Agencia Net',
+                'estatus' => 1,
+            ],
+        ]);
+        $file = UploadedFile::fake()->createWithContent('terminales.csv', "Terminal\n5001\n5002\n");
+
+        $this->post(route('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer'), [
+            'file' => $file,
+            'sistema' => 'Lotobet',
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('total_filas', 2)
+            ->assertJsonPath('encontradas', 1)
+            ->assertJsonPath('terminales.0.terminal', '5001')
+            ->assertJsonPath('terminales.0.sistema', 'Lotobet')
+            ->assertJsonPath('terminales_no_encontradas.0', '5002');
+    }
+
+    public function test_calendar_terminal_recognition_requires_a_file_or_manual_list(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+
+        $this->postJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer'), [
+            'sistema' => 'Todos',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('terminales_manual');
+    }
+
     public function test_daily_calculator_splits_sales_between_payment_80_and_default_payment_60(): void
     {
         DB::table('agencias')->insert([
@@ -342,6 +425,9 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('Informe Gerencial de Incentivos V6', $v6);
         $this->assertStringContainsString('calendarioPaginaSiguiente', $v6);
         $this->assertStringContainsString('document.createDocumentFragment()', $v6);
+        $this->assertStringContainsString('btnReconocerTerminalesCalendario', $v6);
+        $this->assertStringContainsString('btnAplicarTerminalesReconocidas', $v6);
+        $this->assertStringContainsString('calendarRecognizedTerminals', $v6);
     }
 
     /**

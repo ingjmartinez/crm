@@ -209,6 +209,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Validador de Agencia',
+                'descripcion' => 'Compara terminales de un CSV con los Centros de Costo y conserva el historial de cambios.',
+                'url' => '/contabilidad/validador-agencia',
+                'icono' => 'ri-file-search-line',
+                'categoria' => 'Gestion',
+                'tags' => ['agencias', 'terminales', 'centro costo', 'validador'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Movimiento del Mayor',
                 'descripcion' => 'Consulta data local y sincroniza movimientos del mayor desde el API contable.',
                 'url' => '/contabilidad/movimiento-mayor',

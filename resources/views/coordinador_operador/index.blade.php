@@ -196,6 +196,11 @@
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5 class="card-title mb-0">Listado</h5>
+                                <a
+                                    href="{{ route('coordinador-operador.export', ['buscar' => $buscar ?? '']) }}"
+                                    class="btn btn-success">
+                                    <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
+                                </a>
                             </div>
                             <div class="card-body">
                                 @if(session('success'))

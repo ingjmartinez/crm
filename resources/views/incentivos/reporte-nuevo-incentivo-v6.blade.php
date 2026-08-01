@@ -961,6 +961,67 @@
                         </div>
                     </div>
 
+                    <div class="card border-primary-subtle mb-3">
+                        <div class="card-header bg-primary-subtle py-2">
+                            <div class="fw-semibold">Carga masiva por terminales</div>
+                            <small class="text-muted">Carga un archivo o pega las terminales para configurarlas sin buscarlas pagina por pagina.</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-lg-3">
+                                    <label class="form-label" for="calendarioTerminalesArchivo">Archivo Excel o CSV</label>
+                                    <input type="file" class="form-control" id="calendarioTerminalesArchivo" accept=".xlsx,.xls,.csv">
+                                </div>
+                                <div class="col-lg-4">
+                                    <label class="form-label" for="calendarioTerminalesManual">Terminales manuales</label>
+                                    <textarea class="form-control" id="calendarioTerminalesManual" rows="2" placeholder="Una por linea o separadas por coma"></textarea>
+                                </div>
+                                <div class="col-lg-2">
+                                    <button type="button" class="btn btn-outline-info w-100" id="btnReconocerTerminalesCalendario">
+                                        <i class="ri-search-eye-line me-1"></i>Reconocer
+                                    </button>
+                                </div>
+                                <div class="col-lg-3">
+                                    <a href="/incentivos/reporte-nuevo-incentivo-v5/terminales-excluidas/plantilla" class="btn btn-outline-secondary w-100">
+                                        <i class="ri-download-line me-1"></i>Descargar plantilla
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 d-none" id="calendarioTerminalesResultado">
+                                <div class="alert alert-light border py-2 mb-2" id="calendarioTerminalesResumen"></div>
+                                <div class="table-responsive border rounded" style="max-height: 240px;">
+                                    <table class="table table-sm table-hover align-middle mb-0">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th style="width: 42px;"><input type="checkbox" class="form-check-input" id="calendarioSeleccionarTerminalesReconocidas" checked></th>
+                                                <th>Terminal</th>
+                                                <th>Sistema</th>
+                                                <th>Agencia</th>
+                                                <th>Empresa</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="calendarioTerminalesReconocidasBody"></tbody>
+                                    </table>
+                                </div>
+                                <div class="row g-2 align-items-end mt-1">
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="calendarioAlcanceTerminales">Aplicar en</label>
+                                        <select class="form-select" id="calendarioAlcanceTerminales">
+                                            <option value="periodo">Todos los dias del periodo</option>
+                                            <option value="seleccionados">Solo los dias marcados arriba</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4 ms-auto">
+                                        <button type="button" class="btn btn-primary w-100" id="btnAplicarTerminalesReconocidas">
+                                            Aplicar a terminales cargadas
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-flex flex-wrap gap-3 mb-2 small">
                         <span><span class="badge bg-success-subtle text-success">60</span> Pago 60</span>
                         <span><span class="badge bg-info-subtle text-info">70</span> Pago 70</span>
@@ -1007,6 +1068,7 @@
     const CAN_CONFIG_ADMIN_PCT = @json($canConfigAdminPct);
     const CALENDARIO_V6_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario'));
     const CALENDARIO_V6_GUARDAR_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario.guardar'));
+    const CALENDARIO_V6_RECONOCER_TERMINALES_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer'));
 
     function buildRanges(percent, pagos) {
         return [
@@ -1087,6 +1149,7 @@
     let cachedModoCalculo = null;
     let calendarPaymentDates = [];
     let calendarPaymentRows = [];
+    let calendarRecognizedTerminals = [];
     let calendarPaymentPagination = {
         pagina_actual: 1,
         ultima_pagina: 1,
@@ -1416,6 +1479,136 @@
                     markCalendarPaymentDirty(select);
                 }
             });
+        });
+    }
+
+    function renderRecognizedCalendarTerminals(response) {
+        calendarRecognizedTerminals = Array.isArray(response.terminales) ? response.terminales : [];
+        const result = document.getElementById('calendarioTerminalesResultado');
+        const summary = document.getElementById('calendarioTerminalesResumen');
+        const tbody = document.getElementById('calendarioTerminalesReconocidasBody');
+        const missing = Array.isArray(response.terminales_no_encontradas) ? response.terminales_no_encontradas : [];
+
+        summary.innerHTML = `
+            <strong>${Number(response.encontradas || 0).toLocaleString('en-US')} terminales encontradas</strong>
+            de ${Number(response.terminales_unicas || 0).toLocaleString('en-US')} unicas.
+            ${missing.length ? `<span class="text-danger ms-2">No encontradas: ${escapeHtml(missing.join(', '))}</span>` : '<span class="text-success ms-2">Todas fueron reconocidas.</span>'}
+        `;
+        tbody.innerHTML = calendarRecognizedTerminals.map((terminal, index) => `
+            <tr>
+                <td><input type="checkbox" class="form-check-input calendario-terminal-reconocida" value="${index}" checked></td>
+                <td class="fw-semibold">${escapeHtml(terminal.terminal)}</td>
+                <td><span class="badge bg-light text-dark">${escapeHtml(terminal.sistema)}</span></td>
+                <td>${escapeHtml(terminal.agencia)}</td>
+                <td>${escapeHtml(terminal.empresa)}</td>
+            </tr>
+        `).join('');
+        document.getElementById('calendarioSeleccionarTerminalesReconocidas').checked = true;
+        result.classList.remove('d-none');
+    }
+
+    function recognizeCalendarTerminals() {
+        const fileInput = document.getElementById('calendarioTerminalesArchivo');
+        const manualInput = document.getElementById('calendarioTerminalesManual');
+        const hasFile = fileInput.files && fileInput.files.length > 0;
+        const manualText = manualInput.value.trim();
+
+        if (!hasFile && !manualText) {
+            Swal.fire({ title: 'Datos requeridos', text: 'Selecciona un archivo o escribe al menos una terminal.', icon: 'warning' });
+            return;
+        }
+
+        const formData = new FormData();
+        if (hasFile) {
+            formData.append('file', fileInput.files[0]);
+        }
+        formData.append('terminales_manual', manualText);
+        formData.append('sistema', document.getElementById('ni_sistema').value || 'Todos');
+
+        Swal.fire({
+            title: 'Reconociendo terminales...',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        fetch(CALENDARIO_V6_RECONOCER_TERMINALES_URL, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: formData,
+        })
+            .then(response => parseResponseAsJson(response, 'No se pudieron reconocer las terminales'))
+            .then((response) => {
+                Swal.close();
+                renderRecognizedCalendarTerminals(response);
+            })
+            .catch((error) => Swal.fire({ title: 'Error', text: error.message || String(error), icon: 'error' }));
+    }
+
+    function applyRecognizedCalendarTerminals() {
+        const selectedTerminals = [...document.querySelectorAll('.calendario-terminal-reconocida:checked')]
+            .map(checkbox => calendarRecognizedTerminals[Number(checkbox.value)])
+            .filter(Boolean);
+        const scope = document.getElementById('calendarioAlcanceTerminales').value;
+        const dates = scope === 'seleccionados'
+            ? [...document.querySelectorAll('.calendar-date-check:checked')].map(checkbox => checkbox.value)
+            : [...calendarPaymentDates];
+
+        if (!selectedTerminals.length) {
+            Swal.fire({ title: 'Seleccion requerida', text: 'Selecciona al menos una terminal reconocida.', icon: 'warning' });
+            return;
+        }
+        if (!dates.length) {
+            Swal.fire({ title: 'Seleccion requerida', text: 'Marca al menos un dia del calendario.', icon: 'warning' });
+            return;
+        }
+
+        const type = document.getElementById('calendarioTipoMasivo').value;
+        const projectedKeys = new Set(calendarDirtyAssignments.keys());
+        selectedTerminals.forEach((terminal) => {
+            dates.forEach((date) => projectedKeys.add(calendarPaymentKey(terminal.sistema, terminal.terminal, date)));
+        });
+
+        if (projectedKeys.size > 10000) {
+            Swal.fire({ title: 'Demasiadas configuraciones', text: 'El guardado permite hasta 10,000 combinaciones de terminal y dia. Reduce el periodo o divide la carga.', icon: 'warning' });
+            return;
+        }
+
+        selectedTerminals.forEach((terminal) => {
+            dates.forEach((date) => {
+                const assignment = {
+                    sistema: terminal.sistema,
+                    terminal: terminal.terminal,
+                    fecha: date,
+                    tipo_pago: type || null,
+                };
+                calendarDirtyAssignments.set(
+                    calendarPaymentKey(assignment.sistema, assignment.terminal, assignment.fecha),
+                    assignment
+                );
+            });
+        });
+
+        document.querySelectorAll('.calendar-payment-select').forEach((select) => {
+            const assignment = calendarDirtyAssignments.get(
+                calendarPaymentKey(select.dataset.sistema, select.dataset.terminal, select.dataset.fecha)
+            );
+            if (assignment) {
+                select.value = assignment.tipo_pago || '';
+                updateCalendarPaymentCell(select);
+            }
+        });
+        updateCalendarPaymentSummary();
+
+        const typeLabel = type ? type.replace('tramos_', 'Pago ') : 'General';
+        Swal.fire({
+            title: 'Cambios preparados',
+            text: `${selectedTerminals.length.toLocaleString('en-US')} terminales por ${dates.length.toLocaleString('en-US')} dias quedaron en ${typeLabel}. Presiona Guardar cambios para confirmar.`,
+            icon: 'success',
         });
     }
 
@@ -5852,6 +6045,20 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
     document.querySelector('#btnAplicarTipoMasivo').addEventListener('click', function() {
         applyBulkCalendarPaymentType();
+    });
+
+    document.querySelector('#btnReconocerTerminalesCalendario').addEventListener('click', function() {
+        recognizeCalendarTerminals();
+    });
+
+    document.querySelector('#btnAplicarTerminalesReconocidas').addEventListener('click', function() {
+        applyRecognizedCalendarTerminals();
+    });
+
+    document.querySelector('#calendarioSeleccionarTerminalesReconocidas').addEventListener('change', function() {
+        document.querySelectorAll('.calendario-terminal-reconocida').forEach((checkbox) => {
+            checkbox.checked = this.checked;
+        });
     });
 
     document.querySelector('#btnGuardarCalendarioPago').addEventListener('click', function() {

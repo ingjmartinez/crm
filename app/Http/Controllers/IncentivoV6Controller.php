@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ConsultarCalendarioIncentivoV6Request;
 use App\Http\Requests\GuardarCalendarioIncentivoV6Request;
+use App\Http\Requests\ReconocerTerminalesCalendarioIncentivoV6Request;
 use App\Http\Requests\ReporteNuevoIncentivoV6Request;
+use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Models\Agencia;
 use App\Models\IncentivoTerminalTipoPago;
 use App\Services\IncentivoV6Calculator;
@@ -15,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
 
 class IncentivoV6Controller extends Controller
 {
@@ -195,6 +198,58 @@ class IncentivoV6Controller extends Controller
             'message' => 'Calendario de tipos de pago actualizado.',
             'guardadas' => $guardadas->count(),
             'eliminadas' => $eliminadas->count(),
+        ]);
+    }
+
+    public function reconocerTerminalesCalendario(ReconocerTerminalesCalendarioIncentivoV6Request $request): JsonResponse
+    {
+        $terminalesLeidas = collect();
+        $totalFilas = 0;
+
+        if ($request->hasFile('file')) {
+            $import = new AgenciasActualizacionMasivaImport;
+            Excel::import($import, $request->file('file'));
+            $totalFilas = $import->rows->count();
+            $terminalesLeidas = $terminalesLeidas->merge(
+                $import->rows
+                    ->map(fn ($row): string => trim((string) collect($row)->get('terminal', '')))
+                    ->filter()
+            );
+        }
+
+        $terminalesLeidas = $terminalesLeidas->merge(
+            preg_split('/[\s,;]+/', $request->string('terminales_manual')->toString()) ?: []
+        )
+            ->map(fn ($terminal): string => trim((string) $terminal))
+            ->filter();
+        $terminalesUnicas = $terminalesLeidas->unique()->values();
+
+        if ($terminalesUnicas->isEmpty()) {
+            return response()->json([
+                'message' => 'No se encontraron terminales. La plantilla debe tener una columna llamada Terminal.',
+            ], 422);
+        }
+
+        $agencias = $this->terminalesActivas($request->string('sistema', 'Todos')->toString())
+            ->filter(fn (Agencia $agencia): bool => $terminalesUnicas->contains((string) $agencia->terminal))
+            ->map(fn (Agencia $agencia): array => [
+                'sistema' => (string) $agencia->sistema_normalizado,
+                'terminal' => (string) $agencia->terminal,
+                'agencia' => (string) $agencia->nombre_agencia,
+                'empresa' => (string) $agencia->empresa,
+            ])
+            ->values();
+        $terminalesEncontradas = $agencias->pluck('terminal')->unique()->values();
+
+        return response()->json([
+            'ok' => true,
+            'total_filas' => $totalFilas,
+            'terminales_leidas' => $terminalesLeidas->count(),
+            'terminales_unicas' => $terminalesUnicas->count(),
+            'encontradas' => $terminalesEncontradas->count(),
+            'coincidencias' => $agencias->count(),
+            'terminales' => $agencias,
+            'terminales_no_encontradas' => $terminalesUnicas->diff($terminalesEncontradas)->values(),
         ]);
     }
 

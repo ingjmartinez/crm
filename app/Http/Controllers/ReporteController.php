@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Exports\FaltantesExport;
 use App\Exports\VentasUsuarioExport;
-use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ReporteController extends Controller
 {
@@ -35,7 +34,7 @@ class ReporteController extends Controller
         return view('reportes.index', compact('reportes', 'categorias'));
     }
 
-    function ventasUsuarioBet(Request $request)
+    public function ventasUsuarioBet(Request $request)
     {
         return view('reportes.ventas-usuario-bet');
     }
@@ -277,6 +276,7 @@ class ReporteController extends Controller
         $totalPorotraBet = (float) ($totalRow->porotra_bet ?? 0);
         $totalPorotraNet = (float) ($totalRow->porotra_net ?? 0);
         $totalGeneral = $totalAotraBet + $totalAotraNet + $totalPorotraBet + $totalPorotraNet;
+
         return response()->json([
             'resumen' => [
                 'empresa' => match ($validated['empresa']) {
@@ -331,9 +331,9 @@ class ReporteController extends Controller
         ]);
 
         $payload = $this->listCompensacion($consulta)->getData(true);
-        $fileName = 'compensacion_' . $empresa . '_' .
-            str_replace('-', '', $validated['fecha_inicio']) . '_' .
-            str_replace('-', '', $validated['fecha_fin']) . '.pdf';
+        $fileName = 'compensacion_'.$empresa.'_'.
+            str_replace('-', '', $validated['fecha_inicio']).'_'.
+            str_replace('-', '', $validated['fecha_fin']).'.pdf';
 
         $pdf = Pdf::loadView('reportes.compensacion-grupo-joselito-pdf', [
             'fechaInicio' => $validated['fecha_inicio'],
@@ -384,7 +384,7 @@ class ReporteController extends Controller
         }
 
         if ($empresa !== 'todos') {
-            $query->leftJoin('agencias as a', DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(a.terminal AS CHAR))"));
+            $query->leftJoin('agencias as a', DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'), '=', DB::raw('TRIM(CAST(a.terminal AS CHAR))'));
 
             if ($empresa === 'grupo_joselito') {
                 $query->whereRaw('LOWER(COALESCE(a.empresa, "")) LIKE ?', ['%joselito%']);
@@ -416,12 +416,12 @@ class ReporteController extends Controller
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
 
-        $fileName = 'ventas_usuarioio_bet_' . now()->format('Ymd_His') . '.xlsx';
+        $fileName = 'ventas_usuarioio_bet_'.now()->format('Ymd_His').'.xlsx';
 
         return Excel::download(new VentasUsuarioExport($tipo, $fecha, $mes, $empresa, $fechaInicio, $fechaFin), $fileName);
     }
 
-    function pdfVentasUsuarioBet(Request $request)
+    public function pdfVentasUsuarioBet(Request $request)
     {
         ini_set('memory_limit', '1G'); // Aumentar el límite de memoria a 512MB
 
@@ -441,7 +441,7 @@ class ReporteController extends Controller
         $registros = $query
             ->groupBy('consorcio_id', 'agencia_id', 'cedula', 'tipo')
             ->orderBy('cedula', 'desc')
-            ->get();        
+            ->get();
 
         // 🔹 Generar PDF usando una vista
         $pdf = Pdf::loadView('reportes.ventas-usuario-bet-pdf', compact('registros'))
@@ -452,7 +452,7 @@ class ReporteController extends Controller
     }
 
     // ========== INFORME FALTANTES BET ==========
-    function faltantesBet(Request $request)
+    public function faltantesBet(Request $request)
     {
         return view('reportes.faltantes-bet');
     }
@@ -511,11 +511,11 @@ class ReporteController extends Controller
         $tabla = $config['tabla'];
 
         $query = $this->faltantesBaseQuery($config['tipo'])
-            ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
-            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(agencias.terminal AS CHAR))"))
+            ->leftJoin('empleados', $tabla.'.identificacion', '=', 'empleados.cedula')
+            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw('TRIM(CAST(agencias.terminal AS CHAR))'))
             ->select(
-                $tabla . '.agencia_id',
-                $tabla . '.identificacion',
+                $tabla.'.agencia_id',
+                $tabla.'.identificacion',
                 DB::raw("COALESCE(NULLIF(TRIM(agencias.empresa), ''), 'Sin empresa') as empresa"),
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
                 DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
@@ -523,11 +523,11 @@ class ReporteController extends Controller
                 DB::raw("GROUP_CONCAT(DISTINCT DATE_FORMAT($tabla.fecha, '%d/%m/%Y') ORDER BY $tabla.fecha SEPARATOR ', ') as fechas_faltantes"),
                 DB::raw("GROUP_CONCAT(CONCAT(DATE_FORMAT($tabla.fecha, '%d/%m/%Y'), '|', COALESCE($tabla.monto, 0)) ORDER BY $tabla.fecha SEPARATOR ';;') as detalles_faltantes")
             )
-            ->whereNotNull($tabla . '.identificacion')
-            ->where($tabla . '.identificacion', '!=', '');
+            ->whereNotNull($tabla.'.identificacion')
+            ->where($tabla.'.identificacion', '!=', '');
 
         if ($fechaInicio && $fechaFin) {
-            $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
+            $query->whereBetween($tabla.'.fecha', [$fechaInicio, $fechaFin]);
         }
 
         if ($empresa === 'grupo_joselito') {
@@ -537,7 +537,7 @@ class ReporteController extends Controller
         }
 
         if ($buscar !== '') {
-            $termino = '%' . mb_strtolower($buscar) . '%';
+            $termino = '%'.mb_strtolower($buscar).'%';
             $cedula = preg_replace('/\D+/', '', $buscar);
 
             $query->where(function ($subQuery) use ($tabla, $termino, $cedula) {
@@ -548,14 +548,14 @@ class ReporteController extends Controller
                 if ($cedula !== '') {
                     $subQuery->orWhereRaw(
                         "REPLACE(REPLACE(CAST({$tabla}.identificacion AS CHAR), '-', ''), ' ', '') LIKE ?",
-                        ['%' . $cedula . '%']
+                        ['%'.$cedula.'%']
                     );
                 }
             });
         }
 
         $registros = $query
-            ->groupBy($tabla . '.agencia_id', $tabla . '.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla.'.agencia_id', $tabla.'.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->paginate(10);
 
@@ -574,21 +574,21 @@ class ReporteController extends Controller
         $tabla = $config['tabla'];
 
         $query = $this->faltantesBaseQuery($config['tipo'])
-            ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
-            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(agencias.terminal AS CHAR))"))
+            ->leftJoin('empleados', $tabla.'.identificacion', '=', 'empleados.cedula')
+            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw('TRIM(CAST(agencias.terminal AS CHAR))'))
             ->select(
-                $tabla . '.identificacion',
+                $tabla.'.identificacion',
                 DB::raw("COALESCE(NULLIF(TRIM(agencias.empresa), ''), 'Sin empresa') as empresa"),
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
                 DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
                 DB::raw("SUM($tabla.monto) as total_monto"),
                 DB::raw("GROUP_CONCAT(DISTINCT DATE_FORMAT($tabla.fecha, '%d/%m/%Y') ORDER BY $tabla.fecha SEPARATOR ', ') as fechas_faltantes")
             )
-            ->whereNotNull($tabla . '.identificacion')
-            ->where($tabla . '.identificacion', '!=', '');
+            ->whereNotNull($tabla.'.identificacion')
+            ->where($tabla.'.identificacion', '!=', '');
 
         if ($fechaInicio && $fechaFin) {
-            $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
+            $query->whereBetween($tabla.'.fecha', [$fechaInicio, $fechaFin]);
         }
 
         if ($empresa === 'grupo_joselito') {
@@ -598,11 +598,11 @@ class ReporteController extends Controller
         }
 
         $registros = $query
-            ->groupBy($tabla . '.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla.'.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->get();
 
-        $fileName = 'faltantes_' . $config['tipo'] . '_' . now()->format('Ymd_His') . '.xlsx';
+        $fileName = 'faltantes_'.$config['tipo'].'_'.now()->format('Ymd_His').'.xlsx';
 
         return Excel::download(new \App\Exports\FaltantesBetExport($registros), $fileName);
     }
@@ -618,21 +618,21 @@ class ReporteController extends Controller
         $tabla = $config['tabla'];
 
         $query = $this->faltantesBaseQuery($config['tipo'])
-            ->leftJoin('empleados', $tabla . '.identificacion', '=', 'empleados.cedula')
-            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(agencias.terminal AS CHAR))"))
+            ->leftJoin('empleados', $tabla.'.identificacion', '=', 'empleados.cedula')
+            ->leftJoin('agencias', DB::raw("TRIM(CAST({$tabla}.agencia_id AS CHAR))"), '=', DB::raw('TRIM(CAST(agencias.terminal AS CHAR))'))
             ->select(
-                $tabla . '.identificacion',
+                $tabla.'.identificacion',
                 DB::raw("COALESCE(NULLIF(TRIM(agencias.empresa), ''), 'Sin empresa') as empresa"),
                 DB::raw("CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')) as nombre_empleado"),
                 DB::raw("COUNT($tabla.faltante_id) as cantidad_faltantes"),
                 DB::raw("SUM($tabla.monto) as total_monto"),
                 DB::raw("GROUP_CONCAT(DISTINCT DATE_FORMAT($tabla.fecha, '%d/%m/%Y') ORDER BY $tabla.fecha SEPARATOR ', ') as fechas_faltantes")
             )
-            ->whereNotNull($tabla . '.identificacion')
-            ->where($tabla . '.identificacion', '!=', '');
+            ->whereNotNull($tabla.'.identificacion')
+            ->where($tabla.'.identificacion', '!=', '');
 
         if ($fechaInicio && $fechaFin) {
-            $query->whereBetween($tabla . '.fecha', [$fechaInicio, $fechaFin]);
+            $query->whereBetween($tabla.'.fecha', [$fechaInicio, $fechaFin]);
         }
 
         if ($empresa === 'grupo_joselito') {
@@ -642,7 +642,7 @@ class ReporteController extends Controller
         }
 
         $registros = $query
-            ->groupBy($tabla . '.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
+            ->groupBy($tabla.'.identificacion', 'agencias.empresa', 'empleados.nombres', 'empleados.apellidos')
             ->orderBy('total_monto', 'desc')
             ->get();
 
@@ -651,7 +651,7 @@ class ReporteController extends Controller
         $pdf = Pdf::loadView('reportes.faltantes-bet-pdf', compact('registros', 'sistema'))
             ->setPaper('A4', 'portrait');
 
-        return $pdf->download('reporte_faltantes_' . $config['tipo'] . '.pdf');
+        return $pdf->download('reporte_faltantes_'.$config['tipo'].'.pdf');
     }
 
     public function cuadreVentas(Request $request)
@@ -665,7 +665,7 @@ class ReporteController extends Controller
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
 
-        if (!$fechaInicio || !$fechaFin) {
+        if (! $fechaInicio || ! $fechaFin) {
             return response()->json([
                 'resultados' => [],
                 'agencias_sin_cedula' => [],
@@ -733,7 +733,7 @@ class ReporteController extends Controller
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
 
-        if (!$fechaInicio || !$fechaFin || $fechaInicio > $fechaFin) {
+        if (! $fechaInicio || ! $fechaFin || $fechaInicio > $fechaFin) {
             return response()->json([]);
         }
 
@@ -824,7 +824,7 @@ class ReporteController extends Controller
         $fechaFin = $request->input('fecha_fin');
         $periodo = $request->input('periodo', 'dia');
 
-        if (!$fechaInicio || !$fechaFin) {
+        if (! $fechaInicio || ! $fechaFin) {
             return response()->json([]);
         }
 
@@ -867,7 +867,7 @@ class ReporteController extends Controller
     {
         $codigo = $request->input('codigo');
 
-        if (!$codigo) {
+        if (! $codigo) {
             return response()->json(null);
         }
 
@@ -887,7 +887,7 @@ class ReporteController extends Controller
         $periodo = $request->input('periodo', 'dia');
         $terminal = $request->input('terminal');
 
-        if (!$fechaInicio || !$fechaFin || !$terminal) {
+        if (! $fechaInicio || ! $fechaFin || ! $terminal) {
             return response()->json([]);
         }
 
@@ -900,7 +900,7 @@ class ReporteController extends Controller
         $resultados = DB::select("
             SELECT
                 a.terminal AS terminal,
-                a.coordinador AS coordinador,
+                COALESCE(NULLIF(ca.coordinador, ''), 'Sin coordinador') AS coordinador,
                 a.nombre_agencia AS nombre_agencia,
                 a.ruta AS ruta,
                 {$selectPeriodo} AS periodo,
@@ -912,19 +912,30 @@ class ReporteController extends Controller
             FROM {$tabla} v
             JOIN agencias a
                 ON TRIM(CAST(v.agencia_id AS CHAR)) COLLATE utf8mb4_unicode_ci = TRIM(a.terminal) COLLATE utf8mb4_unicode_ci
+            LEFT JOIN (
+                SELECT
+                    coa.agencia_id,
+                    MAX(TRIM(CONCAT(COALESCE(co.nombre, ''), ' ', COALESCE(co.apellido, '')))) AS coordinador
+                FROM coordinador_operador_agencia coa
+                JOIN coordinador_operador co
+                    ON co.id = coa.coordinador_operador_id
+                   AND co.puesto = 'coordinador'
+                GROUP BY coa.agencia_id
+            ) ca
+                ON ca.agencia_id = a.id
             LEFT JOIN catalogo_juegos c
                 ON v.producto_id = c.producto_id
             WHERE v.fecha BETWEEN ? AND ?
               AND TRIM(a.terminal) COLLATE utf8mb4_unicode_ci = TRIM(?) COLLATE utf8mb4_unicode_ci
             GROUP BY
                 a.terminal,
-                a.coordinador,
+                ca.coordinador,
                 a.nombre_agencia,
                 a.ruta,
                 {$selectPeriodo}
             ORDER BY
                 a.terminal,
-                a.coordinador,
+                ca.coordinador,
                 periodo
         ", [$fechaInicio, $fechaFin, $terminal]);
 
@@ -943,7 +954,7 @@ class ReporteController extends Controller
         $fechaFin = $request->input('fecha_fin');
         $cedula = preg_replace('/\D/', '', (string) $request->input('cedula', ''));
 
-        if (!$fechaInicio || !$fechaFin || !$cedula || $fechaInicio > $fechaFin) {
+        if (! $fechaInicio || ! $fechaFin || ! $cedula || $fechaInicio > $fechaFin) {
             return response()->json([]);
         }
 
@@ -1001,7 +1012,7 @@ class ReporteController extends Controller
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
 
-        if (!$fechaInicio || !$fechaFin) {
+        if (! $fechaInicio || ! $fechaFin) {
             return response()->json([]);
         }
 
@@ -1155,7 +1166,7 @@ class ReporteController extends Controller
             GROUP BY v.agencia_id
             ORDER BY Dias_Sin_Cedula_Con_Ventas DESC, v.agencia_id
         ", array_merge([$fechaInicio, $fechaFin], $empresaBindings));
-        
+
         // Restaurar el strict mode
         DB::statement("SET SESSION sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
 
@@ -1166,7 +1177,7 @@ class ReporteController extends Controller
         $filtrarPorSeguimiento = array_key_exists((string) $estatus, $filtrosSeguimiento);
 
         // Filtrar resultados
-        $resultados = array_filter($resultados, function($item) use ($estatus, $filtrarPorSeguimiento) {
+        $resultados = array_filter($resultados, function ($item) use ($estatus, $filtrarPorSeguimiento) {
             if ($filtrarPorSeguimiento) {
                 return $item->Estatus !== 'Activo';
             }
@@ -1175,12 +1186,14 @@ class ReporteController extends Controller
                 if ($estatus === 'No activo') {
                     return strpos($item->Estatus, 'No Activo') === 0;
                 }
+
                 return $item->Estatus === $estatus;
             }
+
             // Si no se seleccionó estatus (Todos), excluir los Activos
             return $item->Estatus !== 'Activo';
         });
-        
+
         $resultados = array_values($resultados); // Reindexar el array
         $this->anexarSeguimientoCruceUsuarios($resultados);
 
@@ -1355,13 +1368,13 @@ class ReporteController extends Controller
             $item->Seguimiento_Finalizado = null;
         }
 
-        if (empty($resultados) || !Schema::hasTable('cruce_usuario_seguimientos')) {
+        if (empty($resultados) || ! Schema::hasTable('cruce_usuario_seguimientos')) {
             return;
         }
 
         $cedulas = collect($resultados)
             ->pluck('Identificacion')
-            ->map(fn($cedula) => preg_replace('/[^0-9]/', '', (string) $cedula))
+            ->map(fn ($cedula) => preg_replace('/[^0-9]/', '', (string) $cedula))
             ->filter()
             ->unique()
             ->values();
@@ -1383,7 +1396,7 @@ class ReporteController extends Controller
             $cedula = preg_replace('/[^0-9]/', '', (string) $item->Identificacion);
             $seguimiento = $seguimientos->get($cedula);
 
-            if (!$seguimiento) {
+            if (! $seguimiento) {
                 continue;
             }
 
@@ -1402,7 +1415,7 @@ class ReporteController extends Controller
         $fechaFin = $request->input('fecha_fin');
         $agenciaId = $request->input('agencia_id');
 
-        if (!$fechaInicio || !$fechaFin || !$agenciaId) {
+        if (! $fechaInicio || ! $fechaFin || ! $agenciaId) {
             return response()->json([
                 'agencia' => $agenciaId,
                 'fechas' => [],
@@ -1636,7 +1649,7 @@ class ReporteController extends Controller
             $empresaLabel = trim((string) ($row['empresa'] ?? ''));
             $fecha = trim((string) ($row['ultimo_dia_venta'] ?? ''));
 
-            if (!isset($grouped[$key])) {
+            if (! isset($grouped[$key])) {
                 $grouped[$key] = [
                     'cedula' => $cedulaOriginal !== '' ? $cedulaOriginal : $cedulaNormalizada,
                     'empresa_set' => [],
@@ -1707,8 +1720,8 @@ class ReporteController extends Controller
                 $estado = 'Activo';
                 if ($empleadoid === '') {
                     $estado = 'No registrado';
-                } elseif ($fechaSalida !== '' || !$activo) {
-                    $estado = $fechaSalida !== '' ? 'No activo - ' . $fechaSalida : 'No activo';
+                } elseif ($fechaSalida !== '' || ! $activo) {
+                    $estado = $fechaSalida !== '' ? 'No activo - '.$fechaSalida : 'No activo';
                 } elseif ($nombre === '') {
                     $estado = 'Activo con nombre vacio';
                 }
@@ -1738,7 +1751,7 @@ class ReporteController extends Controller
             return 'La cedula aparece como pendiente en Incentivos y tambien queda visible en Cruce.';
         }
 
-        if ($estaEnIncentivos && !$estaEnCruceVisible) {
+        if ($estaEnIncentivos && ! $estaEnCruceVisible) {
             if ($estaEnCruceBase && $estatusCruce === 'Activo') {
                 return 'Cruce la detecta, pero como Activo no se muestra por defecto.';
             }
@@ -1754,7 +1767,7 @@ class ReporteController extends Controller
             return 'Aparece en Incentivos, pero no en el conjunto visible de Cruce para estos filtros.';
         }
 
-        if (!$estaEnIncentivos && $estaEnCruceVisible) {
+        if (! $estaEnIncentivos && $estaEnCruceVisible) {
             if (str_starts_with($estatusCruce, 'No Activo')) {
                 return 'Cruce la muestra como No activa; Incentivos no la cuenta por actualizar porque si encontro nombre en maestra.';
             }
@@ -1800,7 +1813,7 @@ class ReporteController extends Controller
         $fechaFin = $request->input('fecha_fin');
         $sistema = $request->input('sistema', 'todos'); // todos, lotobet, lotonet
 
-        if (!$fechaInicio || !$fechaFin) {
+        if (! $fechaInicio || ! $fechaFin) {
             return response()->json([]);
         }
 
@@ -1932,7 +1945,7 @@ class ReporteController extends Controller
             $fechaInicio, $fechaFin,  // an (horas net)
             $fechaInicio, $fechaFin,  // ab (horas bet)
             $fechaInicio, $fechaFin,  // fn (faltantes net)
-            $fechaInicio, $fechaFin   // fb (faltantes bet)
+            $fechaInicio, $fechaFin,   // fb (faltantes bet)
         ]);
 
         // Restaurar el strict mode
@@ -1940,12 +1953,13 @@ class ReporteController extends Controller
 
         // Filtrar por sistema si se especifica
         if ($sistema !== 'todos') {
-            $resultados = array_filter($resultados, function($item) use ($sistema) {
+            $resultados = array_filter($resultados, function ($item) use ($sistema) {
                 if ($sistema === 'lotobet') {
                     return $item->horas_bet > 0 || $item->cant_faltantes_bet > 0;
                 } elseif ($sistema === 'lotonet') {
                     return $item->horas_net > 0 || $item->cant_faltantes_net > 0;
                 }
+
                 return true;
             });
             $resultados = array_values($resultados);
@@ -1963,7 +1977,7 @@ class ReporteController extends Controller
         $fechaFin = $request->input('fecha_fin');
         $sistema = $request->input('sistema', 'todos');
 
-        if (!$fechaInicio || !$fechaFin) {
+        if (! $fechaInicio || ! $fechaFin) {
             return response()->json(['error' => 'Fechas requeridas'], 400);
         }
 
@@ -2072,25 +2086,26 @@ class ReporteController extends Controller
             $fechaInicio, $fechaFin,
             $fechaInicio, $fechaFin,
             $fechaInicio, $fechaFin,
-            $fechaInicio, $fechaFin
+            $fechaInicio, $fechaFin,
         ]);
 
         DB::statement("SET SESSION sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
 
         // Filtrar por sistema
         if ($sistema !== 'todos') {
-            $resultados = array_filter($resultados, function($item) use ($sistema) {
+            $resultados = array_filter($resultados, function ($item) use ($sistema) {
                 if ($sistema === 'lotobet') {
                     return $item->horas_bet > 0 || $item->cant_faltantes_bet > 0;
                 } elseif ($sistema === 'lotonet') {
                     return $item->horas_net > 0 || $item->cant_faltantes_net > 0;
                 }
+
                 return true;
             });
             $resultados = array_values($resultados);
         }
 
-        $fileName = 'verificador_usuarios_' . now()->format('Ymd_His') . '.xlsx';
+        $fileName = 'verificador_usuarios_'.now()->format('Ymd_His').'.xlsx';
 
         return Excel::download(new \App\Exports\VerificadorUsuariosExport($resultados), $fileName);
     }

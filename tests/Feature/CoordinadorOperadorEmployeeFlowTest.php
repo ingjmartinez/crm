@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Exports\CoordinadorOperadorExport;
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\ForcePasswordChange;
+use App\Models\CoordinadorOperador;
 use App\Services\CoordinadorEmpleadoMatcher;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
 class CoordinadorOperadorEmployeeFlowTest extends TestCase
@@ -438,6 +442,63 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             'id' => $coordinadorId,
             'empleado_id' => null,
         ]);
+    }
+
+    public function test_excel_export_repeats_coordinator_data_for_each_terminal(): void
+    {
+        $employeeId = $this->insertEmployee();
+        $coordinadorId = DB::table('coordinador_operador')->insertGetId([
+            'empleado_id' => $employeeId,
+            'nombre' => 'Ana',
+            'apellido' => 'Pérez',
+            'correo' => 'ana@example.com',
+            'cedula' => '00111111111',
+            'telefono' => '8095551212',
+            'puesto' => 'coordinador',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $agenciaIds = collect([
+            ['agencia' => 'A-1', 'nombre_agencia' => 'Agencia Uno', 'terminal' => 'T-001'],
+            ['agencia' => 'A-2', 'nombre_agencia' => 'Agencia Dos', 'terminal' => 'T-002'],
+        ])->map(fn (array $agencia): int => DB::table('agencias')->insertGetId($agencia));
+
+        foreach ($agenciaIds as $agenciaId) {
+            DB::table('coordinador_operador_agencia')->insert([
+                'coordinador_operador_id' => $coordinadorId,
+                'agencia_id' => $agenciaId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $coordinadores = CoordinadorOperador::with(['agencias', 'empleado'])->get();
+        $rows = (new CoordinadorOperadorExport($coordinadores))->collection();
+
+        $this->assertCount(2, $rows);
+        $this->assertSame('Ana', $rows[0][2]);
+        $this->assertSame('Ana', $rows[1][2]);
+        $this->assertSame(
+            ['T-001', 'T-002'],
+            $rows->map(fn (array $row): string => $row[8])->sort()->values()->all()
+        );
+        $this->assertSame('@', (new CoordinadorOperadorExport($coordinadores))->columnFormats()['I']);
+
+        Excel::fake();
+        Carbon::setTestNow('2026-07-30 12:34:56');
+
+        $this->get(route('coordinador-operador.export'))
+            ->assertOk();
+
+        Excel::assertDownloaded(
+            'coordinadores_terminales_2026-07-30_123456.xlsx',
+            fn (CoordinadorOperadorExport $export): bool => $export->collection()->count() === 2
+        );
+        Carbon::setTestNow();
+
+        $this->get(route('coordinador-operador.index'))
+            ->assertOk()
+            ->assertSee('Descargar Excel');
     }
 
     /** @param array<string, mixed> $overrides */
