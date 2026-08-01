@@ -3959,43 +3959,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                     vLineColor: function () { return '#d9dee3'; },
                 },
             },
-            { text: 'Detalle por coordinador', style: 'sectionTitle', margin: [0, 14, 0, 6] },
         ];
-
-        rows.forEach((row) => {
-            const users = getCoordinatorDetailUsers(row);
-            content.push({
-                text: `${row.nombre || 'Coordinador'} | ID ${row.empleadoid || '-'} | ${toNumber(row.agencias_validas)} agencias validas`,
-                style: 'coordinatorTitle',
-                margin: [0, 8, 0, 4],
-            });
-
-            if (!users.length) {
-                content.push({ text: 'Sin usuarios calculados para este coordinador.', color: '#6c757d', margin: [0, 0, 0, 5] });
-                return;
-            }
-
-            content.push({
-                table: {
-                    headerRows: 1,
-                    widths: ['20%', '*', '20%'],
-                    body: [
-                        [
-                            { text: 'Cedula', style: 'tableHeader' },
-                            { text: 'Usuario / Empresa', style: 'tableHeader' },
-                            { text: 'Incentivo', style: 'tableHeader', alignment: 'right' },
-                        ],
-                        ...users.map((user) => [
-                            user.cedula || '-',
-                            user.usuario || '-',
-                            moneyCell(user.incentivo),
-                        ]),
-                    ],
-                },
-                layout: 'lightHorizontalLines',
-                margin: [0, 0, 0, 5],
-            });
-        });
 
         const docDefinition = {
             pageSize: 'LETTER',
@@ -4014,8 +3978,6 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             styles: {
                 title: { fontSize: 16, bold: true, color: '#212529' },
                 subtitle: { fontSize: 10, color: '#495057' },
-                sectionTitle: { fontSize: 11, bold: true, color: '#1f2937' },
-                coordinatorTitle: { fontSize: 9, bold: true, color: '#0f5132' },
                 tableHeader: { bold: true, fontSize: 7.5, color: '#212529' },
             },
             defaultStyle: { fontSize: 7.5 },
