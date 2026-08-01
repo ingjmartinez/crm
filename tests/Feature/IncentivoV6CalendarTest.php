@@ -547,6 +547,13 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('getRecognizedCalendarDates', $v6);
         $this->assertStringContainsString('<option value="desde">', $v6);
         $this->assertStringContainsString('<option value="rango">', $v6);
+
+        $coordinatorModal = substr($v6, strpos($v6, 'id="modalCoordinadores"'), 5000);
+        $validAgenciesColumn = strpos($coordinatorModal, '>Validas</th>');
+        $retentionColumn = strpos($coordinatorModal, '>Monto en retenci');
+        $amountColumn = strpos($coordinatorModal, '>Monto</th>');
+        $this->assertGreaterThan($validAgenciesColumn, $retentionColumn);
+        $this->assertLessThan($amountColumn, $retentionColumn);
     }
 
     /**

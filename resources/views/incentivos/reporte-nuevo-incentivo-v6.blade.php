@@ -681,11 +681,11 @@
                                     <th style="min-width: 280px;">Nombre</th>
                                     <th style="min-width: 100px;">Agencias</th>
                                     <th style="min-width: 100px;">Validas</th>
+                                    <th style="min-width: 130px;">Monto en retención</th>
                                     <th style="min-width: 160px;">Monto</th>
                                     <th style="min-width: 120px;">Detalle</th>
                                     <th style="min-width: 120px;">% Total</th>
                                     <th style="min-width: 160px;">Monto Coordinador</th>
-                                    <th style="min-width: 130px;">Monto en retención</th>
                                 </tr>
                             </thead>
                             <tbody id="tbodyCoordinadores"></tbody>
@@ -4476,6 +4476,9 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 <td><input type="text" class="form-control form-control-sm coord-input" data-field="nombre" data-idx="${idx}" value="${escapeHtml(row.nombre)}"></td>
                 <td class="text-center fw-semibold">${toNumber(row.agencias)}</td>
                 <td class="text-center fw-semibold text-success">${toNumber(row.agencias_validas)}</td>
+                <td class="text-center">
+                    <input class="form-check-input coord-bolsa-check" type="checkbox" data-idx="${idx}" ${excluded ? 'checked' : ''}>
+                </td>
                 <td class="text-end fw-semibold">${formatMoney(row.monto_usuarios)}</td>
                 <td class="text-center">
                     <button type="button" class="btn btn-sm btn-outline-primary btn-ver-detalle-coord" data-idx="${idx}" ${hasDetail ? '' : 'disabled'}>Ver</button>
@@ -4489,9 +4492,6 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 <td class="text-end fw-semibold coord-monto" data-idx="${idx}">
                     ${formatMoney(rowAmount)}
                     ${excluded ? `<br><small class="text-warning">Retención: ${formatMoney(appliedAmount)}</small>` : ''}
-                </td>
-                <td class="text-center">
-                    <input class="form-check-input coord-bolsa-check" type="checkbox" data-idx="${idx}" ${excluded ? 'checked' : ''}>
                 </td>
             `;
             tbody.appendChild(tr);

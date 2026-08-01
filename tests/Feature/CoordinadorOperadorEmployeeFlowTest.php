@@ -350,6 +350,19 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             ->assertSee('Asignar empleado');
     }
 
+    public function test_employee_picker_uses_resilient_selection_and_visible_confirmation(): void
+    {
+        $response = $this->get(route('coordinador-operador.index'));
+
+        $response
+            ->assertOk()
+            ->assertSee('id="empleado_selected_feedback"', false)
+            ->assertSee("employeeResults.addEventListener('pointerdown'", false)
+            ->assertSee('employeeSelectionHandledByPointer', false)
+            ->assertSee('employeeRequestController.abort()', false)
+            ->assertSee('Ya asignado a otro pool');
+    }
+
     public function test_coordinator_row_is_highlighted_only_when_its_cedula_is_not_in_employee_master(): void
     {
         $employeeId = $this->insertEmployee();

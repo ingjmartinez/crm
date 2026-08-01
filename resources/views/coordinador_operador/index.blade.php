@@ -19,11 +19,13 @@
 
         .employee-picker {
             position: relative;
+            z-index: 1060;
+            isolation: isolate;
         }
 
         .employee-results {
             position: absolute;
-            z-index: 1050;
+            z-index: 1070;
             top: calc(100% + 2px);
             right: 0;
             left: 0;
@@ -34,6 +36,7 @@
             border-radius: .375rem;
             background: #fff;
             box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .12);
+            pointer-events: auto;
         }
 
         .employee-results.is-open {
@@ -48,6 +51,13 @@
             border-bottom: 1px solid #eef0f2;
             background: #fff;
             text-align: left;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .employee-option:disabled {
+            cursor: not-allowed;
+            opacity: .65;
         }
 
         .employee-option:hover,
@@ -157,10 +167,11 @@
                                             <input type="search" id="empleado_search" class="form-control"
                                                 value="{{ old('nombre') }}" placeholder="Seleccione un departamento"
                                                 autocomplete="off" aria-autocomplete="list" aria-controls="empleado_results"
-                                                required disabled>
+                                                aria-expanded="false" required disabled>
                                             <input type="hidden" name="empleado_id" id="empleado_id" value="{{ old('empleado_id') }}">
                                             <div id="empleado_results" class="employee-results" role="listbox"></div>
                                         </div>
+                                        <div id="empleado_selected_feedback" class="small text-success fw-semibold mt-1 d-none" aria-live="polite"></div>
                                     </div>
 
                                     <div>
@@ -445,17 +456,21 @@
         const employeeSearch = document.getElementById('empleado_search');
         const employeeId = document.getElementById('empleado_id');
         const employeeResults = document.getElementById('empleado_results');
+        const employeeSelectedFeedback = document.getElementById('empleado_selected_feedback');
         const employeeName = document.getElementById('nombre_create');
         const employeeCedula = document.getElementById('cedula_create');
         const employeeEmail = document.getElementById('correo_create');
         let employeeSearchTimer;
         let employeeRequestController;
+        let employeeOptions = new Map();
+        let employeeSelectionHandledByPointer = false;
         let explicitAssignmentTarget = coordinatorRecordId.value
             ? { id: Number(coordinatorRecordId.value), name: 'el pool seleccionado', hasEmployee: false }
             : null;
 
         function closeEmployeeResults() {
             employeeResults.classList.remove('is-open');
+            employeeSearch.setAttribute('aria-expanded', 'false');
         }
 
         function showEmployeeMessage(message) {
@@ -465,6 +480,7 @@
             element.textContent = message;
             employeeResults.appendChild(element);
             employeeResults.classList.add('is-open');
+            employeeSearch.setAttribute('aria-expanded', 'true');
         }
 
         function setCoordinatorCreateMode() {
@@ -506,6 +522,8 @@
             employeeName.value = '';
             employeeCedula.value = '';
             employeeEmail.value = '';
+            employeeSelectedFeedback.textContent = '';
+            employeeSelectedFeedback.classList.add('d-none');
 
             if (clearSearch) {
                 employeeSearch.value = '';
@@ -552,6 +570,12 @@
 
             const assignmentTarget = explicitAssignmentTarget;
 
+            clearTimeout(employeeSearchTimer);
+            if (employeeRequestController) {
+                employeeRequestController.abort();
+                employeeRequestController = null;
+            }
+
             if (!assignmentTarget) {
                 setCoordinatorCreateMode();
             }
@@ -561,6 +585,8 @@
             employeeName.value = employee.nombre;
             employeeCedula.value = employee.cedula;
             employeeEmail.value = employee.correo || '';
+            employeeSelectedFeedback.textContent = `Seleccionado: ${employee.nombre} · ID ${employee.empleadoid}`;
+            employeeSelectedFeedback.classList.remove('d-none');
             closeEmployeeResults();
 
             if (assignmentTarget) {
@@ -572,6 +598,8 @@
 
         function renderEmployees(employees) {
             employeeResults.innerHTML = '';
+            employeeOptions = new Map();
+            employeeSelectionHandledByPointer = false;
 
             if (!employees.length) {
                 showEmployeeMessage('No se encontraron empleados activos.');
@@ -586,19 +614,60 @@
                 option.type = 'button';
                 option.className = 'employee-option';
                 option.setAttribute('role', 'option');
+                option.dataset.employeeId = String(employee.id);
                 name.className = 'd-block fw-semibold';
                 name.textContent = employee.nombre;
                 detail.className = 'd-block text-muted';
                 detail.textContent = `${employee.cedula} · ${employee.empresa_nombre} · ID ${employee.empleadoid}`;
+                const belongsToAnotherPool = explicitAssignmentTarget && employee.coordinador
+                    && Number(employee.coordinador.id) !== Number(explicitAssignmentTarget.id);
+
+                if (belongsToAnotherPool) {
+                    option.disabled = true;
+                    detail.textContent += ' · Ya asignado a otro pool';
+                }
+
                 option.append(name, detail);
-                option.addEventListener('click', function () {
-                    selectEmployee(employee);
-                });
+                employeeOptions.set(String(employee.id), employee);
                 employeeResults.appendChild(option);
             });
 
             employeeResults.classList.add('is-open');
+            employeeSearch.setAttribute('aria-expanded', 'true');
         }
+
+        function employeeFromOption(option) {
+            if (!option || option.disabled) {
+                return null;
+            }
+
+            return employeeOptions.get(String(option.dataset.employeeId || '')) || null;
+        }
+
+        employeeResults.addEventListener('pointerdown', function (event) {
+            const option = event.target.closest('.employee-option');
+            const employee = employeeFromOption(option);
+
+            if (!employee) {
+                return;
+            }
+
+            event.preventDefault();
+            employeeSelectionHandledByPointer = true;
+            selectEmployee(employee);
+        });
+
+        employeeResults.addEventListener('click', function (event) {
+            if (employeeSelectionHandledByPointer) {
+                employeeSelectionHandledByPointer = false;
+                return;
+            }
+
+            const employee = employeeFromOption(event.target.closest('.employee-option'));
+            if (employee) {
+                selectEmployee(employee);
+            }
+        });
 
         function loadEmployees() {
             const company = employeeCompany.value;
