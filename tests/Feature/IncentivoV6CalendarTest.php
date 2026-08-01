@@ -290,15 +290,16 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertOk()
             ->assertJsonPath('terminales_leidas', 63)
             ->assertJsonPath('terminales_unicas', 62)
-            ->assertJsonPath('encontradas', 60)
-            ->assertJsonPath('coincidencias', 120)
-            ->assertJsonCount(120, 'terminales')
+            ->assertJsonPath('encontradas', 61)
+            ->assertJsonPath('coincidencias', 122)
+            ->assertJsonCount(122, 'terminales')
             ->assertJsonPath('terminales.118.terminal', '4060')
             ->assertJsonPath('terminales.118.sistema', 'Lotobet')
             ->assertJsonPath('terminales.119.terminal', '4060')
             ->assertJsonPath('terminales.119.sistema', 'Lotonet')
-            ->assertJsonPath('terminales_no_encontradas.0', '4999')
-            ->assertJsonPath('terminales_no_encontradas.1', '9999');
+            ->assertJsonPath('terminales.120.terminal', '4999')
+            ->assertJsonPath('terminales.121.terminal', '4999')
+            ->assertJsonPath('terminales_no_encontradas.0', '9999');
     }
 
     public function test_calendar_recognizes_active_terminals_from_csv_and_uses_selected_system(): void
@@ -337,7 +338,7 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertJsonCount(0, 'terminales_no_encontradas');
     }
 
-    public function test_calendar_recognizes_an_active_terminal_without_system(): void
+    public function test_calendar_recognizes_an_inactive_registered_terminal_without_system(): void
     {
         $this->actingAs(User::factory()->make(['id' => 55]));
         DB::table('agencias')->insert([
@@ -345,7 +346,7 @@ class IncentivoV6CalendarTest extends TestCase
             'sistema' => null,
             'empresa' => 'Negosur',
             'nombre_agencia' => 'Oviedo-36 Ltk',
-            'estatus' => 1,
+            'estatus' => 0,
         ]);
 
         $this->postJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer'), [

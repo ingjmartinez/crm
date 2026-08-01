@@ -230,11 +230,10 @@ class IncentivoV6Controller extends Controller
             ], 422);
         }
 
-        $agenciasActivas = collect();
+        $agenciasRegistradas = collect();
         foreach ($terminalesUnicas->chunk(1000) as $terminalesChunk) {
-            $agenciasActivas = $agenciasActivas->merge(
+            $agenciasRegistradas = $agenciasRegistradas->merge(
                 Agencia::query()
-                    ->where('estatus', 1)
                     ->whereIn(DB::raw('TRIM(CAST(terminal AS CHAR))'), $terminalesChunk->all())
                     ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')
                     ->selectRaw("COALESCE(NULLIF(TRIM(nombre_agencia), ''), NULLIF(TRIM(agencia), ''), 'SIN AGENCIA') AS nombre_agencia")
@@ -243,16 +242,16 @@ class IncentivoV6Controller extends Controller
             );
         }
 
-        $agenciasActivas = $agenciasActivas
+        $agenciasRegistradas = $agenciasRegistradas
             ->unique(fn (Agencia $agencia): string => (string) $agencia->terminal)
             ->sortBy(fn (Agencia $agencia): string => (string) $agencia->terminal, SORT_NATURAL)
             ->values();
-        $terminalesEncontradas = $agenciasActivas->pluck('terminal')->unique()->values();
+        $terminalesEncontradas = $agenciasRegistradas->pluck('terminal')->unique()->values();
         $sistemaSeleccionado = $request->string('sistema', 'Todos')->toString();
         $sistemas = $sistemaSeleccionado === 'Todos'
             ? collect(IncentivoTerminalTipoPago::SISTEMAS)
             : collect([$sistemaSeleccionado]);
-        $agencias = $agenciasActivas
+        $agencias = $agenciasRegistradas
             ->flatMap(fn (Agencia $agencia): Collection => $sistemas->map(fn (string $sistema): array => [
                 'sistema' => $sistema,
                 'terminal' => (string) $agencia->terminal,
