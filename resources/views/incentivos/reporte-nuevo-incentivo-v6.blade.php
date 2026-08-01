@@ -3850,6 +3850,21 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         );
     }
 
+    function getCoordinatorCompanyLabel(row) {
+        const companyId = String(row?.companyid ?? '').trim();
+        const companyValue = companyId || String(row?.empresa ?? '').trim();
+        const normalizedCompany = companyValue.toLowerCase();
+
+        if (companyValue === '168' || normalizedCompany.includes('joselito') || normalizedCompany.includes('consorcio')) {
+            return 'Grupo Joselito';
+        }
+        if (companyValue === '169' || normalizedCompany.includes('negosur')) {
+            return 'Negosur';
+        }
+
+        return 'Actualizar empresa';
+    }
+
     function generarPdfInformeCoordinadores() {
         if (!cachedRows.length) {
             Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
@@ -3891,6 +3906,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             [
                 { text: 'Coordinador', style: 'tableHeader' },
                 { text: 'ID', style: 'tableHeader' },
+                { text: 'Empresa', style: 'tableHeader' },
                 { text: 'Agencias', style: 'tableHeader', alignment: 'right' },
                 { text: 'Validas', style: 'tableHeader', alignment: 'right' },
                 { text: 'Monto usuarios', style: 'tableHeader', alignment: 'right' },
@@ -3902,6 +3918,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             ...rows.map((row) => [
                 row.nombre || '',
                 row.empleadoid || '-',
+                getCoordinatorCompanyLabel(row),
                 numberCell(row.agencias),
                 numberCell(row.agencias_validas),
                 moneyCell(row.monto_usuarios),
@@ -3912,6 +3929,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             ]),
             [
                 { text: 'Total', colSpan: 2, bold: true, fillColor: '#d1e7dd' },
+                { text: '', fillColor: '#d1e7dd' },
                 { text: '', fillColor: '#d1e7dd' },
                 { ...numberCell(totalAgencies, true), fillColor: '#d1e7dd' },
                 { ...numberCell(totalValidAgencies, true), fillColor: '#d1e7dd' },
@@ -3947,7 +3965,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 table: {
                     headerRows: 1,
                     dontBreakRows: true,
-                    widths: ['*', '8%', '8%', '8%', '12%', '7%', '11%', '11%', '11%'],
+                    widths: ['*', '7%', '10%', '7%', '7%', '11%', '6%', '10%', '10%', '10%'],
                     body: summaryBody,
                 },
                 layout: {

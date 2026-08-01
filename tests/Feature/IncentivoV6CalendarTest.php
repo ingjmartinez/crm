@@ -546,6 +546,10 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('btnInformeCoordinadoresPdf', $v6);
         $this->assertStringContainsString('generarPdfInformeCoordinadores', $v6);
         $this->assertStringContainsString('Informe de Validacion de Coordinadores', $v6);
+        $this->assertStringContainsString('getCoordinatorCompanyLabel', $v6);
+        $this->assertStringContainsString("companyValue === '168'", $v6);
+        $this->assertStringContainsString("companyValue === '169'", $v6);
+        $this->assertStringContainsString('Actualizar empresa', $v6);
         $this->assertStringNotContainsString("{ text: 'Detalle por coordinador'", $v6);
         $this->assertStringNotContainsString('<th>Sistema</th>', $v6);
         $this->assertStringContainsString('getRecognizedCalendarDates', $v6);
