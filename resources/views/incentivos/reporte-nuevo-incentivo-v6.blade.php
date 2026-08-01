@@ -695,6 +695,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-warning" id="btnAplicarCoordinadoresBolsa">Aplicar retención</button>
                     <button type="button" class="btn btn-danger" id="btnDesvinculadosCoordinadores">Desvinculados</button>
+                    <button type="button" class="btn btn-info" id="btnInformeCoordinadoresPdf">Informe PDF</button>
                     <button type="button" class="btn btn-success" id="btnExportCoordinadoresExcel">Excel</button>
                     <button type="button" class="btn btn-soft-secondary" id="btnRestaurarCoordinadores">Restaurar plantilla</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
@@ -3849,6 +3850,180 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         );
     }
 
+    function generarPdfInformeCoordinadores() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Informacion', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        if (typeof pdfMake === 'undefined') {
+            Swal.fire({ title: 'Error', text: 'No se encontro la libreria para generar PDF.', icon: 'error' });
+            return;
+        }
+
+        const rows = getCoordinatorDisplayRows();
+        if (!rows.length) {
+            Swal.fire({ title: 'Sin datos', text: 'No hay coordinadores para generar el informe.', icon: 'warning' });
+            return;
+        }
+
+        const fechaIni = document.getElementById('ni_fecha_ini')?.value || '';
+        const fechaFin = document.getElementById('ni_fecha_fin')?.value || '';
+        const sistema = document.getElementById('ni_sistema')?.value || 'Todos';
+        const totalAgencies = rows.reduce((sum, row) => sum + toNumber(row.agencias), 0);
+        const totalValidAgencies = rows.reduce((sum, row) => sum + toNumber(row.agencias_validas), 0);
+        const totalUserAmount = rows.reduce((sum, row) => sum + toIntegerAmount(row.monto_usuarios), 0);
+        const totalCalculated = rows.reduce((sum, row) => sum + getCoordinatorAmount(row), 0);
+        const totalRetention = rows.reduce((sum, row) => sum + getCoordinatorAppliedAmount(row), 0);
+        const totalPayable = rows.reduce((sum, row) => sum + getCoordinatorDisplayAmount(row), 0);
+        const totalPercentage = totalUserAmount > 0 ? 100 : 0;
+        const moneyCell = (value, bold = false) => ({
+            text: formatMoney(value),
+            alignment: 'right',
+            bold,
+        });
+        const numberCell = (value, bold = false) => ({
+            text: Number(value || 0).toLocaleString('en-US'),
+            alignment: 'right',
+            bold,
+        });
+        const summaryBody = [
+            [
+                { text: 'Coordinador', style: 'tableHeader' },
+                { text: 'ID', style: 'tableHeader' },
+                { text: 'Agencias', style: 'tableHeader', alignment: 'right' },
+                { text: 'Validas', style: 'tableHeader', alignment: 'right' },
+                { text: 'Monto usuarios', style: 'tableHeader', alignment: 'right' },
+                { text: '%', style: 'tableHeader', alignment: 'right' },
+                { text: 'Retencion', style: 'tableHeader', alignment: 'right' },
+                { text: 'Calculado', style: 'tableHeader', alignment: 'right' },
+                { text: 'A pagar', style: 'tableHeader', alignment: 'right' },
+            ],
+            ...rows.map((row) => [
+                row.nombre || '',
+                row.empleadoid || '-',
+                numberCell(row.agencias),
+                numberCell(row.agencias_validas),
+                moneyCell(row.monto_usuarios),
+                { text: `${formatCoordinatorPct(row)}%`, alignment: 'right' },
+                moneyCell(getCoordinatorAppliedAmount(row)),
+                moneyCell(getCoordinatorAmount(row)),
+                moneyCell(getCoordinatorDisplayAmount(row), true),
+            ]),
+            [
+                { text: 'Total', colSpan: 2, bold: true, fillColor: '#d1e7dd' },
+                { text: '', fillColor: '#d1e7dd' },
+                { ...numberCell(totalAgencies, true), fillColor: '#d1e7dd' },
+                { ...numberCell(totalValidAgencies, true), fillColor: '#d1e7dd' },
+                { ...moneyCell(totalUserAmount, true), fillColor: '#d1e7dd' },
+                { text: `${totalPercentage.toFixed(2)}%`, alignment: 'right', bold: true, fillColor: '#d1e7dd' },
+                { ...moneyCell(totalRetention, true), fillColor: '#d1e7dd' },
+                { ...moneyCell(totalCalculated, true), fillColor: '#d1e7dd' },
+                { ...moneyCell(totalPayable, true), fillColor: '#d1e7dd' },
+            ],
+        ];
+        const content = [
+            { text: 'Informe de Validacion de Coordinadores', style: 'title' },
+            { text: 'Revision previa al proceso de pago', style: 'subtitle' },
+            {
+                columns: [
+                    { text: `Periodo: ${formatDateDisplay(fechaIni)} al ${formatDateDisplay(fechaFin)}` },
+                    { text: `Sistema: ${sistema}`, alignment: 'center' },
+                    { text: `Generado: ${new Date().toLocaleString('es-DO')}`, alignment: 'right' },
+                ],
+                margin: [0, 8, 0, 8],
+                fontSize: 8,
+            },
+            {
+                columns: [
+                    { text: `Base coordinadores: ${formatMoney(currentCoordinatorBase)}`, bold: true },
+                    { text: `Retencion: ${formatMoney(totalRetention)}`, alignment: 'center', bold: true },
+                    { text: `Total a pagar: ${formatMoney(totalPayable)}`, alignment: 'right', bold: true },
+                ],
+                margin: [0, 0, 0, 10],
+                fontSize: 9,
+            },
+            {
+                table: {
+                    headerRows: 1,
+                    dontBreakRows: true,
+                    widths: ['*', '8%', '8%', '8%', '12%', '7%', '11%', '11%', '11%'],
+                    body: summaryBody,
+                },
+                layout: {
+                    fillColor: function (rowIndex) {
+                        if (rowIndex === 0) return '#eef2f7';
+                        return rowIndex % 2 === 0 ? '#fbfcfd' : null;
+                    },
+                    hLineColor: function () { return '#d9dee3'; },
+                    vLineColor: function () { return '#d9dee3'; },
+                },
+            },
+            { text: 'Detalle por coordinador', style: 'sectionTitle', margin: [0, 14, 0, 6] },
+        ];
+
+        rows.forEach((row) => {
+            const users = getCoordinatorDetailUsers(row);
+            content.push({
+                text: `${row.nombre || 'Coordinador'} | ID ${row.empleadoid || '-'} | ${toNumber(row.agencias_validas)} agencias validas`,
+                style: 'coordinatorTitle',
+                margin: [0, 8, 0, 4],
+            });
+
+            if (!users.length) {
+                content.push({ text: 'Sin usuarios calculados para este coordinador.', color: '#6c757d', margin: [0, 0, 0, 5] });
+                return;
+            }
+
+            content.push({
+                table: {
+                    headerRows: 1,
+                    widths: ['20%', '*', '20%'],
+                    body: [
+                        [
+                            { text: 'Cedula', style: 'tableHeader' },
+                            { text: 'Usuario / Empresa', style: 'tableHeader' },
+                            { text: 'Incentivo', style: 'tableHeader', alignment: 'right' },
+                        ],
+                        ...users.map((user) => [
+                            user.cedula || '-',
+                            user.usuario || '-',
+                            moneyCell(user.incentivo),
+                        ]),
+                    ],
+                },
+                layout: 'lightHorizontalLines',
+                margin: [0, 0, 0, 5],
+            });
+        });
+
+        const docDefinition = {
+            pageSize: 'LETTER',
+            pageOrientation: 'landscape',
+            pageMargins: [24, 30, 24, 38],
+            footer: function (currentPage, pageCount) {
+                return {
+                    text: `Pagina ${currentPage} de ${pageCount}`,
+                    alignment: 'right',
+                    margin: [0, 0, 24, 0],
+                    fontSize: 8,
+                    color: '#6c757d',
+                };
+            },
+            content,
+            styles: {
+                title: { fontSize: 16, bold: true, color: '#212529' },
+                subtitle: { fontSize: 10, color: '#495057' },
+                sectionTitle: { fontSize: 11, bold: true, color: '#1f2937' },
+                coordinatorTitle: { fontSize: 9, bold: true, color: '#0f5132' },
+                tableHeader: { bold: true, fontSize: 7.5, color: '#212529' },
+            },
+            defaultStyle: { fontSize: 7.5 },
+        };
+
+        pdfMake.createPdf(docDefinition).download(`validacion_coordinadores_v6_${fechaFin || 'incentivos'}.pdf`);
+    }
+
     function normalizeAdministrativeGroup(value) {
         const group = String(value ?? '').trim();
         if (group.includes('Servs. Tecnicos') || group.includes('Servs Tecnicos')) {
@@ -6028,6 +6203,10 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
         document.querySelector('#btnExportCoordinadoresExcel').addEventListener('click', function() {
             exportCoordinadoresExcel();
+        });
+
+        document.querySelector('#btnInformeCoordinadoresPdf').addEventListener('click', function() {
+            generarPdfInformeCoordinadores();
         });
 
         document.querySelector('#btnRestaurarTramos').addEventListener('click', function() {
