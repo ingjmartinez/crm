@@ -18,6 +18,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -159,11 +161,11 @@ class OperacionesMovimientosRutasV2Controller extends Controller
 
     public function eliminarDeposito(MovimientoRutaV2Deposito $deposito): JsonResponse
     {
-        $comprobantePath = $deposito->comprobante_path;
+        $rutaComprobante = $this->resolverRutaComprobante($deposito->comprobante_path);
         $deposito->delete();
 
-        if ($comprobantePath !== null) {
-            Storage::disk('local')->delete($comprobantePath);
+        if ($rutaComprobante !== null) {
+            File::delete($rutaComprobante);
         }
 
         return response()->json([
@@ -173,11 +175,11 @@ class OperacionesMovimientosRutasV2Controller extends Controller
 
     public function eliminarGasto(MovimientoRutaV2Gasto $gasto): JsonResponse
     {
-        $comprobantePath = $gasto->comprobante_path;
+        $rutaComprobante = $this->resolverRutaComprobante($gasto->comprobante_path);
         $gasto->delete();
 
-        if ($comprobantePath !== null) {
-            Storage::disk('local')->delete($comprobantePath);
+        if ($rutaComprobante !== null) {
+            File::delete($rutaComprobante);
         }
 
         return response()->json([
@@ -212,7 +214,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'observacion' => $deposito->observacion,
                 'estado' => $deposito->estado,
                 'usuario' => $deposito->usuario?->name ?? 'Sistema',
-                'comprobante_url' => $deposito->comprobante_path
+                'comprobante_url' => $this->resolverRutaComprobante($deposito->comprobante_path) !== null
                     ? route('operaciones.movimientos-rutas-v2.depositos.comprobante', $deposito)
                     : null,
                 'eliminar_url' => route('operaciones.movimientos-rutas-v2.depositos.eliminar', $deposito),
@@ -232,7 +234,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'observacion' => $gasto->observacion,
                 'estado' => $gasto->estado,
                 'usuario' => $gasto->usuario?->name ?? 'Sistema',
-                'comprobante_url' => $gasto->comprobante_path
+                'comprobante_url' => $this->resolverRutaComprobante($gasto->comprobante_path) !== null
                     ? route('operaciones.movimientos-rutas-v2.gastos.comprobante', $gasto)
                     : null,
                 'eliminar_url' => route('operaciones.movimientos-rutas-v2.gastos.eliminar', $gasto),
@@ -280,22 +282,73 @@ class OperacionesMovimientosRutasV2Controller extends Controller
 
     public function comprobante(MovimientoRutaV2Deposito $deposito): BinaryFileResponse
     {
-        abort_if(
-            $deposito->comprobante_path === null || ! Storage::disk('local')->exists($deposito->comprobante_path),
-            404,
-        );
+        $rutaComprobante = $this->resolverRutaComprobante($deposito->comprobante_path);
 
-        return response()->file(Storage::disk('local')->path($deposito->comprobante_path));
+        if ($rutaComprobante === null) {
+            Log::warning('Comprobante de depósito V2 no encontrado.', [
+                'deposito_id' => $deposito->id,
+                'comprobante_path' => $deposito->comprobante_path,
+                'local_root' => config('filesystems.disks.local.root'),
+            ]);
+
+            abort(404, 'El comprobante no está disponible en el almacenamiento del servidor.');
+        }
+
+        return response()->file($rutaComprobante);
     }
 
     public function comprobanteGasto(MovimientoRutaV2Gasto $gasto): BinaryFileResponse
     {
-        abort_if(
-            $gasto->comprobante_path === null || ! Storage::disk('local')->exists($gasto->comprobante_path),
-            404,
-        );
+        $rutaComprobante = $this->resolverRutaComprobante($gasto->comprobante_path);
 
-        return response()->file(Storage::disk('local')->path($gasto->comprobante_path));
+        if ($rutaComprobante === null) {
+            Log::warning('Comprobante de gasto V2 no encontrado.', [
+                'gasto_id' => $gasto->id,
+                'comprobante_path' => $gasto->comprobante_path,
+                'local_root' => config('filesystems.disks.local.root'),
+            ]);
+
+            abort(404, 'El comprobante no está disponible en el almacenamiento del servidor.');
+        }
+
+        return response()->file($rutaComprobante);
+    }
+
+    private function resolverRutaComprobante(?string $comprobantePath): ?string
+    {
+        if ($comprobantePath === null || trim($comprobantePath) === '') {
+            return null;
+        }
+
+        $rutaRelativa = ltrim(str_replace('\\', '/', trim($comprobantePath)), '/');
+
+        if (in_array('..', explode('/', $rutaRelativa), true)) {
+            return null;
+        }
+
+        $discoLocal = Storage::disk('local');
+
+        if ($discoLocal->exists($rutaRelativa)) {
+            $rutaActual = $discoLocal->path($rutaRelativa);
+
+            if (is_file($rutaActual) && is_readable($rutaActual)) {
+                return $rutaActual;
+            }
+        }
+
+        $rutasCompatibles = [
+            storage_path('app/'.$rutaRelativa),
+            storage_path('app/private/'.$rutaRelativa),
+            storage_path('app/public/'.$rutaRelativa),
+        ];
+
+        foreach (array_unique($rutasCompatibles) as $rutaCompatible) {
+            if (is_file($rutaCompatible) && is_readable($rutaCompatible)) {
+                return $rutaCompatible;
+            }
+        }
+
+        return null;
     }
 
     /** @param  array<int, string>  $fechasDisponibles */

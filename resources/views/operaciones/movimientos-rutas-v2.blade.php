@@ -150,7 +150,7 @@
                                     <tr>
                                         <th>Ruta</th>
                                         <th class="text-end">Transacciones</th>
-                                        <th class="text-end">Depósitos CSV</th>
+                                        <th class="text-end">Depósito Pérdida</th>
                                         <th class="text-end">Retiros</th>
                                         <th class="text-end">Neto esperado</th>
                                         <th class="text-end">Depositado banco</th>
@@ -256,7 +256,7 @@
 
     <div class="modal fade" id="modal-aplicar-deposito" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg">
-            <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.depositos.guardar') }}" enctype="multipart/form-data" class="modal-content">
+            <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.depositos.guardar') }}" enctype="multipart/form-data" class="modal-content" id="form-aplicar-deposito">
                 @csrf
                 <div class="modal-header">
                     <div><h5 class="modal-title">Aplicar depósito bancario</h5><p class="text-muted mb-0" id="deposito-ruta-titulo"></p></div>
@@ -268,7 +268,15 @@
                     <input type="hidden" name="ruta" id="deposito-ruta">
                     <div class="alert alert-light border" id="deposito-resumen"></div>
                     <div class="row g-3">
-                        <div class="col-md-6"><label class="form-label">Monto depositado</label><input type="number" name="monto" class="form-control" min="0.01" step="0.01" required></div>
+                        <div class="col-md-6">
+                            <label for="monto-deposito-visible" class="form-label">Monto depositado</label>
+                            <div class="input-group">
+                                <span class="input-group-text fw-semibold">RD$</span>
+                                <input type="text" class="form-control text-end fs-5 fw-semibold" id="monto-deposito-visible" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
+                                <input type="hidden" name="monto" id="monto-deposito">
+                            </div>
+                            <div class="form-text">El monto se mostrará con separador de miles y dos decimales.</div>
+                        </div>
                         <div class="col-md-6"><label class="form-label">Banco</label><input type="text" name="banco" class="form-control" list="lista-bancos-v2" required></div>
                         <div class="col-md-6"><label class="form-label">Referencia bancaria</label><input type="text" name="referencia" class="form-control" maxlength="120"></div>
                         <div class="col-md-6"><label class="form-label">Comprobante</label><input type="file" name="comprobante" class="form-control" id="comprobante-deposito" accept="image/*"></div>
@@ -433,6 +441,76 @@
             configurarPegadoComprobante('modal-aplicar-deposito', 'zona-pegar-deposito', 'comprobante-deposito', 'vista-previa-deposito', 'texto-pegar-deposito', 'deposito');
             configurarPegadoComprobante('modal-aplicar-gasto', 'zona-pegar-gasto', 'comprobante-gasto', 'vista-previa-gasto', 'texto-pegar-gasto', 'gasto');
 
+            const formDeposito = document.getElementById('form-aplicar-deposito');
+            const montoDepositoVisible = document.getElementById('monto-deposito-visible');
+            const montoDeposito = document.getElementById('monto-deposito');
+
+            function actualizarMontoDeposito(completarDecimales = false) {
+                let valor = montoDepositoVisible.value
+                    .replace(/,/g, '')
+                    .replace(/[^\d.]/g, '');
+                const posicionDecimal = valor.indexOf('.');
+
+                if (posicionDecimal >= 0) {
+                    valor = valor.slice(0, posicionDecimal + 1) + valor.slice(posicionDecimal + 1).replace(/\./g, '');
+                }
+
+                let [entero = '', decimales = ''] = valor.split('.');
+                entero = entero.slice(0, 13).replace(/^0+(?=\d)/, '');
+                decimales = decimales.slice(0, 2);
+
+                if (entero === '' && posicionDecimal >= 0) entero = '0';
+
+                if (entero === '') {
+                    montoDepositoVisible.value = '';
+                    montoDeposito.value = '';
+                    return;
+                }
+
+                const enteroFormateado = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                const mostrarDecimal = posicionDecimal >= 0 || completarDecimales;
+                const decimalesVisibles = completarDecimales ? decimales.padEnd(2, '0') : decimales;
+                montoDepositoVisible.value = enteroFormateado + (mostrarDecimal ? `.${decimalesVisibles}` : '');
+                montoDeposito.value = `${entero}.${decimales.padEnd(2, '0')}`;
+            }
+
+            montoDepositoVisible.addEventListener('input', () => {
+                montoDepositoVisible.setCustomValidity('');
+                actualizarMontoDeposito();
+            });
+            montoDepositoVisible.addEventListener('blur', () => actualizarMontoDeposito(true));
+            formDeposito.addEventListener('submit', async event => {
+                event.preventDefault();
+                actualizarMontoDeposito(true);
+
+                const monto = Number(montoDeposito.value);
+
+                if (!Number.isFinite(monto) || monto <= 0) {
+                    montoDepositoVisible.setCustomValidity('Escribe un monto depositado mayor que cero.');
+                    montoDepositoVisible.reportValidity();
+                    return;
+                }
+
+                montoDepositoVisible.setCustomValidity('');
+                const pendiente = Number(aplicacionActual?.pendiente || 0);
+                const excedente = monto - pendiente;
+                const advertencia = excedente > 0
+                    ? `<div class="alert alert-warning mt-3 mb-0">Este depósito supera el pendiente del día por <strong>${moneda(excedente)}</strong>.</div>`
+                    : '';
+                const confirmado = typeof Swal !== 'undefined'
+                    ? await Swal.fire({
+                        icon: excedente > 0 ? 'warning' : 'question',
+                        title: 'Confirmar monto depositado',
+                        html: `<div class="fs-3 fw-bold text-success">${moneda(monto)}</div>${advertencia}`,
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, guardar depósito',
+                        cancelButtonText: 'Revisar monto',
+                    }).then(resultado => resultado.isConfirmed)
+                    : confirm(`¿Guardar depósito por ${moneda(monto)}?`);
+
+                if (confirmado) formDeposito.submit();
+            });
+
             if ($('#tabla-movimientos-rutas-v2 tbody tr').length) {
                 $('#tabla-movimientos-rutas-v2').DataTable({ responsive: true, pageLength: 25, order: [[0, 'asc']], columnDefs: [{ orderable: false, targets: 11 }], language: { search: 'Buscar:', lengthMenu: 'Mostrar _MENU_', info: 'Mostrando _START_ a _END_ de _TOTAL_', paginate: { next: 'Siguiente', previous: 'Anterior' } } });
             }
@@ -444,6 +522,8 @@
 
             document.getElementById('elegir-deposito').addEventListener('click', function () {
                 if (!aplicacionActual) return;
+                montoDepositoVisible.value = '';
+                montoDeposito.value = '';
                 document.getElementById('deposito-ruta-key').value = aplicacionActual.rutaKey;
                 document.getElementById('deposito-ruta').value = aplicacionActual.ruta;
                 document.getElementById('deposito-ruta-titulo').textContent = `${aplicacionActual.ruta} · ${fecha || ''}`;

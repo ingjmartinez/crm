@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\OperacionesMovimientosRutasV2Controller;
+use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2DepositoRequest;
 use App\Models\MovimientoRutaV2Deposito;
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
@@ -10,6 +11,7 @@ use App\Services\Operaciones\MovimientosRutasV2ImportService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -152,6 +154,8 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertSame('/operaciones/movimientos-rutas-v2', $item['url']);
         $this->assertIsString($vista);
         $this->assertStringContainsString('Depositado banco', $vista);
+        $this->assertStringContainsString('Depósito Pérdida', $vista);
+        $this->assertStringNotContainsString('Depósitos CSV', $vista);
         $this->assertStringContainsString('Pendiente', $vista);
         $this->assertStringContainsString('Aplicar depósito bancario', $vista);
         $this->assertStringContainsString('Gasto de ruta', $vista);
@@ -174,6 +178,11 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString("modalElement.addEventListener('paste'", $vista);
         $this->assertStringContainsString('btn-eliminar-aplicacion', $vista);
         $this->assertStringContainsString("method: 'DELETE'", $vista);
+        $this->assertStringContainsString('id="monto-deposito-visible"', $vista);
+        $this->assertStringContainsString('id="monto-deposito"', $vista);
+        $this->assertStringContainsString("title: 'Confirmar monto depositado'", $vista);
+        $this->assertStringContainsString("decimales.padEnd(2, '0')", $vista);
+        $this->assertContains('decimal:2', (new GuardarMovimientoRutaV2DepositoRequest)->rules()['monto']);
     }
 
     public function test_permite_eliminar_depositos_y_gastos_con_sus_comprobantes(): void
@@ -223,6 +232,53 @@ class OperacionesMovimientosRutasV2Test extends TestCase
 
         $this->assertDatabaseMissing('movimientos_rutas_v2_gastos', ['id' => $gasto]);
         Storage::disk('local')->assertMissing('comprobantes/gasto.png');
+    }
+
+    public function test_muestra_comprobantes_del_disco_actual_y_de_la_ruta_heredada_del_vps(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('operaciones/actual.png', 'comprobante actual');
+
+        $rutaHeredadaRelativa = 'operaciones/movimientos-rutas-v2/comprobantes/prueba-vps-heredada.png';
+        $rutaHeredadaAbsoluta = storage_path('app/'.$rutaHeredadaRelativa);
+        File::ensureDirectoryExists(dirname($rutaHeredadaAbsoluta));
+        File::put($rutaHeredadaAbsoluta, 'comprobante heredado');
+
+        try {
+            $deposito = MovimientoRutaV2Deposito::query()->create([
+                'fecha' => '2026-08-03',
+                'ruta_key' => '05 - HAINA',
+                'ruta' => '05 - HAINA',
+                'monto' => 100,
+                'banco' => 'Banreservas',
+                'comprobante_path' => 'operaciones/actual.png',
+                'estado' => 'aplicado',
+            ]);
+            $gasto = DB::table('movimientos_rutas_v2_gastos')->insertGetId([
+                'fecha' => '2026-08-03',
+                'ruta_key' => '05 - HAINA',
+                'ruta' => '05 - HAINA',
+                'monto' => 50,
+                'concepto' => 'Peaje',
+                'comprobante_path' => $rutaHeredadaRelativa,
+                'estado' => 'aplicado',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->withoutMiddleware([
+                \Illuminate\Auth\Middleware\Authenticate::class,
+                \App\Http\Middleware\ForcePasswordChange::class,
+            ])->get(route('operaciones.movimientos-rutas-v2.depositos.comprobante', $deposito))
+                ->assertOk();
+            $this->withoutMiddleware([
+                \Illuminate\Auth\Middleware\Authenticate::class,
+                \App\Http\Middleware\ForcePasswordChange::class,
+            ])->get(route('operaciones.movimientos-rutas-v2.gastos.comprobante', $gasto))
+                ->assertOk();
+        } finally {
+            File::delete($rutaHeredadaAbsoluta);
+        }
     }
 
     public function test_rechaza_el_archivo_cuando_su_fecha_no_coincide_con_la_fecha_del_reporte(): void
