@@ -126,11 +126,24 @@
                         ];
                     @endphp
                     @foreach ($tarjetas as [$titulo, $valor, $esMoneda, $color])
+                        @php
+                            $esTarjetaDepositado = $titulo === 'Depositado en banco';
+                        @endphp
                         <div class="col-xl col-md-4 col-sm-6">
-                            <div class="card h-100 mb-0"><div class="card-body">
+                            <div class="card h-100 mb-0 {{ $esTarjetaDepositado ? 'border-success shadow-sm' : '' }}"
+                                @if ($esTarjetaDepositado)
+                                    id="tarjeta-depositado-banco" role="button" tabindex="0"
+                                    data-bs-toggle="modal" data-bs-target="#modal-depositos-banco"
+                                    aria-label="Ver depósitos agrupados por banco" style="cursor: pointer;"
+                                @endif>
+                                <div class="card-body">
                                 <p class="text-muted mb-2">{{ $titulo }}</p>
                                 <h4 class="mb-0 {{ $color }}">{{ $esMoneda ? 'RD$ '.number_format((float) $valor, 2) : number_format((int) $valor) }}</h4>
-                            </div></div>
+                                @if ($esTarjetaDepositado)
+                                    <div class="text-success small fw-semibold mt-2"><i class="ri-bank-line me-1"></i>Ver montos por banco</div>
+                                @endif
+                                </div>
+                            </div>
                         </div>
                     @endforeach
                 </div>
@@ -235,6 +248,73 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modal-depositos-banco" tabindex="-1" aria-labelledby="modal-depositos-banco-titulo" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success-subtle border-0">
+                    <div>
+                        <h5 class="modal-title text-success mb-1" id="modal-depositos-banco-titulo">
+                            <i class="ri-bank-line me-1"></i>Depósitos por banco
+                        </h5>
+                        <p class="text-muted mb-0">{{ $fecha ? \Carbon\Carbon::parse($fecha)->format('d/m/Y') : 'Sin fecha seleccionada' }}</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="rounded-3 bg-success text-white text-center p-3 mb-4">
+                        <div class="text-uppercase small opacity-75 fw-semibold">Total depositado en banco</div>
+                        <div class="display-6 fw-bold">RD$ {{ number_format((float) $resumen['depositado_banco'], 2) }}</div>
+                        <div class="small opacity-75">{{ number_format((int) $depositosPorBanco->sum('cantidad_depositos')) }} depósito(s) aplicado(s)</div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Banco</th>
+                                    <th class="text-center">Depósitos</th>
+                                    <th style="min-width: 170px;">Participación</th>
+                                    <th class="text-end">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($depositosPorBanco as $depositoBanco)
+                                    @php
+                                        $montoBanco = (float) $depositoBanco->monto_total;
+                                        $participacionBanco = $resumen['depositado_banco'] > 0
+                                            ? ($montoBanco / $resumen['depositado_banco']) * 100
+                                            : 0;
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="avatar-xs rounded-circle bg-success-subtle text-success d-inline-flex align-items-center justify-content-center"><i class="ri-bank-line"></i></span>
+                                                <span class="fw-semibold">{{ $depositoBanco->banco }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="text-center"><span class="badge bg-light text-dark border">{{ number_format((int) $depositoBanco->cantidad_depositos) }}</span></td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="progress flex-grow-1" style="height: 8px;">
+                                                    <div class="progress-bar bg-success" style="width: {{ min($participacionBanco, 100) }}%"></div>
+                                                </div>
+                                                <span class="small fw-semibold">{{ number_format($participacionBanco, 1) }}%</span>
+                                            </div>
+                                        </td>
+                                        <td class="text-end fs-5 fw-bold text-success">RD$ {{ number_format($montoBanco, 2) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="4" class="text-center text-muted py-5"><i class="ri-bank-line fs-1 d-block mb-2"></i>No hay depósitos bancarios aplicados para este día.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer border-0"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="modal-elegir-aplicacion" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-sm modal-dialog-centered">
             <div class="modal-content">
@@ -299,7 +379,7 @@
 
     <div class="modal fade" id="modal-aplicar-gasto" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg">
-            <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.gastos.guardar') }}" enctype="multipart/form-data" class="modal-content">
+            <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.gastos.guardar') }}" enctype="multipart/form-data" class="modal-content" id="form-aplicar-gasto">
                 @csrf
                 <div class="modal-header">
                     <div><h5 class="modal-title">Aplicar gasto de ruta</h5><p class="text-muted mb-0" id="gasto-ruta-titulo"></p></div>
@@ -311,7 +391,15 @@
                     <input type="hidden" name="ruta" id="gasto-ruta">
                     <div class="alert alert-light border" id="gasto-resumen"></div>
                     <div class="row g-3">
-                        <div class="col-md-6"><label class="form-label">Monto del gasto</label><input type="number" name="monto" class="form-control" min="0.01" step="0.01" required></div>
+                        <div class="col-md-6">
+                            <label for="monto-gasto-visible" class="form-label">Monto del gasto</label>
+                            <div class="input-group">
+                                <span class="input-group-text fw-semibold">RD$</span>
+                                <input type="text" class="form-control text-end fs-5 fw-semibold" id="monto-gasto-visible" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
+                                <input type="hidden" name="monto" id="monto-gasto">
+                            </div>
+                            <div class="form-text">El monto se mostrará con separador de miles y dos decimales.</div>
+                        </div>
                         <div class="col-md-6"><label class="form-label">Concepto</label><input type="text" name="concepto" class="form-control" maxlength="150" placeholder="Ej.: combustible, peaje o reparación" required></div>
                         <div class="col-md-6"><label class="form-label">Voucher o comprobante</label><input type="file" name="comprobante" class="form-control" id="comprobante-gasto" accept="image/*"></div>
                         <div class="col-12">
@@ -366,9 +454,17 @@
             const modalDeposito = new bootstrap.Modal(document.getElementById('modal-aplicar-deposito'));
             const modalGasto = new bootstrap.Modal(document.getElementById('modal-aplicar-gasto'));
             const modalDetalle = new bootstrap.Modal(document.getElementById('modal-detalle-ruta-v2'));
+            const tarjetaDepositadoBanco = document.getElementById('tarjeta-depositado-banco');
             let aplicacionActual = null;
             const moneda = valor => 'RD$ ' + Number(valor || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[caracter]);
+
+            tarjetaDepositadoBanco?.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+
+                event.preventDefault();
+                tarjetaDepositadoBanco.click();
+            });
 
             if (errorFechaImportacion && typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -441,74 +537,101 @@
             configurarPegadoComprobante('modal-aplicar-deposito', 'zona-pegar-deposito', 'comprobante-deposito', 'vista-previa-deposito', 'texto-pegar-deposito', 'deposito');
             configurarPegadoComprobante('modal-aplicar-gasto', 'zona-pegar-gasto', 'comprobante-gasto', 'vista-previa-gasto', 'texto-pegar-gasto', 'gasto');
 
-            const formDeposito = document.getElementById('form-aplicar-deposito');
-            const montoDepositoVisible = document.getElementById('monto-deposito-visible');
-            const montoDeposito = document.getElementById('monto-deposito');
+            function configurarMontoMonetario({ formId, visibleId, ocultoId, etiqueta, titulo, claseMonto }) {
+                const formulario = document.getElementById(formId);
+                const inputVisible = document.getElementById(visibleId);
+                const inputOculto = document.getElementById(ocultoId);
 
-            function actualizarMontoDeposito(completarDecimales = false) {
-                let valor = montoDepositoVisible.value
-                    .replace(/,/g, '')
-                    .replace(/[^\d.]/g, '');
-                const posicionDecimal = valor.indexOf('.');
+                const actualizar = (completarDecimales = false) => {
+                    let valor = inputVisible.value
+                        .replace(/,/g, '')
+                        .replace(/[^\d.]/g, '');
+                    const posicionDecimal = valor.indexOf('.');
 
-                if (posicionDecimal >= 0) {
-                    valor = valor.slice(0, posicionDecimal + 1) + valor.slice(posicionDecimal + 1).replace(/\./g, '');
-                }
+                    if (posicionDecimal >= 0) {
+                        valor = valor.slice(0, posicionDecimal + 1) + valor.slice(posicionDecimal + 1).replace(/\./g, '');
+                    }
 
-                let [entero = '', decimales = ''] = valor.split('.');
-                entero = entero.slice(0, 13).replace(/^0+(?=\d)/, '');
-                decimales = decimales.slice(0, 2);
+                    let [entero = '', decimales = ''] = valor.split('.');
+                    entero = entero.slice(0, 13).replace(/^0+(?=\d)/, '');
+                    decimales = decimales.slice(0, 2);
 
-                if (entero === '' && posicionDecimal >= 0) entero = '0';
+                    if (entero === '' && posicionDecimal >= 0) entero = '0';
 
-                if (entero === '') {
-                    montoDepositoVisible.value = '';
-                    montoDeposito.value = '';
-                    return;
-                }
+                    if (entero === '') {
+                        inputVisible.value = '';
+                        inputOculto.value = '';
+                        return;
+                    }
 
-                const enteroFormateado = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                const mostrarDecimal = posicionDecimal >= 0 || completarDecimales;
-                const decimalesVisibles = completarDecimales ? decimales.padEnd(2, '0') : decimales;
-                montoDepositoVisible.value = enteroFormateado + (mostrarDecimal ? `.${decimalesVisibles}` : '');
-                montoDeposito.value = `${entero}.${decimales.padEnd(2, '0')}`;
+                    const enteroFormateado = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    const mostrarDecimal = posicionDecimal >= 0 || completarDecimales;
+                    const decimalesVisibles = completarDecimales ? decimales.padEnd(2, '0') : decimales;
+                    inputVisible.value = enteroFormateado + (mostrarDecimal ? `.${decimalesVisibles}` : '');
+                    inputOculto.value = `${entero}.${decimales.padEnd(2, '0')}`;
+                };
+
+                inputVisible.addEventListener('input', () => {
+                    inputVisible.setCustomValidity('');
+                    actualizar();
+                });
+                inputVisible.addEventListener('blur', () => actualizar(true));
+                formulario.addEventListener('submit', async event => {
+                    event.preventDefault();
+                    actualizar(true);
+
+                    const monto = Number(inputOculto.value);
+
+                    if (!Number.isFinite(monto) || monto <= 0) {
+                        inputVisible.setCustomValidity(`Escribe un monto de ${etiqueta} mayor que cero.`);
+                        inputVisible.reportValidity();
+                        return;
+                    }
+
+                    inputVisible.setCustomValidity('');
+                    const pendiente = Number(aplicacionActual?.pendiente || 0);
+                    const excedente = monto - pendiente;
+                    const advertencia = excedente > 0
+                        ? `<div class="alert alert-warning mt-3 mb-0">Este ${etiqueta} supera el pendiente del día por <strong>${moneda(excedente)}</strong>.</div>`
+                        : '';
+                    const confirmado = typeof Swal !== 'undefined'
+                        ? await Swal.fire({
+                            icon: excedente > 0 ? 'warning' : 'question',
+                            title: titulo,
+                            html: `<div class="fs-3 fw-bold ${claseMonto}">${moneda(monto)}</div>${advertencia}`,
+                            showCancelButton: true,
+                            confirmButtonText: `Sí, guardar ${etiqueta}`,
+                            cancelButtonText: 'Revisar monto',
+                        }).then(resultado => resultado.isConfirmed)
+                        : confirm(`¿Guardar ${etiqueta} por ${moneda(monto)}?`);
+
+                    if (confirmado) formulario.submit();
+                });
+
+                return {
+                    limpiar() {
+                        inputVisible.value = '';
+                        inputOculto.value = '';
+                        inputVisible.setCustomValidity('');
+                    },
+                };
             }
 
-            montoDepositoVisible.addEventListener('input', () => {
-                montoDepositoVisible.setCustomValidity('');
-                actualizarMontoDeposito();
+            const controlMontoDeposito = configurarMontoMonetario({
+                formId: 'form-aplicar-deposito',
+                visibleId: 'monto-deposito-visible',
+                ocultoId: 'monto-deposito',
+                etiqueta: 'depósito',
+                titulo: 'Confirmar monto depositado',
+                claseMonto: 'text-success',
             });
-            montoDepositoVisible.addEventListener('blur', () => actualizarMontoDeposito(true));
-            formDeposito.addEventListener('submit', async event => {
-                event.preventDefault();
-                actualizarMontoDeposito(true);
-
-                const monto = Number(montoDeposito.value);
-
-                if (!Number.isFinite(monto) || monto <= 0) {
-                    montoDepositoVisible.setCustomValidity('Escribe un monto depositado mayor que cero.');
-                    montoDepositoVisible.reportValidity();
-                    return;
-                }
-
-                montoDepositoVisible.setCustomValidity('');
-                const pendiente = Number(aplicacionActual?.pendiente || 0);
-                const excedente = monto - pendiente;
-                const advertencia = excedente > 0
-                    ? `<div class="alert alert-warning mt-3 mb-0">Este depósito supera el pendiente del día por <strong>${moneda(excedente)}</strong>.</div>`
-                    : '';
-                const confirmado = typeof Swal !== 'undefined'
-                    ? await Swal.fire({
-                        icon: excedente > 0 ? 'warning' : 'question',
-                        title: 'Confirmar monto depositado',
-                        html: `<div class="fs-3 fw-bold text-success">${moneda(monto)}</div>${advertencia}`,
-                        showCancelButton: true,
-                        confirmButtonText: 'Sí, guardar depósito',
-                        cancelButtonText: 'Revisar monto',
-                    }).then(resultado => resultado.isConfirmed)
-                    : confirm(`¿Guardar depósito por ${moneda(monto)}?`);
-
-                if (confirmado) formDeposito.submit();
+            const controlMontoGasto = configurarMontoMonetario({
+                formId: 'form-aplicar-gasto',
+                visibleId: 'monto-gasto-visible',
+                ocultoId: 'monto-gasto',
+                etiqueta: 'gasto',
+                titulo: 'Confirmar monto del gasto',
+                claseMonto: 'text-primary',
             });
 
             if ($('#tabla-movimientos-rutas-v2 tbody tr').length) {
@@ -522,8 +645,7 @@
 
             document.getElementById('elegir-deposito').addEventListener('click', function () {
                 if (!aplicacionActual) return;
-                montoDepositoVisible.value = '';
-                montoDeposito.value = '';
+                controlMontoDeposito.limpiar();
                 document.getElementById('deposito-ruta-key').value = aplicacionActual.rutaKey;
                 document.getElementById('deposito-ruta').value = aplicacionActual.ruta;
                 document.getElementById('deposito-ruta-titulo').textContent = `${aplicacionActual.ruta} · ${fecha || ''}`;
@@ -533,6 +655,7 @@
 
             document.getElementById('elegir-gasto').addEventListener('click', function () {
                 if (!aplicacionActual) return;
+                controlMontoGasto.limpiar();
                 document.getElementById('gasto-ruta-key').value = aplicacionActual.rutaKey;
                 document.getElementById('gasto-ruta').value = aplicacionActual.ruta;
                 document.getElementById('gasto-ruta-titulo').textContent = `${aplicacionActual.ruta} · ${fecha || ''}`;

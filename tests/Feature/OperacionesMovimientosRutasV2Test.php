@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\OperacionesMovimientosRutasV2Controller;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2DepositoRequest;
+use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2GastoRequest;
 use App\Models\MovimientoRutaV2Deposito;
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
 use App\Services\Operaciones\MovimientosRutasV2ImportService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
@@ -149,6 +151,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
     {
         $item = collect(config('module_hubs.operaciones.items'))->firstWhere('nombre', 'Movimientos por Ruta V2');
         $vista = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2.blade.php'));
+        $vistaCompilada = Blade::compileString($vista);
 
         $this->assertNotNull($item);
         $this->assertSame('/operaciones/movimientos-rutas-v2', $item['url']);
@@ -180,9 +183,52 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString("method: 'DELETE'", $vista);
         $this->assertStringContainsString('id="monto-deposito-visible"', $vista);
         $this->assertStringContainsString('id="monto-deposito"', $vista);
-        $this->assertStringContainsString("title: 'Confirmar monto depositado'", $vista);
+        $this->assertStringContainsString("titulo: 'Confirmar monto depositado'", $vista);
         $this->assertStringContainsString("decimales.padEnd(2, '0')", $vista);
         $this->assertContains('decimal:2', (new GuardarMovimientoRutaV2DepositoRequest)->rules()['monto']);
+        $this->assertStringContainsString('id="tarjeta-depositado-banco"', $vista);
+        $this->assertStringContainsString('id="modal-depositos-banco"', $vista);
+        $this->assertStringContainsString('Depósitos por banco', $vista);
+        $this->assertStringContainsString('Ver montos por banco', $vista);
+        $this->assertStringContainsString('id="form-aplicar-gasto"', $vista);
+        $this->assertStringContainsString('id="monto-gasto-visible"', $vista);
+        $this->assertStringContainsString('id="monto-gasto"', $vista);
+        $this->assertStringContainsString("titulo: 'Confirmar monto del gasto'", $vista);
+        $this->assertStringContainsString('function configurarMontoMonetario', $vista);
+        $this->assertContains('decimal:2', (new GuardarMovimientoRutaV2GastoRequest)->rules()['monto']);
+        $this->assertStringNotContainsString('@php(', $vista);
+        $this->assertStringContainsString('foreach($__currentLoopData as $ruta)', $vistaCompilada);
+    }
+
+    public function test_agrupa_los_depositos_del_dia_por_banco(): void
+    {
+        foreach ([
+            ['Banreservas', 100, 'aplicado', '2026-08-03'],
+            ['Banreservas', 150, 'aplicado', '2026-08-03'],
+            ['Popular', 300, 'aplicado', '2026-08-03'],
+            ['BHD', 900, 'aplicado', '2026-08-02'],
+            ['Scotiabank', 800, 'anulado', '2026-08-03'],
+        ] as [$banco, $monto, $estado, $fecha]) {
+            DB::table('movimientos_rutas_v2_depositos')->insert([
+                'fecha' => $fecha,
+                'ruta_key' => '05 - HAINA',
+                'ruta' => '05 - HAINA',
+                'monto' => $monto,
+                'banco' => $banco,
+                'estado' => $estado,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $metodo = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'depositosPorBanco');
+        $depositos = $metodo->invoke(app(OperacionesMovimientosRutasV2Controller::class), '2026-08-03');
+        $banreservas = $depositos->firstWhere('banco', 'Banreservas');
+
+        $this->assertCount(2, $depositos);
+        $this->assertSame('Popular', $depositos->first()->banco);
+        $this->assertSame(250.0, (float) $banreservas->monto_total);
+        $this->assertSame(2, (int) $banreservas->cantidad_depositos);
     }
 
     public function test_permite_eliminar_depositos_y_gastos_con_sus_comprobantes(): void

@@ -53,6 +53,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'cumplimiento_depositos' => $netoEsperado > 0 ? ($depositadoBanco / $netoEsperado) * 100 : 0,
             ],
             'bancos' => BancoOperacion::query()->orderBy('nombre')->get(),
+            'depositosPorBanco' => $this->depositosPorBanco($fecha),
             'importaciones' => $this->importacionesPorFecha($fecha),
         ]);
     }
@@ -387,6 +388,23 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->whereDate('fecha_hasta', $fecha)
             ->latest()
             ->limit(10)
+            ->get();
+    }
+
+    private function depositosPorBanco(?string $fecha): Collection
+    {
+        if ($fecha === null) {
+            return collect();
+        }
+
+        return MovimientoRutaV2Deposito::query()
+            ->where('fecha', $fecha)
+            ->where('estado', 'aplicado')
+            ->select('banco')
+            ->selectRaw('COUNT(*) as cantidad_depositos')
+            ->selectRaw('SUM(monto) as monto_total')
+            ->groupBy('banco')
+            ->orderByDesc('monto_total')
             ->get();
     }
 
