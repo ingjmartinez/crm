@@ -64,12 +64,18 @@
                             <div class="card-header"><h5 class="card-title mb-0">Consultar día</h5></div>
                             <div class="card-body">
                                 <form method="GET" action="{{ route('operaciones.movimientos-rutas-v2') }}" class="row g-3 align-items-end">
-                                    <div class="col-md-8">
+                                    <div class="col-12">
                                         <label for="fecha" class="form-label">Fecha del movimiento</label>
                                         <input type="date" class="form-control" id="fecha" name="fecha" value="{{ $fecha }}">
                                     </div>
-                                    <div class="col-md-4 d-grid">
+                                    <div class="col-6 d-grid">
                                         <button type="submit" class="btn btn-outline-primary">Consultar</button>
+                                    </div>
+                                    <div class="col-6 d-grid">
+                                        <a href="{{ $fecha ? route('operaciones.movimientos-rutas-v2.pdf', ['fecha' => $fecha]) : '#' }}"
+                                            class="btn btn-danger {{ $fecha ? '' : 'disabled' }}" target="_blank" aria-disabled="{{ $fecha ? 'false' : 'true' }}">
+                                            <i class="ri-file-pdf-2-line me-1"></i>Mini informe PDF
+                                        </a>
                                     </div>
                                 </form>
                                 @if ($fechasDisponibles !== [])
@@ -431,9 +437,6 @@
                     <div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Transacción</th><th>Terminal</th><th>Agencia</th><th>Tipo</th><th class="text-end">Monto</th></tr></thead><tbody id="detalle-transacciones-body"></tbody></table></div>
                 </div>
                 <div class="modal-footer">
-                    <a href="#" target="_blank" class="btn btn-danger" id="btn-informe-ruta-pdf">
-                        <i class="ri-file-pdf-2-line me-1"></i> Informe PDF
-                    </a>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -448,7 +451,6 @@
             const csrfToken = @json(csrf_token());
             const errorFechaImportacion = @json($errors->first('fecha_reporte'));
             const detalleUrl = @json(route('operaciones.movimientos-rutas-v2.detalle'));
-            const pdfUrl = @json(route('operaciones.movimientos-rutas-v2.pdf'));
             const modalEleccionElement = document.getElementById('modal-elegir-aplicacion');
             const modalEleccion = new bootstrap.Modal(modalEleccionElement);
             const modalDeposito = new bootstrap.Modal(document.getElementById('modal-aplicar-deposito'));
@@ -734,7 +736,6 @@
                 if (!botonDetalle) return;
 
                 document.getElementById('detalle-ruta-titulo').textContent = `Detalle · ${botonDetalle.dataset.ruta}`;
-                document.getElementById('btn-informe-ruta-pdf').href = `${pdfUrl}?${new URLSearchParams({ fecha, ruta_key: botonDetalle.dataset.rutaKey }).toString()}`;
                 document.getElementById('detalle-depositos-body').innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-gastos-body').innerHTML = '<tr><td colspan="6" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-transacciones-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';

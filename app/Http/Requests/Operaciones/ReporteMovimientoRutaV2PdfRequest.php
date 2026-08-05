@@ -23,7 +23,6 @@ class ReporteMovimientoRutaV2PdfRequest extends FormRequest
     {
         return [
             'fecha' => ['required', 'date'],
-            'ruta_key' => ['required', 'string', 'max:180'],
         ];
     }
 }

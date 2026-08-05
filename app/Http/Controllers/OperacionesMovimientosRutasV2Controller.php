@@ -21,7 +21,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -36,22 +35,12 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         $fechasDisponibles = $this->fechasDisponibles();
         $fecha = $this->fechaSeleccionada($request, $fechasDisponibles);
         $rutas = $fecha !== null ? $this->resumenPorRutas($fecha) : collect();
-        $netoEsperado = (float) $rutas->sum('neto_esperado');
-        $depositadoBanco = (float) $rutas->sum('depositado_banco');
 
         return view('operaciones.movimientos-rutas-v2', [
             'fecha' => $fecha,
             'fechasDisponibles' => $fechasDisponibles,
             'rutas' => $rutas,
-            'resumen' => [
-                'rutas' => $rutas->count(),
-                'transacciones' => $rutas->sum('transacciones'),
-                'neto_esperado' => $netoEsperado,
-                'depositado_banco' => $depositadoBanco,
-                'gastos_ruta' => $rutas->sum('gastos_ruta'),
-                'pendiente' => $rutas->sum('pendiente'),
-                'cumplimiento_depositos' => $netoEsperado > 0 ? ($depositadoBanco / $netoEsperado) * 100 : 0,
-            ],
+            'resumen' => $this->resumenGeneral($rutas),
             'bancos' => BancoOperacion::query()->orderBy('nombre')->get(),
             'depositosPorBanco' => $this->depositosPorBanco($fecha),
             'importaciones' => $this->importacionesPorFecha($fecha),
@@ -247,38 +236,16 @@ class OperacionesMovimientosRutasV2Controller extends Controller
     public function pdf(ReporteMovimientoRutaV2PdfRequest $request): Response
     {
         $validated = $request->validated();
-        $resumenRuta = $this->resumenPorRutas($validated['fecha'])
-            ->firstWhere('ruta_key', $validated['ruta_key']);
+        $rutas = $this->resumenPorRutas($validated['fecha']);
 
-        abort_if($resumenRuta === null, 404, 'No se encontró la ruta para la fecha seleccionada.');
+        abort_if($rutas->isEmpty(), 404, 'No se encontraron movimientos para la fecha seleccionada.');
 
-        $transacciones = MovimientoRutaV2Transaccion::query()
-            ->where('fecha', $validated['fecha'])
-            ->where('ruta_key', $validated['ruta_key'])
-            ->orderBy('id_trans')
-            ->get();
-        $depositos = MovimientoRutaV2Deposito::query()
-            ->with('usuario:id,name')
-            ->where('fecha', $validated['fecha'])
-            ->where('ruta_key', $validated['ruta_key'])
-            ->latest()
-            ->get();
-        $gastos = MovimientoRutaV2Gasto::query()
-            ->with('usuario:id,name')
-            ->where('fecha', $validated['fecha'])
-            ->where('ruta_key', $validated['ruta_key'])
-            ->latest()
-            ->get();
         $documento = Pdf::loadView('operaciones.movimientos-rutas-v2-pdf', [
             'fecha' => $validated['fecha'],
-            'resumenRuta' => $resumenRuta,
-            'transacciones' => $transacciones,
-            'depositos' => $depositos,
-            'gastos' => $gastos,
-        ])->setPaper('letter', 'landscape');
-        $nombreRuta = Str::slug($resumenRuta['ruta']);
+            'resumen' => $this->resumenGeneral($rutas),
+        ])->setPaper('letter', 'portrait');
 
-        return $documento->download("movimientos-ruta-{$nombreRuta}-{$validated['fecha']}.pdf");
+        return $documento->download("resumen-movimientos-rutas-{$validated['fecha']}.pdf");
     }
 
     public function comprobante(MovimientoRutaV2Deposito $deposito): BinaryFileResponse
@@ -389,6 +356,26 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->latest()
             ->limit(10)
             ->get();
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rutas
+     * @return array{rutas: int, transacciones: int, neto_esperado: float, depositado_banco: float, gastos_ruta: float, pendiente: float, cumplimiento_depositos: float}
+     */
+    private function resumenGeneral(Collection $rutas): array
+    {
+        $netoEsperado = (float) $rutas->sum('neto_esperado');
+        $depositadoBanco = (float) $rutas->sum('depositado_banco');
+
+        return [
+            'rutas' => $rutas->count(),
+            'transacciones' => (int) $rutas->sum('transacciones'),
+            'neto_esperado' => $netoEsperado,
+            'depositado_banco' => $depositadoBanco,
+            'gastos_ruta' => (float) $rutas->sum('gastos_ruta'),
+            'pendiente' => (float) $rutas->sum('pendiente'),
+            'cumplimiento_depositos' => $netoEsperado > 0 ? ($depositadoBanco / $netoEsperado) * 100 : 0,
+        ];
     }
 
     private function depositosPorBanco(?string $fecha): Collection

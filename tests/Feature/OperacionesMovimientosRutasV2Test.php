@@ -163,7 +163,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString('Aplicar depósito bancario', $vista);
         $this->assertStringContainsString('Gasto de ruta', $vista);
         $this->assertStringContainsString('Voucher o comprobante', $vista);
-        $this->assertStringContainsString('Informe PDF', $vista);
+        $this->assertStringContainsString('Mini informe PDF', $vista);
         $this->assertStringContainsString('operaciones.movimientos-rutas-v2.pdf', $vista);
         $this->assertStringContainsString('name="fecha_reporte"', $vista);
         $this->assertStringContainsString('Rendimiento de ruta', $vista);
@@ -386,7 +386,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertSame('2026-08-02', $importaciones->first()->fecha_hasta->toDateString());
     }
 
-    public function test_genera_el_informe_pdf_de_una_fecha_y_ruta(): void
+    public function test_genera_el_mini_informe_pdf_de_las_tarjetas_del_dia(): void
     {
         app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
             $this->retiro('T-PDF', '02/08/2026', '05 - HAINA', -5000000),
@@ -394,12 +394,17 @@ class OperacionesMovimientosRutasV2Test extends TestCase
 
         $response = $this->withoutMiddleware()->get(route('operaciones.movimientos-rutas-v2.pdf', [
             'fecha' => '2026-08-02',
-            'ruta_key' => '05 - HAINA',
         ]));
+        $vistaPdf = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2-pdf.blade.php'));
 
         $response->assertOk();
         $response->assertHeader('content-type', 'application/pdf');
-        $response->assertDownload('movimientos-ruta-05-haina-2026-08-02.pdf');
+        $response->assertDownload('resumen-movimientos-rutas-2026-08-02.pdf');
+        $this->assertIsString($vistaPdf);
+        $this->assertStringContainsString('Mini informe diario de conciliación', $vistaPdf);
+        $this->assertStringContainsString('Cumplimiento del neto esperado', $vistaPdf);
+        $this->assertStringNotContainsString('Transacciones del CSV', $vistaPdf);
+        $this->assertStringNotContainsString('Depósitos bancarios aplicados', $vistaPdf);
     }
 
     /** @param  array<int, string>  $filas */
