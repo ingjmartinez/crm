@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\OperacionesMovimientosRutasV2Controller;
 use App\Models\MovimientoRutaV2Deposito;
+use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
 use App\Services\Operaciones\MovimientosRutasV2ImportService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class OperacionesMovimientosRutasV2Test extends TestCase
@@ -89,8 +91,10 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $servicio = app(MovimientosRutasV2ImportService::class);
         $servicio->importar($this->archivoCsv([
             $this->retiro('T-1', '02/08/2026', '05 - HAINA', -5000000),
+        ]), null, '2026-08-02');
+        $servicio->importar($this->archivoCsv([
             $this->retiro('T-2', '03/08/2026', '01 - NORTE', -1000000),
-        ]), null);
+        ]), null, '2026-08-03');
 
         DB::table('movimientos_rutas_v2_depositos')->insert([
             'fecha' => '2026-08-02',
@@ -115,7 +119,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
 
         $servicio->importar($this->archivoCsv([
             $this->retiro('T-3', '02/08/2026', '05 - HAINA', -5500000),
-        ]), null);
+        ]), null, '2026-08-02');
 
         $this->assertDatabaseMissing('movimientos_rutas_v2_transacciones', ['id_trans' => 'T-1']);
         $this->assertDatabaseHas('movimientos_rutas_v2_transacciones', ['id_trans' => 'T-3', 'fecha' => '2026-08-02']);
@@ -153,13 +157,60 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString('Voucher o comprobante', $vista);
         $this->assertStringContainsString('Informe PDF', $vista);
         $this->assertStringContainsString('operaciones.movimientos-rutas-v2.pdf', $vista);
+        $this->assertStringContainsString('name="fecha_reporte"', $vista);
+        $this->assertStringContainsString('Rendimiento de ruta', $vista);
+        $this->assertStringContainsString("title: 'Las fechas no corresponden'", $vista);
+        $this->assertStringContainsString('cumplimiento_depositos', $vista);
+        $this->assertStringContainsString('Últimas importaciones del día', $vista);
+        $this->assertStringContainsString('id="rendimiento-neto-esperado"', $vista);
+        $this->assertStringContainsString('id="rendimiento-depositado-banco"', $vista);
+        $this->assertStringContainsString('id="rendimiento-porcentaje"', $vista);
+        $this->assertStringContainsString('height: 28px', $vista);
+    }
+
+    public function test_rechaza_el_archivo_cuando_su_fecha_no_coincide_con_la_fecha_del_reporte(): void
+    {
+        try {
+            app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+                $this->retiro('T-FECHA-INCORRECTA', '03/08/2026', '05 - HAINA', -5000000),
+            ]), null, '2026-08-02');
+
+            $this->fail('La importación debió rechazar una fecha diferente.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString(
+                'La fecha del reporte (02/08/2026) no corresponde con la fecha del archivo (03/08/2026)',
+                $exception->errors()['fecha_reporte'][0],
+            );
+        }
+
+        $this->assertDatabaseCount('movimientos_rutas_v2_importaciones', 0);
+        $this->assertDatabaseCount('movimientos_rutas_v2_transacciones', 0);
+    }
+
+    public function test_ultimas_importaciones_solo_incluye_el_dia_consultado(): void
+    {
+        $servicio = app(MovimientosRutasV2ImportService::class);
+        $servicio->importar($this->archivoCsv([
+            $this->retiro('T-DIA-2', '02/08/2026', '05 - HAINA', -5000000),
+        ]), null, '2026-08-02');
+        $servicio->importar($this->archivoCsv([
+            $this->retiro('T-DIA-3', '03/08/2026', '01 - NORTE', -1000000),
+        ]), null, '2026-08-03');
+
+        $metodo = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'importacionesPorFecha');
+        $importaciones = $metodo->invoke(app(OperacionesMovimientosRutasV2Controller::class), '2026-08-02');
+
+        $this->assertCount(1, $importaciones);
+        $this->assertInstanceOf(MovimientoRutaV2Importacion::class, $importaciones->first());
+        $this->assertSame('2026-08-02', $importaciones->first()->fecha_desde->toDateString());
+        $this->assertSame('2026-08-02', $importaciones->first()->fecha_hasta->toDateString());
     }
 
     public function test_genera_el_informe_pdf_de_una_fecha_y_ruta(): void
     {
         app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
             $this->retiro('T-PDF', '02/08/2026', '05 - HAINA', -5000000),
-        ]), null);
+        ]), null, '2026-08-02');
 
         $response = $this->withoutMiddleware()->get(route('operaciones.movimientos-rutas-v2.pdf', [
             'fecha' => '2026-08-02',

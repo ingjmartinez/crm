@@ -33,20 +33,24 @@
                 @endif
 
                 <div class="row g-3 mb-4">
-                    <div class="col-xl-7">
+                    <div class="col-xl-4">
                         <div class="card h-100 mb-0">
                             <div class="card-header">
                                 <h5 class="card-title mb-1">Actualizar movimientos por fecha</h5>
-                                <p class="text-muted mb-0">Solo se reemplazan los días incluidos en el documento. Los depósitos manuales se conservan.</p>
+                                <p class="text-muted mb-0">La fecha seleccionada debe coincidir con la del documento.</p>
                             </div>
-                            <div class="card-body">
-                                <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.procesar') }}" enctype="multipart/form-data" class="row g-3 align-items-end">
+                            <div class="card-body d-flex align-items-center">
+                                <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.procesar') }}" enctype="multipart/form-data" class="row g-2 align-items-end w-100">
                                     @csrf
-                                    <div class="col-md-9">
+                                    <div class="col-md-5">
+                                        <label for="fecha_reporte" class="form-label">Fecha del reporte</label>
+                                        <input type="date" class="form-control" id="fecha_reporte" name="fecha_reporte" value="{{ old('fecha_reporte', $fecha ?? now()->toDateString()) }}" required>
+                                    </div>
+                                    <div class="col-md-7">
                                         <label for="archivo_csv" class="form-label">Documento CSV</label>
                                         <input type="file" class="form-control" id="archivo_csv" name="archivo_csv" accept=".csv,.txt,text/csv,text/plain" required>
                                     </div>
-                                    <div class="col-md-3 d-grid">
+                                    <div class="col-12 d-grid">
                                         <button type="submit" class="btn btn-primary">
                                             <i class="ri-upload-cloud-2-line me-1"></i>Importar
                                         </button>
@@ -55,7 +59,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-5">
+                    <div class="col-xl-4">
                         <div class="card h-100 mb-0">
                             <div class="card-header"><h5 class="card-title mb-0">Consultar día</h5></div>
                             <div class="card-body">
@@ -71,6 +75,40 @@
                                 @if ($fechasDisponibles !== [])
                                     <div class="form-text mt-2">Último día disponible: {{ \Carbon\Carbon::parse($fechasDisponibles[0])->format('d/m/Y') }}</div>
                                 @endif
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-4">
+                        <div class="card h-100 mb-0">
+                            <div class="card-header">
+                                <h5 class="card-title mb-1">Rendimiento de ruta</h5>
+                                <p class="text-muted mb-0">Cumplimiento del neto esperado depositado en banco.</p>
+                            </div>
+                            <div class="card-body d-flex flex-column justify-content-center">
+                                @php
+                                    $cumplimientoDepositos = (float) $resumen['cumplimiento_depositos'];
+                                    $anchoCumplimiento = min(max($cumplimientoDepositos, 0), 100);
+                                @endphp
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <div class="text-muted fw-semibold mb-1">Neto esperado</div>
+                                        <div class="fs-4 fw-bold text-warning lh-sm" id="rendimiento-neto-esperado">
+                                            RD$ {{ number_format((float) $resumen['neto_esperado'], 2) }}
+                                        </div>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <div class="text-muted fw-semibold mb-1">Depositado en banco</div>
+                                        <div class="fs-4 fw-bold text-success lh-sm" id="rendimiento-depositado-banco">
+                                            RD$ {{ number_format((float) $resumen['depositado_banco'], 2) }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="progress position-relative" style="height: 28px;" role="progressbar" aria-label="Cumplimiento de depósitos" aria-valuenow="{{ round($cumplimientoDepositos, 1) }}" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-bar bg-success" style="width: {{ $anchoCumplimiento }}%"></div>
+                                    <span class="position-absolute top-50 start-50 translate-middle fs-5 fw-bold {{ $anchoCumplimiento >= 55 ? 'text-white' : 'text-dark' }}" id="rendimiento-porcentaje">
+                                        {{ number_format($cumplimientoDepositos, 1) }}%
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -168,7 +206,10 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-header"><h5 class="card-title mb-0">Últimas importaciones</h5></div>
+                    <div class="card-header">
+                        <h5 class="card-title mb-1">Últimas importaciones del día</h5>
+                        <p class="text-muted mb-0">{{ $fecha ? \Carbon\Carbon::parse($fecha)->format('d/m/Y') : 'Sin fecha seleccionada' }}</p>
+                    </div>
                     <div class="card-body table-responsive">
                         <table class="table table-sm align-middle mb-0">
                             <thead><tr><th>Archivo</th><th>Período reemplazado</th><th>Filas</th><th>Usuario</th><th>Importado</th></tr></thead>
@@ -290,6 +331,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const fecha = @json($fecha);
+            const errorFechaImportacion = @json($errors->first('fecha_reporte'));
             const detalleUrl = @json(route('operaciones.movimientos-rutas-v2.detalle'));
             const pdfUrl = @json(route('operaciones.movimientos-rutas-v2.pdf'));
             const modalEleccionElement = document.getElementById('modal-elegir-aplicacion');
@@ -300,6 +342,15 @@
             let aplicacionActual = null;
             const moneda = valor => 'RD$ ' + Number(valor || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[caracter]);
+
+            if (errorFechaImportacion && typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Las fechas no corresponden',
+                    text: errorFechaImportacion,
+                    confirmButtonText: 'Revisar documento',
+                });
+            }
 
             if ($('#tabla-movimientos-rutas-v2 tbody tr').length) {
                 $('#tabla-movimientos-rutas-v2').DataTable({ responsive: true, pageLength: 25, order: [[0, 'asc']], columnDefs: [{ orderable: false, targets: 10 }], language: { search: 'Buscar:', lengthMenu: 'Mostrar _MENU_', info: 'Mostrando _START_ a _END_ de _TOTAL_', paginate: { next: 'Siguiente', previous: 'Anterior' } } });

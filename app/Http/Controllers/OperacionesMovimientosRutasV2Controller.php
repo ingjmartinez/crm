@@ -34,6 +34,8 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         $fechasDisponibles = $this->fechasDisponibles();
         $fecha = $this->fechaSeleccionada($request, $fechasDisponibles);
         $rutas = $fecha !== null ? $this->resumenPorRutas($fecha) : collect();
+        $netoEsperado = (float) $rutas->sum('neto_esperado');
+        $depositadoBanco = (float) $rutas->sum('depositado_banco');
 
         return view('operaciones.movimientos-rutas-v2', [
             'fecha' => $fecha,
@@ -42,21 +44,23 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'resumen' => [
                 'rutas' => $rutas->count(),
                 'transacciones' => $rutas->sum('transacciones'),
-                'neto_esperado' => $rutas->sum('neto_esperado'),
-                'depositado_banco' => $rutas->sum('depositado_banco'),
+                'neto_esperado' => $netoEsperado,
+                'depositado_banco' => $depositadoBanco,
                 'gastos_ruta' => $rutas->sum('gastos_ruta'),
                 'pendiente' => $rutas->sum('pendiente'),
+                'cumplimiento_depositos' => $netoEsperado > 0 ? ($depositadoBanco / $netoEsperado) * 100 : 0,
             ],
             'bancos' => BancoOperacion::query()->orderBy('nombre')->get(),
-            'importaciones' => MovimientoRutaV2Importacion::query()->with('usuario:id,name')->latest()->limit(10)->get(),
+            'importaciones' => $this->importacionesPorFecha($fecha),
         ]);
     }
 
     public function procesar(ProcesarMovimientosRutasV2Request $request): RedirectResponse
     {
+        $validated = $request->validated();
         /** @var UploadedFile $archivo */
-        $archivo = $request->validated('archivo_csv');
-        $resultado = $this->importService->importar($archivo, $request->user()?->id);
+        $archivo = $validated['archivo_csv'];
+        $resultado = $this->importService->importar($archivo, $request->user()?->id, $validated['fecha_reporte']);
         $fecha = $resultado['fechas'][array_key_last($resultado['fechas'])];
 
         return redirect()->route('operaciones.movimientos-rutas-v2', ['fecha' => $fecha])
@@ -286,6 +290,21 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->pluck('fecha')
             ->map(fn (mixed $fecha): string => substr((string) $fecha, 0, 10))
             ->all();
+    }
+
+    private function importacionesPorFecha(?string $fecha): Collection
+    {
+        if ($fecha === null) {
+            return collect();
+        }
+
+        return MovimientoRutaV2Importacion::query()
+            ->with('usuario:id,name')
+            ->whereDate('fecha_desde', $fecha)
+            ->whereDate('fecha_hasta', $fecha)
+            ->latest()
+            ->limit(10)
+            ->get();
     }
 
     private function resumenPorRutas(string $fecha): Collection

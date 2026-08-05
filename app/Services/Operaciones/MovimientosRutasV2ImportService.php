@@ -4,6 +4,7 @@ namespace App\Services\Operaciones;
 
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -20,7 +21,7 @@ class MovimientosRutasV2ImportService
     /**
      * @return array{importacion: MovimientoRutaV2Importacion, fechas: array<int, string>, control: array<string, int>}
      */
-    public function importar(UploadedFile $archivo, ?int $userId): array
+    public function importar(UploadedFile $archivo, ?int $userId, string $fechaReporte): array
     {
         $resultado = $this->csvService->procesar($archivo);
         $transacciones = $this->agenciaService->enriquecer($resultado['transacciones']);
@@ -29,6 +30,17 @@ class MovimientosRutasV2ImportService
         if ($fechas === []) {
             throw ValidationException::withMessages([
                 'archivo_csv' => 'El documento no contiene movimientos válidos para importar.',
+            ]);
+        }
+
+        if (count($fechas) !== 1 || $fechas[0] !== $fechaReporte) {
+            $fechaReporteLegible = Carbon::createFromFormat('Y-m-d', $fechaReporte)->format('d/m/Y');
+            $fechasArchivo = collect($fechas)
+                ->map(fn (string $fecha): string => Carbon::createFromFormat('Y-m-d', $fecha)->format('d/m/Y'))
+                ->implode(', ');
+
+            throw ValidationException::withMessages([
+                'fecha_reporte' => "La fecha del reporte ({$fechaReporteLegible}) no corresponde con la fecha del archivo ({$fechasArchivo}). No se importó ningún movimiento.",
             ]);
         }
 

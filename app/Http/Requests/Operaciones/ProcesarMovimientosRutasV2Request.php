@@ -22,12 +22,17 @@ class ProcesarMovimientosRutasV2Request extends FormRequest
      */
     public function rules(): array
     {
-        return ['archivo_csv' => ['required', File::types(['csv', 'txt'])->max(50 * 1024)]];
+        return [
+            'fecha_reporte' => ['required', 'date_format:Y-m-d'],
+            'archivo_csv' => ['required', File::types(['csv', 'txt'])->max(50 * 1024)],
+        ];
     }
 
     public function messages(): array
     {
         return [
+            'fecha_reporte.required' => 'Selecciona la fecha que corresponde al reporte.',
+            'fecha_reporte.date_format' => 'La fecha del reporte no tiene un formato válido.',
             'archivo_csv.required' => 'Selecciona el documento CSV que deseas importar.',
             'archivo_csv.max' => 'El documento no puede superar los 50 MB.',
         ];
