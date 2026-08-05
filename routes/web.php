@@ -183,6 +183,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::delete('/api-cuentas/{id}', [Api::class, 'destroyCuenta']);
     Route::get('/api-entradas', [Api::class, 'getEntradas']);
     Route::get('/api-entradas-diario', [Api::class, 'getEntradasDiario']);
+    Route::get('/api-entradas-diario/exportar-csv', [Api::class, 'exportEntradasDiarioCsv'])
+        ->name('contabilidad.movimiento-mayor.exportar-csv');
     Route::post('/api-entradas-diario/sync', [Api::class, 'syncEntradasDiario']);
     Route::delete('/api-entradas-diario', [Api::class, 'deleteEntradasDiario']);
     Route::get('/api-centros-costo', [Api::class, 'getCentrosCosto']);

@@ -32,6 +32,9 @@
                                         <button type="button" class="btn btn-primary" id="btnConsultarEntradasDiario">
                                             Consultar data local
                                         </button>
+                                        <button type="button" class="btn btn-success" id="btnExportarEntradasDiarioCsv">
+                                            <i class="ri-file-download-line me-1"></i>CSV completo
+                                        </button>
                                         <button type="button" class="btn btn-info" id="btnSincronizarEntradasDiario">
                                             Sincronizar API
                                         </button>
@@ -154,6 +157,7 @@
         const csrfToken = '{{ csrf_token() }}';
 
         document.getElementById('btnConsultarEntradasDiario').addEventListener('click', consultarEntradasDiarioLocal);
+        document.getElementById('btnExportarEntradasDiarioCsv').addEventListener('click', exportarEntradasDiarioCsv);
         document.getElementById('btnSincronizarEntradasDiario').addEventListener('click', sincronizarEntradasDiario);
         document.getElementById('btnEliminarEntradasDiario').addEventListener('click', eliminarEntradasDiario);
         document.querySelectorAll('.check-entrada-tipo').forEach(check => {
@@ -398,6 +402,62 @@
                 boton.disabled = false;
                 boton.innerText = textoOriginal;
             }
+        }
+
+        function exportarEntradasDiarioCsv() {
+            let filtros;
+            try {
+                filtros = getEntradasDiarioFiltros();
+            } catch (error) {
+                alert(error.message);
+                return;
+            }
+
+            const boton = document.getElementById('btnExportarEntradasDiarioCsv');
+            const contenidoOriginal = boton.innerHTML;
+            boton.disabled = true;
+            boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Generando...';
+
+            const iniciarDescarga = () => {
+                const enlace = document.createElement('a');
+                enlace.href = '{{ route('contabilidad.movimiento-mayor.exportar-csv') }}?' + filtros.params.toString();
+                enlace.download = '';
+                document.body.appendChild(enlace);
+                enlace.click();
+                enlace.remove();
+            };
+
+            if (typeof Swal === 'undefined') {
+                iniciarDescarga();
+                boton.disabled = false;
+                boton.innerHTML = contenidoOriginal;
+                return;
+            }
+
+            Swal.fire({
+                title: 'Generando CSV completo',
+                html: `Preparando los movimientos de la empresa <strong>${filtros.empresa}</strong><br>` +
+                    `desde <strong>${filtros.fechaInicio}</strong> hasta <strong>${filtros.fechaFin}</strong>.<br><br>` +
+                    '<span class="text-muted">Los rangos grandes pueden tardar varios minutos.</span>',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                    iniciarDescarga();
+                },
+            });
+
+            window.setTimeout(() => {
+                boton.disabled = false;
+                boton.innerHTML = contenidoOriginal;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Descarga iniciada',
+                    text: 'El servidor continuará generando y enviando el CSV completo. No cierres la descarga del navegador.',
+                    confirmButtonText: 'Entendido',
+                });
+            }, 1800);
         }
 
         async function sincronizarEntradasDiario() {
