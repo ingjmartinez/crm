@@ -156,6 +156,7 @@
                                         <th class="text-end">Depositado banco</th>
                                         <th class="text-end">Gastos de ruta</th>
                                         <th class="text-end">Pendiente</th>
+                                        <th class="text-end">Balance pendiente</th>
                                         <th class="text-end">Cumplimiento</th>
                                         <th>Estado</th>
                                         <th class="text-center">Acciones</th>
@@ -180,6 +181,7 @@
                                             <td class="text-end text-success">RD$ {{ number_format($ruta['depositado_banco'], 2) }}</td>
                                             <td class="text-end text-primary">RD$ {{ number_format($ruta['gastos_ruta'], 2) }}</td>
                                             <td class="text-end {{ $ruta['pendiente'] > 0 ? 'text-danger' : 'text-success' }}">RD$ {{ number_format($ruta['pendiente'], 2) }}</td>
+                                            <td class="text-end fw-bold {{ $ruta['balance_pendiente'] > 0 ? 'text-danger' : 'text-success' }}">RD$ {{ number_format($ruta['balance_pendiente'], 2) }}</td>
                                             <td class="text-end">{{ number_format($ruta['cumplimiento'], 1) }}%</td>
                                             <td><span class="badge bg-{{ $estadoConfig[0] }}-subtle text-{{ $estadoConfig[0] }}" style="font-size: inherit;">{{ $estadoConfig[1] }}</span></td>
                                             <td class="text-center text-nowrap">
@@ -269,7 +271,15 @@
                         <div class="col-md-6"><label class="form-label">Monto depositado</label><input type="number" name="monto" class="form-control" min="0.01" step="0.01" required></div>
                         <div class="col-md-6"><label class="form-label">Banco</label><input type="text" name="banco" class="form-control" list="lista-bancos-v2" required></div>
                         <div class="col-md-6"><label class="form-label">Referencia bancaria</label><input type="text" name="referencia" class="form-control" maxlength="120"></div>
-                        <div class="col-md-6"><label class="form-label">Comprobante</label><input type="file" name="comprobante" class="form-control" accept="image/*"></div>
+                        <div class="col-md-6"><label class="form-label">Comprobante</label><input type="file" name="comprobante" class="form-control" id="comprobante-deposito" accept="image/*"></div>
+                        <div class="col-12">
+                            <div class="border border-2 rounded p-3 text-center bg-light" id="zona-pegar-deposito" tabindex="0" role="button" style="border-style: dashed !important; cursor: pointer;">
+                                <i class="ri-clipboard-line fs-4 text-success"></i>
+                                <div class="fw-semibold" id="texto-pegar-deposito">Haz clic aquí y presiona Ctrl+V para pegar una captura</div>
+                                <small class="text-muted">También puedes continuar seleccionando el archivo arriba.</small>
+                                <img class="img-fluid rounded mt-2 d-none mx-auto" id="vista-previa-deposito" alt="Vista previa del comprobante pegado" style="max-height: 180px;">
+                            </div>
+                        </div>
                         <div class="col-12"><label class="form-label">Observación</label><textarea name="observacion" class="form-control" rows="3" maxlength="1000"></textarea></div>
                     </div>
                     <datalist id="lista-bancos-v2">@foreach ($bancos as $banco)<option value="{{ $banco->nombre }}">@endforeach</datalist>
@@ -295,7 +305,15 @@
                     <div class="row g-3">
                         <div class="col-md-6"><label class="form-label">Monto del gasto</label><input type="number" name="monto" class="form-control" min="0.01" step="0.01" required></div>
                         <div class="col-md-6"><label class="form-label">Concepto</label><input type="text" name="concepto" class="form-control" maxlength="150" placeholder="Ej.: combustible, peaje o reparación" required></div>
-                        <div class="col-md-6"><label class="form-label">Voucher o comprobante</label><input type="file" name="comprobante" class="form-control" accept="image/*"></div>
+                        <div class="col-md-6"><label class="form-label">Voucher o comprobante</label><input type="file" name="comprobante" class="form-control" id="comprobante-gasto" accept="image/*"></div>
+                        <div class="col-12">
+                            <div class="border border-2 rounded p-3 text-center bg-light" id="zona-pegar-gasto" tabindex="0" role="button" style="border-style: dashed !important; cursor: pointer;">
+                                <i class="ri-clipboard-line fs-4 text-primary"></i>
+                                <div class="fw-semibold" id="texto-pegar-gasto">Haz clic aquí y presiona Ctrl+V para pegar una captura</div>
+                                <small class="text-muted">También puedes continuar seleccionando el archivo arriba.</small>
+                                <img class="img-fluid rounded mt-2 d-none mx-auto" id="vista-previa-gasto" alt="Vista previa del comprobante pegado" style="max-height: 180px;">
+                            </div>
+                        </div>
                         <div class="col-12"><label class="form-label">Observación</label><textarea name="observacion" class="form-control" rows="3" maxlength="1000"></textarea></div>
                     </div>
                 </div>
@@ -310,9 +328,9 @@
                 <div class="modal-header"><h5 class="modal-title" id="detalle-ruta-titulo">Detalle de ruta</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <h6>Depósitos bancarios aplicados</h6>
-                    <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Banco</th><th>Referencia</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th></tr></thead><tbody id="detalle-depositos-body"></tbody></table></div>
+                    <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Banco</th><th>Referencia</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th><th class="text-center">Acciones</th></tr></thead><tbody id="detalle-depositos-body"></tbody></table></div>
                     <h6>Gastos de ruta aplicados</h6>
-                    <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Concepto</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th></tr></thead><tbody id="detalle-gastos-body"></tbody></table></div>
+                    <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Concepto</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th><th class="text-center">Acciones</th></tr></thead><tbody id="detalle-gastos-body"></tbody></table></div>
                     <h6>Transacciones del CSV</h6>
                     <div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Transacción</th><th>Terminal</th><th>Agencia</th><th>Tipo</th><th class="text-end">Monto</th></tr></thead><tbody id="detalle-transacciones-body"></tbody></table></div>
                 </div>
@@ -331,6 +349,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const fecha = @json($fecha);
+            const csrfToken = @json(csrf_token());
             const errorFechaImportacion = @json($errors->first('fecha_reporte'));
             const detalleUrl = @json(route('operaciones.movimientos-rutas-v2.detalle'));
             const pdfUrl = @json(route('operaciones.movimientos-rutas-v2.pdf'));
@@ -352,8 +371,70 @@
                 });
             }
 
+            function configurarPegadoComprobante(modalId, zonaId, inputId, vistaPreviaId, textoId, prefijoArchivo) {
+                const modalElement = document.getElementById(modalId);
+                const zona = document.getElementById(zonaId);
+                const input = document.getElementById(inputId);
+                const vistaPrevia = document.getElementById(vistaPreviaId);
+                const texto = document.getElementById(textoId);
+                let vistaPreviaUrl = null;
+
+                const mostrarVistaPrevia = archivo => {
+                    if (vistaPreviaUrl) URL.revokeObjectURL(vistaPreviaUrl);
+
+                    if (!archivo) {
+                        vistaPrevia.classList.add('d-none');
+                        vistaPrevia.removeAttribute('src');
+                        texto.textContent = 'Haz clic aquí y presiona Ctrl+V para pegar una captura';
+                        return;
+                    }
+
+                    vistaPreviaUrl = URL.createObjectURL(archivo);
+                    vistaPrevia.src = vistaPreviaUrl;
+                    vistaPrevia.classList.remove('d-none');
+                    texto.textContent = `Captura lista: ${archivo.name}`;
+                };
+
+                const asignarCaptura = archivo => {
+                    if (!archivo?.type.startsWith('image/')) return;
+
+                    if (archivo.size > 10 * 1024 * 1024) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire('Captura demasiado grande', 'La imagen no puede superar los 10 MB.', 'warning');
+                        } else {
+                            alert('La imagen no puede superar los 10 MB.');
+                        }
+
+                        return;
+                    }
+
+                    const extension = archivo.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+                    const captura = new File([archivo], `${prefijoArchivo}-${Date.now()}.${extension}`, { type: archivo.type });
+                    const transferencia = new DataTransfer();
+                    transferencia.items.add(captura);
+                    input.files = transferencia.files;
+                    mostrarVistaPrevia(captura);
+                };
+
+                zona.addEventListener('click', () => zona.focus());
+                input.addEventListener('change', () => mostrarVistaPrevia(input.files[0] || null));
+                modalElement.addEventListener('paste', event => {
+                    const imagen = Array.from(event.clipboardData?.items || [])
+                        .find(item => item.type.startsWith('image/'))
+                        ?.getAsFile();
+
+                    if (!imagen) return;
+
+                    event.preventDefault();
+                    asignarCaptura(imagen);
+                });
+            }
+
+            configurarPegadoComprobante('modal-aplicar-deposito', 'zona-pegar-deposito', 'comprobante-deposito', 'vista-previa-deposito', 'texto-pegar-deposito', 'deposito');
+            configurarPegadoComprobante('modal-aplicar-gasto', 'zona-pegar-gasto', 'comprobante-gasto', 'vista-previa-gasto', 'texto-pegar-gasto', 'gasto');
+
             if ($('#tabla-movimientos-rutas-v2 tbody tr').length) {
-                $('#tabla-movimientos-rutas-v2').DataTable({ responsive: true, pageLength: 25, order: [[0, 'asc']], columnDefs: [{ orderable: false, targets: 10 }], language: { search: 'Buscar:', lengthMenu: 'Mostrar _MENU_', info: 'Mostrando _START_ a _END_ de _TOTAL_', paginate: { next: 'Siguiente', previous: 'Anterior' } } });
+                $('#tabla-movimientos-rutas-v2').DataTable({ responsive: true, pageLength: 25, order: [[0, 'asc']], columnDefs: [{ orderable: false, targets: 11 }], language: { search: 'Buscar:', lengthMenu: 'Mostrar _MENU_', info: 'Mostrando _START_ a _END_ de _TOTAL_', paginate: { next: 'Siguiente', previous: 'Anterior' } } });
             }
 
             function abrirLuegoDeEleccion(modalDestino) {
@@ -380,6 +461,57 @@
             });
 
             document.addEventListener('click', async function (event) {
+                const botonEliminar = event.target.closest('.btn-eliminar-aplicacion');
+                if (botonEliminar) {
+                    const tipo = botonEliminar.dataset.tipo;
+                    const confirmado = typeof Swal !== 'undefined'
+                        ? await Swal.fire({
+                            icon: 'warning',
+                            title: `Eliminar ${tipo}`,
+                            text: `Se eliminará este ${tipo} y su comprobante. Luego podrás cargarlo nuevamente.`,
+                            showCancelButton: true,
+                            confirmButtonText: 'Sí, eliminar',
+                            cancelButtonText: 'Cancelar',
+                            confirmButtonColor: '#dc3545',
+                        }).then(resultado => resultado.isConfirmed)
+                        : confirm(`¿Eliminar este ${tipo}?`);
+
+                    if (!confirmado) return;
+
+                    botonEliminar.disabled = true;
+
+                    try {
+                        const response = await fetch(botonEliminar.dataset.url, {
+                            method: 'DELETE',
+                            headers: {
+                                Accept: 'application/json',
+                                'X-CSRF-TOKEN': csrfToken,
+                            },
+                        });
+                        const payload = await response.json().catch(() => ({}));
+
+                        if (!response.ok) throw new Error(payload.message || `No se pudo eliminar el ${tipo}.`);
+
+                        if (typeof Swal !== 'undefined') {
+                            await Swal.fire('Registro eliminado', payload.message, 'success');
+                        } else {
+                            alert(payload.message);
+                        }
+
+                        window.location.reload();
+                    } catch (error) {
+                        botonEliminar.disabled = false;
+
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire('No se pudo eliminar', error.message, 'error');
+                        } else {
+                            alert(error.message);
+                        }
+                    }
+
+                    return;
+                }
+
                 const botonAplicar = event.target.closest('.btn-elegir-aplicacion');
                 if (botonAplicar) {
                     aplicacionActual = {
@@ -400,8 +532,8 @@
 
                 document.getElementById('detalle-ruta-titulo').textContent = `Detalle · ${botonDetalle.dataset.ruta}`;
                 document.getElementById('btn-informe-ruta-pdf').href = `${pdfUrl}?${new URLSearchParams({ fecha, ruta_key: botonDetalle.dataset.rutaKey }).toString()}`;
-                document.getElementById('detalle-depositos-body').innerHTML = '<tr><td colspan="6" class="text-center">Cargando...</td></tr>';
-                document.getElementById('detalle-gastos-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
+                document.getElementById('detalle-depositos-body').innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
+                document.getElementById('detalle-gastos-body').innerHTML = '<tr><td colspan="6" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-transacciones-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
                 modalDetalle.show();
 
@@ -410,11 +542,11 @@
                     const response = await fetch(`${detalleUrl}?${params.toString()}`, { headers: { Accept: 'application/json' } });
                     if (!response.ok) throw new Error('No se pudo cargar el detalle.');
                     const payload = await response.json();
-                    document.getElementById('detalle-depositos-body').innerHTML = payload.depositos.length ? payload.depositos.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.banco)}</td><td>${escapar(item.referencia || '-')}</td><td class="text-end">${moneda(item.monto)}</td><td>${escapar(item.usuario)}</td><td>${item.comprobante_url ? `<a class="btn btn-sm btn-soft-primary" href="${escapar(item.comprobante_url)}" target="_blank">Ver</a>` : '-'}</td></tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted">No hay depósitos aplicados.</td></tr>';
-                    document.getElementById('detalle-gastos-body').innerHTML = payload.gastos.length ? payload.gastos.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.concepto)}</td><td class="text-end">${moneda(item.monto)}</td><td>${escapar(item.usuario)}</td><td>${item.comprobante_url ? `<a class="btn btn-sm btn-soft-primary" href="${escapar(item.comprobante_url)}" target="_blank">Ver</a>` : '-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted">No hay gastos aplicados.</td></tr>';
+                    document.getElementById('detalle-depositos-body').innerHTML = payload.depositos.length ? payload.depositos.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.banco)}</td><td>${escapar(item.referencia || '-')}</td><td class="text-end">${moneda(item.monto)}</td><td>${escapar(item.usuario)}</td><td>${item.comprobante_url ? `<a class="btn btn-sm btn-soft-primary" href="${escapar(item.comprobante_url)}" target="_blank">Ver</a>` : '-'}</td><td class="text-center"><button type="button" class="btn btn-sm btn-soft-danger btn-eliminar-aplicacion" data-tipo="depósito" data-url="${escapar(item.eliminar_url)}"><i class="ri-delete-bin-line"></i> Eliminar</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted">No hay depósitos aplicados.</td></tr>';
+                    document.getElementById('detalle-gastos-body').innerHTML = payload.gastos.length ? payload.gastos.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.concepto)}</td><td class="text-end">${moneda(item.monto)}</td><td>${escapar(item.usuario)}</td><td>${item.comprobante_url ? `<a class="btn btn-sm btn-soft-primary" href="${escapar(item.comprobante_url)}" target="_blank">Ver</a>` : '-'}</td><td class="text-center"><button type="button" class="btn btn-sm btn-soft-danger btn-eliminar-aplicacion" data-tipo="gasto" data-url="${escapar(item.eliminar_url)}"><i class="ri-delete-bin-line"></i> Eliminar</button></td></tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted">No hay gastos aplicados.</td></tr>';
                     document.getElementById('detalle-transacciones-body').innerHTML = payload.transacciones.length ? payload.transacciones.map(item => `<tr><td>${escapar(item.id_trans)}</td><td>${escapar(item.terminal || '-')}</td><td>${escapar(item.nombre_agencia || '-')}</td><td>${escapar(item.tipo_etiqueta)}</td><td class="text-end">${moneda(item.monto_original)}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted">No hay transacciones.</td></tr>';
                 } catch (error) {
-                    document.getElementById('detalle-depositos-body').innerHTML = `<tr><td colspan="6" class="text-center text-danger">${escapar(error.message)}</td></tr>`;
+                    document.getElementById('detalle-depositos-body').innerHTML = `<tr><td colspan="7" class="text-center text-danger">${escapar(error.message)}</td></tr>`;
                     document.getElementById('detalle-gastos-body').innerHTML = '';
                     document.getElementById('detalle-transacciones-body').innerHTML = '';
                 }

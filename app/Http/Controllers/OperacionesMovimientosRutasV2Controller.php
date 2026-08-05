@@ -157,6 +157,34 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->with('success', 'Gasto aplicado correctamente a la ruta '.$movimiento->ruta.'.');
     }
 
+    public function eliminarDeposito(MovimientoRutaV2Deposito $deposito): JsonResponse
+    {
+        $comprobantePath = $deposito->comprobante_path;
+        $deposito->delete();
+
+        if ($comprobantePath !== null) {
+            Storage::disk('local')->delete($comprobantePath);
+        }
+
+        return response()->json([
+            'message' => 'Depósito eliminado correctamente. Ya puedes cargar el registro nuevamente.',
+        ]);
+    }
+
+    public function eliminarGasto(MovimientoRutaV2Gasto $gasto): JsonResponse
+    {
+        $comprobantePath = $gasto->comprobante_path;
+        $gasto->delete();
+
+        if ($comprobantePath !== null) {
+            Storage::disk('local')->delete($comprobantePath);
+        }
+
+        return response()->json([
+            'message' => 'Gasto eliminado correctamente. Ya puedes cargar el registro nuevamente.',
+        ]);
+    }
+
     public function detalle(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -187,6 +215,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'comprobante_url' => $deposito->comprobante_path
                     ? route('operaciones.movimientos-rutas-v2.depositos.comprobante', $deposito)
                     : null,
+                'eliminar_url' => route('operaciones.movimientos-rutas-v2.depositos.eliminar', $deposito),
             ]);
 
         $gastos = MovimientoRutaV2Gasto::query()
@@ -206,6 +235,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'comprobante_url' => $gasto->comprobante_path
                     ? route('operaciones.movimientos-rutas-v2.gastos.comprobante', $gasto)
                     : null,
+                'eliminar_url' => route('operaciones.movimientos-rutas-v2.gastos.eliminar', $gasto),
             ]);
 
         return response()->json(['transacciones' => $transacciones, 'depositos' => $depositos, 'gastos' => $gastos]);
@@ -339,7 +369,31 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->get()
             ->keyBy('ruta_key');
 
-        return $movimientos->map(function (MovimientoRutaV2Transaccion $movimiento) use ($depositos, $gastos): array {
+        $movimientosHistoricos = MovimientoRutaV2Transaccion::query()
+            ->where('fecha', '<=', $fecha)
+            ->select('ruta_key')
+            ->selectRaw("SUM(CASE WHEN tipo = 'retiro' THEN monto WHEN tipo = 'deposito' THEN -monto ELSE 0 END) as neto_esperado")
+            ->groupBy('ruta_key')
+            ->get()
+            ->keyBy('ruta_key');
+        $depositosHistoricos = MovimientoRutaV2Deposito::query()
+            ->where('fecha', '<=', $fecha)
+            ->where('estado', 'aplicado')
+            ->select('ruta_key')
+            ->selectRaw('SUM(monto) as depositado_banco')
+            ->groupBy('ruta_key')
+            ->get()
+            ->keyBy('ruta_key');
+        $gastosHistoricos = MovimientoRutaV2Gasto::query()
+            ->where('fecha', '<=', $fecha)
+            ->where('estado', 'aplicado')
+            ->select('ruta_key')
+            ->selectRaw('SUM(monto) as gastos_ruta')
+            ->groupBy('ruta_key')
+            ->get()
+            ->keyBy('ruta_key');
+
+        return $movimientos->map(function (MovimientoRutaV2Transaccion $movimiento) use ($depositos, $gastos, $movimientosHistoricos, $depositosHistoricos, $gastosHistoricos): array {
             $deposito = $depositos->get($movimiento->ruta_key);
             $gasto = $gastos->get($movimiento->ruta_key);
             $depositosCsv = (float) $movimiento->depositos_csv;
@@ -348,6 +402,9 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             $depositadoBanco = (float) ($deposito?->depositado_banco ?? 0);
             $gastosRuta = (float) ($gasto?->gastos_ruta ?? 0);
             $pendiente = $neto - $depositadoBanco - $gastosRuta;
+            $balancePendiente = (float) ($movimientosHistoricos->get($movimiento->ruta_key)?->neto_esperado ?? 0)
+                - (float) ($depositosHistoricos->get($movimiento->ruta_key)?->depositado_banco ?? 0)
+                - (float) ($gastosHistoricos->get($movimiento->ruta_key)?->gastos_ruta ?? 0);
 
             return [
                 'ruta_key' => $movimiento->ruta_key,
@@ -361,6 +418,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'gastos_ruta' => $gastosRuta,
                 'cantidad_gastos' => (int) ($gasto?->cantidad_gastos ?? 0),
                 'pendiente' => $pendiente,
+                'balance_pendiente' => $balancePendiente,
                 'cumplimiento' => $neto > 0 ? (($depositadoBanco + $gastosRuta) / $neto) * 100 : 0,
                 'estado' => $this->estadoConciliacion($neto, $depositadoBanco + $gastosRuta),
             ];

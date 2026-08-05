@@ -11,6 +11,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -162,10 +163,66 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString("title: 'Las fechas no corresponden'", $vista);
         $this->assertStringContainsString('cumplimiento_depositos', $vista);
         $this->assertStringContainsString('Últimas importaciones del día', $vista);
+        $this->assertStringContainsString('Balance pendiente', $vista);
+        $this->assertStringContainsString("['balance_pendiente']", $vista);
         $this->assertStringContainsString('id="rendimiento-neto-esperado"', $vista);
         $this->assertStringContainsString('id="rendimiento-depositado-banco"', $vista);
         $this->assertStringContainsString('id="rendimiento-porcentaje"', $vista);
         $this->assertStringContainsString('height: 28px', $vista);
+        $this->assertStringContainsString('id="zona-pegar-deposito"', $vista);
+        $this->assertStringContainsString('id="zona-pegar-gasto"', $vista);
+        $this->assertStringContainsString("modalElement.addEventListener('paste'", $vista);
+        $this->assertStringContainsString('btn-eliminar-aplicacion', $vista);
+        $this->assertStringContainsString("method: 'DELETE'", $vista);
+    }
+
+    public function test_permite_eliminar_depositos_y_gastos_con_sus_comprobantes(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('comprobantes/deposito.png', 'deposito');
+        Storage::disk('local')->put('comprobantes/gasto.png', 'gasto');
+
+        $deposito = MovimientoRutaV2Deposito::query()->create([
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - HAINA',
+            'ruta' => '05 - HAINA',
+            'monto' => 100,
+            'banco' => 'Banreservas',
+            'comprobante_path' => 'comprobantes/deposito.png',
+            'estado' => 'aplicado',
+        ]);
+        $gasto = DB::table('movimientos_rutas_v2_gastos')->insertGetId([
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - HAINA',
+            'ruta' => '05 - HAINA',
+            'monto' => 50,
+            'concepto' => 'Peaje',
+            'comprobante_path' => 'comprobantes/gasto.png',
+            'estado' => 'aplicado',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->withoutMiddleware([
+            \Illuminate\Auth\Middleware\Authenticate::class,
+            \App\Http\Middleware\ForcePasswordChange::class,
+        ])
+            ->deleteJson(route('operaciones.movimientos-rutas-v2.depositos.eliminar', $deposito))
+            ->assertOk()
+            ->assertJsonPath('message', 'Depósito eliminado correctamente. Ya puedes cargar el registro nuevamente.');
+        $this->assertDatabaseMissing('movimientos_rutas_v2_depositos', ['id' => $deposito->id]);
+        Storage::disk('local')->assertMissing('comprobantes/deposito.png');
+
+        $this->withoutMiddleware([
+            \Illuminate\Auth\Middleware\Authenticate::class,
+            \App\Http\Middleware\ForcePasswordChange::class,
+        ])
+            ->deleteJson(route('operaciones.movimientos-rutas-v2.gastos.eliminar', $gasto))
+            ->assertOk()
+            ->assertJsonPath('message', 'Gasto eliminado correctamente. Ya puedes cargar el registro nuevamente.');
+
+        $this->assertDatabaseMissing('movimientos_rutas_v2_gastos', ['id' => $gasto]);
+        Storage::disk('local')->assertMissing('comprobantes/gasto.png');
     }
 
     public function test_rechaza_el_archivo_cuando_su_fecha_no_coincide_con_la_fecha_del_reporte(): void
@@ -185,6 +242,27 @@ class OperacionesMovimientosRutasV2Test extends TestCase
 
         $this->assertDatabaseCount('movimientos_rutas_v2_importaciones', 0);
         $this->assertDatabaseCount('movimientos_rutas_v2_transacciones', 0);
+    }
+
+    public function test_balance_pendiente_acumula_los_dias_anteriores_de_la_ruta(): void
+    {
+        $servicio = app(MovimientosRutasV2ImportService::class);
+
+        foreach ([
+            ['2026-08-01', '01/08/2026', 'T-BALANCE-1', -100],
+            ['2026-08-02', '02/08/2026', 'T-BALANCE-2', -150],
+            ['2026-08-03', '03/08/2026', 'T-BALANCE-3', -100],
+        ] as [$fechaIso, $fechaArchivo, $transaccion, $monto]) {
+            $servicio->importar($this->archivoCsv([
+                $this->retiro($transaccion, $fechaArchivo, '05 - HAINA', $monto),
+            ]), null, $fechaIso);
+        }
+
+        $metodoResumen = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'resumenPorRutas');
+        $resumenRuta = $metodoResumen->invoke(app(OperacionesMovimientosRutasV2Controller::class), '2026-08-03')->first();
+
+        $this->assertSame(100.0, $resumenRuta['pendiente']);
+        $this->assertSame(350.0, $resumenRuta['balance_pendiente']);
     }
 
     public function test_ultimas_importaciones_solo_incluye_el_dia_consultado(): void
