@@ -1,0 +1,189 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Http\Controllers\OperacionesMovimientosRutasV2Controller;
+use App\Models\MovimientoRutaV2Deposito;
+use App\Models\MovimientoRutaV2Transaccion;
+use App\Services\Operaciones\MovimientosRutasV2ImportService;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Tests\TestCase;
+
+class OperacionesMovimientosRutasV2Test extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Schema::create('movimientos_rutas_v2_importaciones', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nombre_archivo');
+            $table->date('fecha_desde');
+            $table->date('fecha_hasta');
+            $table->unsignedInteger('fechas_reemplazadas');
+            $table->unsignedInteger('filas_aceptadas');
+            $table->unsignedInteger('filas_descartadas');
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('movimientos_rutas_v2_transacciones', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('importacion_id');
+            $table->date('fecha');
+            $table->string('ruta_key');
+            $table->string('ruta');
+            $table->string('id_trans');
+            $table->string('terminal')->nullable();
+            $table->string('nombre_agencia')->nullable();
+            $table->string('tipo');
+            $table->string('tipo_etiqueta');
+            $table->decimal('monto', 15, 2);
+            $table->decimal('monto_original', 15, 2);
+            $table->timestamps();
+            $table->unique(['fecha', 'id_trans']);
+        });
+        Schema::create('movimientos_rutas_v2_depositos', function (Blueprint $table): void {
+            $table->id();
+            $table->date('fecha');
+            $table->string('ruta_key');
+            $table->string('ruta');
+            $table->decimal('monto', 15, 2);
+            $table->string('banco');
+            $table->string('referencia')->nullable();
+            $table->string('comprobante_path')->nullable();
+            $table->text('observacion')->nullable();
+            $table->string('estado')->default('aplicado');
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('movimientos_rutas_v2_gastos', function (Blueprint $table): void {
+            $table->id();
+            $table->date('fecha');
+            $table->string('ruta_key');
+            $table->string('ruta');
+            $table->decimal('monto', 15, 2);
+            $table->string('concepto');
+            $table->string('comprobante_path')->nullable();
+            $table->text('observacion')->nullable();
+            $table->string('estado')->default('aplicado');
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    protected function tearDown(): void
+    {
+        Schema::dropIfExists('movimientos_rutas_v2_gastos');
+        Schema::dropIfExists('movimientos_rutas_v2_depositos');
+        Schema::dropIfExists('movimientos_rutas_v2_transacciones');
+        Schema::dropIfExists('movimientos_rutas_v2_importaciones');
+
+        parent::tearDown();
+    }
+
+    public function test_reemplaza_solo_las_fechas_del_archivo_y_conserva_los_depositos_manuales(): void
+    {
+        $servicio = app(MovimientosRutasV2ImportService::class);
+        $servicio->importar($this->archivoCsv([
+            $this->retiro('T-1', '02/08/2026', '05 - HAINA', -5000000),
+            $this->retiro('T-2', '03/08/2026', '01 - NORTE', -1000000),
+        ]), null);
+
+        DB::table('movimientos_rutas_v2_depositos')->insert([
+            'fecha' => '2026-08-02',
+            'ruta_key' => '05 - HAINA',
+            'ruta' => '05 - HAINA',
+            'monto' => 3000000,
+            'banco' => 'Banreservas',
+            'estado' => 'aplicado',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('movimientos_rutas_v2_gastos')->insert([
+            'fecha' => '2026-08-02',
+            'ruta_key' => '05 - HAINA',
+            'ruta' => '05 - HAINA',
+            'monto' => 1000000,
+            'concepto' => 'Combustible y peajes',
+            'estado' => 'aplicado',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $servicio->importar($this->archivoCsv([
+            $this->retiro('T-3', '02/08/2026', '05 - HAINA', -5500000),
+        ]), null);
+
+        $this->assertDatabaseMissing('movimientos_rutas_v2_transacciones', ['id_trans' => 'T-1']);
+        $this->assertDatabaseHas('movimientos_rutas_v2_transacciones', ['id_trans' => 'T-3', 'fecha' => '2026-08-02']);
+        $this->assertDatabaseHas('movimientos_rutas_v2_transacciones', ['id_trans' => 'T-2', 'fecha' => '2026-08-03']);
+        $deposito = MovimientoRutaV2Deposito::query()->firstOrFail();
+        $this->assertSame('2026-08-02', $deposito->fecha->toDateString());
+        $this->assertSame(3000000.0, (float) $deposito->monto);
+        $this->assertDatabaseHas('movimientos_rutas_v2_gastos', [
+            'concepto' => 'Combustible y peajes',
+            'monto' => 1000000,
+        ]);
+        $this->assertSame(2, MovimientoRutaV2Transaccion::query()->count());
+
+        $metodoResumen = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'resumenPorRutas');
+        $resumenRuta = $metodoResumen->invoke(app(OperacionesMovimientosRutasV2Controller::class), '2026-08-02')->first();
+        $this->assertSame(5500000.0, $resumenRuta['neto_esperado']);
+        $this->assertSame(3000000.0, $resumenRuta['depositado_banco']);
+        $this->assertSame(1000000.0, $resumenRuta['gastos_ruta']);
+        $this->assertSame(1500000.0, $resumenRuta['pendiente']);
+        $this->assertSame('parcial', $resumenRuta['estado']);
+    }
+
+    public function test_registra_la_v2_en_el_hub_y_muestra_las_columnas_de_conciliacion(): void
+    {
+        $item = collect(config('module_hubs.operaciones.items'))->firstWhere('nombre', 'Movimientos por Ruta V2');
+        $vista = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2.blade.php'));
+
+        $this->assertNotNull($item);
+        $this->assertSame('/operaciones/movimientos-rutas-v2', $item['url']);
+        $this->assertIsString($vista);
+        $this->assertStringContainsString('Depositado banco', $vista);
+        $this->assertStringContainsString('Pendiente', $vista);
+        $this->assertStringContainsString('Aplicar depósito bancario', $vista);
+        $this->assertStringContainsString('Gasto de ruta', $vista);
+        $this->assertStringContainsString('Voucher o comprobante', $vista);
+        $this->assertStringContainsString('Informe PDF', $vista);
+        $this->assertStringContainsString('operaciones.movimientos-rutas-v2.pdf', $vista);
+    }
+
+    public function test_genera_el_informe_pdf_de_una_fecha_y_ruta(): void
+    {
+        app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-PDF', '02/08/2026', '05 - HAINA', -5000000),
+        ]), null);
+
+        $response = $this->withoutMiddleware()->get(route('operaciones.movimientos-rutas-v2.pdf', [
+            'fecha' => '2026-08-02',
+            'ruta_key' => '05 - HAINA',
+        ]));
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertDownload('movimientos-ruta-05-haina-2026-08-02.pdf');
+    }
+
+    /** @param  array<int, string>  $filas */
+    private function archivoCsv(array $filas): UploadedFile
+    {
+        $encabezado = 'TipoTransaccion,NumeroExterno,Ruta,IdTrans,FecTransaccion,Referencia,DMonto2';
+
+        return UploadedFile::fake()->createWithContent('movimientos.csv', implode("\n", [$encabezado, ...$filas]));
+    }
+
+    private function retiro(string $id, string $fecha, string $ruta, float $monto): string
+    {
+        return implode(',', [
+            'RETIRO DE EFECTIVO DE LA AGENCIA E INGRESO A LA CAJA',
+            '', $ruta, $id, $fecha, '', number_format($monto, 2, '.', ''),
+        ]);
+    }
+}

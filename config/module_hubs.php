@@ -288,6 +288,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Movimientos por Ruta V2',
+                'descripcion' => 'Concilia por fecha los retiros netos con depósitos bancarios registrados por Operaciones.',
+                'url' => '/operaciones/movimientos-rutas-v2',
+                'icono' => 'ri-bank-line',
+                'categoria' => 'Rutas',
+                'tags' => ['rutas', 'retiros', 'depositos', 'conciliacion', 'v2'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Deposito Ruta',
                 'descripcion' => 'Consulta los comprobantes bancarios recibidos desde el chatbot.',
                 'url' => '/operaciones/deposito-ruta',
