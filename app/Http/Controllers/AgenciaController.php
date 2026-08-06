@@ -98,9 +98,16 @@ class AgenciaController extends Controller
      */
     public function edit(Agencia $agencia)
     {
-        [$operadores, $coordinadores] = $this->obtenerOpcionesCoordinadorOperador();
+        $coordinadoresAsignados = $agencia->coordinadoresOperadores()
+            ->where('puesto', 'coordinador')
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get()
+            ->map(fn (CoordinadorOperador $coordinador): string => trim($coordinador->nombre.' '.$coordinador->apellido))
+            ->filter()
+            ->values();
 
-        return view('agencias.edit', compact('agencia', 'operadores', 'coordinadores'));
+        return view('agencias.edit', compact('agencia', 'coordinadoresAsignados'));
     }
 
     /**
@@ -108,8 +115,6 @@ class AgenciaController extends Controller
      */
     public function update(Request $request, Agencia $agencia)
     {
-        [$operadores, $coordinadores] = $this->obtenerOpcionesCoordinadorOperador();
-
         $validated = $request->validate([
             'agencia' => 'required|string|max:255',
             'nombre_agencia' => 'nullable|string|max:255',
@@ -129,21 +134,11 @@ class AgenciaController extends Controller
             'empresa' => 'nullable|string|max:60',
             'ciudad' => 'nullable|string|max:255',
             'ruta' => 'nullable|string|max:255',
-            'operador' => ['nullable', 'string', 'max:255', Rule::in($operadores)],
-            'coordinador' => ['nullable', 'string', 'max:255', Rule::in($coordinadores)],
             'estatus' => 'required|integer|in:0,1',
             'aplica_incentivo' => 'required|boolean',
-        ], [
-            'operador.in' => 'Seleccione un operador válido de la lista.',
-            'coordinador.in' => 'Seleccione un coordinador válido de la lista.',
         ]);
 
         $agencia->update($validated);
-        $this->sincronizarAsignacionesCoordinadorOperador(
-            $agencia->id,
-            $validated['coordinador'] ?? '',
-            $validated['operador'] ?? ''
-        );
 
         return redirect()->route('agencias.index')
             ->with('success', 'Agencia actualizada exitosamente.');

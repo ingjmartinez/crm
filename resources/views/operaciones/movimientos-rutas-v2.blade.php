@@ -241,7 +241,17 @@
                                         <td>{{ $importacion->fecha_desde->format('d/m/Y') }} al {{ $importacion->fecha_hasta->format('d/m/Y') }}</td>
                                         <td>{{ number_format($importacion->filas_aceptadas) }}</td>
                                         <td>{{ $importacion->usuario?->name ?? 'Sistema' }}</td>
-                                        <td>{{ $importacion->created_at->format('d/m/Y h:i A') }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                                <span>{{ $importacion->created_at->format('d/m/Y h:i A') }}</span>
+                                                <button type="button" class="btn btn-sm btn-soft-danger btn-eliminar-importacion"
+                                                    data-url="{{ route('operaciones.movimientos-rutas-v2.importaciones.eliminar', $importacion) }}"
+                                                    data-archivo="{{ $importacion->nombre_archivo }}"
+                                                    data-periodo="{{ $importacion->fecha_desde->format('d/m/Y') }}">
+                                                    <i class="ri-delete-bin-line me-1"></i>Eliminar carga
+                                                </button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 @empty
                                     <tr><td colspan="5" class="text-center text-muted">Aún no hay importaciones.</td></tr>
@@ -666,6 +676,56 @@
             });
 
             document.addEventListener('click', async function (event) {
+                const botonEliminarImportacion = event.target.closest('.btn-eliminar-importacion');
+                if (botonEliminarImportacion) {
+                    const confirmado = typeof Swal !== 'undefined'
+                        ? await Swal.fire({
+                            icon: 'warning',
+                            title: 'Eliminar carga completa',
+                            html: `Se eliminará <strong>${escapar(botonEliminarImportacion.dataset.archivo)}</strong>, las transacciones, todos los depósitos y las cargas históricas del <strong>${escapar(botonEliminarImportacion.dataset.periodo)}</strong>.<br><br>Los gastos se conservarán. Esta acción no se puede deshacer.`,
+                            showCancelButton: true,
+                            confirmButtonText: 'Sí, eliminar carga',
+                            cancelButtonText: 'Cancelar',
+                            confirmButtonColor: '#dc3545',
+                        }).then(resultado => resultado.isConfirmed)
+                        : confirm(`¿Eliminar la carga ${botonEliminarImportacion.dataset.archivo} y sus depósitos?`);
+
+                    if (!confirmado) return;
+
+                    botonEliminarImportacion.disabled = true;
+
+                    try {
+                        const response = await fetch(botonEliminarImportacion.dataset.url, {
+                            method: 'DELETE',
+                            headers: {
+                                Accept: 'application/json',
+                                'X-CSRF-TOKEN': csrfToken,
+                            },
+                        });
+                        const payload = await response.json().catch(() => ({}));
+
+                        if (!response.ok) throw new Error(payload.message || 'No se pudo eliminar la carga.');
+
+                        if (typeof Swal !== 'undefined') {
+                            await Swal.fire('Carga eliminada', payload.message, 'success');
+                        } else {
+                            alert(payload.message);
+                        }
+
+                        window.location.reload();
+                    } catch (error) {
+                        botonEliminarImportacion.disabled = false;
+
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire('No se pudo eliminar', error.message, 'error');
+                        } else {
+                            alert(error.message);
+                        }
+                    }
+
+                    return;
+                }
+
                 const botonEliminar = event.target.closest('.btn-eliminar-aplicacion');
                 if (botonEliminar) {
                     const tipo = botonEliminar.dataset.tipo;

@@ -196,6 +196,9 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString("titulo: 'Confirmar monto del gasto'", $vista);
         $this->assertStringContainsString('function configurarMontoMonetario', $vista);
         $this->assertContains('decimal:2', (new GuardarMovimientoRutaV2GastoRequest)->rules()['monto']);
+        $this->assertStringContainsString('btn-eliminar-importacion', $vista);
+        $this->assertStringContainsString('Eliminar carga completa', $vista);
+        $this->assertStringContainsString('operaciones.movimientos-rutas-v2.importaciones.eliminar', $vista);
         $this->assertStringNotContainsString('@php(', $vista);
         $this->assertStringContainsString('foreach($__currentLoopData as $ruta)', $vistaCompilada);
     }
@@ -278,6 +281,68 @@ class OperacionesMovimientosRutasV2Test extends TestCase
 
         $this->assertDatabaseMissing('movimientos_rutas_v2_gastos', ['id' => $gasto]);
         Storage::disk('local')->assertMissing('comprobantes/gasto.png');
+    }
+
+    public function test_elimina_la_carga_del_dia_sus_transacciones_y_depositos_pero_conserva_los_gastos(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('comprobantes/deposito-carga.png', 'deposito');
+        $resultadoImportacion = app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-CARGA-ELIMINAR', '02/08/2026', '05 - HAINA', -5000000),
+        ]), null, '2026-08-02');
+        MovimientoRutaV2Importacion::query()->create([
+            'nombre_archivo' => 'carga-anterior.csv',
+            'fecha_desde' => '2026-08-02',
+            'fecha_hasta' => '2026-08-02',
+            'fechas_reemplazadas' => 1,
+            'filas_aceptadas' => 1,
+            'filas_descartadas' => 0,
+        ]);
+        MovimientoRutaV2Deposito::query()->create([
+            'fecha' => '2026-08-02',
+            'ruta_key' => 'RUTA ANTIGUA',
+            'ruta' => 'RUTA ANTIGUA',
+            'monto' => 100,
+            'banco' => 'Banreservas',
+            'comprobante_path' => 'comprobantes/deposito-carga.png',
+            'estado' => 'aplicado',
+        ]);
+        $depositoOtraFecha = MovimientoRutaV2Deposito::query()->create([
+            'fecha' => '2026-08-03',
+            'ruta_key' => 'OTRA RUTA',
+            'ruta' => 'OTRA RUTA',
+            'monto' => 200,
+            'banco' => 'Popular',
+            'estado' => 'aplicado',
+        ]);
+        DB::table('movimientos_rutas_v2_gastos')->insert([
+            'fecha' => '2026-08-02',
+            'ruta_key' => 'RUTA ANTIGUA',
+            'ruta' => 'RUTA ANTIGUA',
+            'monto' => 50,
+            'concepto' => 'Peaje',
+            'estado' => 'aplicado',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->withoutMiddleware([
+            \Illuminate\Auth\Middleware\Authenticate::class,
+            \App\Http\Middleware\ForcePasswordChange::class,
+        ])->deleteJson(route(
+            'operaciones.movimientos-rutas-v2.importaciones.eliminar',
+            $resultadoImportacion['importacion'],
+        ))->assertOk()
+            ->assertJsonPath('data.importacionesEliminadas', 2)
+            ->assertJsonPath('data.transaccionesEliminadas', 1)
+            ->assertJsonPath('data.depositosEliminados', 1);
+
+        $this->assertDatabaseMissing('movimientos_rutas_v2_importaciones', ['fecha_desde' => '2026-08-02']);
+        $this->assertDatabaseMissing('movimientos_rutas_v2_transacciones', ['fecha' => '2026-08-02']);
+        $this->assertDatabaseMissing('movimientos_rutas_v2_depositos', ['ruta_key' => 'RUTA ANTIGUA']);
+        $this->assertDatabaseHas('movimientos_rutas_v2_depositos', ['id' => $depositoOtraFecha->id, 'monto' => 200]);
+        $this->assertDatabaseHas('movimientos_rutas_v2_gastos', ['ruta_key' => 'RUTA ANTIGUA', 'monto' => 50]);
+        Storage::disk('local')->assertMissing('comprobantes/deposito-carga.png');
     }
 
     public function test_muestra_comprobantes_del_disco_actual_y_de_la_ruta_heredada_del_vps(): void

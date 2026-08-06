@@ -18,6 +18,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -160,6 +161,54 @@ class OperacionesMovimientosRutasV2Controller extends Controller
 
         return response()->json([
             'message' => 'Depósito eliminado correctamente. Ya puedes cargar el registro nuevamente.',
+        ]);
+    }
+
+    public function eliminarImportacion(MovimientoRutaV2Importacion $importacion): JsonResponse
+    {
+        $fechaDesde = $importacion->fecha_desde->toDateString();
+        $fechaHasta = $importacion->fecha_hasta->toDateString();
+        $depositos = MovimientoRutaV2Deposito::query()
+            ->whereDate('fecha', '>=', $fechaDesde)
+            ->whereDate('fecha', '<=', $fechaHasta)
+            ->get(['id', 'comprobante_path']);
+
+        $resultado = DB::transaction(function () use ($fechaDesde, $fechaHasta, $depositos): array {
+            $depositosEliminados = $depositos->count();
+            MovimientoRutaV2Deposito::query()
+                ->whereDate('fecha', '>=', $fechaDesde)
+                ->whereDate('fecha', '<=', $fechaHasta)
+                ->delete();
+            $transaccionesEliminadas = MovimientoRutaV2Transaccion::query()
+                ->whereBetween('fecha', [$fechaDesde, $fechaHasta])
+                ->delete();
+            $importacionesEliminadas = MovimientoRutaV2Importacion::query()
+                ->whereDate('fecha_desde', $fechaDesde)
+                ->whereDate('fecha_hasta', $fechaHasta)
+                ->delete();
+
+            return compact('transaccionesEliminadas', 'depositosEliminados', 'importacionesEliminadas');
+        });
+
+        $depositos
+            ->pluck('comprobante_path')
+            ->filter()
+            ->unique()
+            ->each(function (string $comprobantePath): void {
+                $rutaComprobante = $this->resolverRutaComprobante($comprobantePath);
+
+                if ($rutaComprobante !== null) {
+                    File::delete($rutaComprobante);
+                }
+            });
+
+        return response()->json([
+            'message' => sprintf(
+                'Carga eliminada correctamente: %d transacciones y %d depósitos eliminados. Ya puedes subir el documento corregido.',
+                $resultado['transaccionesEliminadas'],
+                $resultado['depositosEliminados'],
+            ),
+            'data' => $resultado,
         ]);
     }
 
