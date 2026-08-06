@@ -765,6 +765,42 @@ class MonitoreoTerminalTest extends TestCase
             ->assertJsonFragment(['agencia_id' => $agenciaId, 'estado' => 'SIN AGENTE DE VENTA']);
     }
 
+    public function test_generate_includes_group_joselito_terminal_without_system_as_lotobet(): void
+    {
+        $agenciaId = $this->insertAgency([
+            'terminal' => '055903',
+            'nombre_agencia' => 'Ag Parque Del Este 02',
+            'empresa' => 'Grupo Joselito',
+            'sistema' => null,
+            'horario_am' => '7:30 AM / 2:30 PM',
+        ]);
+        $agenciaNegosurId = $this->insertAgency([
+            'terminal' => '099999',
+            'empresa' => 'Negosur',
+            'sistema' => null,
+        ]);
+
+        $service = $this->mock(AsistenciaTerminalEndpointService::class);
+        $service->shouldReceive('terminalesConPonche')->once()->andReturn([]);
+
+        $this->getJson(route('tecnologia.monitoreo-terminales.generar', [
+            'fecha_inicio' => '2026-07-22',
+            'fecha_fin' => '2026-07-22',
+            'hora_monitoreo' => '07:30',
+            'tipo_horario' => 'AM',
+            'alcance_agencias' => 'todas',
+        ]))->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('sin_agente', 1)
+            ->assertJsonFragment([
+                'agencia_id' => $agenciaId,
+                'terminal' => '055903',
+                'hora_apertura' => '07:30 AM',
+                'estado' => 'SIN AGENTE DE VENTA',
+            ])
+            ->assertJsonMissing(['agencia_id' => $agenciaNegosurId]);
+    }
+
     public function test_generate_only_evaluates_the_schedule_configured_for_the_day(): void
     {
         $agenciaId = $this->insertAgency([

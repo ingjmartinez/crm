@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -35,6 +36,17 @@ class Agencia extends Model
         'estatus' => 'integer',
         'aplica_incentivo' => 'boolean',
     ];
+
+    public function scopeLotobet(Builder $query): Builder
+    {
+        return $query->where(function (Builder $sistema): void {
+            $sistema->whereRaw('UPPER(TRIM(sistema)) = ?', ['LOTOBET'])
+                ->orWhere(function (Builder $sinSistema): void {
+                    $sinSistema->whereNull('sistema')
+                        ->whereRaw('UPPER(TRIM(empresa)) = ?', ['GRUPO JOSELITO']);
+                });
+        });
+    }
 
     public function coordinadoresOperadores()
     {

@@ -23,7 +23,13 @@ class GuardarMonitoreoTerminalAgenciasPlazaRequest extends FormRequest
                 'distinct:strict',
                 Rule::exists('agencias', 'id')->where(function ($query): void {
                     $query->whereNotNull('terminal')
-                        ->whereRaw('UPPER(TRIM(sistema)) = ?', ['LOTOBET']);
+                        ->where(function ($sistema): void {
+                            $sistema->whereRaw('UPPER(TRIM(sistema)) = ?', ['LOTOBET'])
+                                ->orWhere(function ($sinSistema): void {
+                                    $sinSistema->whereNull('sistema')
+                                        ->whereRaw('UPPER(TRIM(empresa)) = ?', ['GRUPO JOSELITO']);
+                                });
+                        });
                 }),
             ],
         ];

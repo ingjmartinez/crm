@@ -73,7 +73,7 @@ class MonitoreoTerminalController extends Controller
                 'horarios:id,agencia_id,dia_semana,horario_am,horario_pm',
             ])
             ->whereNotNull('terminal')
-            ->whereRaw('UPPER(TRIM(sistema)) = ?', ['LOTOBET'])
+            ->lotobet()
             ->when(
                 $alcanceAgencias === 'plaza',
                 fn ($query) => $query->whereIn('id', $agenciasPlazaIds)
@@ -307,7 +307,7 @@ class MonitoreoTerminalController extends Controller
         $agenciasPorTerminal = Agencia::query()
             ->select('id', 'agencia', 'terminal', 'nombre_agencia')
             ->whereNotNull('terminal')
-            ->whereRaw('UPPER(TRIM(sistema)) = ?', ['LOTOBET'])
+            ->lotobet()
             ->get()
             ->groupBy(fn (Agencia $agencia): string => $this->normalizarTerminal((string) $agencia->terminal));
 
@@ -396,7 +396,7 @@ class MonitoreoTerminalController extends Controller
             ->select('id', 'horario_am', 'horario_pm')
             ->with('horarios:id,agencia_id,horario_am,horario_pm')
             ->whereNotNull('terminal')
-            ->whereRaw('UPPER(TRIM(sistema)) = ?', ['LOTOBET'])
+            ->lotobet()
             ->get()
             ->flatMap(function (Agencia $agencia): Collection {
                 return collect([
