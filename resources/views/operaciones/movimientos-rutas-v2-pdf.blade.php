@@ -40,6 +40,7 @@
     <div class="header clearfix">
         <div class="header-meta">
             Fecha del reporte: <strong>{{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}</strong><br>
+            Empresa: <strong>{{ $empresaNombre }}</strong><br>
             Generado: {{ now()->format('d/m/Y h:i A') }}
         </div>
         <h1>Resumen de movimientos por rutas</h1>

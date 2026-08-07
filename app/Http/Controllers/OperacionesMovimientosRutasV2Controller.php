@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Operaciones\FiltrarMovimientosRutasV2Request;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2DepositoRequest;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2GastoRequest;
 use App\Http\Requests\Operaciones\ProcesarMovimientosRutasV2Request;
@@ -29,21 +30,30 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class OperacionesMovimientosRutasV2Controller extends Controller
 {
+    private const EMPRESAS = [
+        'GJ' => 'Grupo Joselito',
+        'NG' => 'Negosur',
+    ];
+
     public function __construct(private readonly MovimientosRutasV2ImportService $importService) {}
 
-    public function index(Request $request): View
+    public function index(FiltrarMovimientosRutasV2Request $request): View
     {
+        $validated = $request->validated();
         $fechasDisponibles = $this->fechasDisponibles();
         $fecha = $this->fechaSeleccionada($request, $fechasDisponibles);
-        $rutas = $fecha !== null ? $this->resumenPorRutas($fecha) : collect();
+        $empresa = $validated['empresa'] ?? null;
+        $rutas = $fecha !== null ? $this->resumenPorRutas($fecha, $empresa) : collect();
 
         return view('operaciones.movimientos-rutas-v2', [
             'fecha' => $fecha,
+            'empresa' => $empresa,
+            'empresas' => self::EMPRESAS,
             'fechasDisponibles' => $fechasDisponibles,
             'rutas' => $rutas,
             'resumen' => $this->resumenGeneral($rutas),
             'bancos' => BancoOperacion::query()->orderBy('nombre')->get(),
-            'depositosPorBanco' => $this->depositosPorBanco($fecha),
+            'depositosPorBanco' => $this->depositosPorBanco($fecha, $empresa),
             'importaciones' => $this->importacionesPorFecha($fecha),
         ]);
     }
@@ -111,7 +121,10 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'user_id' => $request->user()?->id,
         ]);
 
-        return redirect()->route('operaciones.movimientos-rutas-v2', ['fecha' => $validated['fecha']])
+        return redirect()->route('operaciones.movimientos-rutas-v2', [
+            'fecha' => $validated['fecha'],
+            'empresa' => $validated['empresa'] ?? null,
+        ])
             ->with('success', 'Depósito aplicado correctamente a la ruta '.$movimiento->ruta.'.');
     }
 
@@ -146,7 +159,10 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'user_id' => $request->user()?->id,
         ]);
 
-        return redirect()->route('operaciones.movimientos-rutas-v2', ['fecha' => $validated['fecha']])
+        return redirect()->route('operaciones.movimientos-rutas-v2', [
+            'fecha' => $validated['fecha'],
+            'empresa' => $validated['empresa'] ?? null,
+        ])
             ->with('success', 'Gasto aplicado correctamente a la ruta '.$movimiento->ruta.'.');
     }
 
@@ -285,12 +301,14 @@ class OperacionesMovimientosRutasV2Controller extends Controller
     public function pdf(ReporteMovimientoRutaV2PdfRequest $request): Response
     {
         $validated = $request->validated();
-        $rutas = $this->resumenPorRutas($validated['fecha']);
+        $empresa = $validated['empresa'] ?? null;
+        $rutas = $this->resumenPorRutas($validated['fecha'], $empresa);
 
         abort_if($rutas->isEmpty(), 404, 'No se encontraron movimientos para la fecha seleccionada.');
 
         $documento = Pdf::loadView('operaciones.movimientos-rutas-v2-pdf', [
             'fecha' => $validated['fecha'],
+            'empresaNombre' => $empresa !== null ? self::EMPRESAS[$empresa] : 'Todas las empresas',
             'resumen' => $this->resumenGeneral($rutas),
         ])->setPaper('letter', 'portrait');
 
@@ -427,7 +445,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         ];
     }
 
-    private function depositosPorBanco(?string $fecha): Collection
+    private function depositosPorBanco(?string $fecha, ?string $empresa = null): Collection
     {
         if ($fecha === null) {
             return collect();
@@ -436,6 +454,13 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         return MovimientoRutaV2Deposito::query()
             ->where('fecha', $fecha)
             ->where('estado', 'aplicado')
+            ->when($empresa !== null, function ($query) use ($empresa): void {
+                $query->where(function ($query) use ($empresa): void {
+                    $query->where('ruta', 'like', "% {$empresa} %")
+                        ->orWhere('ruta', 'like', "{$empresa} %")
+                        ->orWhere('ruta', 'like', "% {$empresa}");
+                });
+            })
             ->select('banco')
             ->selectRaw('COUNT(*) as cantidad_depositos')
             ->selectRaw('SUM(monto) as monto_total')
@@ -444,7 +469,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->get();
     }
 
-    private function resumenPorRutas(string $fecha): Collection
+    private function resumenPorRutas(string $fecha, ?string $empresa = null): Collection
     {
         $movimientos = MovimientoRutaV2Transaccion::query()
             ->where('fecha', $fecha)
@@ -529,7 +554,21 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'cumplimiento' => $neto > 0 ? (($depositadoBanco + $gastosRuta) / $neto) * 100 : 0,
                 'estado' => $this->estadoConciliacion($neto, $depositadoBanco + $gastosRuta),
             ];
-        })->sortBy('ruta', SORT_NATURAL | SORT_FLAG_CASE)->values();
+        })->when(
+            $empresa !== null,
+            fn (Collection $rutas): Collection => $rutas->filter(
+                fn (array $ruta): bool => $this->empresaDesdeRuta($ruta['ruta']) === $empresa
+            )
+        )->sortBy('ruta', SORT_NATURAL | SORT_FLAG_CASE)->values();
+    }
+
+    private function empresaDesdeRuta(string $ruta): ?string
+    {
+        if (preg_match('/(?:^|[\s-])(GJ|NG)(?=$|[\s-])/iu', $ruta, $coincidencia) !== 1) {
+            return null;
+        }
+
+        return strtoupper($coincidencia[1]);
     }
 
     private function estadoConciliacion(float $neto, float $depositado): string

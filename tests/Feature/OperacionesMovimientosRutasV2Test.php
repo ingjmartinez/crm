@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\OperacionesMovimientosRutasV2Controller;
+use App\Http\Requests\Operaciones\FiltrarMovimientosRutasV2Request;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2DepositoRequest;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2GastoRequest;
+use App\Http\Requests\Operaciones\ReporteMovimientoRutaV2PdfRequest;
 use App\Models\MovimientoRutaV2Deposito;
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
@@ -165,6 +167,8 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString('Voucher o comprobante', $vista);
         $this->assertStringContainsString('Mini informe PDF', $vista);
         $this->assertStringContainsString('operaciones.movimientos-rutas-v2.pdf', $vista);
+        $this->assertStringContainsString('name="empresa"', $vista);
+        $this->assertStringContainsString('Todas las empresas', $vista);
         $this->assertStringContainsString('name="fecha_reporte"', $vista);
         $this->assertStringContainsString('Rendimiento de ruta', $vista);
         $this->assertStringContainsString("title: 'Las fechas no corresponden'", $vista);
@@ -201,6 +205,60 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString('operaciones.movimientos-rutas-v2.importaciones.eliminar', $vista);
         $this->assertStringNotContainsString('@php(', $vista);
         $this->assertStringContainsString('foreach($__currentLoopData as $ruta)', $vistaCompilada);
+        $this->assertContains('in:GJ,NG', (new FiltrarMovimientosRutasV2Request)->rules()['empresa']);
+        $this->assertContains('in:GJ,NG', (new ReporteMovimientoRutaV2PdfRequest)->rules()['empresa']);
+    }
+
+    public function test_filtra_por_empresa_sin_perder_el_detalle_individual_de_las_rutas(): void
+    {
+        app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-GJ-1', '07/08/2026', '05 - GJ RUTA ROMANA', -100),
+            $this->retiro('T-GJ-2', '07/08/2026', '05 - GJ RUTA CONSUELO', -200),
+            $this->retiro('T-NG-1', '07/08/2026', '05 - NG RUTA HAINA', -300),
+            $this->retiro('T-SIN-1', '07/08/2026', '05 - RUTA SIN EMPRESA', -400),
+        ]), null, '2026-08-07');
+
+        $metodo = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'resumenPorRutas');
+        $controlador = app(OperacionesMovimientosRutasV2Controller::class);
+        $todas = $metodo->invoke($controlador, '2026-08-07');
+        $grupoJoselito = $metodo->invoke($controlador, '2026-08-07', 'GJ');
+        $negosur = $metodo->invoke($controlador, '2026-08-07', 'NG');
+
+        $this->assertCount(4, $todas);
+        $this->assertSame(
+            ['05 - GJ RUTA CONSUELO', '05 - GJ RUTA ROMANA'],
+            $grupoJoselito->pluck('ruta')->all(),
+        );
+        $this->assertSame(['05 - NG RUTA HAINA'], $negosur->pluck('ruta')->all());
+        $this->assertSame(300.0, (float) $grupoJoselito->sum('neto_esperado'));
+    }
+
+    public function test_filtra_el_resumen_de_depositos_por_banco_segun_la_empresa(): void
+    {
+        foreach ([
+            ['Banreservas', 100, '05 - GJ RUTA ROMANA'],
+            ['Banreservas', 150, '05 - NG RUTA HAINA'],
+            ['Popular', 300, '05 - GJ RUTA CONSUELO'],
+            ['BHD', 400, '05 - RUTA SIN EMPRESA'],
+        ] as [$banco, $monto, $ruta]) {
+            DB::table('movimientos_rutas_v2_depositos')->insert([
+                'fecha' => '2026-08-07',
+                'ruta_key' => $ruta,
+                'ruta' => $ruta,
+                'monto' => $monto,
+                'banco' => $banco,
+                'estado' => 'aplicado',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $metodo = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'depositosPorBanco');
+        $depositos = $metodo->invoke(app(OperacionesMovimientosRutasV2Controller::class), '2026-08-07', 'GJ');
+
+        $this->assertCount(2, $depositos);
+        $this->assertSame(400.0, (float) $depositos->sum('monto_total'));
+        $this->assertNull($depositos->firstWhere('banco', 'BHD'));
     }
 
     public function test_agrupa_los_depositos_del_dia_por_banco(): void

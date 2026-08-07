@@ -64,15 +64,24 @@
                             <div class="card-header"><h5 class="card-title mb-0">Consultar día</h5></div>
                             <div class="card-body">
                                 <form method="GET" action="{{ route('operaciones.movimientos-rutas-v2') }}" class="row g-3 align-items-end">
-                                    <div class="col-12">
+                                    <div class="col-md-6">
                                         <label for="fecha" class="form-label">Fecha del movimiento</label>
                                         <input type="date" class="form-control" id="fecha" name="fecha" value="{{ $fecha }}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="empresa" class="form-label">Empresa</label>
+                                        <select class="form-select" id="empresa" name="empresa">
+                                            <option value="">Todas las empresas</option>
+                                            @foreach ($empresas as $codigoEmpresa => $nombreEmpresa)
+                                                <option value="{{ $codigoEmpresa }}" @selected($empresa === $codigoEmpresa)>{{ $nombreEmpresa }}</option>
+                                            @endforeach
+                                        </select>
                                     </div>
                                     <div class="col-6 d-grid">
                                         <button type="submit" class="btn btn-outline-primary">Consultar</button>
                                     </div>
                                     <div class="col-6 d-grid">
-                                        <a href="{{ $fecha ? route('operaciones.movimientos-rutas-v2.pdf', ['fecha' => $fecha]) : '#' }}"
+                                        <a href="{{ $fecha ? route('operaciones.movimientos-rutas-v2.pdf', ['fecha' => $fecha, 'empresa' => $empresa]) : '#' }}"
                                             class="btn btn-danger {{ $fecha ? '' : 'disabled' }}" target="_blank" aria-disabled="{{ $fecha ? 'false' : 'true' }}">
                                             <i class="ri-file-pdf-2-line me-1"></i>Mini informe PDF
                                         </a>
@@ -360,6 +369,7 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="fecha" value="{{ $fecha }}">
+                    <input type="hidden" name="empresa" value="{{ $empresa }}">
                     <input type="hidden" name="ruta_key" id="deposito-ruta-key">
                     <input type="hidden" name="ruta" id="deposito-ruta">
                     <div class="alert alert-light border" id="deposito-resumen"></div>
@@ -403,6 +413,7 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="fecha" value="{{ $fecha }}">
+                    <input type="hidden" name="empresa" value="{{ $empresa }}">
                     <input type="hidden" name="ruta_key" id="gasto-ruta-key">
                     <input type="hidden" name="ruta" id="gasto-ruta">
                     <div class="alert alert-light border" id="gasto-resumen"></div>

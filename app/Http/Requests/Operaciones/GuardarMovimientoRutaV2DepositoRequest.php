@@ -24,6 +24,7 @@ class GuardarMovimientoRutaV2DepositoRequest extends FormRequest
     {
         return [
             'fecha' => ['required', 'date'],
+            'empresa' => ['nullable', 'string', 'in:GJ,NG'],
             'ruta_key' => ['required', 'string', 'max:180'],
             'ruta' => ['required', 'string', 'max:180'],
             'monto' => ['required', 'numeric', 'decimal:2', 'gt:0', 'max:9999999999999.99'],

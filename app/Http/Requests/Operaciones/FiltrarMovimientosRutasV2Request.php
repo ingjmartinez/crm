@@ -4,7 +4,7 @@ namespace App\Http\Requests\Operaciones;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class ReporteMovimientoRutaV2PdfRequest extends FormRequest
+class FiltrarMovimientosRutasV2Request extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -22,7 +22,7 @@ class ReporteMovimientoRutaV2PdfRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'fecha' => ['required', 'date'],
+            'fecha' => ['nullable', 'date'],
             'empresa' => ['nullable', 'string', 'in:GJ,NG'],
         ];
     }
