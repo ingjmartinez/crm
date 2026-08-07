@@ -383,7 +383,15 @@
                             </div>
                             <div class="form-text">El monto se mostrará con separador de miles y dos decimales.</div>
                         </div>
-                        <div class="col-md-6"><label class="form-label">Banco</label><input type="text" name="banco" class="form-control" list="lista-bancos-v2" required></div>
+                        <div class="col-md-6">
+                            <label for="banco-deposito" class="form-label">Banco</label>
+                            <select name="banco" class="form-select" id="banco-deposito" required>
+                                <option value="" selected disabled>Selecciona un banco</option>
+                                @foreach ($bancos as $banco)
+                                    <option value="{{ $banco }}" @selected(old('banco') === $banco)>{{ $banco }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="col-md-6"><label class="form-label">Referencia bancaria</label><input type="text" name="referencia" class="form-control" maxlength="120"></div>
                         <div class="col-md-6"><label class="form-label">Comprobante</label><input type="file" name="comprobante" class="form-control" id="comprobante-deposito" accept="image/*"></div>
                         <div class="col-12">
@@ -396,7 +404,6 @@
                         </div>
                         <div class="col-12"><label class="form-label">Observación</label><textarea name="observacion" class="form-control" rows="3" maxlength="1000"></textarea></div>
                     </div>
-                    <datalist id="lista-bancos-v2">@foreach ($bancos as $banco)<option value="{{ $banco->nombre }}">@endforeach</datalist>
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Guardar depósito</button></div>
             </form>

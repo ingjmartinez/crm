@@ -6,6 +6,7 @@ use App\Http\Controllers\AsistenciaComparativaController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AutoProcesoConfigController;
+use App\Http\Controllers\BancoOperacionController;
 use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\ComercialController;
 use App\Http\Controllers\ContabilidadComisionController;
@@ -474,6 +475,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
     // Modulo Operaciones
     Route::get('/operaciones', [ModuleHubController::class, 'operaciones'])->name('operaciones.index');
+    Route::get('/operaciones/bancos', [BancoOperacionController::class, 'index'])->name('operaciones.bancos.index');
+    Route::post('/operaciones/bancos', [BancoOperacionController::class, 'store'])->name('operaciones.bancos.store');
+    Route::delete('/operaciones/bancos/{banco}', [BancoOperacionController::class, 'destroy'])->name('operaciones.bancos.destroy');
     Route::get('/operaciones/deposito-ruta', [OperacionDepositoRutaController::class, 'index'])->name('operaciones.deposito-ruta');
     Route::get('/operaciones/deposito-ruta/data', [OperacionDepositoRutaController::class, 'data'])->name('operaciones.deposito-ruta.data');
     Route::post('/operaciones/deposito-ruta/{deposito}/estado', [OperacionDepositoRutaController::class, 'updateEstado'])->name('operaciones.deposito-ruta.estado');

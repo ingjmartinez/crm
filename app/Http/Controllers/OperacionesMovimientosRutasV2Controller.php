@@ -52,7 +52,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'fechasDisponibles' => $fechasDisponibles,
             'rutas' => $rutas,
             'resumen' => $this->resumenGeneral($rutas),
-            'bancos' => BancoOperacion::query()->orderBy('nombre')->get(),
+            'bancos' => BancoOperacion::nombresDisponibles(),
             'depositosPorBanco' => $this->depositosPorBanco($fecha, $empresa),
             'importaciones' => $this->importacionesPorFecha($fecha),
         ]);

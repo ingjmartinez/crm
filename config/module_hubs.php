@@ -252,6 +252,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Banco',
+                'descripcion' => 'Administra los bancos disponibles para depósitos y reportes de Operaciones.',
+                'url' => '/operaciones/bancos',
+                'icono' => 'ri-bank-line',
+                'categoria' => 'Gestion',
+                'tags' => ['banco', 'depositos', 'catalogo', 'operaciones'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Operador Ruta',
                 'descripcion' => 'Relaciona operadores con rutas y agencias asignadas.',
                 'url' => '/operaciones/operador-ruta',

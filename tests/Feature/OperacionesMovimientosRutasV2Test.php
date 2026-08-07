@@ -7,6 +7,7 @@ use App\Http\Requests\Operaciones\FiltrarMovimientosRutasV2Request;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2DepositoRequest;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2GastoRequest;
 use App\Http\Requests\Operaciones\ReporteMovimientoRutaV2PdfRequest;
+use App\Models\BancoOperacion;
 use App\Models\MovimientoRutaV2Deposito;
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
@@ -27,6 +28,11 @@ class OperacionesMovimientosRutasV2Test extends TestCase
     {
         parent::setUp();
 
+        Schema::create('bancos_operaciones', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nombre')->unique();
+            $table->timestamps();
+        });
         Schema::create('movimientos_rutas_v2_importaciones', function (Blueprint $table): void {
             $table->id();
             $table->string('nombre_archivo');
@@ -89,6 +95,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         Schema::dropIfExists('movimientos_rutas_v2_depositos');
         Schema::dropIfExists('movimientos_rutas_v2_transacciones');
         Schema::dropIfExists('movimientos_rutas_v2_importaciones');
+        Schema::dropIfExists('bancos_operaciones');
 
         parent::tearDown();
     }
@@ -195,6 +202,9 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString('Depósitos por banco', $vista);
         $this->assertStringContainsString('Ver montos por banco', $vista);
         $this->assertStringContainsString('id="form-aplicar-gasto"', $vista);
+        $this->assertStringContainsString('id="banco-deposito"', $vista);
+        $this->assertStringContainsString('Selecciona un banco', $vista);
+        $this->assertStringNotContainsString('lista-bancos-v2', $vista);
         $this->assertStringContainsString('id="monto-gasto-visible"', $vista);
         $this->assertStringContainsString('id="monto-gasto"', $vista);
         $this->assertStringContainsString("titulo: 'Confirmar monto del gasto'", $vista);
@@ -207,6 +217,28 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString('foreach($__currentLoopData as $ruta)', $vistaCompilada);
         $this->assertContains('in:GJ,NG', (new FiltrarMovimientosRutasV2Request)->rules()['empresa']);
         $this->assertContains('in:GJ,NG', (new ReporteMovimientoRutaV2PdfRequest)->rules()['empresa']);
+    }
+
+    public function test_el_catalogo_de_bancos_refleja_los_registros_disponibles(): void
+    {
+        BancoOperacion::query()->insert([
+            ['nombre' => 'Banco Reservas'],
+            ['nombre' => 'Banco Caribe'],
+            ['nombre' => 'Banco Santa Cruz'],
+            ['nombre' => 'Banco Popular'],
+        ]);
+
+        $bancos = BancoOperacion::nombresDisponibles();
+
+        $this->assertSame([
+            'Banco Caribe',
+            'Banco Popular',
+            'Banco Reservas',
+            'Banco Santa Cruz',
+        ], $bancos->all());
+        $this->assertSame(1, $bancos->filter(
+            fn (string $banco): bool => $banco === 'Banco Reservas'
+        )->count());
     }
 
     public function test_filtra_por_empresa_sin_perder_el_detalle_individual_de_las_rutas(): void
