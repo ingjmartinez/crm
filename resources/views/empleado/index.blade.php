@@ -261,6 +261,7 @@
         let chartEmpleadosCiudad = null;
         let chartSalarioEmpresa = null;
         let empleadosTable = null;
+        const empleadosExportUrl = @json(route('empleados.export'));
 
         function formatoMonto(valor) {
             return Number(valor || 0).toLocaleString('en-US', {
@@ -510,7 +511,24 @@
                     searchDelay: 450,
                     pageLength: 10,
                     dom: 'Bfrtip',
-                    buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+                    buttons: [
+                        'copy',
+                        'csv',
+                        {
+                            text: '<i class="ri-file-excel-2-line me-1"></i>Excel completo',
+                            titleAttr: 'Descargar todos los empleados que coinciden con el filtro actual',
+                            action: function () {
+                                const params = new URLSearchParams({
+                                    empresa: obtenerEmpresaActual(),
+                                    buscar: empleadosTable ? empleadosTable.search().trim() : '',
+                                });
+
+                                window.location.assign(empleadosExportUrl + '?' + params.toString());
+                            }
+                        },
+                        'pdf',
+                        'print'
+                    ],
                     ajax: {
                         url: '/empleados/list',
                         data: function (data) {

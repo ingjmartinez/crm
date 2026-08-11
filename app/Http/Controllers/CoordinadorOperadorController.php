@@ -34,7 +34,7 @@ class CoordinadorOperadorController extends Controller
 
         $registrosQuery = CoordinadorOperador::with([
             'agencias:id,agencia,nombre_agencia,terminal',
-            'empleado:id,empleadoid',
+            'empleado:id,empleadoid,companyid',
         ])
             ->withCount('agencias');
 
@@ -51,19 +51,35 @@ class CoordinadorOperadorController extends Controller
             ->unique()
             ->values();
 
-        $cedulasEnMaestra = DB::table('empleados')
+        $empleadosPorCedula = DB::table('empleados')
             ->whereNotNull('cedula')
             ->whereIn(
                 DB::raw("REPLACE(REPLACE(REPLACE(TRIM(CAST(cedula AS CHAR)), '-', ''), ' ', ''), '.', '')"),
                 $cedulasCoordinadores
             )
-            ->pluck('cedula')
-            ->map(fn ($cedula): string => $this->normalizarCedula($cedula))
-            ->flip();
+            ->get(['cedula', 'fechasalida', 'companyid'])
+            ->groupBy(fn ($empleado): string => $this->normalizarCedula($empleado->cedula));
 
-        $registros->getCollection()->each(function (CoordinadorOperador $registro) use ($cedulasEnMaestra): void {
+        $registros->getCollection()->each(function (CoordinadorOperador $registro) use ($empleadosPorCedula): void {
             $cedula = $this->normalizarCedula($registro->cedula);
-            $registro->setAttribute('cedula_en_maestra', $cedula !== '' && $cedulasEnMaestra->has($cedula));
+            $empleados = $empleadosPorCedula->get($cedula, collect());
+            $companyIds = $empleados
+                ->pluck('companyid')
+                ->map(fn ($companyId): string => trim((string) $companyId))
+                ->filter()
+                ->unique()
+                ->values();
+            $companyId = $registro->empleado?->companyid
+                ?? ($companyIds->count() === 1 ? $companyIds->first() : null);
+
+            $registro->setAttribute('cedula_en_maestra', $cedula !== '' && $empleados->isNotEmpty());
+            $registro->setAttribute('empresa_nombre', $this->nombreEmpresaDesdeCompanyId($companyId));
+            $registro->setAttribute(
+                'cedula_con_salida',
+                $cedula !== '' && $empleados->contains(
+                    fn ($empleado): bool => $this->tieneFechaSalida($empleado->fechasalida)
+                )
+            );
         });
 
         $agencias = Agencia::select('id', 'agencia', 'nombre_agencia')
@@ -314,6 +330,13 @@ class CoordinadorOperadorController extends Controller
     private function normalizarCedula(mixed $cedula): string
     {
         return preg_replace('/\D+/', '', (string) $cedula);
+    }
+
+    private function tieneFechaSalida(mixed $fechaSalida): bool
+    {
+        $fechaSalida = trim((string) $fechaSalida);
+
+        return $fechaSalida !== '' && $fechaSalida !== '0000-00-00';
     }
 
     /**

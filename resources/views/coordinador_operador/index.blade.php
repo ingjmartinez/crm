@@ -75,6 +75,10 @@
             background-color: #fff7e6 !important;
         }
 
+        #tablaCoordinadorOperador > tbody > tr.coordinador-con-salida > td {
+            background-color: #e7f5ff !important;
+        }
+
         @media (max-width: 991.98px) {
             .coordinador-create-form {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -241,11 +245,11 @@
                                     <table class="table table-bordered table-striped align-middle mb-0" id="tablaCoordinadorOperador">
                                         <thead class="table-light">
                                             <tr>
+                                                <th>Empresa</th>
                                                 <th class="text-center" style="width:80px;">ID</th>
                                                 <th class="text-center">ID empleado</th>
                                                 <th>Nombre</th>
                                                 <th>Apellido</th>
-                                                <th>Correo</th>
                                                 <th>Cédula</th>
                                                 <th>Teléfono</th>
                                                 <th>Puesto</th>
@@ -256,20 +260,29 @@
                                         <tbody>
                                             @forelse($registros as $item)
                                                 <tr
-                                                    @class(['coordinador-sin-maestra' => ! $item->cedula_en_maestra])
+                                                    @class([
+                                                        'coordinador-sin-maestra' => ! $item->cedula_en_maestra,
+                                                        'coordinador-con-salida' => $item->cedula_con_salida,
+                                                    ])
                                                     data-cedula-en-maestra="{{ $item->cedula_en_maestra ? '1' : '0' }}"
+                                                    data-cedula-con-salida="{{ $item->cedula_con_salida ? '1' : '0' }}"
                                                     data-search="{{ strtolower(trim($item->nombre . ' ' . $item->apellido . ' ' . $item->cedula . ' ' . preg_replace('/\D+/', '', (string) $item->cedula))) }}">
+                                                    <td>{{ $item->empresa_nombre }}</td>
                                                     <td class="text-center">{{ $item->id }}</td>
                                                     <td class="text-center">{{ $item->empleado?->empleadoid ?: 'Sin asignar' }}</td>
                                                     <td>{{ $item->nombre }}</td>
                                                     <td>{{ $item->apellido }}</td>
-                                                    <td>{{ $item->correo }}</td>
                                                     <td>
                                                         {{ $item->cedula }}
                                                         @if (! $item->cedula_en_maestra)
                                                             <span class="badge bg-warning-subtle text-warning-emphasis ms-1"
                                                                 title="La cédula no aparece en la maestra de empleados">
                                                                 No está en maestra
+                                                            </span>
+                                                        @elseif ($item->cedula_con_salida)
+                                                            <span class="badge bg-info-subtle text-info-emphasis ms-1"
+                                                                title="La cédula tiene fecha de salida en la maestra de empleados y debe actualizarse">
+                                                                Salida en maestra · actualizar
                                                             </span>
                                                         @endif
                                                     </td>

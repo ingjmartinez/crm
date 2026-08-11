@@ -24,6 +24,11 @@ class ModuleHubController extends Controller
         return $this->show('operaciones');
     }
 
+    public function legal()
+    {
+        return $this->show('legal');
+    }
+
     public function mantenimiento()
     {
         return $this->show('mantenimiento');
@@ -68,11 +73,11 @@ class ModuleHubController extends Controller
                     return false;
                 }
 
-                if (!empty($item['permission']) && (! $user || ! $user->can($item['permission']))) {
+                if (! empty($item['permission']) && (! $user || ! $user->can($item['permission']))) {
                     return false;
                 }
 
-                if (!empty($item['role']) && (! $user || ! method_exists($user, 'hasRole') || ! $user->hasRole($item['role']))) {
+                if (! empty($item['role']) && (! $user || ! method_exists($user, 'hasRole') || ! $user->hasRole($item['role']))) {
                     return false;
                 }
 

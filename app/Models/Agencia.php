@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Agencia extends Model
 {
@@ -71,5 +72,10 @@ class Agencia extends Model
     public function horarios()
     {
         return $this->hasMany(AgenciaHorario::class);
+    }
+
+    public function legalContratos(): HasMany
+    {
+        return $this->hasMany(LegalContrato::class);
     }
 }

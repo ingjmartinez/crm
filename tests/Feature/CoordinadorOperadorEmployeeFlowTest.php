@@ -350,6 +350,31 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             ->assertSee('Asignar empleado');
     }
 
+    public function test_list_starts_with_company_column_and_hides_email_column(): void
+    {
+        $employeeId = $this->insertEmployee();
+
+        DB::table('coordinador_operador')->insert([
+            'empleado_id' => $employeeId,
+            'nombre' => 'Ana',
+            'apellido' => 'Pérez',
+            'correo' => 'ana@example.com',
+            'cedula' => '00111111111',
+            'puesto' => 'coordinador',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->get(route('coordinador-operador.index'));
+
+        $response
+            ->assertOk()
+            ->assertSeeInOrder(['<th>Empresa</th>', '<th class="text-center" style="width:80px;">ID</th>'], false)
+            ->assertSee('<td>Grupo Joselito</td>', false)
+            ->assertDontSee('<th>Correo</th>', false)
+            ->assertDontSee('<td>ana@example.com</td>', false);
+    }
+
     public function test_employee_picker_uses_resilient_selection_and_visible_confirmation(): void
     {
         $response = $this->get(route('coordinador-operador.index'));
@@ -397,6 +422,48 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             ->assertSee('No está en maestra');
 
         $this->assertSame(1, substr_count($response->getContent(), 'class="coordinador-sin-maestra"'));
+    }
+
+    public function test_coordinator_row_is_highlighted_in_light_blue_when_cedula_has_an_exit_date(): void
+    {
+        $exitedEmployeeId = $this->insertEmployee([
+            'fechasalida' => '2026-07-01',
+        ]);
+        $activeEmployeeId = $this->insertEmployee([
+            'empleadoid' => 1002,
+            'cedula' => '00111111112',
+        ]);
+
+        DB::table('coordinador_operador')->insert([
+            [
+                'empleado_id' => $exitedEmployeeId,
+                'nombre' => 'Empleado',
+                'apellido' => 'Con salida',
+                'cedula' => '00111111111',
+                'puesto' => 'coordinador',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'empleado_id' => $activeEmployeeId,
+                'nombre' => 'Empleado',
+                'apellido' => 'Activo',
+                'cedula' => '00111111112',
+                'puesto' => 'coordinador',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->get(route('coordinador-operador.index'));
+
+        $response
+            ->assertOk()
+            ->assertSee('data-cedula-con-salida="1"', false)
+            ->assertSee('data-cedula-con-salida="0"', false)
+            ->assertSee('Salida en maestra · actualizar');
+
+        $this->assertSame(1, substr_count($response->getContent(), 'class="coordinador-con-salida"'));
     }
 
     public function test_pending_coordinator_is_linked_by_cedula_and_displays_employee_code(): void

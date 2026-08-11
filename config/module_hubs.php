@@ -335,6 +335,22 @@ return [
         ],
     ],
 
+    'legal' => [
+        'titulo' => 'Legal',
+        'breadcrumb' => 'Legal',
+        'items' => [
+            [
+                'nombre' => 'Bitácora de agencia',
+                'descripcion' => 'Administra contratos, documentos y pagos programados por terminal.',
+                'url' => '/legal/bitacora-agencias',
+                'icono' => 'ri-file-list-3-line',
+                'categoria' => 'Contratos',
+                'tags' => ['legal', 'agencias', 'terminales', 'contratos', 'pagos', 'documentos'],
+                'activo' => true,
+            ],
+        ],
+    ],
+
     'mantenimiento' => [
         'titulo' => 'Mantenimiento',
         'breadcrumb' => 'Mantenimiento',
@@ -685,6 +701,15 @@ return [
         'titulo' => 'Gerencia',
         'breadcrumb' => 'Gerencia',
         'items' => [
+            [
+                'nombre' => 'Beneficio Bruto',
+                'descripcion' => 'Carga el resumen CSV y organiza ventas, premios, pagos y resultados por terminal.',
+                'url' => '/gerencia/beneficio-bruto',
+                'icono' => 'ri-file-chart-line',
+                'categoria' => 'Rentabilidad',
+                'tags' => ['beneficio', 'ventas', 'premios', 'csv', 'terminales'],
+                'activo' => true,
+            ],
             [
                 'nombre' => 'Seguimiento de Agencia',
                 'descripcion' => 'Da seguimiento a metas, ventas, brechas y proyección por ciudad, coordinador, ruta, agencia y producto.',

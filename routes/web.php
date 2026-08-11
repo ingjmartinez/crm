@@ -21,6 +21,7 @@ use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\EntrevistaOnlineController;
 use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
+use App\Http\Controllers\Gerencia\BeneficioBrutoController;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaController;
 use App\Http\Controllers\Gerencia\SeguimientoAgenciaController;
 use App\Http\Controllers\GestionAgenciasReporteController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\IncentivoV6Controller;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\KpiLotobetController;
+use App\Http\Controllers\LegalBitacoraAgenciaController;
 use App\Http\Controllers\MarController;
 use App\Http\Controllers\MetaIncentivoController;
 use App\Http\Controllers\ModuleHubController;
@@ -92,6 +94,10 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/gerencia', [ModuleHubController::class, 'gerencia'])->name('gerencia.index');
+    Route::get('/gerencia/beneficio-bruto', [BeneficioBrutoController::class, 'index'])
+        ->name('gerencia.beneficio-bruto');
+    Route::post('/gerencia/beneficio-bruto', [BeneficioBrutoController::class, 'procesar'])
+        ->name('gerencia.beneficio-bruto.procesar');
     Route::get('/gerencia/rentabilidad-agencia', [RentabilidadAgenciaController::class, 'index'])
         ->name('gerencia.rentabilidad-agencia');
     Route::get('/gerencia/rentabilidad-agencia/buscar', [RentabilidadAgenciaController::class, 'buscar'])
@@ -314,6 +320,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::get('/recursos-humanos', [RecursosHumanosController::class, 'index'])->name('recursos-humanos.index');
         Route::get('/empleados', [EmpleadoController::class, 'index']);
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
+        Route::get('/empleados/exportar', [EmpleadoController::class, 'export'])->name('empleados.export');
         Route::get('/empleados/dashboard', [EmpleadoController::class, 'dashboard']);
         Route::get('/empleados/show/{id}', [EmpleadoController::class, 'show']);
         Route::post('/empleados/store', [EmpleadoController::class, 'store']);
@@ -512,6 +519,14 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/operaciones/reportes/diario/{reporte_diario_ruta}/comprobante/upload', [OperacionesReporteDiarioController::class, 'uploadComprobanteEnReporte'])->name('operaciones.reporte.diario.comprobante.upload');
     Route::post('/operaciones/reportes/diario/upload-comprobante', [OperacionesReporteDiarioController::class, 'uploadComprobante'])->name('operaciones.reporte.diario.upload-comprobante');
     Route::get('/operaciones/reportes/mensual', fn () => view('operaciones.reportes.mensual'))->name('operaciones.reporte.mensual');
+
+    // Modulo Legal
+    Route::get('/legal', [ModuleHubController::class, 'legal'])->name('legal.index');
+    Route::get('/legal/bitacora-agencias', [LegalBitacoraAgenciaController::class, 'index'])->name('legal.bitacora-agencias.index');
+    Route::get('/legal/bitacora-agencias/{agencia}', [LegalBitacoraAgenciaController::class, 'show'])->name('legal.bitacora-agencias.show');
+    Route::post('/legal/bitacora-agencias/{agencia}/contratos', [LegalBitacoraAgenciaController::class, 'storeContrato'])->name('legal.contratos.store');
+    Route::get('/legal/contratos/{contrato}/documento', [LegalBitacoraAgenciaController::class, 'documento'])->name('legal.contratos.documento');
+    Route::post('/legal/contratos/{contrato}/obligaciones', [LegalBitacoraAgenciaController::class, 'storeObligacion'])->name('legal.obligaciones.store');
     Route::resource('operaciones/operador-ruta', OperadorRutaController::class)
         ->except(['show'])
         ->parameters(['operador-ruta' => 'operador_ruta'])

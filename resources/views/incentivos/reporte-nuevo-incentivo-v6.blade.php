@@ -2318,28 +2318,6 @@
         };
     }
 
-    function getExcludedCoordinatorPaymentKeys() {
-        const cedulas = new Set();
-        const empleadoIds = new Set();
-
-        coordinatorRows
-            .filter((row) => isCoordinatorExcluded(row))
-            .forEach((row) => {
-                const cedula = getCedulaKey(row?.cedula);
-                const empleadoId = getEmpleadoIdKey(row?.empleadoid);
-
-                if (cedula) {
-                    cedulas.add(cedula);
-                }
-
-                if (empleadoId) {
-                    empleadoIds.add(empleadoId);
-                }
-            });
-
-        return { cedulas, empleadoIds };
-    }
-
     function getUsuariosPorActualizarRows(sourceRows = currentFilteredRows) {
         const rows = Array.isArray(sourceRows) ? sourceRows : [];
         const grouped = new Map();
@@ -2587,17 +2565,6 @@
 
         if (excludedDesvinculadosEmpleadoIds.size) {
             rows = rows.filter(item => !excludedDesvinculadosEmpleadoIds.has(getEmpleadoIdKey(item?.empleadoid)));
-        }
-
-        if (excludedCoordinatorIds.size) {
-            const coordinatorKeys = getExcludedCoordinatorPaymentKeys();
-            rows = rows.filter((item) => {
-                const cedula = getCedulaKey(item?.cedula);
-                const empleadoId = getEmpleadoIdKey(item?.empleadoid);
-
-                return !(cedula && coordinatorKeys.cedulas.has(cedula))
-                    && !(empleadoId && coordinatorKeys.empleadoIds.has(empleadoId));
-            });
         }
 
         return rows;

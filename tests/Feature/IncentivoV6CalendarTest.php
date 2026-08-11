@@ -564,6 +564,27 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertLessThan($amountColumn, $retentionColumn);
     }
 
+    public function test_coordinator_retention_does_not_filter_agent_payment_rows(): void
+    {
+        $view = view('incentivos.reporte-nuevo-incentivo-v6', [
+            'coordinadores' => collect(),
+            'administrativosConfig' => [],
+            'terminalesExcluidasIncentivo' => [],
+        ])->render();
+
+        $functionStart = strpos($view, 'function getPagoIncentivoExportRows()');
+        $functionEnd = strpos($view, 'function getPagoIncentivoExportData', $functionStart);
+
+        $this->assertNotFalse($functionStart);
+        $this->assertNotFalse($functionEnd);
+
+        $paymentRowsFunction = substr($view, $functionStart, $functionEnd - $functionStart);
+
+        $this->assertStringNotContainsString('excludedCoordinatorIds', $paymentRowsFunction);
+        $this->assertStringNotContainsString('getExcludedCoordinatorPaymentKeys', $view);
+        $this->assertStringContainsString('function getCoordinatorExcludedTotal()', $view);
+    }
+
     /**
      * @return array<string, array<int, array<string, int|float|string|null>>>
      */

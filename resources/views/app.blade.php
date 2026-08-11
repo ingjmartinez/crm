@@ -1113,6 +1113,12 @@
                                 </a>
                             </li>
                             <li class="nav-item">
+                                <a href="{{ route('legal.index') }}"
+                                    class="nav-link menu-link {{ request()->is('legal*') ? 'active' : '' }}">
+                                    <i class="ri-scales-3-line"></i> <span data-key="t-apps">Legal</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
                                 <a href="{{ route('comercial.index') }}"
                                     class="nav-link menu-link {{ request()->is('comercial*') ? 'active' : '' }}">
                                     <i class="ri-line-chart-line"></i> <span data-key="t-apps">Comercial</span>
