@@ -2652,10 +2652,11 @@
         });
     }
 
-    function getAdmiCoorPagoExportWorkbookData() {
+    function getAdmiCoorPagoExportWorkbookData(options = {}) {
+        const combineByCompany = Boolean(options.combineByCompany);
         const buildRows = (rows) => buildPagoIncentivoData(rows, {
             includeNombre: true,
-            suffix: '_admi_coor',
+            suffix: combineByCompany ? '_admi_coor_por_empresa' : '_admi_coor',
             emptyMessage: 'No hay registros administrativos ni coordinadores con importe mayor a cero para generar el Excel de pago.',
         });
 
@@ -2695,6 +2696,19 @@
         const sheets = groups.flatMap((group) => {
             const adminRows = administrativos.filter((row) => normalizePagoEmpresaGroupKey(row.empresa) === group.key);
             const coordRows = coordinadores.filter((row) => normalizePagoEmpresaGroupKey(row.empresa) === group.key);
+
+            if (combineByCompany) {
+                const companyData = [...adminRows, ...coordRows].length
+                    ? buildRows([...adminRows, ...coordRows])
+                    : null;
+
+                return companyData ? [{
+                    name: group.label,
+                    headers: companyData.headers,
+                    rows: companyData.rows,
+                }] : [];
+            }
+
             const adminData = adminRows.length ? buildRows(adminRows) : null;
             const coordData = coordRows.length ? buildRows(coordRows) : null;
 
@@ -2724,7 +2738,7 @@
         return {
             sheets,
             fechaFin: getFechaFinPagoIncentivo(),
-            suffix: '_admi_coor',
+            suffix: combineByCompany ? '_admi_coor_por_empresa' : '_admi_coor',
         };
     }
 
@@ -2940,8 +2954,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         });
     }
 
-    function generarXlsxPagoAdmiCoor() {
-        const data = getAdmiCoorPagoExportWorkbookData();
+    function generarXlsxPagoAdmiCoor(options = {}) {
+        const data = getAdmiCoorPagoExportWorkbookData(options);
         if (!data) {
             return;
         }
@@ -2996,6 +3010,9 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                         <div style="grid-column:1 / -1;">
                             <button type="button" class="btn btn-primary btn-lg fw-bold w-100 py-3" id="btnPagoExcelAdmiCoor">admi-coor</button>
                         </div>
+                        <div style="grid-column:1 / -1;">
+                            <button type="button" class="btn btn-info btn-lg fw-bold w-100 py-3" id="btnPagoExcelAdmiCoorPorEmpresa">admi-coor por empresa (2 hojas)</button>
+                        </div>
                     </div>
                 </div>
             `,
@@ -3015,6 +3032,10 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 document.getElementById('btnPagoExcelAdmiCoor')?.addEventListener('click', () => {
                     Swal.close();
                     generarXlsxPagoAdmiCoor();
+                });
+                document.getElementById('btnPagoExcelAdmiCoorPorEmpresa')?.addEventListener('click', () => {
+                    Swal.close();
+                    generarXlsxPagoAdmiCoor({ combineByCompany: true });
                 });
             },
         });

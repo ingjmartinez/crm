@@ -585,6 +585,25 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('function getCoordinatorExcludedTotal()', $view);
     }
 
+    public function test_payment_excel_can_combine_administrators_and_coordinators_into_two_company_sheets(): void
+    {
+        $view = view('incentivos.reporte-nuevo-incentivo-v6', [
+            'coordinadores' => collect(),
+            'administrativosConfig' => [],
+            'terminalesExcluidasIncentivo' => [],
+        ])->render();
+
+        $this->assertStringContainsString('id="btnPagoExcelAdmiCoor"', $view);
+        $this->assertStringContainsString('generarXlsxPagoAdmiCoor();', $view);
+        $this->assertStringContainsString('btnPagoExcelAdmiCoorPorEmpresa', $view);
+        $this->assertStringContainsString('admi-coor por empresa (2 hojas)', $view);
+        $this->assertStringContainsString('const combineByCompany = Boolean(options.combineByCompany);', $view);
+        $this->assertStringContainsString('buildRows([...adminRows, ...coordRows])', $view);
+        $this->assertStringContainsString('name: group.label', $view);
+        $this->assertStringContainsString("suffix: combineByCompany ? '_admi_coor_por_empresa' : '_admi_coor'", $view);
+        $this->assertStringContainsString('generarXlsxPagoAdmiCoor({ combineByCompany: true });', $view);
+    }
+
     /**
      * @return array<string, array<int, array<string, int|float|string|null>>>
      */
