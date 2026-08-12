@@ -473,6 +473,15 @@ return [
                 'tags' => ['tecnologia', 'monitoreo', 'agencias', 'plaza'],
                 'activo' => true,
             ],
+            [
+                'nombre' => 'Monitoreo de agentes de ventas',
+                'descripcion' => 'Ponches de entrada y salida por agente, terminal y coordinador.',
+                'url' => '/tecnologia/monitoreo-agentes-ventas',
+                'icono' => 'ri-user-follow-line',
+                'categoria' => 'Monitoreo',
+                'tags' => ['tecnologia', 'monitoreo', 'agentes', 'asistencia'],
+                'activo' => true,
+            ],
         ],
     ],
 

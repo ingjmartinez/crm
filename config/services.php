@@ -65,4 +65,13 @@ return [
         'verify_ssl' => env('OPENAI_API_VERIFY_SSL', true),
     ],
 
+    'lotonet' => [
+        'session_url' => env('LOTONET_SESSION_URL', 'http://contable.apploteka.com/api/finan/sessions'),
+        'attendance_url' => env('LOTONET_ATTENDANCE_URL', 'http://contable.apploteka.com/api/finan/asistencia_usuarios'),
+        'attendance_token' => env('LOTONET_ATTENDANCE_TOKEN', 'ZFozLWdBYyqERusVdTsW'),
+        'attendance_cookie' => env('LOTONET_ATTENDANCE_COOKIE', '_orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682'),
+        'username' => env('LOTONET_USERNAME', 'fjoselito'),
+        'password' => env('LOTONET_PASSWORD', 'mnXd5pSyF3HXjCC4'),
+    ],
+
 ];

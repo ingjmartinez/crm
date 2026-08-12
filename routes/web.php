@@ -60,6 +60,7 @@ use App\Http\Controllers\ServicioGeneralRequerimientoController;
 use App\Http\Controllers\SuperAdminSesionController;
 use App\Http\Controllers\TareaController;
 use App\Http\Controllers\Tecnologia\MonitoreoAgenciaPlazaController;
+use App\Http\Controllers\Tecnologia\MonitoreoAgenteVentaController;
 use App\Http\Controllers\Tecnologia\MonitoreoTerminalController;
 use App\Http\Controllers\TecnologiaSolicitudController;
 use App\Http\Controllers\TokenController;
@@ -639,6 +640,12 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::post('/monitoreo-terminales/exportar', [MonitoreoTerminalController::class, 'exportar'])
             ->name('monitoreo-terminales.exportar');
         Route::get('/monitoreo-agencias-plaza', MonitoreoAgenciaPlazaController::class)->name('monitoreo-agencias-plaza.index');
+        Route::get('/monitoreo-agentes-ventas', [MonitoreoAgenteVentaController::class, 'index'])
+            ->name('monitoreo-agentes-ventas.index');
+        Route::get('/monitoreo-agentes-ventas/generar', [MonitoreoAgenteVentaController::class, 'generar'])
+            ->name('monitoreo-agentes-ventas.generar');
+        Route::post('/monitoreo-agentes-ventas/exportar', [MonitoreoAgenteVentaController::class, 'exportar'])
+            ->name('monitoreo-agentes-ventas.exportar');
         Route::get('/solicitudes', [TecnologiaSolicitudController::class, 'index'])->name('solicitudes.index');
         Route::get('/solicitudes/list', [TecnologiaSolicitudController::class, 'list'])->name('solicitudes.list');
         Route::post('/solicitudes', [TecnologiaSolicitudController::class, 'store'])->name('solicitudes.store');
