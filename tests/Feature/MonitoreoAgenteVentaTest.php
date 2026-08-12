@@ -33,6 +33,7 @@ class MonitoreoAgenteVentaTest extends TestCase
         Schema::dropIfExists('empleados');
         Schema::dropIfExists('agencias');
         Schema::dropIfExists('tokens');
+        Schema::dropIfExists('gestion_agencias_ventas');
 
         Schema::create('agencias', function (Blueprint $table): void {
             $table->increments('id');
@@ -73,6 +74,12 @@ class MonitoreoAgenteVentaTest extends TestCase
             $table->text('token');
             $table->dateTime('fecha');
         });
+
+        Schema::create('gestion_agencias_ventas', function (Blueprint $table): void {
+            $table->id();
+            $table->string('terminal_clave', 50)->nullable();
+            $table->dateTime('fecha_transaccion')->nullable();
+        });
     }
 
     protected function tearDown(): void
@@ -112,6 +119,11 @@ class MonitoreoAgenteVentaTest extends TestCase
             ->assertSee('paginacionAgentes', false)
             ->assertSee('const pageSize = 50;', false)
             ->assertSee('filtered.slice(firstRow, firstRow + pageSize)', false)
+            ->assertSee('REINICIO VALIDADO')
+            ->assertSee('SALIDA POR INACTIVIDAD')
+            ->assertSee('PENDIENTE DE VALIDACIÓN')
+            ->assertSee('Marca a validar')
+            ->assertSee('Última venta')
             ->assertSee('Página ${currentPage.toLocaleString', false)
             ->assertSee('monitoreo-agentes-ventas\/generar', false);
     }
@@ -162,11 +174,15 @@ class MonitoreoAgenteVentaTest extends TestCase
             ['companyid' => 168, 'cedula' => '1-0000000-1', 'nombres' => 'Agente', 'apellidos' => 'Joselito'],
             ['companyid' => 169, 'cedula' => '00100000001', 'nombres' => 'Agente', 'apellidos' => 'Negosur'],
         ]);
+        DB::table('gestion_agencias_ventas')->insert([
+            'terminal_clave' => '99',
+            'fecha_transaccion' => '2026-08-12 15:30:00',
+        ]);
 
         $service = $this->mock(AsistenciaAgenteVentaEndpointService::class);
         $service->shouldReceive('prepararAcceso')->once()->with('todos');
         $service->shouldReceive('consultar')->once()->with('2026-08-12', 'todos')->andReturn([
-            ['fecha' => '2026-08-12', 'sistema' => 'LOTOBET', 'cedula' => '00100000001', 'nombre' => 'Usuario API Bet', 'terminal' => '1', 'entrada' => '2026-08-12 07:25:00', 'salida' => '2026-08-12 14:02:00'],
+            ['fecha' => '2026-08-12', 'sistema' => 'LOTOBET', 'cedula' => '00100000001', 'nombre' => 'Usuario API Bet', 'terminal' => '1', 'entrada' => '2026-08-12 07:25:00', 'salida' => '2026-08-12 08:02:00'],
             ['fecha' => '2026-08-12', 'sistema' => 'LOTONET', 'cedula' => '00100000001', 'nombre' => 'Usuario API Net', 'terminal' => '2', 'entrada' => '2026-08-12 08:00:00', 'salida' => null],
         ]);
 
@@ -184,7 +200,7 @@ class MonitoreoAgenteVentaTest extends TestCase
                 'agencia' => '001 - Sucursal Centro',
                 'empresa' => 'Grupo Joselito',
                 'coordinador' => 'Ana Pérez',
-                'estado' => 'COMPLETO',
+                'estado' => 'SALIDA POR INACTIVIDAD',
             ])
             ->assertJsonFragment([
                 'agente' => 'Agente Negosur',
@@ -192,6 +208,155 @@ class MonitoreoAgenteVentaTest extends TestCase
                 'empresa' => 'Negosur',
                 'coordinador' => 'Luis Santos',
                 'estado' => 'SIN SALIDA',
+            ]);
+    }
+
+    public function test_generate_classifies_candidate_exits_using_subsequent_sales(): void
+    {
+        $this->insertAgency('001', 'Agencia con reinicio', 'Grupo Joselito', 'LOTOBET');
+        $this->insertAgency('002', 'Agencia con salida', 'Grupo Joselito', 'LOTOBET');
+        $this->insertAgency('003', 'Agencia pendiente', 'Grupo Joselito', 'LOTOBET');
+
+        DB::table('gestion_agencias_ventas')->insert([
+            [
+                'terminal_clave' => '1',
+                'fecha_transaccion' => '2026-08-12 08:45:00',
+            ],
+            [
+                'terminal_clave' => '99',
+                'fecha_transaccion' => '2026-08-12 09:30:00',
+            ],
+        ]);
+
+        $service = $this->mock(AsistenciaAgenteVentaEndpointService::class);
+        $service->shouldReceive('prepararAcceso')->once()->with('lotobet');
+        $service->shouldReceive('consultar')->once()->with('2026-08-12', 'lotobet')->andReturn([
+            [
+                'fecha' => '2026-08-12',
+                'sistema' => 'LOTOBET',
+                'cedula' => '00100000001',
+                'nombre' => 'Agente Reinicio',
+                'terminal' => '1',
+                'entrada' => '2026-08-12 07:30:00',
+                'salida' => '2026-08-12 08:20:00',
+                'ultimo_login' => null,
+            ],
+            [
+                'fecha' => '2026-08-12',
+                'sistema' => 'LOTOBET',
+                'cedula' => '00100000002',
+                'nombre' => 'Agente Salida',
+                'terminal' => '2',
+                'entrada' => '2026-08-12 07:30:00',
+                'salida' => '2026-08-12 08:20:00',
+                'ultimo_login' => null,
+            ],
+            [
+                'fecha' => '2026-08-12',
+                'sistema' => 'LOTOBET',
+                'cedula' => '00100000003',
+                'nombre' => 'Agente Pendiente',
+                'terminal' => '3',
+                'entrada' => '2026-08-12 08:45:00',
+                'salida' => '2026-08-12 09:30:00',
+                'ultimo_login' => null,
+            ],
+        ]);
+
+        $this->getJson(route('tecnologia.monitoreo-agentes-ventas.generar', [
+            'fecha_inicio' => '2026-08-12',
+            'fecha_fin' => '2026-08-12',
+            'sistema' => 'lotobet',
+        ]))->assertOk()
+            ->assertJsonPath('completos', 1)
+            ->assertJsonPath('sin_salida', 2)
+            ->assertJsonFragment([
+                'terminal' => '001',
+                'salida' => null,
+                'marca_validar' => '08:20 AM',
+                'ultima_venta' => '08:45 AM',
+                'estado' => 'REINICIO VALIDADO',
+            ])
+            ->assertJsonFragment([
+                'terminal' => '002',
+                'salida' => '08:20 AM',
+                'marca_validar' => '08:20 AM',
+                'ultima_venta' => null,
+                'estado' => 'SALIDA POR INACTIVIDAD',
+            ])
+            ->assertJsonFragment([
+                'terminal' => '003',
+                'salida' => null,
+                'marca_validar' => '09:30 AM',
+                'ultima_venta' => null,
+                'estado' => 'PENDIENTE DE VALIDACIÓN',
+            ]);
+    }
+
+    public function test_generate_does_not_infer_an_exit_without_movement_document_coverage(): void
+    {
+        $this->insertAgency('004', 'Agencia sin documento', 'Grupo Joselito', 'LOTOBET');
+
+        $service = $this->mock(AsistenciaAgenteVentaEndpointService::class);
+        $service->shouldReceive('prepararAcceso')->once()->with('lotobet');
+        $service->shouldReceive('consultar')->once()->with('2026-08-12', 'lotobet')->andReturn([[
+            'fecha' => '2026-08-12',
+            'sistema' => 'LOTOBET',
+            'cedula' => '00100000004',
+            'nombre' => 'Agente Sin Documento',
+            'terminal' => '4',
+            'entrada' => '2026-08-12 07:30:00',
+            'salida' => '2026-08-12 08:20:00',
+            'ultimo_login' => null,
+        ]]);
+
+        $this->getJson(route('tecnologia.monitoreo-agentes-ventas.generar', [
+            'fecha_inicio' => '2026-08-12',
+            'fecha_fin' => '2026-08-12',
+            'sistema' => 'lotobet',
+        ]))->assertOk()
+            ->assertJsonFragment([
+                'terminal' => '004',
+                'salida' => null,
+                'marca_validar' => '08:20 AM',
+                'estado' => 'PENDIENTE DE VALIDACIÓN',
+                'observacion' => 'No hay movimientos cargados para esta fecha; debe validarse el terminal.',
+            ]);
+    }
+
+    public function test_generate_waits_when_the_movement_document_does_not_cover_the_full_hour(): void
+    {
+        $this->insertAgency('005', 'Agencia con documento parcial', 'Grupo Joselito', 'LOTOBET');
+
+        DB::table('gestion_agencias_ventas')->insert([
+            'terminal_clave' => '99',
+            'fecha_transaccion' => '2026-08-12 08:45:00',
+        ]);
+
+        $service = $this->mock(AsistenciaAgenteVentaEndpointService::class);
+        $service->shouldReceive('prepararAcceso')->once()->with('lotobet');
+        $service->shouldReceive('consultar')->once()->with('2026-08-12', 'lotobet')->andReturn([[
+            'fecha' => '2026-08-12',
+            'sistema' => 'LOTOBET',
+            'cedula' => '00100000005',
+            'nombre' => 'Agente Documento Parcial',
+            'terminal' => '5',
+            'entrada' => '2026-08-12 07:30:00',
+            'salida' => '2026-08-12 08:20:00',
+            'ultimo_login' => null,
+        ]]);
+
+        $this->getJson(route('tecnologia.monitoreo-agentes-ventas.generar', [
+            'fecha_inicio' => '2026-08-12',
+            'fecha_fin' => '2026-08-12',
+            'sistema' => 'lotobet',
+        ]))->assertOk()
+            ->assertJsonFragment([
+                'terminal' => '005',
+                'salida' => null,
+                'marca_validar' => '08:20 AM',
+                'estado' => 'PENDIENTE DE VALIDACIÓN',
+                'observacion' => 'El documento de movimientos aún no cubre una hora completa desde la marca.',
             ]);
     }
 
@@ -237,6 +402,35 @@ class MonitoreoAgenteVentaTest extends TestCase
         Http::assertSent(fn ($request): bool => $request->url() === 'http://contable.apploteka.com/api/finan/sessions');
     }
 
+    public function test_service_keeps_last_login_as_a_candidate_instead_of_an_exit(): void
+    {
+        Token::query()->create([
+            'id' => 1,
+            'token' => 'token-prueba',
+            'fecha' => now()->addHour(),
+        ]);
+
+        Http::fake([
+            'https://ltkadapi.lotobet.bet/*' => Http::response([
+                'code' => '200',
+                'Content' => [[
+                    'agencia' => '0001',
+                    'cedula' => '1-0000000-1',
+                    'usuario' => 'Agente Prueba',
+                    'primer_login' => '2026-08-12 07:30:00',
+                    'ultimo_login' => '2026-08-12 08:20:00',
+                ]],
+            ]),
+        ]);
+
+        $registros = app(AsistenciaAgenteVentaEndpointService::class)
+            ->consultar('2026-08-12', 'lotobet');
+
+        $this->assertCount(1, $registros);
+        $this->assertNull($registros[0]['salida']);
+        $this->assertSame('2026-08-12 08:20:00', $registros[0]['ultimo_login']);
+    }
+
     public function test_generate_validates_date_range_and_system(): void
     {
         $this->getJson(route('tecnologia.monitoreo-agentes-ventas.generar', [
@@ -264,11 +458,14 @@ class MonitoreoAgenteVentaTest extends TestCase
             'agente' => 'Agente Prueba',
             'entrada' => '07:20 AM',
             'salida' => '02:10 PM',
+            'marca_validar' => null,
+            'ultima_venta' => null,
             'terminal' => '001',
             'agencia' => '001 - Agencia Prueba',
             'empresa' => 'Grupo Joselito',
             'coordinador' => 'Ana Pérez',
             'estado' => 'COMPLETO',
+            'observacion' => 'Salida confirmada por logout.',
         ];
 
         foreach (['excel' => 'xlsx', 'pdf' => 'pdf'] as $formato => $extension) {

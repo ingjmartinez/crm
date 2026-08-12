@@ -69,7 +69,7 @@ class MonitoreoAgenteVentaController extends Controller
         return response()->json([
             'data' => $registros,
             'total' => $registros->count(),
-            'completos' => $registros->where('estado', 'COMPLETO')->count(),
+            'completos' => $registros->whereIn('estado', ['COMPLETO', 'SALIDA POR INACTIVIDAD'])->count(),
             'sin_entrada' => $registros->whereIn('estado', ['SIN ENTRADA', 'SIN ENTRADA Y SALIDA'])->count(),
             'sin_salida' => $registros->whereIn('estado', [
                 'SIN SALIDA',
@@ -170,18 +170,18 @@ class MonitoreoAgenteVentaController extends Controller
 
     /**
      * @param  Collection<int, array<string, mixed>>  $registrosApi
-     * @return array{fechas: Collection<string, bool>, por_terminal: Collection<string, Collection<int, Carbon>>}
+     * @return array{fechas: Collection<string, bool>, hasta_por_fecha: Collection<string, Carbon>, por_terminal: Collection<string, Collection<int, Carbon>>}
      */
     private function movimientosVentas(Collection $registrosApi): array
     {
         if (! Schema::hasTable('gestion_agencias_ventas')) {
-            return ['fechas' => collect(), 'por_terminal' => collect()];
+            return ['fechas' => collect(), 'hasta_por_fecha' => collect(), 'por_terminal' => collect()];
         }
 
         $fechas = $registrosApi->pluck('fecha')->filter()->unique()->sort()->values();
 
         if ($fechas->isEmpty()) {
-            return ['fechas' => collect(), 'por_terminal' => collect()];
+            return ['fechas' => collect(), 'hasta_por_fecha' => collect(), 'por_terminal' => collect()];
         }
 
         $movimientos = DB::table('gestion_agencias_ventas')
@@ -195,6 +195,11 @@ class MonitoreoAgenteVentaController extends Controller
         return [
             'fechas' => $movimientos
                 ->mapWithKeys(fn (object $movimiento): array => [Carbon::parse($movimiento->fecha_transaccion)->toDateString() => true]),
+            'hasta_por_fecha' => $movimientos
+                ->groupBy(fn (object $movimiento): string => Carbon::parse($movimiento->fecha_transaccion)->toDateString())
+                ->map(fn (Collection $grupo): Carbon => $grupo
+                    ->map(fn (object $movimiento): Carbon => Carbon::parse($movimiento->fecha_transaccion))
+                    ->max()),
             'por_terminal' => $movimientos
                 ->filter(fn (object $movimiento): bool => trim((string) $movimiento->terminal_clave) !== '')
                 ->groupBy(fn (object $movimiento): string => Carbon::parse($movimiento->fecha_transaccion)->toDateString().'|'.$this->normalizarTerminal((string) $movimiento->terminal_clave))
@@ -207,29 +212,27 @@ class MonitoreoAgenteVentaController extends Controller
 
     /**
      * @param  array<string, mixed>  $registro
-     * @param  array{fechas: Collection<string, bool>, por_terminal: Collection<string, Collection<int, Carbon>>}  $movimientosVentas
+     * @param  array{fechas: Collection<string, bool>, hasta_por_fecha: Collection<string, Carbon>, por_terminal: Collection<string, Collection<int, Carbon>>}  $movimientosVentas
      * @return array{salida: ?string, marca_validar: ?string, ultima_venta: ?string, observacion: string, estado: string}
      */
     private function validarSalidaConMovimientos(array $registro, array $movimientosVentas): array
     {
         $fecha = (string) $registro['fecha'];
         $entrada = $this->instantePonche($registro['entrada'] ?? null, $fecha);
-        $salidaConfirmada = $this->instantePonche($registro['salida'] ?? null, $fecha);
+        $ultimoLogout = $this->instantePonche($registro['salida'] ?? null, $fecha);
         $ultimoLogin = $this->instantePonche($registro['ultimo_login'] ?? null, $fecha);
-        $esMarcaPosterior = $ultimoLogin !== null
+        $marcaCandidata = $ultimoLogout ?? $ultimoLogin;
+        $esMarcaPosterior = $marcaCandidata !== null
             && $entrada !== null
-            && $ultimoLogin->greaterThan($entrada)
-            && ($salidaConfirmada === null || $ultimoLogin->greaterThan($salidaConfirmada));
+            && $marcaCandidata->greaterThan($entrada);
 
         if (! $esMarcaPosterior) {
-            $salida = $this->formatearPonche($registro['salida'] ?? null, $fecha);
-
             return [
-                'salida' => $salida,
+                'salida' => null,
                 'marca_validar' => null,
                 'ultima_venta' => null,
-                'observacion' => $salida !== null ? 'Salida confirmada por logout.' : '',
-                'estado' => $this->estadoPonche($this->formatearPonche($registro['entrada'] ?? null, $fecha), $salida),
+                'observacion' => '',
+                'estado' => $this->estadoPonche($this->formatearPonche($registro['entrada'] ?? null, $fecha), null),
             ];
         }
 
@@ -237,9 +240,9 @@ class MonitoreoAgenteVentaController extends Controller
         /** @var Collection<int, Carbon> $movimientosTerminal */
         $movimientosTerminal = $movimientosVentas['por_terminal']->get($clave, collect());
         $ultimaVentaPosterior = $movimientosTerminal
-            ->filter(fn (Carbon $movimiento): bool => $movimiento->greaterThan($ultimoLogin))
+            ->filter(fn (Carbon $movimiento): bool => $movimiento->greaterThan($marcaCandidata))
             ->last();
-        $marcaValidar = $ultimoLogin->format('h:i A');
+        $marcaValidar = $marcaCandidata->format('h:i A');
 
         if ($ultimaVentaPosterior instanceof Carbon) {
             return [
@@ -261,12 +264,25 @@ class MonitoreoAgenteVentaController extends Controller
             ];
         }
 
-        if (now()->lessThan($ultimoLogin->copy()->addHour())) {
+        if (now()->lessThan($marcaCandidata->copy()->addHour())) {
             return [
                 'salida' => null,
                 'marca_validar' => $marcaValidar,
                 'ultima_venta' => null,
                 'observacion' => 'Aún no ha transcurrido una hora sin ventas desde la marca.',
+                'estado' => 'PENDIENTE DE VALIDACIÓN',
+            ];
+        }
+
+        $finVentanaValidacion = $marcaCandidata->copy()->addHour();
+        $coberturaDocumento = $movimientosVentas['hasta_por_fecha']->get($fecha);
+
+        if (! $coberturaDocumento instanceof Carbon || $coberturaDocumento->lessThan($finVentanaValidacion)) {
+            return [
+                'salida' => null,
+                'marca_validar' => $marcaValidar,
+                'ultima_venta' => null,
+                'observacion' => 'El documento de movimientos aún no cubre una hora completa desde la marca.',
                 'estado' => 'PENDIENTE DE VALIDACIÓN',
             ];
         }
