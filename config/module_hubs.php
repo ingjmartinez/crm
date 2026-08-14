@@ -306,6 +306,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Distribucion de Gastos de Ruta',
+                'descripcion' => 'Distribuye en partes iguales los gastos de cada ruta entre sus agencias y los agrupa por socio.',
+                'url' => '/operaciones/distribucion-gastos-ruta',
+                'icono' => 'ri-pie-chart-2-line',
+                'categoria' => 'Reportes',
+                'tags' => ['gastos', 'rutas', 'agencias', 'socios', 'distribucion'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Deposito Ruta',
                 'descripcion' => 'Consulta los comprobantes bancarios recibidos desde el chatbot.',
                 'url' => '/operaciones/deposito-ruta',

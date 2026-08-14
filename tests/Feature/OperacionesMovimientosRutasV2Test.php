@@ -324,6 +324,47 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertSame(2, (int) $banreservas->cantidad_depositos);
     }
 
+    public function test_aplica_deposito_y_gasto_por_ajax_sin_recargar_la_tabla(): void
+    {
+        app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-AJAX', '03/08/2026', '05 - HAINA', -1000),
+        ]), null, '2026-08-03');
+
+        $deposito = $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - HAINA',
+            'ruta' => '05 - HAINA',
+            'monto' => '200.00',
+            'banco' => 'Banreservas',
+            'referencia' => 'AJAX-001',
+        ])->assertOk();
+
+        $this->assertSame(200.0, (float) $deposito->json('ruta.depositado_banco'));
+        $this->assertSame(800.0, (float) $deposito->json('ruta.pendiente'));
+        $this->assertSame(200.0, (float) $deposito->json('resumen.depositado_banco'));
+        $this->assertSame('Banreservas', $deposito->json('depositos_por_banco.0.banco'));
+
+        $gasto = $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.gastos.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - HAINA',
+            'ruta' => '05 - HAINA',
+            'monto' => '100.00',
+            'concepto' => 'Peaje',
+        ])->assertOk();
+
+        $this->assertSame(200.0, (float) $gasto->json('ruta.depositado_banco'));
+        $this->assertSame(100.0, (float) $gasto->json('ruta.gastos_ruta'));
+        $this->assertSame(700.0, (float) $gasto->json('ruta.pendiente'));
+        $this->assertSame(700.0, (float) $gasto->json('resumen.pendiente'));
+        $this->assertDatabaseHas('movimientos_rutas_v2_depositos', ['referencia' => 'AJAX-001', 'monto' => 200]);
+        $this->assertDatabaseHas('movimientos_rutas_v2_gastos', ['concepto' => 'Peaje', 'monto' => 100]);
+
+        $vista = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2.blade.php'));
+        $this->assertStringContainsString('fetch(formulario.action', $vista);
+        $this->assertStringContainsString('tablaMovimientos.row(fila).data(datos).draw(false)', $vista);
+        $this->assertStringNotContainsString('if (confirmado) formulario.submit();', $vista);
+    }
+
     public function test_permite_eliminar_depositos_y_gastos_con_sus_comprobantes(): void
     {
         Storage::fake('local');

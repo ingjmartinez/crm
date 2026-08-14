@@ -119,7 +119,7 @@
                                     </div>
                                 </div>
                                 <div class="progress position-relative" style="height: 28px;" role="progressbar" aria-label="Cumplimiento de depósitos" aria-valuenow="{{ round($cumplimientoDepositos, 1) }}" aria-valuemin="0" aria-valuemax="100">
-                                    <div class="progress-bar bg-success" style="width: {{ $anchoCumplimiento }}%"></div>
+                                    <div class="progress-bar bg-success" id="rendimiento-barra" style="width: {{ $anchoCumplimiento }}%"></div>
                                     <span class="position-absolute top-50 start-50 translate-middle fs-5 fw-bold {{ $anchoCumplimiento >= 55 ? 'text-white' : 'text-dark' }}" id="rendimiento-porcentaje">
                                         {{ number_format($cumplimientoDepositos, 1) }}%
                                     </span>
@@ -132,15 +132,15 @@
                 <div class="row g-3 mb-4">
                     @php
                         $tarjetas = [
-                            ['Rutas', $resumen['rutas'], false, 'text-primary'],
-                            ['Transacciones', $resumen['transacciones'], false, 'text-info'],
-                            ['Neto esperado', $resumen['neto_esperado'], true, 'text-warning'],
-                            ['Depositado en banco', $resumen['depositado_banco'], true, 'text-success'],
-                            ['Gastos de ruta', $resumen['gastos_ruta'], true, 'text-primary'],
-                            ['Pendiente', $resumen['pendiente'], true, $resumen['pendiente'] > 0 ? 'text-danger' : 'text-success'],
+                            ['Rutas', $resumen['rutas'], false, 'text-primary', 'resumen-rutas'],
+                            ['Transacciones', $resumen['transacciones'], false, 'text-info', 'resumen-transacciones'],
+                            ['Neto esperado', $resumen['neto_esperado'], true, 'text-warning', 'resumen-neto-esperado'],
+                            ['Depositado en banco', $resumen['depositado_banco'], true, 'text-success', 'resumen-depositado-banco'],
+                            ['Gastos de ruta', $resumen['gastos_ruta'], true, 'text-primary', 'resumen-gastos-ruta'],
+                            ['Pendiente', $resumen['pendiente'], true, $resumen['pendiente'] > 0 ? 'text-danger' : 'text-success', 'resumen-pendiente'],
                         ];
                     @endphp
-                    @foreach ($tarjetas as [$titulo, $valor, $esMoneda, $color])
+                    @foreach ($tarjetas as [$titulo, $valor, $esMoneda, $color, $idValor])
                         @php
                             $esTarjetaDepositado = $titulo === 'Depositado en banco';
                         @endphp
@@ -153,7 +153,7 @@
                                 @endif>
                                 <div class="card-body">
                                 <p class="text-muted mb-2">{{ $titulo }}</p>
-                                <h4 class="mb-0 {{ $color }}">{{ $esMoneda ? 'RD$ '.number_format((float) $valor, 2) : number_format((int) $valor) }}</h4>
+                                <h4 class="mb-0 {{ $color }}" id="{{ $idValor }}">{{ $esMoneda ? 'RD$ '.number_format((float) $valor, 2) : number_format((int) $valor) }}</h4>
                                 @if ($esTarjetaDepositado)
                                     <div class="text-success small fw-semibold mt-2"><i class="ri-bank-line me-1"></i>Ver montos por banco</div>
                                 @endif
@@ -200,7 +200,7 @@
                                                 default => ['danger', 'Pendiente'],
                                             };
                                         @endphp
-                                        <tr>
+                                        <tr data-ruta-key="{{ $ruta['ruta_key'] }}">
                                             <td class="fw-semibold">{{ $ruta['ruta'] }}</td>
                                             <td class="text-end">{{ number_format($ruta['transacciones']) }}</td>
                                             <td class="text-end">RD$ {{ number_format($ruta['depositos_csv'], 2) }}</td>
@@ -288,8 +288,8 @@
                 <div class="modal-body p-4">
                     <div class="rounded-3 bg-success text-white text-center p-3 mb-4">
                         <div class="text-uppercase small opacity-75 fw-semibold">Total depositado en banco</div>
-                        <div class="display-6 fw-bold">RD$ {{ number_format((float) $resumen['depositado_banco'], 2) }}</div>
-                        <div class="small opacity-75">{{ number_format((int) $depositosPorBanco->sum('cantidad_depositos')) }} depósito(s) aplicado(s)</div>
+                        <div class="display-6 fw-bold" id="depositos-banco-total">RD$ {{ number_format((float) $resumen['depositado_banco'], 2) }}</div>
+                        <div class="small opacity-75" id="depositos-banco-cantidad">{{ number_format((int) $depositosPorBanco->sum('cantidad_depositos')) }} depósito(s) aplicado(s)</div>
                     </div>
 
                     <div class="table-responsive">
@@ -302,7 +302,7 @@
                                     <th class="text-end">Monto</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="depositos-banco-body">
                                 @forelse ($depositosPorBanco as $depositoBanco)
                                     @php
                                         $montoBanco = (float) $depositoBanco->monto_total;
@@ -486,6 +486,7 @@
             const modalDetalle = new bootstrap.Modal(document.getElementById('modal-detalle-ruta-v2'));
             const tarjetaDepositadoBanco = document.getElementById('tarjeta-depositado-banco');
             let aplicacionActual = null;
+            let tablaMovimientos = null;
             const moneda = valor => 'RD$ ' + Number(valor || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[caracter]);
 
@@ -567,6 +568,133 @@
             configurarPegadoComprobante('modal-aplicar-deposito', 'zona-pegar-deposito', 'comprobante-deposito', 'vista-previa-deposito', 'texto-pegar-deposito', 'deposito');
             configurarPegadoComprobante('modal-aplicar-gasto', 'zona-pegar-gasto', 'comprobante-gasto', 'vista-previa-gasto', 'texto-pegar-gasto', 'gasto');
 
+            function actualizarFilaRuta(ruta) {
+                if (!tablaMovimientos) return;
+
+                const fila = Array.from(document.querySelectorAll('#tabla-movimientos-rutas-v2 tbody tr'))
+                    .find(elemento => elemento.dataset.rutaKey === ruta.ruta_key);
+
+                if (!fila) return;
+
+                const datos = tablaMovimientos.row(fila).data();
+                const estados = {
+                    conciliada: ['success', 'Conciliada'],
+                    parcial: ['warning', 'Parcial'],
+                    excedida: ['info', 'Excedida'],
+                    pendiente: ['danger', 'Pendiente'],
+                };
+                const estado = estados[ruta.estado] || estados.pendiente;
+
+                datos[5] = moneda(ruta.depositado_banco);
+                datos[6] = moneda(ruta.gastos_ruta);
+                datos[7] = moneda(ruta.pendiente);
+                datos[8] = moneda(ruta.balance_pendiente);
+                datos[9] = `${Number(ruta.cumplimiento || 0).toFixed(1)}%`;
+                datos[10] = `<span class="badge bg-${estado[0]}-subtle text-${estado[0]}" style="font-size: inherit;">${estado[1]}</span>`;
+                tablaMovimientos.row(fila).data(datos).draw(false);
+
+                fila.children[7]?.classList.toggle('text-danger', Number(ruta.pendiente) > 0);
+                fila.children[7]?.classList.toggle('text-success', Number(ruta.pendiente) <= 0);
+                fila.children[8]?.classList.toggle('text-danger', Number(ruta.balance_pendiente) > 0);
+                fila.children[8]?.classList.toggle('text-success', Number(ruta.balance_pendiente) <= 0);
+
+                const botonAplicar = fila.querySelector('.btn-elegir-aplicacion');
+                if (botonAplicar) {
+                    botonAplicar.dataset.neto = ruta.neto_esperado;
+                    botonAplicar.dataset.depositado = ruta.depositado_banco;
+                    botonAplicar.dataset.gastos = ruta.gastos_ruta;
+                    botonAplicar.dataset.pendiente = ruta.pendiente;
+                }
+
+                if (aplicacionActual?.rutaKey === ruta.ruta_key) {
+                    aplicacionActual.neto = ruta.neto_esperado;
+                    aplicacionActual.depositado = ruta.depositado_banco;
+                    aplicacionActual.gastos = ruta.gastos_ruta;
+                    aplicacionActual.pendiente = ruta.pendiente;
+                }
+            }
+
+            function actualizarResumen(resumen) {
+                document.getElementById('resumen-rutas').textContent = Number(resumen.rutas || 0).toLocaleString('en-US');
+                document.getElementById('resumen-transacciones').textContent = Number(resumen.transacciones || 0).toLocaleString('en-US');
+                document.getElementById('resumen-neto-esperado').textContent = moneda(resumen.neto_esperado);
+                document.getElementById('resumen-depositado-banco').textContent = moneda(resumen.depositado_banco);
+                document.getElementById('resumen-gastos-ruta').textContent = moneda(resumen.gastos_ruta);
+
+                const pendiente = document.getElementById('resumen-pendiente');
+                pendiente.textContent = moneda(resumen.pendiente);
+                pendiente.classList.toggle('text-danger', Number(resumen.pendiente) > 0);
+                pendiente.classList.toggle('text-success', Number(resumen.pendiente) <= 0);
+
+                document.getElementById('rendimiento-neto-esperado').textContent = moneda(resumen.neto_esperado);
+                document.getElementById('rendimiento-depositado-banco').textContent = moneda(resumen.depositado_banco);
+                const cumplimiento = Number(resumen.cumplimiento_depositos || 0);
+                const ancho = Math.min(Math.max(cumplimiento, 0), 100);
+                document.getElementById('rendimiento-porcentaje').textContent = `${cumplimiento.toFixed(1)}%`;
+                document.getElementById('rendimiento-barra').style.width = `${ancho}%`;
+            }
+
+            function actualizarDepositosPorBanco(depositos) {
+                const total = depositos.reduce((suma, deposito) => suma + Number(deposito.monto_total || 0), 0);
+                const cantidad = depositos.reduce((suma, deposito) => suma + Number(deposito.cantidad_depositos || 0), 0);
+                document.getElementById('depositos-banco-total').textContent = moneda(total);
+                document.getElementById('depositos-banco-cantidad').textContent = `${cantidad.toLocaleString('en-US')} depósito(s) aplicado(s)`;
+                document.getElementById('depositos-banco-body').innerHTML = depositos.length
+                    ? depositos.map(deposito => {
+                        const participacion = total > 0 ? (Number(deposito.monto_total) / total) * 100 : 0;
+                        return `<tr>
+                            <td><div class="d-flex align-items-center gap-2"><span class="avatar-xs rounded-circle bg-success-subtle text-success d-inline-flex align-items-center justify-content-center"><i class="ri-bank-line"></i></span><span class="fw-semibold">${escapar(deposito.banco)}</span></div></td>
+                            <td class="text-center"><span class="badge bg-light text-dark border">${Number(deposito.cantidad_depositos || 0).toLocaleString('en-US')}</span></td>
+                            <td><div class="d-flex align-items-center gap-2"><div class="progress flex-grow-1" style="height: 8px;"><div class="progress-bar bg-success" style="width: ${Math.min(participacion, 100)}%"></div></div><span class="small fw-semibold">${participacion.toFixed(1)}%</span></div></td>
+                            <td class="text-end fs-5 fw-bold text-success">${moneda(deposito.monto_total)}</td>
+                        </tr>`;
+                    }).join('')
+                    : '<tr><td colspan="4" class="text-center text-muted py-5"><i class="ri-bank-line fs-1 d-block mb-2"></i>No hay depósitos bancarios aplicados para este día.</td></tr>';
+            }
+
+            async function guardarAplicacion(formulario, etiqueta) {
+                const boton = formulario.querySelector('button[type="submit"]');
+                const textoOriginal = boton.innerHTML;
+                boton.disabled = true;
+                boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
+
+                try {
+                    const response = await fetch(formulario.action, {
+                        method: 'POST',
+                        headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        body: new FormData(formulario),
+                    });
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        const errores = payload.errors ? Object.values(payload.errors).flat().join(' ') : '';
+                        throw new Error(errores || payload.message || `No se pudo guardar el ${etiqueta}.`);
+                    }
+
+                    actualizarFilaRuta(payload.ruta);
+                    actualizarResumen(payload.resumen);
+                    actualizarDepositosPorBanco(payload.depositos_por_banco || []);
+                    (formulario.id === 'form-aplicar-deposito' ? modalDeposito : modalGasto).hide();
+                    formulario.reset();
+                    formulario.querySelectorAll('input[type="file"]').forEach(input => input.dispatchEvent(new Event('change')));
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Registro aplicado', payload.message, 'success');
+                    } else {
+                        alert(payload.message);
+                    }
+                } catch (error) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('No se pudo guardar', error.message, 'error');
+                    } else {
+                        alert(error.message);
+                    }
+                } finally {
+                    boton.disabled = false;
+                    boton.innerHTML = textoOriginal;
+                }
+            }
+
             function configurarMontoMonetario({ formId, visibleId, ocultoId, etiqueta, titulo, claseMonto }) {
                 const formulario = document.getElementById(formId);
                 const inputVisible = document.getElementById(visibleId);
@@ -635,7 +763,7 @@
                         }).then(resultado => resultado.isConfirmed)
                         : confirm(`¿Guardar ${etiqueta} por ${moneda(monto)}?`);
 
-                    if (confirmado) formulario.submit();
+                    if (confirmado) await guardarAplicacion(formulario, etiqueta);
                 });
 
                 return {
@@ -665,7 +793,7 @@
             });
 
             if ($('#tabla-movimientos-rutas-v2 tbody tr').length) {
-                $('#tabla-movimientos-rutas-v2').DataTable({ responsive: true, pageLength: 25, order: [[0, 'asc']], columnDefs: [{ orderable: false, targets: 11 }], language: { search: 'Buscar:', lengthMenu: 'Mostrar _MENU_', info: 'Mostrando _START_ a _END_ de _TOTAL_', paginate: { next: 'Siguiente', previous: 'Anterior' } } });
+                tablaMovimientos = $('#tabla-movimientos-rutas-v2').DataTable({ responsive: true, pageLength: 25, order: [[0, 'asc']], columnDefs: [{ orderable: false, targets: 11 }], language: { search: 'Buscar:', lengthMenu: 'Mostrar _MENU_', info: 'Mostrando _START_ a _END_ de _TOTAL_', paginate: { next: 'Siguiente', previous: 'Anterior' } } });
             }
 
             function abrirLuegoDeEleccion(modalDestino) {

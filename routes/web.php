@@ -10,6 +10,7 @@ use App\Http\Controllers\BancoOperacionController;
 use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\ComercialController;
 use App\Http\Controllers\ContabilidadComisionController;
+use App\Http\Controllers\ContabilidadDistribucionGastoRutaController;
 use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\ContabilidadFlujoRutaController;
@@ -506,6 +507,16 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/operaciones/movimientos-rutas-v2/pdf', [OperacionesMovimientosRutasV2Controller::class, 'pdf'])->name('operaciones.movimientos-rutas-v2.pdf');
     Route::get('/operaciones/movimientos-rutas-v2/depositos/{deposito}/comprobante', [OperacionesMovimientosRutasV2Controller::class, 'comprobante'])->name('operaciones.movimientos-rutas-v2.depositos.comprobante');
     Route::get('/operaciones/movimientos-rutas-v2/gastos/{gasto}/comprobante', [OperacionesMovimientosRutasV2Controller::class, 'comprobanteGasto'])->name('operaciones.movimientos-rutas-v2.gastos.comprobante');
+    Route::get('/operaciones/distribucion-gastos-ruta', [ContabilidadDistribucionGastoRutaController::class, 'index'])
+        ->name('operaciones.distribucion-gastos-ruta');
+    Route::get('/operaciones/distribucion-gastos-ruta/data', [ContabilidadDistribucionGastoRutaController::class, 'data'])
+        ->name('operaciones.distribucion-gastos-ruta.data');
+    Route::get('/operaciones/distribucion-gastos-ruta/pdf', [ContabilidadDistribucionGastoRutaController::class, 'pdf'])
+        ->name('operaciones.distribucion-gastos-ruta.pdf');
+    Route::post('/operaciones/distribucion-gastos-ruta/mapeos', [ContabilidadDistribucionGastoRutaController::class, 'storeMapeo'])
+        ->name('operaciones.distribucion-gastos-ruta.mapeos.store');
+    Route::delete('/operaciones/distribucion-gastos-ruta/mapeos/{mapeo}', [ContabilidadDistribucionGastoRutaController::class, 'destroyMapeo'])
+        ->name('operaciones.distribucion-gastos-ruta.mapeos.destroy');
     Route::get('/operaciones/reportes/diario', [OperacionesReporteDiarioController::class, 'index'])->name('operaciones.reporte.diario');
     Route::get('/operaciones/reportes/diario/exportar/excel', [OperacionesReporteDiarioController::class, 'exportExcel'])->name('operaciones.reporte.diario.export.excel');
     Route::get('/operaciones/reportes/diario/exportar/pdf', [OperacionesReporteDiarioController::class, 'exportPdf'])->name('operaciones.reporte.diario.export.pdf');

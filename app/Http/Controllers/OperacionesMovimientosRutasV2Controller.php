@@ -75,7 +75,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ));
     }
 
-    public function guardarDeposito(GuardarMovimientoRutaV2DepositoRequest $request): RedirectResponse
+    public function guardarDeposito(GuardarMovimientoRutaV2DepositoRequest $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validated();
         $movimiento = MovimientoRutaV2Transaccion::query()
@@ -121,14 +121,25 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'user_id' => $request->user()?->id,
         ]);
 
+        $message = 'Depósito aplicado correctamente a la ruta '.$movimiento->ruta.'.';
+
+        if ($request->expectsJson()) {
+            return $this->respuestaAplicacion(
+                $message,
+                $validated['fecha'],
+                $movimiento->ruta_key,
+                $validated['empresa'] ?? null,
+            );
+        }
+
         return redirect()->route('operaciones.movimientos-rutas-v2', [
             'fecha' => $validated['fecha'],
             'empresa' => $validated['empresa'] ?? null,
         ])
-            ->with('success', 'Depósito aplicado correctamente a la ruta '.$movimiento->ruta.'.');
+            ->with('success', $message);
     }
 
-    public function guardarGasto(GuardarMovimientoRutaV2GastoRequest $request): RedirectResponse
+    public function guardarGasto(GuardarMovimientoRutaV2GastoRequest $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validated();
         $movimiento = MovimientoRutaV2Transaccion::query()
@@ -159,11 +170,22 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'user_id' => $request->user()?->id,
         ]);
 
+        $message = 'Gasto aplicado correctamente a la ruta '.$movimiento->ruta.'.';
+
+        if ($request->expectsJson()) {
+            return $this->respuestaAplicacion(
+                $message,
+                $validated['fecha'],
+                $movimiento->ruta_key,
+                $validated['empresa'] ?? null,
+            );
+        }
+
         return redirect()->route('operaciones.movimientos-rutas-v2', [
             'fecha' => $validated['fecha'],
             'empresa' => $validated['empresa'] ?? null,
         ])
-            ->with('success', 'Gasto aplicado correctamente a la ruta '.$movimiento->ruta.'.');
+            ->with('success', $message);
     }
 
     public function eliminarDeposito(MovimientoRutaV2Deposito $deposito): JsonResponse
@@ -250,13 +272,13 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         ]);
 
         $transacciones = MovimientoRutaV2Transaccion::query()
-            ->where('fecha', $validated['fecha'])
+            ->whereDate('fecha', $validated['fecha'])
             ->where('ruta_key', $validated['ruta_key'])
             ->orderBy('id_trans')
             ->get(['id_trans', 'terminal', 'nombre_agencia', 'tipo', 'tipo_etiqueta', 'monto_original']);
         $depositos = MovimientoRutaV2Deposito::query()
             ->with('usuario:id,name')
-            ->where('fecha', $validated['fecha'])
+            ->whereDate('fecha', $validated['fecha'])
             ->where('ruta_key', $validated['ruta_key'])
             ->latest()
             ->get()
@@ -277,7 +299,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
 
         $gastos = MovimientoRutaV2Gasto::query()
             ->with('usuario:id,name')
-            ->where('fecha', $validated['fecha'])
+            ->whereDate('fecha', $validated['fecha'])
             ->where('ruta_key', $validated['ruta_key'])
             ->latest()
             ->get()
@@ -452,7 +474,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         }
 
         return MovimientoRutaV2Deposito::query()
-            ->where('fecha', $fecha)
+            ->whereDate('fecha', $fecha)
             ->where('estado', 'aplicado')
             ->when($empresa !== null, function ($query) use ($empresa): void {
                 $query->where(function ($query) use ($empresa): void {
@@ -469,10 +491,31 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->get();
     }
 
+    private function respuestaAplicacion(string $message, string $fecha, string $rutaKey, ?string $empresa): JsonResponse
+    {
+        $rutas = $this->resumenPorRutas($fecha, $empresa);
+        $ruta = $rutas->firstWhere('ruta_key', $rutaKey);
+
+        abort_if($ruta === null, 404, 'No se pudo recalcular la ruta actualizada.');
+
+        return response()->json([
+            'message' => $message,
+            'ruta' => $ruta,
+            'resumen' => $this->resumenGeneral($rutas),
+            'depositos_por_banco' => $this->depositosPorBanco($fecha, $empresa)
+                ->map(fn (MovimientoRutaV2Deposito $deposito): array => [
+                    'banco' => $deposito->banco,
+                    'cantidad_depositos' => (int) $deposito->cantidad_depositos,
+                    'monto_total' => (float) $deposito->monto_total,
+                ])
+                ->values(),
+        ]);
+    }
+
     private function resumenPorRutas(string $fecha, ?string $empresa = null): Collection
     {
         $movimientos = MovimientoRutaV2Transaccion::query()
-            ->where('fecha', $fecha)
+            ->whereDate('fecha', $fecha)
             ->select('ruta_key')
             ->selectRaw('MAX(ruta) as ruta')
             ->selectRaw('COUNT(*) as transacciones')
@@ -482,7 +525,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->get()
             ->keyBy('ruta_key');
         $depositos = MovimientoRutaV2Deposito::query()
-            ->where('fecha', $fecha)
+            ->whereDate('fecha', $fecha)
             ->where('estado', 'aplicado')
             ->select('ruta_key')
             ->selectRaw('MAX(ruta) as ruta')
@@ -492,7 +535,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->get()
             ->keyBy('ruta_key');
         $gastos = MovimientoRutaV2Gasto::query()
-            ->where('fecha', $fecha)
+            ->whereDate('fecha', $fecha)
             ->where('estado', 'aplicado')
             ->select('ruta_key')
             ->selectRaw('COUNT(*) as cantidad_gastos')
