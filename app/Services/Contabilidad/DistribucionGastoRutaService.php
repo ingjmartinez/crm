@@ -87,11 +87,21 @@ class DistribucionGastoRutaService
     public function generar(string $fechaInicio, string $fechaFin, ?string $empresa = null, ?string $rutaKey = null): array
     {
         $gastos = $this->gastosPorRuta($fechaInicio, $fechaFin, $rutaKey);
+        $gastosPendientesClasificacion = $this->gastosPendientesClasificacion($fechaInicio, $fechaFin, $rutaKey);
         $rutas = Ruta::query()->with('agencias')->get();
         $centrosActivos = $this->centrosActivos();
         $centrosPorTerminal = $centrosActivos->groupBy(fn (CentroDeCosto $centro): string => $this->normalizarTerminal($centro->id_viejo));
         $mapeosPorRuta = DistribucionGastoRutaMapeo::query()->get()
             ->groupBy(fn (DistribucionGastoRutaMapeo $mapeo): string => $this->normalizarRuta($mapeo->ruta_key));
+        $gastosPendientesClasificacion = $gastosPendientesClasificacion->filter(function (MovimientoRutaV2Gasto $gasto) use ($empresa, $mapeosPorRuta): bool {
+            if ($empresa === null) {
+                return true;
+            }
+
+            $mapeos = $mapeosPorRuta->get($this->normalizarRuta($gasto->ruta_key), collect());
+
+            return ($this->empresaDesdeMapeos($mapeos) ?? $this->empresaDesdeNombre($gasto->ruta)) === $empresa;
+        })->values();
         $agenciasPorTerminal = Agencia::query()->get(['terminal', 'nombre_agencia', 'agencia'])
             ->filter(fn (Agencia $agencia): bool => $this->normalizarTerminal($agencia->terminal) !== '')
             ->keyBy(fn (Agencia $agencia): string => $this->normalizarTerminal($agencia->terminal));
@@ -100,9 +110,61 @@ class DistribucionGastoRutaService
         $incidencias = collect();
         $totalGastosCentavos = 0;
 
+        foreach ($gastosPendientesClasificacion as $gastoPendiente) {
+            $incidencias->push([
+                'tipo' => 'pendiente_clasificacion',
+                'ruta' => $gastoPendiente->ruta,
+                'terminal' => '',
+                'agencia' => '',
+                'detalle' => 'El gasto debe clasificarse desde Movimientos por Ruta V2 antes de distribuirse.',
+                'monto_pendiente' => (float) $gastoPendiente->monto,
+            ]);
+        }
+
         foreach ($gastos as $gasto) {
             $empresaGasto = $this->empresaDesdeNombre((string) $gasto['ruta']);
             $mapeos = $mapeosPorRuta->get($this->normalizarRuta((string) $gasto['ruta_key']), collect());
+
+            if ($gasto['distribucion_tipo'] === 'terminal') {
+                $empresaDestino = $this->empresaDesdeMapeos($mapeos) ?? $empresaGasto;
+                if ($empresa !== null && $empresaDestino !== $empresa) {
+                    continue;
+                }
+
+                $montoRutaCentavos = (int) round(((float) $gasto['monto']) * 100);
+                $totalGastosCentavos += $montoRutaCentavos;
+                $fila = [
+                    'ruta_key' => (string) $gasto['ruta_key'],
+                    'ruta' => (string) $gasto['ruta'],
+                    'empresa' => $this->nombreEmpresa($empresaDestino),
+                    'terminal' => (string) $gasto['terminal_destino'],
+                    'agencia' => (string) ($gasto['agencia_destino'] ?: 'Agencia sin nombre'),
+                    'socio_key' => (string) $gasto['socio_codigo'],
+                    'socio' => (string) $gasto['socio_nombre'],
+                    'estado' => 'asignado',
+                    'cuenta_codigo' => (string) $gasto['cuenta_codigo'],
+                    'cuenta_descripcion' => (string) $gasto['cuenta_descripcion'],
+                    'gasto_ruta' => $montoRutaCentavos / 100,
+                    'total_agencias_ruta' => 1,
+                    'participacion' => 100,
+                    'gasto_agencia' => $montoRutaCentavos / 100,
+                ];
+                $detalle->push($fila);
+                $resumenRutas->push([
+                    'ruta_key' => (string) $gasto['ruta_key'],
+                    'ruta' => (string) $gasto['ruta'],
+                    'empresa' => $this->nombreEmpresa($empresaDestino),
+                    'gastos' => 1,
+                    'agencias' => 1,
+                    'socios' => 1,
+                    'gasto_ruta' => $montoRutaCentavos / 100,
+                    'asignado_socios' => $montoRutaCentavos / 100,
+                    'pendiente' => 0,
+                    'estado' => 'distribuida',
+                ]);
+
+                continue;
+            }
 
             if ($mapeos->isNotEmpty()) {
                 $empresaMapeo = $this->empresaDesdeMapeos($mapeos) ?? $empresaGasto;
@@ -194,6 +256,8 @@ class DistribucionGastoRutaService
                     'socio_key' => $socioKey,
                     'socio' => $socio,
                     'estado' => $estado,
+                    'cuenta_codigo' => (string) $gasto['cuenta_codigo'],
+                    'cuenta_descripcion' => (string) $gasto['cuenta_descripcion'],
                     'gasto_ruta' => $montoRutaCentavos / 100,
                     'total_agencias_ruta' => $agencias->count(),
                     'participacion' => round(100 / $agencias->count(), 6),
@@ -216,6 +280,7 @@ class DistribucionGastoRutaService
 
             $montoAsignado = (float) $filasRuta->where('estado', 'asignado')->sum('gasto_agencia');
             $resumenRutas->push([
+                'ruta_key' => (string) $gasto['ruta_key'],
                 'ruta' => (string) ($ruta->nombre_ruta ?? $gasto['ruta']),
                 'empresa' => $this->nombreEmpresa($empresaRuta),
                 'gastos' => (int) $gasto['cantidad_gastos'],
@@ -228,19 +293,27 @@ class DistribucionGastoRutaService
             ]);
         }
 
+        $totalesPorCuentaRuta = $gastos
+            ->groupBy(fn (array $gasto): string => $gasto['ruta_key'].'|'.$gasto['cuenta_codigo'])
+            ->map(fn (Collection $gastosCuenta): float => round((float) $gastosCuenta->sum('monto'), 2));
         $resumenSocios = $detalle
-            ->groupBy(fn (array $fila): string => $fila['ruta_key'].'|'.$fila['socio_key'])
-            ->map(function (Collection $filas): array {
+            ->groupBy(fn (array $fila): string => $fila['ruta_key'].'|'.$fila['cuenta_codigo'].'|'.$fila['socio_key'])
+            ->map(function (Collection $filas) use ($totalesPorCuentaRuta): array {
                 $primera = $filas->first();
                 $gastoSocio = (float) $filas->sum('gasto_agencia');
-                $gastoRuta = (float) $primera['gasto_ruta'];
+                $gastoRuta = (float) $totalesPorCuentaRuta->get(
+                    $primera['ruta_key'].'|'.$primera['cuenta_codigo'],
+                    $primera['gasto_ruta'],
+                );
 
                 return [
                     'ruta' => $primera['ruta'],
                     'empresa' => $primera['empresa'],
+                    'cuenta_codigo' => $primera['cuenta_codigo'],
+                    'cuenta_descripcion' => $primera['cuenta_descripcion'],
                     'socio' => $primera['socio'],
                     'estado' => $primera['estado'] === 'asignado' ? 'asignado' : 'pendiente',
-                    'agencias' => $filas->count(),
+                    'agencias' => $filas->pluck('terminal')->unique()->count(),
                     'gasto_ruta' => $gastoRuta,
                     'participacion' => $gastoRuta !== 0.0 ? round(($gastoSocio / $gastoRuta) * 100, 6) : 0,
                     'gasto_socio' => round($gastoSocio, 2),
@@ -248,10 +321,32 @@ class DistribucionGastoRutaService
             })
             ->sortBy([
                 ['ruta', 'asc'],
+                ['cuenta_codigo', 'asc'],
                 ['estado', 'asc'],
                 ['socio', 'asc'],
             ])
             ->values();
+
+        $resumenRutas = $resumenRutas
+            ->groupBy('ruta_key')
+            ->map(function (Collection $filasRuta) use ($detalle): array {
+                $primera = $filasRuta->first();
+                $detalleRuta = $detalle->where('ruta_key', $primera['ruta_key']);
+                $pendiente = (float) $filasRuta->sum('pendiente');
+
+                return [
+                    'ruta_key' => $primera['ruta_key'],
+                    'ruta' => $primera['ruta'],
+                    'empresa' => $primera['empresa'],
+                    'gastos' => (int) $filasRuta->sum('gastos'),
+                    'agencias' => $detalleRuta->pluck('terminal')->unique()->count(),
+                    'socios' => $detalleRuta->where('estado', 'asignado')->pluck('socio_key')->unique()->count(),
+                    'gasto_ruta' => round((float) $filasRuta->sum('gasto_ruta'), 2),
+                    'asignado_socios' => round((float) $filasRuta->sum('asignado_socios'), 2),
+                    'pendiente' => round($pendiente, 2),
+                    'estado' => $pendiente === 0.0 ? 'distribuida' : 'con_incidencias',
+                ];
+            })->values();
 
         $totalAsignado = (float) $detalle->where('estado', 'asignado')->sum('gasto_agencia');
         $totalDistribuidoAgencias = (float) $detalle->sum('gasto_agencia');
@@ -271,9 +366,10 @@ class DistribucionGastoRutaService
                 'total_distribuido_agencias' => round($totalDistribuidoAgencias, 2),
                 'total_pendiente' => round($totalGastos - $totalAsignado, 2),
                 'total_rutas' => $resumenRutas->count(),
-                'total_agencias' => $detalle->count(),
+                'total_agencias' => $detalle->unique(fn (array $fila): string => $fila['ruta_key'].'|'.$fila['terminal'])->count(),
                 'total_socios' => $detalle->where('estado', 'asignado')->pluck('socio_key')->unique()->count(),
                 'total_incidencias' => $incidencias->count(),
+                'total_pendiente_clasificar' => round((float) $gastosPendientesClasificacion->sum('monto'), 2),
             ],
         ];
     }
@@ -350,6 +446,8 @@ class DistribucionGastoRutaService
                 'socio_key' => $estado === 'asignado' ? $asignacion['socio_key'] : 'pendiente:conflicto_socio',
                 'socio' => $estado === 'asignado' ? $asignacion['socio'] : 'Sin socio asignado',
                 'estado' => $estado,
+                'cuenta_codigo' => (string) $gasto['cuenta_codigo'],
+                'cuenta_descripcion' => (string) $gasto['cuenta_descripcion'],
                 'gasto_ruta' => $montoRutaCentavos / 100,
                 'total_agencias_ruta' => $terminales->count(),
                 'participacion' => round(100 / $terminales->count(), 6),
@@ -369,7 +467,7 @@ class DistribucionGastoRutaService
 
         $montoAsignado = (float) $filasRuta->where('estado', 'asignado')->sum('gasto_agencia');
         $resumenRutas->push([
-            'ruta' => (string) $gasto['ruta'], 'empresa' => $this->nombreEmpresa($empresa),
+            'ruta_key' => (string) $gasto['ruta_key'], 'ruta' => (string) $gasto['ruta'], 'empresa' => $this->nombreEmpresa($empresa),
             'gastos' => (int) $gasto['cantidad_gastos'], 'agencias' => $terminales->count(),
             'socios' => $filasRuta->where('estado', 'asignado')->pluck('socio_key')->unique()->count(),
             'gasto_ruta' => $montoRutaCentavos / 100, 'asignado_socios' => round($montoAsignado, 2),
@@ -378,27 +476,38 @@ class DistribucionGastoRutaService
         ]);
     }
 
-    /** @return Collection<int, array{ruta_key: string, ruta: string, monto: float, cantidad_gastos: int}> */
+    /** @return Collection<int, array<string, mixed>> */
     private function gastosPorRuta(string $fechaInicio, string $fechaFin, ?string $rutaKey = null): Collection
     {
         return MovimientoRutaV2Gasto::query()
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
             ->where('estado', 'aplicado')
+            ->whereNotNull('cuenta_codigo')
+            ->whereNotNull('distribucion_tipo')
             ->when($rutaKey !== null, fn ($query) => $query->where('ruta_key', $rutaKey))
-            ->get(['ruta_key', 'ruta', 'monto'])
-            ->groupBy(fn (MovimientoRutaV2Gasto $gasto): string => $this->normalizarRuta($gasto->ruta_key ?: $gasto->ruta))
-            ->map(function (Collection $gastos): array {
-                /** @var MovimientoRutaV2Gasto $primero */
-                $primero = $gastos->first();
+            ->get([
+                'ruta_key', 'ruta', 'monto', 'cuenta_codigo', 'cuenta_descripcion', 'distribucion_tipo',
+                'terminal_destino', 'agencia_destino', 'socio_codigo', 'socio_nombre',
+            ])
+            ->map(fn (MovimientoRutaV2Gasto $gasto): array => [
+                ...$gasto->toArray(),
+                'ruta_key' => $this->normalizarRuta($gasto->ruta_key ?: $gasto->ruta),
+                'monto' => round((float) $gasto->monto, 2),
+                'cantidad_gastos' => 1,
+            ]);
+    }
 
-                return [
-                    'ruta_key' => $this->normalizarRuta($primero->ruta_key ?: $primero->ruta),
-                    'ruta' => (string) $primero->ruta,
-                    'monto' => round((float) $gastos->sum('monto'), 2),
-                    'cantidad_gastos' => $gastos->count(),
-                ];
+    /** @return Collection<int, MovimientoRutaV2Gasto> */
+    private function gastosPendientesClasificacion(string $fechaInicio, string $fechaFin, ?string $rutaKey = null): Collection
+    {
+        return MovimientoRutaV2Gasto::query()
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->where('estado', 'aplicado')
+            ->where(function ($query): void {
+                $query->whereNull('cuenta_codigo')->orWhereNull('distribucion_tipo');
             })
-            ->values();
+            ->when($rutaKey !== null, fn ($query) => $query->where('ruta_key', $rutaKey))
+            ->get(['ruta_key', 'ruta', 'monto']);
     }
 
     /** @return Collection<int, CentroDeCosto> */
@@ -525,6 +634,7 @@ class DistribucionGastoRutaService
     private function resumenRutaSinDistribuir(array $gasto, ?string $empresa, int $montoCentavos, string $estado): array
     {
         return [
+            'ruta_key' => (string) $gasto['ruta_key'],
             'ruta' => (string) $gasto['ruta'],
             'empresa' => $this->nombreEmpresa($empresa),
             'gastos' => (int) $gasto['cantidad_gastos'],

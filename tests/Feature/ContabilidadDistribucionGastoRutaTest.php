@@ -226,6 +226,58 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         $this->assertStringContainsString('distribucion_gastos_tamayo', (string) $pdf->headers->get('content-disposition'));
     }
 
+    public function test_combina_combustible_general_gasto_directo_y_excluye_el_heredado_sin_clasificar(): void
+    {
+        foreach ([5001, 5002] as $indice => $terminal) {
+            DB::table('centros_de_costo')->insert([
+                'id_centro_costo' => 500 + $indice,
+                'company_id' => '168-Grupo Joselito',
+                'id_grupo' => '61-Ruta Tamayo',
+                'id_sub_grupo' => '45-Socio A',
+                'id_viejo' => (string) $terminal,
+                'descripcion' => "Agencia {$terminal}",
+                'inactivo' => false,
+                'ocultar' => false,
+            ]);
+        }
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            'ruta_key' => 'TAMAYO', 'ruta_nombre' => 'Tamayo', 'company_id' => '168',
+            'id_grupo' => '61', 'nombre_grupo' => 'Ruta Tamayo', 'id_sub_grupo' => '45',
+            'nombre_socio' => 'Socio A', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('movimientos_rutas_v2_gastos')->insert([
+            'fecha' => '2026-08-11', 'ruta_key' => 'TAMAYO', 'ruta' => 'Tamayo', 'monto' => 1000,
+            'concepto' => 'Combustibles Y Lubricantes', 'cuenta_codigo' => '600120005',
+            'cuenta_descripcion' => 'Combustibles Y Lubricantes', 'distribucion_tipo' => 'ruta', 'estado' => 'aplicado',
+        ]);
+        DB::table('movimientos_rutas_v2_gastos')->insert([
+            'fecha' => '2026-08-11', 'ruta_key' => 'TAMAYO', 'ruta' => 'Tamayo', 'monto' => 300,
+            'concepto' => 'Mantenimiento De Vehículos', 'cuenta_codigo' => '600120016',
+            'cuenta_descripcion' => 'Mantenimiento De Vehículos', 'distribucion_tipo' => 'terminal',
+            'terminal_destino' => '5001', 'agencia_destino' => 'Agencia 5001',
+            'socio_codigo' => '45', 'socio_nombre' => 'Socio A', 'estado' => 'aplicado',
+        ]);
+        DB::table('movimientos_rutas_v2_gastos')->insert([
+            'fecha' => '2026-08-11', 'ruta_key' => 'TAMAYO', 'ruta' => 'Tamayo', 'monto' => 50,
+            'concepto' => 'Concepto anterior', 'cuenta_codigo' => null, 'cuenta_descripcion' => null,
+            'distribucion_tipo' => null, 'estado' => 'aplicado',
+        ]);
+
+        $payload = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
+            'fecha_ini' => '2026-08-01', 'fecha_fin' => '2026-08-31',
+        ]))->assertOk()->json();
+
+        $this->assertSame(1300.0, (float) $payload['meta']['total_gastos']);
+        $this->assertSame(1300.0, (float) $payload['meta']['total_asignado_socios']);
+        $this->assertSame(50.0, (float) $payload['meta']['total_pendiente_clasificar']);
+        $this->assertSame('pendiente_clasificacion', $payload['incidencias'][0]['tipo']);
+        $this->assertSame(2, $payload['rutas'][0]['gastos']);
+        $this->assertSame(1300.0, (float) $payload['rutas'][0]['gasto_ruta']);
+        $this->assertSame(['600120005', '600120016'], collect($payload['data'])->pluck('cuenta_codigo')->sort()->values()->all());
+        $this->assertSame(800.0, (float) collect($payload['detalle'])->where('terminal', '5001')->sum('gasto_agencia'));
+        $this->assertSame(500.0, (float) collect($payload['detalle'])->where('terminal', '5002')->sum('gasto_agencia'));
+    }
+
     public function test_el_reporte_esta_registrado_en_el_modulo_de_operaciones(): void
     {
         $this->get(route('operaciones.distribucion-gastos-ruta'))
@@ -271,6 +323,14 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
             $table->string('ruta');
             $table->decimal('monto', 15, 2);
             $table->string('concepto');
+            $table->string('cuenta_codigo')->nullable()->default('600120005');
+            $table->string('cuenta_descripcion')->nullable()->default('Combustibles Y Lubricantes');
+            $table->string('distribucion_tipo')->nullable()->default('ruta');
+            $table->unsignedBigInteger('centro_costo_id')->nullable();
+            $table->string('terminal_destino')->nullable();
+            $table->string('agencia_destino')->nullable();
+            $table->string('socio_codigo')->nullable();
+            $table->string('socio_nombre')->nullable();
             $table->string('estado')->default('aplicado');
             $table->timestamps();
         });

@@ -19,8 +19,9 @@
 
                 <div class="alert alert-info border-0">
                     <i class="ri-information-line me-1"></i>
-                    El gasto de cada ruta se divide en partes iguales entre sus agencias. El socio se obtiene desde
-                    Centro de Costo usando <strong>IdViejo</strong> como terminal e <strong>IdSubGrupo</strong> como socio.
+                    Combustible se divide en partes iguales entre las agencias participantes de la ruta. Las demás
+                    cuentas se asignan completas a la terminal seleccionada. Los gastos heredados deben clasificarse
+                    desde <strong>Movimientos por Ruta V2</strong> antes de entrar en esta distribución.
                 </div>
 
                 <div class="card">
@@ -140,6 +141,7 @@
                         ['Total de gastos', 'totalGastos', 'text-dark'],
                         ['Asignado a socios', 'totalAsignado', 'text-success'],
                         ['Pendiente', 'totalPendiente', 'text-danger'],
+                        ['Pendiente de clasificar', 'totalPendienteClasificar', 'text-warning'],
                         ['Socios', 'totalSocios', 'text-primary'],
                     ] as [$titulo, $id, $clase])
                         <div class="col-sm-6 col-xl-3">
@@ -175,7 +177,7 @@
                             <div class="tab-pane fade show active" id="tabSocios">
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-striped align-middle w-100" id="tablaSocios">
-                                        <thead><tr><th>Ruta</th><th>Empresa</th><th>Socio</th><th class="text-end">Agencias</th><th class="text-end">Gasto ruta</th><th class="text-end">Participación</th><th class="text-end">Gasto socio</th><th>Estado</th></tr></thead>
+                                        <thead><tr><th>Ruta</th><th>Empresa</th><th>Cuenta</th><th>Socio</th><th class="text-end">Agencias</th><th class="text-end">Gasto cuenta</th><th class="text-end">Participación</th><th class="text-end">Gasto socio</th><th>Estado</th></tr></thead>
                                         <tbody></tbody>
                                     </table>
                                 </div>
@@ -183,7 +185,7 @@
                             <div class="tab-pane fade" id="tabAgencias">
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-striped align-middle w-100" id="tablaAgencias">
-                                        <thead><tr><th>Ruta</th><th>Terminal</th><th>Agencia</th><th>Socio</th><th class="text-end">Agencias ruta</th><th class="text-end">Gasto ruta</th><th class="text-end">Participación</th><th class="text-end">Gasto agencia</th><th>Estado</th></tr></thead>
+                                        <thead><tr><th>Ruta</th><th>Cuenta</th><th>Terminal</th><th>Agencia</th><th>Socio</th><th class="text-end">Agencias ruta</th><th class="text-end">Gasto cuenta</th><th class="text-end">Participación</th><th class="text-end">Gasto agencia</th><th>Estado</th></tr></thead>
                                         <tbody></tbody>
                                     </table>
                                 </div>
@@ -343,18 +345,22 @@
             document.getElementById('totalGastos').textContent = dinero(meta.total_gastos);
             document.getElementById('totalAsignado').textContent = dinero(meta.total_asignado_socios);
             document.getElementById('totalPendiente').textContent = dinero(meta.total_pendiente);
+            document.getElementById('totalPendienteClasificar').textContent = dinero(meta.total_pendiente_clasificar);
             document.getElementById('totalSocios').textContent = Number(meta.total_socios || 0).toLocaleString('es-DO');
             document.getElementById('cantidadIncidencias').textContent = Number(meta.total_incidencias || 0).toLocaleString('es-DO');
             document.getElementById('periodoReporte').textContent = `Período: ${meta.fecha_ini} al ${meta.fecha_fin}`;
 
             tablasDistribucion.socios = crearTabla('#tablaSocios', payload.data || [], [
-                { data: 'ruta', render: texto }, { data: 'empresa', render: texto }, { data: 'socio', render: texto },
+                { data: 'ruta', render: texto }, { data: 'empresa', render: texto },
+                { data: null, render: fila => `${texto(fila.cuenta_codigo)} - ${texto(fila.cuenta_descripcion)}` }, { data: 'socio', render: texto },
                 { data: 'agencias', className: 'text-end' }, { data: 'gasto_ruta', className: 'text-end', render: moneda },
                 { data: 'participacion', className: 'text-end', render: porcentaje }, { data: 'gasto_socio', className: 'text-end fw-semibold', render: moneda },
                 { data: 'estado', render: estado },
             ], 'distribucion_gastos_ruta_socios');
             tablasDistribucion.agencias = crearTabla('#tablaAgencias', payload.detalle || [], [
-                { data: 'ruta', render: texto }, { data: 'terminal', render: texto }, { data: 'agencia', render: texto }, { data: 'socio', render: texto },
+                { data: 'ruta', render: texto },
+                { data: null, render: fila => `${texto(fila.cuenta_codigo)} - ${texto(fila.cuenta_descripcion)}` },
+                { data: 'terminal', render: texto }, { data: 'agencia', render: texto }, { data: 'socio', render: texto },
                 { data: 'total_agencias_ruta', className: 'text-end' }, { data: 'gasto_ruta', className: 'text-end', render: moneda },
                 { data: 'participacion', className: 'text-end', render: porcentaje }, { data: 'gasto_agencia', className: 'text-end fw-semibold', render: moneda },
                 { data: 'estado', render: estado },

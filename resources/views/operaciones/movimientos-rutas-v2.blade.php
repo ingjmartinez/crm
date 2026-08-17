@@ -434,7 +434,21 @@
                             </div>
                             <div class="form-text">El monto se mostrará con separador de miles y dos decimales.</div>
                         </div>
-                        <div class="col-md-6"><label class="form-label">Concepto</label><input type="text" name="concepto" class="form-control" maxlength="150" placeholder="Ej.: combustible, peaje o reparación" required></div>
+                        <div class="col-md-6">
+                            <label for="cuenta-gasto" class="form-label">Cuenta de gasto</label>
+                            <select name="cuenta_codigo" id="cuenta-gasto" class="form-select" required>
+                                <option value="">Selecciona una cuenta</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="destino-gasto" class="form-label">Distribuir a</label>
+                            <input type="search" id="destino-gasto" class="form-control" list="lista-destinos-gasto"
+                                placeholder="Escribe el código o nombre de la terminal" autocomplete="off" required disabled>
+                            <datalist id="lista-destinos-gasto"></datalist>
+                            <input type="hidden" name="distribucion_tipo" id="distribucion-tipo-gasto">
+                            <input type="hidden" name="centro_costo_id" id="centro-costo-gasto">
+                            <div class="form-text">Combustible se distribuye entre todas las terminales; las demás cuentas se asignan a una terminal.</div>
+                        </div>
                         <div class="col-md-6"><label class="form-label">Voucher o comprobante</label><input type="file" name="comprobante" class="form-control" id="comprobante-gasto" accept="image/*"></div>
                         <div class="col-12">
                             <div class="border border-2 rounded p-3 text-center bg-light" id="zona-pegar-gasto" tabindex="0" role="button" style="border-style: dashed !important; cursor: pointer;">
@@ -460,7 +474,7 @@
                     <h6>Depósitos bancarios aplicados</h6>
                     <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Banco</th><th>Referencia</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th><th class="text-center">Acciones</th></tr></thead><tbody id="detalle-depositos-body"></tbody></table></div>
                     <h6>Gastos de ruta aplicados</h6>
-                    <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Concepto</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th><th class="text-center">Acciones</th></tr></thead><tbody id="detalle-gastos-body"></tbody></table></div>
+                    <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Concepto original</th><th>Cuenta</th><th>Destino</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th><th class="text-center">Acciones</th></tr></thead><tbody id="detalle-gastos-body"></tbody></table></div>
                     <h6>Transacciones del CSV</h6>
                     <div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Transacción</th><th>Terminal</th><th>Agencia</th><th>Tipo</th><th class="text-end">Monto</th></tr></thead><tbody id="detalle-transacciones-body"></tbody></table></div>
                 </div>
@@ -468,6 +482,40 @@
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-clasificar-gasto" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <form class="modal-content" id="form-clasificar-gasto">
+                <div class="modal-header">
+                    <div><h5 class="modal-title">Clasificar gasto existente</h5><p class="text-muted mb-0" id="clasificar-gasto-resumen"></p></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-light border" id="clasificar-gasto-original"></div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="cuenta-clasificar-gasto" class="form-label">Cuenta de gasto</label>
+                            <select name="cuenta_codigo" id="cuenta-clasificar-gasto" class="form-select" required></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="destino-clasificar-gasto" class="form-label">Distribuir a</label>
+                            <input type="search" id="destino-clasificar-gasto" class="form-control"
+                                list="lista-destinos-clasificar-gasto" placeholder="Escribe el código o nombre de la terminal"
+                                autocomplete="off" required>
+                            <datalist id="lista-destinos-clasificar-gasto"></datalist>
+                            <input type="hidden" name="distribucion_tipo" id="distribucion-tipo-clasificar-gasto">
+                            <input type="hidden" name="centro_costo_id" id="centro-costo-clasificar-gasto">
+                        </div>
+                    </div>
+                    <div class="small mt-3" id="estado-clasificar-gasto" aria-live="polite"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="ri-price-tag-3-line me-1"></i>Guardar clasificación</button>
+                </div>
+            </form>
         </div>
     </div>
 @endsection
@@ -479,16 +527,113 @@
             const csrfToken = @json(csrf_token());
             const errorFechaImportacion = @json($errors->first('fecha_reporte'));
             const detalleUrl = @json(route('operaciones.movimientos-rutas-v2.detalle'));
+            const opcionesGastoUrl = @json(route('operaciones.movimientos-rutas-v2.gastos.opciones'));
             const modalEleccionElement = document.getElementById('modal-elegir-aplicacion');
             const modalEleccion = new bootstrap.Modal(modalEleccionElement);
             const modalDeposito = new bootstrap.Modal(document.getElementById('modal-aplicar-deposito'));
             const modalGasto = new bootstrap.Modal(document.getElementById('modal-aplicar-gasto'));
             const modalDetalle = new bootstrap.Modal(document.getElementById('modal-detalle-ruta-v2'));
+            const modalClasificarGasto = new bootstrap.Modal(document.getElementById('modal-clasificar-gasto'));
             const tarjetaDepositadoBanco = document.getElementById('tarjeta-depositado-banco');
             let aplicacionActual = null;
+            let gastoClasificacionActual = null;
+            let gastosDetalle = new Map();
             let tablaMovimientos = null;
             const moneda = valor => 'RD$ ' + Number(valor || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[caracter]);
+
+            async function obtenerOpcionesGasto(rutaKey) {
+                const params = new URLSearchParams({ ruta_key: rutaKey });
+                const response = await fetch(`${opcionesGastoUrl}?${params}`, { headers: { Accept: 'application/json' } });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) throw new Error(payload.message || 'No se pudieron cargar las cuentas y terminales de la ruta.');
+
+                return payload;
+            }
+
+            function configurarClasificacionGasto({ cuentaSelect, destinoSelect, tipoInput, centroInput, opciones, seleccion = {} }) {
+                cuentaSelect.innerHTML = '<option value="">Selecciona una cuenta</option>' + (opciones.cuentas || []).map(cuenta =>
+                    `<option value="${escapar(cuenta.codigo)}">${escapar(cuenta.codigo)} - ${escapar(cuenta.descripcion)}</option>`
+                ).join('');
+                const listaDestino = document.getElementById(destinoSelect.getAttribute('list'));
+                const terminales = (opciones.terminales || []).map(terminal => ({
+                    ...terminal,
+                    etiqueta: `${terminal.terminal} - ${terminal.agencia} - ${terminal.socio}`,
+                }));
+                listaDestino.innerHTML = terminales.map(terminal =>
+                    `<option value="${escapar(terminal.etiqueta)}">Terminal ${escapar(terminal.terminal)}</option>`
+                ).join('');
+                cuentaSelect.value = seleccion.cuentaCodigo || '';
+                const terminalInicial = terminales.find(terminal => Number(terminal.centro_costo_id) === Number(seleccion.centroCostoId));
+                destinoSelect.value = terminalInicial?.etiqueta || '';
+
+                const normalizarBusqueda = valor => String(valor || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .trim()
+                    .toLowerCase();
+
+                const resolverTerminalEscrita = () => {
+                    const busqueda = normalizarBusqueda(destinoSelect.value);
+                    if (!busqueda) return null;
+
+                    const terminalSinCeros = busqueda.replace(/^0+/, '');
+                    const coincidencias = terminales.filter(terminal =>
+                        normalizarBusqueda(terminal.etiqueta) === busqueda
+                        || normalizarBusqueda(terminal.terminal).replace(/^0+/, '') === terminalSinCeros
+                        || normalizarBusqueda(terminal.agencia) === busqueda
+                        || normalizarBusqueda(terminal.socio) === busqueda
+                        || normalizarBusqueda(terminal.etiqueta).includes(busqueda)
+                    );
+
+                    return coincidencias.length === 1 ? coincidencias[0] : null;
+                };
+
+                const actualizarDestino = () => {
+                    const cuenta = (opciones.cuentas || []).find(item => item.codigo === cuentaSelect.value);
+                    const distribucionRuta = cuenta?.distribucion === 'ruta';
+                    destinoSelect.disabled = !cuenta;
+                    destinoSelect.readOnly = distribucionRuta;
+
+                    if (distribucionRuta) {
+                        destinoSelect.value = 'Todas las terminales participantes';
+                    } else if (destinoSelect.value === 'Todas las terminales participantes') {
+                        destinoSelect.value = '';
+                    }
+
+                    const terminal = distribucionRuta ? null : resolverTerminalEscrita();
+                    tipoInput.value = distribucionRuta ? 'ruta' : (terminal ? 'terminal' : '');
+                    centroInput.value = terminal ? Number(terminal.centro_costo_id) : '';
+                    destinoSelect.setCustomValidity(!distribucionRuta && !terminal
+                        ? 'Selecciona la terminal que recibirá este gasto.'
+                        : '');
+                };
+
+                cuentaSelect.onchange = () => {
+                    destinoSelect.value = '';
+                    actualizarDestino();
+                };
+                destinoSelect.oninput = actualizarDestino;
+                destinoSelect.onchange = actualizarDestino;
+                actualizarDestino();
+            }
+
+            function renderizarGastos(gastos) {
+                gastosDetalle = new Map(gastos.map(gasto => [Number(gasto.id), gasto]));
+                document.getElementById('detalle-gastos-body').innerHTML = gastos.length ? gastos.map(item => {
+                    const cuenta = item.clasificado
+                        ? `<span class="fw-semibold">${escapar(item.cuenta_codigo)}</span><span class="d-block small text-muted">${escapar(item.cuenta_descripcion)}</span>`
+                        : '<span class="badge bg-warning-subtle text-warning">Pendiente de clasificación</span>';
+                    const destino = item.clasificado
+                        ? (item.distribucion_tipo === 'ruta'
+                            ? '<span class="badge bg-primary-subtle text-primary">Todas las terminales</span>'
+                            : `Terminal ${escapar(item.terminal_destino)}<span class="d-block small text-muted">${escapar(item.agencia_destino)} · ${escapar(item.socio_nombre)}</span>`)
+                        : '-';
+
+                    return `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.concepto)}</td><td>${cuenta}</td><td>${destino}</td><td class="text-end">${moneda(item.monto)}</td><td>${escapar(item.usuario)}</td><td>${item.comprobante_url ? `<a class="btn btn-sm btn-soft-primary" href="${escapar(item.comprobante_url)}" target="_blank">Ver</a>` : '-'}</td><td class="text-center"><div class="d-flex gap-1 justify-content-center"><button type="button" class="btn btn-sm btn-soft-info btn-clasificar-gasto" data-gasto-id="${Number(item.id)}"><i class="ri-price-tag-3-line"></i> ${item.clasificado ? 'Editar' : 'Clasificar'}</button><button type="button" class="btn btn-sm btn-soft-danger btn-eliminar-aplicacion" data-tipo="gasto" data-url="${escapar(item.eliminar_url)}"><i class="ri-delete-bin-line"></i> Eliminar</button></div></td></tr>`;
+                }).join('') : '<tr><td colspan="8" class="text-center text-muted">No hay gastos aplicados.</td></tr>';
+            }
 
             tarjetaDepositadoBanco?.addEventListener('keydown', event => {
                 if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -738,6 +883,11 @@
                     event.preventDefault();
                     actualizar(true);
 
+                    if (!formulario.checkValidity()) {
+                        formulario.reportValidity();
+                        return;
+                    }
+
                     const monto = Number(inputOculto.value);
 
                     if (!Number.isFinite(monto) || monto <= 0) {
@@ -811,13 +961,28 @@
                 abrirLuegoDeEleccion(modalDeposito);
             });
 
-            document.getElementById('elegir-gasto').addEventListener('click', function () {
+            document.getElementById('elegir-gasto').addEventListener('click', async function () {
                 if (!aplicacionActual) return;
                 controlMontoGasto.limpiar();
                 document.getElementById('gasto-ruta-key').value = aplicacionActual.rutaKey;
                 document.getElementById('gasto-ruta').value = aplicacionActual.ruta;
                 document.getElementById('gasto-ruta-titulo').textContent = `${aplicacionActual.ruta} · ${fecha || ''}`;
                 document.getElementById('gasto-resumen').textContent = `Neto esperado: ${moneda(aplicacionActual.neto)} · Depositado: ${moneda(aplicacionActual.depositado)} · Gastos: ${moneda(aplicacionActual.gastos)} · Pendiente: ${moneda(aplicacionActual.pendiente)}`;
+
+                try {
+                    const opciones = await obtenerOpcionesGasto(aplicacionActual.rutaKey);
+                    configurarClasificacionGasto({
+                        cuentaSelect: document.getElementById('cuenta-gasto'),
+                        destinoSelect: document.getElementById('destino-gasto'),
+                        tipoInput: document.getElementById('distribucion-tipo-gasto'),
+                        centroInput: document.getElementById('centro-costo-gasto'),
+                        opciones,
+                    });
+                } catch (error) {
+                    Swal.fire('No se pudo preparar el gasto', error.message, 'error');
+                    return;
+                }
+
                 abrirLuegoDeEleccion(modalGasto);
             });
 
@@ -867,6 +1032,46 @@
                         } else {
                             alert(error.message);
                         }
+                    }
+
+                    return;
+                }
+
+                const botonClasificar = event.target.closest('.btn-clasificar-gasto');
+                if (botonClasificar) {
+                    gastoClasificacionActual = gastosDetalle.get(Number(botonClasificar.dataset.gastoId));
+                    if (!gastoClasificacionActual) return;
+
+                    document.getElementById('clasificar-gasto-resumen').textContent = `${gastoClasificacionActual.fecha_registro} · ${moneda(gastoClasificacionActual.monto)}`;
+                    document.getElementById('clasificar-gasto-original').innerHTML = `<strong>Concepto original:</strong> ${escapar(gastoClasificacionActual.concepto)}<br><span class="small text-muted">El monto, comprobante y demás datos originales no serán modificados.</span>`;
+                    const estadoClasificacion = document.getElementById('estado-clasificar-gasto');
+                    estadoClasificacion.textContent = 'Cargando cuentas y terminales...';
+                    estadoClasificacion.className = 'small mt-3 text-muted';
+                    document.getElementById('cuenta-clasificar-gasto').innerHTML = '<option value="">Cargando cuentas...</option>';
+                    document.getElementById('cuenta-clasificar-gasto').disabled = true;
+                    document.getElementById('destino-clasificar-gasto').value = '';
+                    document.getElementById('destino-clasificar-gasto').disabled = true;
+                    document.getElementById('lista-destinos-clasificar-gasto').innerHTML = '';
+                    modalClasificarGasto.show();
+
+                    try {
+                        const opciones = await obtenerOpcionesGasto(gastoClasificacionActual.ruta_key);
+                        configurarClasificacionGasto({
+                            cuentaSelect: document.getElementById('cuenta-clasificar-gasto'),
+                            destinoSelect: document.getElementById('destino-clasificar-gasto'),
+                            tipoInput: document.getElementById('distribucion-tipo-clasificar-gasto'),
+                            centroInput: document.getElementById('centro-costo-clasificar-gasto'),
+                            opciones,
+                            seleccion: {
+                                cuentaCodigo: gastoClasificacionActual.cuenta_codigo,
+                                centroCostoId: gastoClasificacionActual.centro_costo_id,
+                            },
+                        });
+                        document.getElementById('cuenta-clasificar-gasto').disabled = false;
+                        document.getElementById('estado-clasificar-gasto').textContent = '';
+                    } catch (error) {
+                        document.getElementById('estado-clasificar-gasto').textContent = error.message;
+                        document.getElementById('estado-clasificar-gasto').className = 'small mt-3 text-danger';
                     }
 
                     return;
@@ -943,7 +1148,7 @@
 
                 document.getElementById('detalle-ruta-titulo').textContent = `Detalle · ${botonDetalle.dataset.ruta}`;
                 document.getElementById('detalle-depositos-body').innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
-                document.getElementById('detalle-gastos-body').innerHTML = '<tr><td colspan="6" class="text-center">Cargando...</td></tr>';
+                document.getElementById('detalle-gastos-body').innerHTML = '<tr><td colspan="8" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-transacciones-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
                 modalDetalle.show();
 
@@ -953,12 +1158,47 @@
                     if (!response.ok) throw new Error('No se pudo cargar el detalle.');
                     const payload = await response.json();
                     document.getElementById('detalle-depositos-body').innerHTML = payload.depositos.length ? payload.depositos.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.banco)}</td><td>${escapar(item.referencia || '-')}</td><td class="text-end">${moneda(item.monto)}</td><td>${escapar(item.usuario)}</td><td>${item.comprobante_url ? `<a class="btn btn-sm btn-soft-primary" href="${escapar(item.comprobante_url)}" target="_blank">Ver</a>` : '-'}</td><td class="text-center"><button type="button" class="btn btn-sm btn-soft-danger btn-eliminar-aplicacion" data-tipo="depósito" data-url="${escapar(item.eliminar_url)}"><i class="ri-delete-bin-line"></i> Eliminar</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted">No hay depósitos aplicados.</td></tr>';
-                    document.getElementById('detalle-gastos-body').innerHTML = payload.gastos.length ? payload.gastos.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.concepto)}</td><td class="text-end">${moneda(item.monto)}</td><td>${escapar(item.usuario)}</td><td>${item.comprobante_url ? `<a class="btn btn-sm btn-soft-primary" href="${escapar(item.comprobante_url)}" target="_blank">Ver</a>` : '-'}</td><td class="text-center"><button type="button" class="btn btn-sm btn-soft-danger btn-eliminar-aplicacion" data-tipo="gasto" data-url="${escapar(item.eliminar_url)}"><i class="ri-delete-bin-line"></i> Eliminar</button></td></tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted">No hay gastos aplicados.</td></tr>';
+                    renderizarGastos(payload.gastos || []);
                     document.getElementById('detalle-transacciones-body').innerHTML = payload.transacciones.length ? payload.transacciones.map(item => `<tr><td>${escapar(item.id_trans)}</td><td>${escapar(item.terminal || '-')}</td><td>${escapar(item.nombre_agencia || '-')}</td><td>${escapar(item.tipo_etiqueta)}</td><td class="text-end">${moneda(item.monto_original)}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted">No hay transacciones.</td></tr>';
                 } catch (error) {
                     document.getElementById('detalle-depositos-body').innerHTML = `<tr><td colspan="7" class="text-center text-danger">${escapar(error.message)}</td></tr>`;
                     document.getElementById('detalle-gastos-body').innerHTML = '';
                     document.getElementById('detalle-transacciones-body').innerHTML = '';
+                }
+            });
+
+            document.getElementById('form-clasificar-gasto').addEventListener('submit', async function (event) {
+                event.preventDefault();
+                if (!gastoClasificacionActual || !this.checkValidity()) {
+                    this.reportValidity();
+                    return;
+                }
+
+                const boton = this.querySelector('button[type="submit"]');
+                boton.disabled = true;
+                document.getElementById('estado-clasificar-gasto').textContent = 'Guardando clasificación...';
+
+                try {
+                    const response = await fetch(gastoClasificacionActual.clasificar_url, {
+                        method: 'PUT',
+                        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        body: JSON.stringify(Object.fromEntries(new FormData(this))),
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        const errores = payload.errors ? Object.values(payload.errors).flat().join(' ') : '';
+                        throw new Error(errores || payload.message || 'No se pudo clasificar el gasto.');
+                    }
+
+                    gastosDetalle.set(Number(payload.gasto.id), payload.gasto);
+                    renderizarGastos([...gastosDetalle.values()]);
+                    modalClasificarGasto.hide();
+                    Swal.fire('Gasto clasificado', payload.message, 'success');
+                } catch (error) {
+                    document.getElementById('estado-clasificar-gasto').textContent = error.message;
+                    document.getElementById('estado-clasificar-gasto').className = 'small mt-3 text-danger';
+                } finally {
+                    boton.disabled = false;
                 }
             });
         });

@@ -28,6 +28,43 @@ class OperacionesMovimientosRutasV2Test extends TestCase
     {
         parent::setUp();
 
+        Schema::create('cuentas_contables', function (Blueprint $table): void {
+            $table->id();
+            $table->string('cuenta')->unique();
+            $table->string('descripcion');
+            $table->string('ctacontrol')->nullable();
+            $table->string('tipo')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('centros_de_costo', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedInteger('id_centro_costo');
+            $table->string('company_id')->nullable();
+            $table->string('id_viejo')->nullable();
+            $table->string('id_grupo')->nullable();
+            $table->string('id_sub_grupo')->nullable();
+            $table->string('descripcion')->nullable();
+            $table->boolean('inactivo')->default(false);
+            $table->boolean('ocultar')->default(false);
+            $table->timestamps();
+        });
+        Schema::create('distribucion_gasto_ruta_mapeos', function (Blueprint $table): void {
+            $table->id();
+            $table->string('ruta_key');
+            $table->string('ruta_nombre');
+            $table->string('company_id');
+            $table->string('id_grupo');
+            $table->string('nombre_grupo');
+            $table->string('id_sub_grupo');
+            $table->string('nombre_socio');
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->timestamps();
+        });
+        DB::table('cuentas_contables')->insert([
+            ['cuenta' => '600120005', 'descripcion' => 'Combustibles Y Lubricantes', 'created_at' => now(), 'updated_at' => now()],
+            ['cuenta' => '600120016', 'descripcion' => 'Mantenimiento De Vehículos', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
         Schema::create('bancos_operaciones', function (Blueprint $table): void {
             $table->id();
             $table->string('nombre')->unique();
@@ -81,10 +118,20 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             $table->string('ruta');
             $table->decimal('monto', 15, 2);
             $table->string('concepto');
+            $table->string('cuenta_codigo')->nullable();
+            $table->string('cuenta_descripcion')->nullable();
+            $table->string('distribucion_tipo')->nullable();
+            $table->unsignedBigInteger('centro_costo_id')->nullable();
+            $table->string('terminal_destino')->nullable();
+            $table->string('agencia_destino')->nullable();
+            $table->string('socio_codigo')->nullable();
+            $table->string('socio_nombre')->nullable();
             $table->string('comprobante_path')->nullable();
             $table->text('observacion')->nullable();
             $table->string('estado')->default('aplicado');
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('clasificado_por_id')->nullable();
+            $table->timestamp('clasificado_at')->nullable();
             $table->timestamps();
         });
     }
@@ -96,6 +143,9 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         Schema::dropIfExists('movimientos_rutas_v2_transacciones');
         Schema::dropIfExists('movimientos_rutas_v2_importaciones');
         Schema::dropIfExists('bancos_operaciones');
+        Schema::dropIfExists('distribucion_gasto_ruta_mapeos');
+        Schema::dropIfExists('centros_de_costo');
+        Schema::dropIfExists('cuentas_contables');
 
         parent::tearDown();
     }
@@ -171,6 +221,12 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString('Pendiente', $vista);
         $this->assertStringContainsString('Aplicar depósito bancario', $vista);
         $this->assertStringContainsString('Gasto de ruta', $vista);
+        $this->assertStringContainsString('Cuenta de gasto', $vista);
+        $this->assertStringContainsString('Distribuir a', $vista);
+        $this->assertStringContainsString('list="lista-destinos-gasto"', $vista);
+        $this->assertStringContainsString('Escribe el código o nombre de la terminal', $vista);
+        $this->assertStringContainsString('resolverTerminalEscrita', $vista);
+        $this->assertStringContainsString('Clasificar gasto existente', $vista);
         $this->assertStringContainsString('Voucher o comprobante', $vista);
         $this->assertStringContainsString('Mini informe PDF', $vista);
         $this->assertStringContainsString('operaciones.movimientos-rutas-v2.pdf', $vista);
@@ -349,7 +405,8 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             'ruta_key' => '05 - HAINA',
             'ruta' => '05 - HAINA',
             'monto' => '100.00',
-            'concepto' => 'Peaje',
+            'cuenta_codigo' => '600120005',
+            'distribucion_tipo' => 'ruta',
         ])->assertOk();
 
         $this->assertSame(200.0, (float) $gasto->json('ruta.depositado_banco'));
@@ -357,12 +414,88 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertSame(700.0, (float) $gasto->json('ruta.pendiente'));
         $this->assertSame(700.0, (float) $gasto->json('resumen.pendiente'));
         $this->assertDatabaseHas('movimientos_rutas_v2_depositos', ['referencia' => 'AJAX-001', 'monto' => 200]);
-        $this->assertDatabaseHas('movimientos_rutas_v2_gastos', ['concepto' => 'Peaje', 'monto' => 100]);
+        $this->assertDatabaseHas('movimientos_rutas_v2_gastos', [
+            'concepto' => 'Combustibles Y Lubricantes',
+            'cuenta_codigo' => '600120005',
+            'distribucion_tipo' => 'ruta',
+            'monto' => 100,
+        ]);
 
         $vista = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2.blade.php'));
         $this->assertStringContainsString('fetch(formulario.action', $vista);
         $this->assertStringContainsString('tablaMovimientos.row(fila).data(datos).draw(false)', $vista);
         $this->assertStringNotContainsString('if (confirmado) formulario.submit();', $vista);
+    }
+
+    public function test_clasifica_un_gasto_existente_sin_perder_sus_datos_originales(): void
+    {
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            'ruta_key' => 'TAMAYO',
+            'ruta_nombre' => 'Tamayo',
+            'company_id' => '168',
+            'id_grupo' => '61',
+            'nombre_grupo' => 'Ruta Tamayo',
+            'id_sub_grupo' => '45',
+            'nombre_socio' => 'Socio A',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $centroCostoId = DB::table('centros_de_costo')->insertGetId([
+            'id_centro_costo' => 9001,
+            'company_id' => '168-Grupo Joselito',
+            'id_grupo' => '61-Ruta Tamayo',
+            'id_sub_grupo' => '45-Socio A',
+            'id_viejo' => '05001',
+            'descripcion' => 'Agencia Tamayo Centro',
+            'inactivo' => false,
+            'ocultar' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $gastoId = DB::table('movimientos_rutas_v2_gastos')->insertGetId([
+            'fecha' => '2026-08-03',
+            'ruta_key' => 'TAMAYO',
+            'ruta' => 'Tamayo',
+            'monto' => 850,
+            'concepto' => 'Reparación inversor agencia',
+            'comprobante_path' => 'comprobantes/original.png',
+            'observacion' => 'Conservar esta observación',
+            'estado' => 'aplicado',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $middleware = [
+            \Illuminate\Auth\Middleware\Authenticate::class,
+            \App\Http\Middleware\ForcePasswordChange::class,
+            \App\Http\Middleware\ExpireInactiveSession::class,
+        ];
+
+        $this->withoutMiddleware($middleware)->getJson(route('operaciones.movimientos-rutas-v2.gastos.opciones', [
+            'ruta_key' => 'TAMAYO',
+        ]))->assertOk()
+            ->assertJsonPath('terminales.0.centro_costo_id', $centroCostoId)
+            ->assertJsonPath('terminales.0.socio', 'Socio A');
+
+        $this->withoutMiddleware($middleware)->putJson(route('operaciones.movimientos-rutas-v2.gastos.clasificar', $gastoId), [
+            'cuenta_codigo' => '600120016',
+            'distribucion_tipo' => 'terminal',
+            'centro_costo_id' => $centroCostoId,
+        ])->assertOk()
+            ->assertJsonPath('gasto.clasificado', true)
+            ->assertJsonPath('gasto.terminal_destino', '05001')
+            ->assertJsonPath('gasto.socio_nombre', 'Socio A');
+
+        $this->assertDatabaseHas('movimientos_rutas_v2_gastos', [
+            'id' => $gastoId,
+            'monto' => 850,
+            'concepto' => 'Reparación inversor agencia',
+            'comprobante_path' => 'comprobantes/original.png',
+            'observacion' => 'Conservar esta observación',
+            'cuenta_codigo' => '600120016',
+            'distribucion_tipo' => 'terminal',
+            'terminal_destino' => '05001',
+        ]);
     }
 
     public function test_permite_eliminar_depositos_y_gastos_con_sus_comprobantes(): void

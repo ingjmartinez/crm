@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Operaciones\ClasificarMovimientoRutaV2GastoRequest;
+use App\Http\Requests\Operaciones\ConsultarOpcionesMovimientoRutaV2GastoRequest;
 use App\Http\Requests\Operaciones\FiltrarMovimientosRutasV2Request;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2DepositoRequest;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2GastoRequest;
@@ -12,6 +14,7 @@ use App\Models\MovimientoRutaV2Deposito;
 use App\Models\MovimientoRutaV2Gasto;
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
+use App\Services\Operaciones\ClasificacionGastoRutaService;
 use App\Services\Operaciones\MovimientosRutasV2ImportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -35,7 +38,10 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         'NG' => 'Negosur',
     ];
 
-    public function __construct(private readonly MovimientosRutasV2ImportService $importService) {}
+    public function __construct(
+        private readonly MovimientosRutasV2ImportService $importService,
+        private readonly ClasificacionGastoRutaService $clasificacionGastoService,
+    ) {}
 
     public function index(FiltrarMovimientosRutasV2Request $request): View
     {
@@ -153,6 +159,11 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ]);
         }
 
+        $clasificacion = $this->clasificacionGastoService->resolver(
+            $movimiento->ruta_key,
+            $validated,
+            $request->user()?->id,
+        );
         $comprobantePath = $request->file('comprobante')?->store(
             'operaciones/movimientos-rutas-v2/gastos',
             'local',
@@ -163,11 +174,12 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'ruta_key' => $movimiento->ruta_key,
             'ruta' => $movimiento->ruta,
             'monto' => $validated['monto'],
-            'concepto' => trim($validated['concepto']),
+            'concepto' => $clasificacion['cuenta_descripcion'],
             'comprobante_path' => $comprobantePath,
             'observacion' => $validated['observacion'] ?? null,
             'estado' => 'aplicado',
             'user_id' => $request->user()?->id,
+            ...$clasificacion,
         ]);
 
         $message = 'Gasto aplicado correctamente a la ruta '.$movimiento->ruta.'.';
@@ -186,6 +198,30 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'empresa' => $validated['empresa'] ?? null,
         ])
             ->with('success', $message);
+    }
+
+    public function opcionesGasto(ConsultarOpcionesMovimientoRutaV2GastoRequest $request): JsonResponse
+    {
+        return response()->json([
+            'cuentas' => $this->clasificacionGastoService->cuentas(),
+            'terminales' => $this->clasificacionGastoService->terminales($request->validated('ruta_key')),
+        ]);
+    }
+
+    public function clasificarGasto(
+        ClasificarMovimientoRutaV2GastoRequest $request,
+        MovimientoRutaV2Gasto $gasto,
+    ): JsonResponse {
+        $gasto->update($this->clasificacionGastoService->resolver(
+            $gasto->ruta_key,
+            $request->validated(),
+            $request->user()?->id,
+        ));
+
+        return response()->json([
+            'message' => 'Gasto clasificado correctamente sin modificar sus datos originales.',
+            'gasto' => $this->datosGastoDetalle($gasto->fresh()),
+        ]);
     }
 
     public function eliminarDeposito(MovimientoRutaV2Deposito $deposito): JsonResponse
@@ -303,21 +339,37 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->where('ruta_key', $validated['ruta_key'])
             ->latest()
             ->get()
-            ->map(fn (MovimientoRutaV2Gasto $gasto): array => [
-                'id' => $gasto->id,
-                'fecha_registro' => $gasto->created_at?->format('d/m/Y h:i A'),
-                'monto' => (float) $gasto->monto,
-                'concepto' => $gasto->concepto,
-                'observacion' => $gasto->observacion,
-                'estado' => $gasto->estado,
-                'usuario' => $gasto->usuario?->name ?? 'Sistema',
-                'comprobante_url' => $this->resolverRutaComprobante($gasto->comprobante_path) !== null
-                    ? route('operaciones.movimientos-rutas-v2.gastos.comprobante', $gasto)
-                    : null,
-                'eliminar_url' => route('operaciones.movimientos-rutas-v2.gastos.eliminar', $gasto),
-            ]);
+            ->map(fn (MovimientoRutaV2Gasto $gasto): array => $this->datosGastoDetalle($gasto));
 
         return response()->json(['transacciones' => $transacciones, 'depositos' => $depositos, 'gastos' => $gastos]);
+    }
+
+    /** @return array<string, mixed> */
+    private function datosGastoDetalle(MovimientoRutaV2Gasto $gasto): array
+    {
+        return [
+            'id' => $gasto->id,
+            'ruta_key' => $gasto->ruta_key,
+            'fecha_registro' => $gasto->created_at?->format('d/m/Y h:i A'),
+            'monto' => (float) $gasto->monto,
+            'concepto' => $gasto->concepto,
+            'cuenta_codigo' => $gasto->cuenta_codigo,
+            'cuenta_descripcion' => $gasto->cuenta_descripcion,
+            'distribucion_tipo' => $gasto->distribucion_tipo,
+            'centro_costo_id' => $gasto->centro_costo_id,
+            'terminal_destino' => $gasto->terminal_destino,
+            'agencia_destino' => $gasto->agencia_destino,
+            'socio_nombre' => $gasto->socio_nombre,
+            'clasificado' => filled($gasto->cuenta_codigo) && filled($gasto->distribucion_tipo),
+            'observacion' => $gasto->observacion,
+            'estado' => $gasto->estado,
+            'usuario' => $gasto->usuario?->name ?? 'Sistema',
+            'comprobante_url' => $this->resolverRutaComprobante($gasto->comprobante_path) !== null
+                ? route('operaciones.movimientos-rutas-v2.gastos.comprobante', $gasto)
+                : null,
+            'clasificar_url' => route('operaciones.movimientos-rutas-v2.gastos.clasificar', $gasto),
+            'eliminar_url' => route('operaciones.movimientos-rutas-v2.gastos.eliminar', $gasto),
+        ];
     }
 
     public function pdf(ReporteMovimientoRutaV2PdfRequest $request): Response

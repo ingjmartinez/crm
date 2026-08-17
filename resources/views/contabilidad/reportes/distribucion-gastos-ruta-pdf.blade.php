@@ -56,10 +56,11 @@
 
     <h2>Resumen por socio</h2>
     <table class="report">
-        <thead><tr><th>Socio</th><th class="right">Agencias</th><th class="right">Participación</th><th class="right">Monto distribuido</th><th class="center">Estado</th></tr></thead>
+        <thead><tr><th>Cuenta</th><th>Socio</th><th class="right">Agencias</th><th class="right">Participación</th><th class="right">Monto distribuido</th><th class="center">Estado</th></tr></thead>
         <tbody>
             @forelse ($socios as $socio)
                 <tr>
+                    <td>{{ $socio['cuenta_codigo'] }} - {{ $socio['cuenta_descripcion'] }}</td>
                     <td>{{ $socio['socio'] }}</td>
                     <td class="right">{{ number_format((int) $socio['agencias']) }}</td>
                     <td class="right">{{ number_format((float) $socio['participacion'], 2) }}%</td>
@@ -67,17 +68,18 @@
                     <td class="center"><span class="badge {{ $socio['estado'] === 'asignado' ? 'badge-ok' : 'badge-warning' }}">{{ $socio['estado'] }}</span></td>
                 </tr>
             @empty
-                <tr><td colspan="5" class="center">No existen montos distribuidos por socio.</td></tr>
+                <tr><td colspan="6" class="center">No existen montos distribuidos por socio.</td></tr>
             @endforelse
         </tbody>
     </table>
 
     <h2>Detalle de la distribución por terminal</h2>
     <table class="report">
-        <thead><tr><th>Terminal</th><th>Agencia</th><th>Socio</th><th class="right">Participación</th><th class="right">Monto distribuido</th><th class="center">Estado</th></tr></thead>
+        <thead><tr><th>Cuenta</th><th>Terminal</th><th>Agencia</th><th>Socio</th><th class="right">Participación</th><th class="right">Monto distribuido</th><th class="center">Estado</th></tr></thead>
         <tbody>
             @forelse ($detalle as $fila)
                 <tr>
+                    <td>{{ $fila['cuenta_codigo'] }} - {{ $fila['cuenta_descripcion'] }}</td>
                     <td>{{ $fila['terminal'] }}</td>
                     <td>{{ $fila['agencia'] }}</td>
                     <td>{{ $fila['socio'] }}</td>
@@ -86,13 +88,13 @@
                     <td class="center"><span class="badge {{ $fila['estado'] === 'asignado' ? 'badge-ok' : 'badge-warning' }}">{{ $fila['estado'] }}</span></td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="center">No existen terminales para distribuir.</td></tr>
+                <tr><td colspan="7" class="center">No existen terminales para distribuir.</td></tr>
             @endforelse
         </tbody>
     </table>
 
     @if (count($incidencias) > 0)
-        <div class="warning-box"><strong>Atención:</strong> este informe contiene {{ count($incidencias) }} incidencia(s) con un monto pendiente de RD$ {{ number_format((float) $ruta['pendiente'], 2) }}.</div>
+        <div class="warning-box"><strong>Atención:</strong> este informe contiene {{ count($incidencias) }} incidencia(s) con un monto pendiente de RD$ {{ number_format((float) collect($incidencias)->sum('monto_pendiente'), 2) }}.</div>
         <h2>Incidencias</h2>
         <table class="report">
             <thead><tr><th>Terminal</th><th>Agencia</th><th>Tipo</th><th>Detalle</th><th class="right">Monto pendiente</th></tr></thead>

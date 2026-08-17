@@ -502,6 +502,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/operaciones/movimientos-rutas-v2/depositos', [OperacionesMovimientosRutasV2Controller::class, 'guardarDeposito'])->name('operaciones.movimientos-rutas-v2.depositos.guardar');
     Route::delete('/operaciones/movimientos-rutas-v2/depositos/{deposito}', [OperacionesMovimientosRutasV2Controller::class, 'eliminarDeposito'])->name('operaciones.movimientos-rutas-v2.depositos.eliminar');
     Route::post('/operaciones/movimientos-rutas-v2/gastos', [OperacionesMovimientosRutasV2Controller::class, 'guardarGasto'])->name('operaciones.movimientos-rutas-v2.gastos.guardar');
+    Route::get('/operaciones/movimientos-rutas-v2/gastos/opciones', [OperacionesMovimientosRutasV2Controller::class, 'opcionesGasto'])->name('operaciones.movimientos-rutas-v2.gastos.opciones');
+    Route::put('/operaciones/movimientos-rutas-v2/gastos/{gasto}/clasificar', [OperacionesMovimientosRutasV2Controller::class, 'clasificarGasto'])->name('operaciones.movimientos-rutas-v2.gastos.clasificar');
     Route::delete('/operaciones/movimientos-rutas-v2/gastos/{gasto}', [OperacionesMovimientosRutasV2Controller::class, 'eliminarGasto'])->name('operaciones.movimientos-rutas-v2.gastos.eliminar');
     Route::get('/operaciones/movimientos-rutas-v2/detalle', [OperacionesMovimientosRutasV2Controller::class, 'detalle'])->name('operaciones.movimientos-rutas-v2.detalle');
     Route::get('/operaciones/movimientos-rutas-v2/pdf', [OperacionesMovimientosRutasV2Controller::class, 'pdf'])->name('operaciones.movimientos-rutas-v2.pdf');
