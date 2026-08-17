@@ -24,6 +24,10 @@
                             <p class="text-muted mb-0 small">Primera entrada y última salida por agente, terminal, sistema y día.</p>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
+                            <button type="button" id="agenciasPlazaButton" class="btn btn-soft-primary fw-semibold">
+                                <i class="ri-map-pin-user-line me-1"></i>Agencias en plaza
+                                <span id="agenciasPlazaCount" class="badge bg-primary ms-1">{{ $agenciasPlazaCount }}</span>
+                            </button>
                             <button type="button" class="btn btn-warning fw-semibold" id="generarTokenLotobetButton">
                                 <i class="ri-key-2-line me-1"></i>Token Lotobet
                             </button>
@@ -70,7 +74,12 @@
                 <div class="card">
                     <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                         <h5 class="card-title mb-0">Detalle por agente</h5>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="filtrarAgenciasPlazaButton"
+                                aria-pressed="false" @disabled($agenciasPlazaCount === 0)>
+                                <i class="ri-map-pin-line me-1"></i>Agencias en plaza
+                                (<span id="filtroAgenciasPlazaCount">{{ $agenciasPlazaCount }}</span>)
+                            </button>
                             <button type="button" class="btn btn-success btn-sm" id="exportarExcelButton" disabled><i class="ri-file-excel-2-line me-1"></i>Excel</button>
                             <button type="button" class="btn btn-danger btn-sm" id="exportarPdfButton" disabled><i class="ri-file-pdf-2-line me-1"></i>PDF</button>
                         </div>
@@ -127,6 +136,59 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="agenciasPlazaModal" tabindex="-1" aria-labelledby="agenciasPlazaModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="agenciasPlazaModalLabel">Agencias en plaza</h5>
+                        <div class="small text-muted">Esta es la misma selección utilizada en el monitoreo de terminales.</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="agenciasPlazaArchivo" class="form-label">Importar terminales</label>
+                        <input type="file" id="agenciasPlazaArchivo" class="form-control" accept=".xlsx,.xls,.csv">
+                        <div class="form-text">El archivo debe contener una columna llamada Terminal.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="agenciasPlazaManual" class="form-label">Terminales manuales</label>
+                        <textarea id="agenciasPlazaManual" class="form-control" rows="3"
+                            placeholder="Escriba o pegue terminales, una por línea o separadas por coma"></textarea>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" id="reconocerAgenciasPlazaButton" class="btn btn-outline-info btn-sm">
+                            <i class="ri-search-eye-line me-1"></i>Reconocer terminales
+                        </button>
+                        <a href="{{ route('tecnologia.monitoreo-terminales.agencias-plaza.plantilla') }}"
+                            class="btn btn-outline-primary btn-sm">
+                            <i class="ri-download-line me-1"></i>Descargar plantilla
+                        </a>
+                        <button type="button" id="limpiarAgenciasPlazaButton" class="btn btn-outline-danger btn-sm ms-auto">
+                            Limpiar selección
+                        </button>
+                    </div>
+
+                    <div id="agenciasPlazaLista" class="border rounded overflow-auto" style="max-height: 300px"></div>
+                    <div id="agenciasPlazaEstado" class="small mt-2" aria-live="polite"></div>
+
+                    <div class="alert alert-info mt-3 mb-0">
+                        Las agencias guardadas podrán mostrarse de forma exclusiva con el filtro del detalle. Si la selección queda vacía, el filtro se desactivará.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" id="guardarAgenciasPlazaButton" class="btn btn-primary">
+                        <i class="ri-save-line align-bottom me-1"></i>Guardar agencias
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -137,11 +199,26 @@
                 exportar: @json(route('tecnologia.monitoreo-agentes-ventas.exportar')),
                 tokenLotobet: @json(route('token.generate')),
                 tokenLotonet: @json(url('/iniciar-session')),
+                plazaIndex: @json(route('tecnologia.monitoreo-terminales.agencias-plaza.index')),
+                plazaUpdate: @json(route('tecnologia.monitoreo-terminales.agencias-plaza.update')),
+                plazaRecognize: @json(route('tecnologia.monitoreo-terminales.agencias-plaza.reconocer')),
             };
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
             const form = document.getElementById('formMonitoreoAgentes');
             const status = document.getElementById('estadoConsulta');
             const body = document.getElementById('tablaAgentesBody');
+            const plazaModal = new bootstrap.Modal(document.getElementById('agenciasPlazaModal'));
+            const plazaButton = document.getElementById('agenciasPlazaButton');
+            const plazaCount = document.getElementById('agenciasPlazaCount');
+            const plazaFilterButton = document.getElementById('filtrarAgenciasPlazaButton');
+            const plazaFilterCount = document.getElementById('filtroAgenciasPlazaCount');
+            const plazaFileInput = document.getElementById('agenciasPlazaArchivo');
+            const plazaManualInput = document.getElementById('agenciasPlazaManual');
+            const plazaRecognizeButton = document.getElementById('reconocerAgenciasPlazaButton');
+            const plazaClearButton = document.getElementById('limpiarAgenciasPlazaButton');
+            const plazaSaveButton = document.getElementById('guardarAgenciasPlazaButton');
+            const plazaList = document.getElementById('agenciasPlazaLista');
+            const plazaStatus = document.getElementById('agenciasPlazaEstado');
             const pagination = document.getElementById('paginacionAgentes');
             const previousPageItem = document.getElementById('paginaAnteriorItem');
             const nextPageItem = document.getElementById('paginaSiguienteItem');
@@ -156,6 +233,9 @@
             const pageSize = 50;
             let rows = [];
             let currentPage = 1;
+            let onlyPlazaAgencies = false;
+            let plazaAgencies = new Map();
+            let plazaConfiguredCount = Number(@json($agenciasPlazaCount));
 
             function escapeHtml(value) {
                 const element = document.createElement('div');
@@ -171,6 +251,90 @@
                 } catch (error) {
                     return { message: `${fallback} El servidor respondió HTTP ${response.status} sin un JSON válido.` };
                 }
+            }
+
+            function setPlazaStatus(message, className = 'text-muted') {
+                plazaStatus.textContent = message;
+                plazaStatus.className = `small mt-2 ${className}`;
+            }
+
+            function updatePlazaFilterButton(count = plazaConfiguredCount) {
+                plazaConfiguredCount = Number(count || 0);
+                count = plazaConfiguredCount;
+                plazaCount.textContent = count.toLocaleString('es-DO');
+                plazaFilterCount.textContent = count.toLocaleString('es-DO');
+                plazaFilterButton.disabled = count === 0;
+
+                if (count === 0) {
+                    onlyPlazaAgencies = false;
+                }
+
+                plazaFilterButton.setAttribute('aria-pressed', onlyPlazaAgencies ? 'true' : 'false');
+                plazaFilterButton.classList.toggle('btn-primary', onlyPlazaAgencies);
+                plazaFilterButton.classList.toggle('btn-outline-primary', !onlyPlazaAgencies);
+            }
+
+            function synchronizeRowsWithPlazaAgencies() {
+                rows = rows.map(row => ({
+                    ...row,
+                    es_agencia_plaza: row.agencia_id !== null
+                        && plazaAgencies.has(Number(row.agencia_id)),
+                }));
+                updatePlazaFilterButton(plazaAgencies.size);
+                resetPageAndRender();
+            }
+
+            function renderPlazaAgencies() {
+                const agencies = [...plazaAgencies.values()].sort((firstAgency, secondAgency) => {
+                    return String(firstAgency.terminal).localeCompare(String(secondAgency.terminal), undefined, { numeric: true });
+                });
+
+                plazaList.innerHTML = agencies.length ? agencies.map(agency => `
+                    <label class="d-flex align-items-center gap-2 px-3 py-2 border-bottom mb-0">
+                        <input type="checkbox" class="form-check-input mt-0" data-plaza-agency-id="${Number(agency.id)}" checked>
+                        <span>
+                            <strong>Terminal ${escapeHtml(agency.terminal)}</strong>
+                            <span class="d-block small text-muted">${escapeHtml(agency.agencia)}</span>
+                        </span>
+                    </label>
+                `).join('') : '<div class="text-muted text-center p-3">No hay agencias seleccionadas.</div>';
+            }
+
+            async function parsePlazaResponse(response, fallbackMessage) {
+                const data = await readJson(response, fallbackMessage);
+
+                if (!response.ok) {
+                    const validationMessage = data.errors ? Object.values(data.errors).flat()[0] : null;
+                    throw new Error(validationMessage || data.message || fallbackMessage);
+                }
+
+                return data;
+            }
+
+            async function loadPlazaAgencies() {
+                const response = await fetch(urls.plazaIndex, { headers: { 'Accept': 'application/json' } });
+                const data = await parsePlazaResponse(response, 'No se pudieron cargar las agencias en plaza.');
+                plazaAgencies = new Map((data.data || []).map(agency => [Number(agency.id), agency]));
+                renderPlazaAgencies();
+                synchronizeRowsWithPlazaAgencies();
+            }
+
+            async function savePlazaAgencies(agencyIds) {
+                const response = await fetch(urls.plazaUpdate, {
+                    method: 'PUT',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({ agencias: agencyIds }),
+                });
+                const data = await parsePlazaResponse(response, 'No se pudieron guardar las agencias en plaza.');
+                plazaAgencies = new Map((data.data || []).map(agency => [Number(agency.id), agency]));
+                renderPlazaAgencies();
+                synchronizeRowsWithPlazaAgencies();
+
+                return data;
             }
 
             function badgeStatus(value) {
@@ -190,7 +354,8 @@
                 const text = filters.text.value.trim().toLowerCase();
                 return rows.filter(row => {
                     const searchable = [row.cedula, row.agente, row.terminal, row.agencia].join(' ').toLowerCase();
-                    return (!text || searchable.includes(text))
+                    return (!onlyPlazaAgencies || row.es_agencia_plaza === true)
+                        && (!text || searchable.includes(text))
                         && (!filters.system.value || row.sistema === filters.system.value)
                         && (!filters.company.value || row.empresa === filters.company.value)
                         && (!filters.coordinator.value || row.coordinador === filters.coordinator.value)
@@ -361,6 +526,7 @@
 
                 rows = data.data || [];
                 currentPage = 1;
+                updatePlazaFilterButton(data.agencias_plaza_count);
                 document.getElementById('resumenTotal').textContent = Number(data.total || 0).toLocaleString('es-DO');
                 document.getElementById('resumenCompletos').textContent = Number(data.completos || 0).toLocaleString('es-DO');
                 document.getElementById('resumenSinEntrada').textContent = Number(data.sin_entrada || 0).toLocaleString('es-DO');
@@ -370,6 +536,108 @@
                 status.textContent = `Reporte generado: ${rows.length.toLocaleString('es-DO')} registros.`;
                 status.className = 'small mt-3 text-success';
             }
+
+            plazaButton.addEventListener('click', async function () {
+                plazaFileInput.value = '';
+                plazaManualInput.value = '';
+                plazaList.innerHTML = '<div class="text-muted text-center p-3">Cargando agencias...</div>';
+                setPlazaStatus('');
+                plazaModal.show();
+
+                try {
+                    await loadPlazaAgencies();
+                } catch (error) {
+                    plazaList.innerHTML = '<div class="text-danger text-center p-3">No se pudo cargar la selección.</div>';
+                    setPlazaStatus(error.message, 'text-danger');
+                }
+            });
+
+            plazaRecognizeButton.addEventListener('click', async function () {
+                const formData = new FormData();
+
+                if (plazaFileInput.files[0]) {
+                    formData.append('archivo', plazaFileInput.files[0]);
+                }
+
+                formData.append('terminales_manual', plazaManualInput.value);
+                this.disabled = true;
+                setPlazaStatus('Reconociendo terminales...');
+
+                try {
+                    const response = await fetch(urls.plazaRecognize, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: formData,
+                    });
+                    const data = await parsePlazaResponse(response, 'No se pudieron reconocer las terminales.');
+
+                    (data.data || []).forEach(agency => plazaAgencies.set(Number(agency.id), agency));
+                    renderPlazaAgencies();
+
+                    const missing = data.no_encontradas || [];
+                    const message = missing.length > 0
+                        ? `${data.encontradas} agencia(s) reconocida(s). No encontradas: ${missing.join(', ')}.`
+                        : `${data.encontradas} agencia(s) reconocida(s) correctamente.`;
+                    setPlazaStatus(message, missing.length > 0 ? 'text-warning' : 'text-success');
+                } catch (error) {
+                    setPlazaStatus(error.message, 'text-danger');
+                } finally {
+                    this.disabled = false;
+                }
+            });
+
+            plazaSaveButton.addEventListener('click', async function () {
+                const agencyIds = [...plazaList.querySelectorAll('[data-plaza-agency-id]:checked')]
+                    .map(input => Number(input.dataset.plazaAgencyId));
+                this.disabled = true;
+                setPlazaStatus('Guardando agencias...');
+
+                try {
+                    const data = await savePlazaAgencies(agencyIds);
+                    setPlazaStatus(data.message, 'text-success');
+                } catch (error) {
+                    setPlazaStatus(error.message, 'text-danger');
+                } finally {
+                    this.disabled = false;
+                }
+            });
+
+            plazaClearButton.addEventListener('click', async function () {
+                const confirmation = await Swal.fire({
+                    title: '¿Limpiar agencias en plaza?',
+                    text: 'El filtro quedará desactivado hasta que se seleccionen nuevas agencias.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, limpiar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#d33',
+                });
+
+                if (!confirmation.isConfirmed) {
+                    return;
+                }
+
+                this.disabled = true;
+                setPlazaStatus('Limpiando selección...');
+
+                try {
+                    const data = await savePlazaAgencies([]);
+                    setPlazaStatus(data.message, 'text-success');
+                } catch (error) {
+                    setPlazaStatus(error.message, 'text-danger');
+                } finally {
+                    this.disabled = false;
+                }
+            });
+
+            plazaFilterButton.addEventListener('click', function () {
+                onlyPlazaAgencies = !onlyPlazaAgencies;
+                updatePlazaFilterButton();
+                resetPageAndRender();
+            });
 
             form.addEventListener('submit', async function (event) {
                 event.preventDefault();
@@ -407,6 +675,7 @@
             document.getElementById('generarTokenLotonetButton').addEventListener('click', () => generateSession(urls.tokenLotonet, 'Iniciando sesión Lotonet'));
             document.getElementById('exportarExcelButton').addEventListener('click', () => exportRows('excel').catch(error => Swal.fire('Error', error.message, 'error')));
             document.getElementById('exportarPdfButton').addEventListener('click', () => exportRows('pdf').catch(error => Swal.fire('Error', error.message, 'error')));
+            updatePlazaFilterButton();
         });
     </script>
 @endsection

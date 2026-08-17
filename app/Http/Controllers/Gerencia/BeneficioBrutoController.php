@@ -12,6 +12,12 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class BeneficioBrutoController extends Controller
 {
+    private const GRUPOS = [
+        'joselito' => 'Joselito',
+        'negosur' => 'Negosur',
+        'higuey' => 'Higuey',
+    ];
+
     private const COLUMNAS = [
         'terminal' => 2,
         'tradicional_ventas' => 4,
@@ -35,19 +41,78 @@ class BeneficioBrutoController extends Controller
 
     public function procesar(ProcesarBeneficioBrutoRequest $request): View
     {
-        /** @var UploadedFile $archivo */
-        $archivo = $request->validated('archivo_csv');
-        $filas = $this->leerCsv($archivo);
+        $filasPorGrupo = collect(self::GRUPOS)->mapWithKeys(function (string $nombreGrupo, string $grupo) use ($request): array {
+            $campo = "archivo_{$grupo}";
+            /** @var UploadedFile $archivo */
+            $archivo = $request->validated($campo);
+            $filas = $this->leerCsv($archivo, $campo)->map(function (array $fila) use ($grupo, $nombreGrupo): array {
+                $fila['grupo'] = $grupo;
+                $fila['grupo_nombre'] = $nombreGrupo;
 
-        return $this->vista($filas, $archivo->getClientOriginalName());
+                return $fila;
+            });
+
+            return [$grupo => $filas];
+        });
+        $filas = $filasPorGrupo->collapse()->values();
+        $nombresArchivos = collect(self::GRUPOS)->mapWithKeys(function (string $nombreGrupo, string $grupo) use ($request, $filasPorGrupo): array {
+            /** @var UploadedFile $archivo */
+            $archivo = $request->validated("archivo_{$grupo}");
+
+            return [$grupo => [
+                'grupo' => $nombreGrupo,
+                'nombre' => $archivo->getClientOriginalName(),
+                'filas' => $filasPorGrupo->get($grupo)->count(),
+            ]];
+        })->all();
+        $resumenPorGrupo = $filasPorGrupo
+            ->map(fn (Collection $filasGrupo): array => $this->crearResumen($filasGrupo))
+            ->all();
+
+        return $this->vista($filas, $nombresArchivos, $resumenPorGrupo);
     }
 
     /**
      * @param  Collection<int, array<string, bool|float|string|null>>|null  $filas
+     * @param  array<string, array{grupo: string, nombre: string, filas: int}>|null  $nombresArchivos
+     * @param  array<string, array<string, mixed>>|null  $resumenPorGrupo
      */
-    private function vista(?Collection $filas = null, ?string $nombreArchivo = null): View
+    private function vista(?Collection $filas = null, ?array $nombresArchivos = null, ?array $resumenPorGrupo = null): View
     {
         $filas ??= collect();
+        $resumen = $this->crearResumen($filas);
+        $resumenPorGrupo ??= collect(self::GRUPOS)
+            ->mapWithKeys(fn (string $nombre, string $grupo): array => [$grupo => $this->crearResumen(collect())])
+            ->all();
+        $camposNumericos = array_keys(array_diff_key(self::COLUMNAS, ['terminal' => true]));
+        $totales = collect($camposNumericos)
+            ->mapWithKeys(fn (string $campo): array => [$campo => (float) $filas->sum($campo)])
+            ->all();
+        $informeGerencial = $this->crearInformeGerencial($filas, $resumen);
+        $cruceAgencias = [
+            'identificadas' => $filas->where('agencia_encontrada', true)->count(),
+            'total' => $filas->count(),
+            'con_ciudad' => $filas->whereNotNull('ciudad')->count(),
+            'con_ruta' => $filas->whereNotNull('ruta')->count(),
+        ];
+
+        return view('gerencia.beneficio-bruto', [
+            'filas' => $filas,
+            'totales' => $totales,
+            'resumen' => $resumen,
+            'resumenPorGrupo' => $resumenPorGrupo,
+            'informeGerencial' => $informeGerencial,
+            'cruceAgencias' => $cruceAgencias,
+            'nombresArchivos' => $nombresArchivos,
+        ]);
+    }
+
+    /**
+     * @param  Collection<int, array<string, bool|float|string|null>>  $filas
+     * @return array<string, mixed>
+     */
+    private function crearResumen(Collection $filas): array
+    {
         $camposNumericos = array_keys(array_diff_key(self::COLUMNAS, ['terminal' => true]));
         $totales = collect($camposNumericos)
             ->mapWithKeys(fn (string $campo): array => [$campo => (float) $filas->sum($campo)])
@@ -94,22 +159,8 @@ class BeneficioBrutoController extends Controller
             + $resumen['no_tradicional']['total_vendido']
             + $resumen['recargas']['total_vendido']
             + $resumen['ventas_externas']['total_vendido'];
-        $informeGerencial = $this->crearInformeGerencial($filas, $resumen);
-        $cruceAgencias = [
-            'identificadas' => $filas->where('agencia_encontrada', true)->count(),
-            'total' => $filas->count(),
-            'con_ciudad' => $filas->whereNotNull('ciudad')->count(),
-            'con_ruta' => $filas->whereNotNull('ruta')->count(),
-        ];
 
-        return view('gerencia.beneficio-bruto', [
-            'filas' => $filas,
-            'totales' => $totales,
-            'resumen' => $resumen,
-            'informeGerencial' => $informeGerencial,
-            'cruceAgencias' => $cruceAgencias,
-            'nombreArchivo' => $nombreArchivo,
-        ]);
+        return $resumen;
     }
 
     /**
@@ -169,13 +220,13 @@ class BeneficioBrutoController extends Controller
     /**
      * @return Collection<int, array<string, bool|float|string|null>>
      */
-    private function leerCsv(UploadedFile $archivo): Collection
+    private function leerCsv(UploadedFile $archivo, string $campoArchivo): Collection
     {
         $path = $archivo->getRealPath();
 
         if ($path === false) {
             throw ValidationException::withMessages([
-                'archivo_csv' => 'No se pudo leer el documento cargado.',
+                $campoArchivo => 'No se pudo leer el documento cargado.',
             ]);
         }
 
@@ -184,7 +235,7 @@ class BeneficioBrutoController extends Controller
 
         if ($handle === false) {
             throw ValidationException::withMessages([
-                'archivo_csv' => 'No se pudo abrir el documento cargado.',
+                $campoArchivo => 'No se pudo abrir el documento cargado.',
             ]);
         }
 
@@ -193,7 +244,7 @@ class BeneficioBrutoController extends Controller
 
             if ($encabezados === false || count($encabezados) <= max(self::COLUMNAS)) {
                 throw ValidationException::withMessages([
-                    'archivo_csv' => 'El documento no contiene las columnas requeridas desde C hasta P.',
+                    $campoArchivo => 'El documento no contiene las columnas requeridas desde C hasta P.',
                 ]);
             }
 

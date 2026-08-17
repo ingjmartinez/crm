@@ -9,6 +9,7 @@ use App\Http\Requests\ExportarMonitoreoAgenteVentaRequest;
 use App\Http\Requests\GenerarMonitoreoAgenteVentaRequest;
 use App\Models\Agencia;
 use App\Models\Empleado;
+use App\Models\MonitoreoTerminalAgenciaPlaza;
 use App\Services\AsistenciaAgenteVentaEndpointService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonPeriod;
@@ -32,6 +33,7 @@ class MonitoreoAgenteVentaController extends Controller
     {
         return view('tecnologia.monitoreo-agentes-ventas', [
             'fechaActual' => today()->toDateString(),
+            'agenciasPlazaCount' => MonitoreoTerminalAgenciaPlaza::query()->count(),
         ]);
     }
 
@@ -77,6 +79,7 @@ class MonitoreoAgenteVentaController extends Controller
                 'REINICIO VALIDADO',
                 'PENDIENTE DE VALIDACIÓN',
             ])->count(),
+            'agencias_plaza_count' => MonitoreoTerminalAgenciaPlaza::query()->count(),
         ]);
     }
 
@@ -120,8 +123,11 @@ class MonitoreoAgenteVentaController extends Controller
 
         $empleados = $this->empleadosPorCedula($registrosApi->pluck('cedula')->filter()->unique()->values());
         $movimientosVentas = $this->movimientosVentas($registrosApi);
+        $agenciasPlazaIds = MonitoreoTerminalAgenciaPlaza::query()
+            ->pluck('agencia_id')
+            ->mapWithKeys(fn (int $agenciaId): array => [$agenciaId => true]);
 
-        return $registrosApi->map(function (array $registro) use ($agencias, $empleados, $movimientosVentas): array {
+        return $registrosApi->map(function (array $registro) use ($agencias, $empleados, $movimientosVentas, $agenciasPlazaIds): array {
             /** @var Agencia|null $agencia */
             $agencia = $agencias->get($this->claveAgencia($registro['sistema'], $registro['terminal']))?->first();
             $empresa = trim((string) ($agencia?->empresa ?? '')) ?: 'Sin empresa';
@@ -155,6 +161,8 @@ class MonitoreoAgenteVentaController extends Controller
                 'ultima_venta' => $validacionPonches['ultima_venta'],
                 'observacion' => $validacionPonches['observacion'],
                 'terminal' => (string) ($agencia?->terminal ?? $registro['terminal']),
+                'agencia_id' => $agencia?->id,
+                'es_agencia_plaza' => $agencia !== null && $agenciasPlazaIds->has($agencia->id),
                 'agencia' => $agencia ? $this->nombreAgencia($agencia) : 'Terminal sin identificar',
                 'empresa' => $empresa,
                 'coordinador' => $agencia ? $this->nombreCoordinador($agencia) : 'Sin coordinador',

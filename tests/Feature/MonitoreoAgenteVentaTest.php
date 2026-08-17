@@ -31,6 +31,7 @@ class MonitoreoAgenteVentaTest extends TestCase
         Schema::dropIfExists('coordinador_operador_agencia');
         Schema::dropIfExists('coordinador_operador');
         Schema::dropIfExists('empleados');
+        Schema::dropIfExists('monitoreo_terminal_agencia_plazas');
         Schema::dropIfExists('agencias');
         Schema::dropIfExists('tokens');
         Schema::dropIfExists('gestion_agencias_ventas');
@@ -43,6 +44,13 @@ class MonitoreoAgenteVentaTest extends TestCase
             $table->string('empresa')->nullable();
             $table->string('coordinador')->nullable();
             $table->string('sistema')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('monitoreo_terminal_agencia_plazas', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedInteger('agencia_id')->unique();
+            $table->unsignedBigInteger('usuario_id')->nullable();
             $table->timestamps();
         });
 
@@ -106,6 +114,11 @@ class MonitoreoAgenteVentaTest extends TestCase
             ->assertSee('<option value="todos">Todos</option>', false)
             ->assertSee('Token Lotobet')
             ->assertSee('Sesión Lotonet')
+            ->assertSee('Agencias en plaza')
+            ->assertSee('agenciasPlazaModal', false)
+            ->assertSee('filtrarAgenciasPlazaButton', false)
+            ->assertSee('row.es_agencia_plaza === true', false)
+            ->assertSee('monitoreo-terminales\/agencias-plaza', false)
             ->assertSee('Coordinador')
             ->assertSee('form.addEventListener', false)
             ->assertSee('Token de Lotobet requerido')
@@ -126,6 +139,43 @@ class MonitoreoAgenteVentaTest extends TestCase
             ->assertSee('Última venta')
             ->assertSee('Página ${currentPage.toLocaleString', false)
             ->assertSee('monitoreo-agentes-ventas\/generar', false);
+    }
+
+    public function test_generate_marks_only_the_configured_plaza_agencies(): void
+    {
+        $plazaAgencyId = $this->insertAgency('001', 'Sucursal en plaza', 'Grupo Joselito', 'LOTOBET');
+        $regularAgencyId = $this->insertAgency('002', 'Sucursal regular', 'Grupo Joselito', 'LOTOBET');
+
+        DB::table('monitoreo_terminal_agencia_plazas')->insert([
+            'agencia_id' => $plazaAgencyId,
+            'usuario_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service = $this->mock(AsistenciaAgenteVentaEndpointService::class);
+        $service->shouldReceive('prepararAcceso')->once()->with('lotobet');
+        $service->shouldReceive('consultar')->once()->with('2026-08-12', 'lotobet')->andReturn([
+            ['fecha' => '2026-08-12', 'sistema' => 'LOTOBET', 'cedula' => '00100000001', 'nombre' => 'Agente Plaza', 'terminal' => '1', 'entrada' => '08:00:00', 'salida' => null],
+            ['fecha' => '2026-08-12', 'sistema' => 'LOTOBET', 'cedula' => '00100000002', 'nombre' => 'Agente Regular', 'terminal' => '2', 'entrada' => '08:00:00', 'salida' => null],
+        ]);
+
+        $this->getJson(route('tecnologia.monitoreo-agentes-ventas.generar', [
+            'fecha_inicio' => '2026-08-12',
+            'fecha_fin' => '2026-08-12',
+            'sistema' => 'lotobet',
+        ]))->assertOk()
+            ->assertJsonPath('agencias_plaza_count', 1)
+            ->assertJsonFragment([
+                'agencia_id' => $plazaAgencyId,
+                'terminal' => '001',
+                'es_agencia_plaza' => true,
+            ])
+            ->assertJsonFragment([
+                'agencia_id' => $regularAgencyId,
+                'terminal' => '002',
+                'es_agencia_plaza' => false,
+            ]);
     }
 
     public function test_generate_requests_a_lotobet_token_when_it_is_missing(): void
@@ -461,6 +511,8 @@ class MonitoreoAgenteVentaTest extends TestCase
             'marca_validar' => null,
             'ultima_venta' => null,
             'terminal' => '001',
+            'agencia_id' => 1,
+            'es_agencia_plaza' => true,
             'agencia' => '001 - Agencia Prueba',
             'empresa' => 'Grupo Joselito',
             'coordinador' => 'Ana Pérez',

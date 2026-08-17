@@ -19,11 +19,12 @@ class ProcesarBeneficioBrutoRequest extends FormRequest
      */
     public function rules(): array
     {
+        $reglaArchivo = File::types(['csv', 'txt'])->max(50 * 1024);
+
         return [
-            'archivo_csv' => [
-                'required',
-                File::types(['csv', 'txt'])->max(50 * 1024),
-            ],
+            'archivo_joselito' => ['required', $reglaArchivo],
+            'archivo_negosur' => ['required', $reglaArchivo],
+            'archivo_higuey' => ['required', $reglaArchivo],
         ];
     }
 
@@ -33,10 +34,18 @@ class ProcesarBeneficioBrutoRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'archivo_csv.required' => 'Selecciona el documento CSV que deseas procesar.',
-            'archivo_csv.file' => 'El documento cargado no es un archivo válido.',
-            'archivo_csv.mimes' => 'El documento debe estar en formato CSV o TXT.',
-            'archivo_csv.max' => 'El documento no puede superar los 50 MB.',
+            'archivo_joselito.required' => 'Selecciona el documento CSV de Joselito.',
+            'archivo_negosur.required' => 'Selecciona el documento CSV de Negosur.',
+            'archivo_higuey.required' => 'Selecciona el documento CSV de Higuey.',
+            'archivo_joselito.file' => 'El documento de Joselito no es un archivo válido.',
+            'archivo_negosur.file' => 'El documento de Negosur no es un archivo válido.',
+            'archivo_higuey.file' => 'El documento de Higuey no es un archivo válido.',
+            'archivo_joselito.mimes' => 'El documento de Joselito debe estar en formato CSV o TXT.',
+            'archivo_negosur.mimes' => 'El documento de Negosur debe estar en formato CSV o TXT.',
+            'archivo_higuey.mimes' => 'El documento de Higuey debe estar en formato CSV o TXT.',
+            'archivo_joselito.max' => 'El documento de Joselito no puede superar los 50 MB.',
+            'archivo_negosur.max' => 'El documento de Negosur no puede superar los 50 MB.',
+            'archivo_higuey.max' => 'El documento de Higuey no puede superar los 50 MB.',
         ];
     }
 }

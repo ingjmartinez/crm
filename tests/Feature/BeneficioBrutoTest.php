@@ -57,7 +57,10 @@ class BeneficioBrutoTest extends TestCase
             ->assertSee('Ventas Tradicionales')
             ->assertSee('Ventas No Tradicionales')
             ->assertSee('Recargas y Paqueticos')
-            ->assertSee('Ventas externas');
+            ->assertSee('Ventas externas')
+            ->assertSee('Documento Joselito')
+            ->assertSee('Documento Negosur')
+            ->assertSee('Documento Higuey');
     }
 
     public function test_csv_columns_are_formatted_by_their_expected_positions(): void
@@ -76,15 +79,20 @@ class BeneficioBrutoTest extends TestCase
         $archivo = UploadedFile::fake()->createWithContent('beneficio.csv', $csv);
 
         $response = $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
-            ->post(route('gerencia.beneficio-bruto.procesar'), ['archivo_csv' => $archivo]);
+            ->post(route('gerencia.beneficio-bruto.procesar'), $this->archivosPorGrupo($archivo));
 
         $response->assertOk()
             ->assertViewIs('gerencia.beneficio-bruto')
-            ->assertViewHas('nombreArchivo', 'beneficio.csv')
+            ->assertViewHas('nombresArchivos', fn (array $archivos): bool => $archivos['joselito']['nombre'] === 'beneficio.csv'
+                && $archivos['joselito']['filas'] === 1
+                && $archivos['negosur']['filas'] === 0
+                && $archivos['higuey']['filas'] === 0)
             ->assertViewHas('filas', function ($filas): bool {
                 $fila = $filas->first();
 
                 return $filas->count() === 1
+                    && $fila['grupo'] === 'joselito'
+                    && $fila['grupo_nombre'] === 'Joselito'
                     && $fila['terminal'] === 'AGENCIA CENTRAL (50001)'
                     && $fila['terminal_crm'] === '050001'
                     && $fila['agencia_encontrada'] === true
@@ -165,7 +173,7 @@ class BeneficioBrutoTest extends TestCase
         $archivo = UploadedFile::fake()->createWithContent('terminales.csv', $csv);
 
         $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
-            ->post(route('gerencia.beneficio-bruto.procesar'), ['archivo_csv' => $archivo])
+            ->post(route('gerencia.beneficio-bruto.procesar'), $this->archivosPorGrupo($archivo))
             ->assertOk()
             ->assertSee('Informe gerencial')
             ->assertSee('PDF de tarjetas')
@@ -174,6 +182,9 @@ class BeneficioBrutoTest extends TestCase
             ->assertSee('informe_gerencial_beneficio_bruto.pdf')
             ->assertSee('estado_resultado_beneficio_bruto.pdf')
             ->assertSee('Estado de Resultado Consolidado')
+            ->assertSee('Total consolidado')
+            ->assertSee("data.section === 'head'", false)
+            ->assertSee("data.column.index >= 2 ? 'right' : 'left'", false)
             ->assertDontSee("doc.text('Archivo: '")
             ->assertSee('Informe Gerencial - Resumen Ejecutivo')
             ->assertSee('Total general')
@@ -201,8 +212,48 @@ class BeneficioBrutoTest extends TestCase
 
         $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
             ->from(route('gerencia.beneficio-bruto'))
-            ->post(route('gerencia.beneficio-bruto.procesar'), ['archivo_csv' => $archivo])
+            ->post(route('gerencia.beneficio-bruto.procesar'), $this->archivosPorGrupo($archivo))
             ->assertRedirect(route('gerencia.beneficio-bruto'))
-            ->assertSessionHasErrors('archivo_csv');
+            ->assertSessionHasErrors('archivo_joselito');
+    }
+
+    public function test_three_group_documents_are_consolidated_and_remain_separated_for_the_income_statement(): void
+    {
+        $encabezados = implode(',', array_map(fn (int $indice): string => "Columna{$indice}", range(1, 47)));
+        $crearCsv = fn (string $terminal, int $ventas): string => implode("\n", [
+            $encabezados,
+            "Terminal,Grupo,{$terminal},Responsable,{$ventas},0,0,{$ventas},0,0,0,0,0,0,0,0",
+        ]);
+
+        $archivos = [
+            'archivo_joselito' => UploadedFile::fake()->createWithContent('joselito.csv', $crearCsv('Terminal-J', 100)),
+            'archivo_negosur' => UploadedFile::fake()->createWithContent('negosur.csv', $crearCsv('Terminal-N', 200)),
+            'archivo_higuey' => UploadedFile::fake()->createWithContent('higuey.csv', $crearCsv('Terminal-H', 300)),
+        ];
+
+        $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->post(route('gerencia.beneficio-bruto.procesar'), $archivos)
+            ->assertOk()
+            ->assertViewHas('filas', fn ($filas): bool => $filas->count() === 3
+                && $filas->pluck('grupo')->all() === ['joselito', 'negosur', 'higuey'])
+            ->assertViewHas('resumen', fn (array $resumen): bool => $resumen['tradicional']['total_vendido'] === 600.0)
+            ->assertViewHas('resumenPorGrupo', fn (array $grupos): bool => $grupos['joselito']['tradicional']['total_vendido'] === 100.0
+                && $grupos['negosur']['tradicional']['total_vendido'] === 200.0
+                && $grupos['higuey']['tradicional']['total_vendido'] === 300.0)
+            ->assertSee('Joselito')
+            ->assertSee('Negosur')
+            ->assertSee('Higuey');
+    }
+
+    /** @return array<string, UploadedFile> */
+    private function archivosPorGrupo(UploadedFile $archivoJoselito): array
+    {
+        $encabezados = implode(',', array_map(fn (int $indice): string => "Columna{$indice}", range(1, 47)));
+
+        return [
+            'archivo_joselito' => $archivoJoselito,
+            'archivo_negosur' => UploadedFile::fake()->createWithContent('negosur.csv', $encabezados),
+            'archivo_higuey' => UploadedFile::fake()->createWithContent('higuey.csv', $encabezados),
+        ];
     }
 }

@@ -67,22 +67,37 @@
                     <div class="card-body">
                         <form method="POST" action="{{ route('gerencia.beneficio-bruto.procesar') }}" enctype="multipart/form-data" class="row g-3 align-items-end" id="form-beneficio-bruto">
                             @csrf
-                            <div class="col-lg-9">
-                                <label for="archivo_csv" class="form-label">Documento CSV</label>
-                                <input type="file" class="form-control" id="archivo_csv" name="archivo_csv" accept=".csv,.txt,text/csv,text/plain" required>
-                                <div class="form-text">Se procesarán el nombre de la terminal y los cuatro bloques de ventas definidos en las columnas C y E–P.</div>
+                            <div class="col-lg-4">
+                                <label for="archivo_joselito" class="form-label">Documento Joselito</label>
+                                <input type="file" class="form-control" id="archivo_joselito" name="archivo_joselito" accept=".csv,.txt,text/csv,text/plain" required>
                             </div>
-                            <div class="col-lg-3">
+                            <div class="col-lg-4">
+                                <label for="archivo_negosur" class="form-label">Documento Negosur</label>
+                                <input type="file" class="form-control" id="archivo_negosur" name="archivo_negosur" accept=".csv,.txt,text/csv,text/plain" required>
+                            </div>
+                            <div class="col-lg-4">
+                                <label for="archivo_higuey" class="form-label">Documento Higuey</label>
+                                <input type="file" class="form-control" id="archivo_higuey" name="archivo_higuey" accept=".csv,.txt,text/csv,text/plain" required>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-text mb-2">Los tres documentos deben mantener la misma estructura: terminal en columna C y bloques de ventas en E–P. Pueden contener cantidades diferentes de registros.</div>
                                 <button type="submit" class="btn btn-primary w-100" id="btn-procesar-beneficio">
                                     <i class="ri-upload-cloud-2-line align-bottom me-1"></i>
-                                    Procesar documento
+                                    Procesar y consolidar los tres documentos
                                 </button>
                             </div>
                         </form>
 
-                        @if ($nombreArchivo)
+                        @if ($nombresArchivos)
                             <div class="alert alert-info mt-3 mb-0">
-                                <div>Archivo procesado: <strong>{{ $nombreArchivo }}</strong></div>
+                                <div class="row g-2">
+                                    @foreach ($nombresArchivos as $archivoProcesado)
+                                        <div class="col-md-4">
+                                            <strong>{{ $archivoProcesado['grupo'] }}:</strong> {{ $archivoProcesado['nombre'] }}
+                                            <span class="d-block small">{{ number_format($archivoProcesado['filas']) }} registros</span>
+                                        </div>
+                                    @endforeach
+                                </div>
                                 <div class="small mt-1">
                                     Cruce con <strong>crm.agencias</strong>:
                                     {{ number_format($cruceAgencias['identificadas']) }} de {{ number_format($cruceAgencias['total']) }} terminales identificadas,
@@ -389,6 +404,7 @@
             const pdfButton = document.getElementById('btn-pdf-tarjetas');
             const estadoResultadosPdfButton = document.getElementById('btn-pdf-estado-resultados');
             const resumenPdf = @json($resumen);
+            const resumenPorGrupoPdf = @json($resumenPorGrupo);
             const informePdf = @json($informeGerencial);
 
             if (form && button) {
@@ -608,18 +624,36 @@
                 }
 
                 const doc = new window.jspdf.jsPDF({
-                    orientation: 'portrait',
+                    orientation: 'landscape',
                     unit: 'pt',
                     format: 'letter',
                 });
                 const pageWidth = doc.internal.pageSize.getWidth();
-                const margin = 38;
-                const totalPremiosPagados = Number(resumenPdf.tradicional.premios_pagados || 0)
-                    + Number(resumenPdf.no_tradicional.premios_pagados || 0);
-                const totalPremiosSacados = Number(resumenPdf.tradicional.premios_sacados || 0)
-                    + Number(resumenPdf.no_tradicional.premios_sacados || 0);
-                const totalVentasLoterias = Number(resumenPdf.tradicional.total_vendido || 0)
-                    + Number(resumenPdf.no_tradicional.total_vendido || 0);
+                const margin = 28;
+                const gruposEstado = [
+                    { clave: 'joselito', nombre: 'Joselito' },
+                    { clave: 'negosur', nombre: 'Negosur' },
+                    { clave: 'higuey', nombre: 'Higuey' },
+                ];
+                const filaMonto = (concepto, clasificacion, calcular, deduccion = false) => {
+                    const valores = gruposEstado.map((grupo) => Number(calcular(resumenPorGrupoPdf[grupo.clave]) || 0));
+                    const total = valores.reduce((acumulado, valor) => acumulado + valor, 0);
+                    const formatear = (valor) => (deduccion ? '- ' : '') + formatoMontoPdf(valor);
+
+                    return [concepto, clasificacion, ...valores.map(formatear), formatear(total)];
+                };
+                const seccion = (titulo) => [titulo, '', '', '', '', ''];
+                const ventasLoterias = (grupo) => Number(grupo.tradicional.total_vendido || 0)
+                    + Number(grupo.no_tradicional.total_vendido || 0);
+                const premiosSacados = (grupo) => Number(grupo.tradicional.premios_sacados || 0)
+                    + Number(grupo.no_tradicional.premios_sacados || 0);
+                const premiosPagados = (grupo) => Number(grupo.tradicional.premios_pagados || 0)
+                    + Number(grupo.no_tradicional.premios_pagados || 0);
+                const balanceLoterias = (grupo) => Number(grupo.tradicional.balance_general || 0)
+                    + Number(grupo.no_tradicional.balance_general || 0);
+                const balanceGeneralNeto = (grupo) => balanceLoterias(grupo)
+                    + Number(grupo.recargas.total_vendido || 0)
+                    + Number(grupo.ventas_externas.total_vendido || 0);
 
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(18);
@@ -632,29 +666,29 @@
                 doc.text('Generado: ' + new Date().toLocaleString('es-DO'), pageWidth - margin, 72, { align: 'right' });
 
                 const filasEstado = [
-                    ['INGRESOS DE LOTERÍAS', '', ''],
-                    ['Ventas Tradicionales', 'Ventas brutas', formatoMontoPdf(resumenPdf.tradicional.total_vendido)],
-                    ['Ventas No Tradicionales', 'Ventas brutas', formatoMontoPdf(resumenPdf.no_tradicional.total_vendido)],
-                    ['Total ventas de loterías', '', formatoMontoPdf(totalVentasLoterias)],
-                    ['MOVIMIENTO DE PREMIOS', '', ''],
-                    ['Premios sacados Tradicional', 'Informativo', formatoMontoPdf(resumenPdf.tradicional.premios_sacados)],
-                    ['Premios sacados No Tradicional', 'Informativo', formatoMontoPdf(resumenPdf.no_tradicional.premios_sacados)],
-                    ['Total premios sacados', 'No afecta el balance', formatoMontoPdf(totalPremiosSacados)],
-                    ['Premios pagados Tradicional', 'Deducción', '- ' + formatoMontoPdf(resumenPdf.tradicional.premios_pagados)],
-                    ['Premios pagados No Tradicional', 'Deducción', '- ' + formatoMontoPdf(resumenPdf.no_tradicional.premios_pagados)],
-                    ['Total premios pagados', 'Deducción aplicada', '- ' + formatoMontoPdf(totalPremiosPagados)],
-                    ['RESULTADO DE LOTERÍAS', '', ''],
-                    ['Balance Tradicional', 'Según columna Resultados', formatoMontoPdf(resumenPdf.tradicional.balance_general)],
-                    ['Balance No Tradicional', 'Según columna Resultados', formatoMontoPdf(resumenPdf.no_tradicional.balance_general)],
-                    ['Balance de loterías', '', formatoMontoPdf(informePdf.balance_loterias)],
-                    ['OTRAS VENTAS', '', ''],
-                    ['Recargas', '', formatoMontoPdf(resumenPdf.recargas.recargas)],
-                    ['Paqueticos', '', formatoMontoPdf(resumenPdf.recargas.paqueticos)],
-                    ['Total Recargas y Paqueticos', '', formatoMontoPdf(informePdf.ventas_recargas)],
-                    ['Seguros', '', formatoMontoPdf(resumenPdf.ventas_externas.seguros)],
-                    ['Boletos', '', formatoMontoPdf(resumenPdf.ventas_externas.boletos)],
-                    ['Total ventas externas', '', formatoMontoPdf(informePdf.ventas_externas)],
-                    ['BALANCE GENERAL NETO', 'Loterías + Recargas + Externas', formatoMontoPdf(informePdf.balance_general_neto)],
+                    seccion('INGRESOS DE LOTERÍAS'),
+                    filaMonto('Ventas Tradicionales', 'Ventas brutas', (grupo) => grupo.tradicional.total_vendido),
+                    filaMonto('Ventas No Tradicionales', 'Ventas brutas', (grupo) => grupo.no_tradicional.total_vendido),
+                    filaMonto('Total ventas de loterías', '', ventasLoterias),
+                    seccion('MOVIMIENTO DE PREMIOS'),
+                    filaMonto('Premios sacados Tradicional', 'Informativo', (grupo) => grupo.tradicional.premios_sacados),
+                    filaMonto('Premios sacados No Tradicional', 'Informativo', (grupo) => grupo.no_tradicional.premios_sacados),
+                    filaMonto('Total premios sacados', 'No afecta el balance', premiosSacados),
+                    filaMonto('Premios pagados Tradicional', 'Deducción', (grupo) => grupo.tradicional.premios_pagados, true),
+                    filaMonto('Premios pagados No Tradicional', 'Deducción', (grupo) => grupo.no_tradicional.premios_pagados, true),
+                    filaMonto('Total premios pagados', 'Deducción aplicada', premiosPagados, true),
+                    seccion('RESULTADO DE LOTERÍAS'),
+                    filaMonto('Balance Tradicional', 'Según columna Resultados', (grupo) => grupo.tradicional.balance_general),
+                    filaMonto('Balance No Tradicional', 'Según columna Resultados', (grupo) => grupo.no_tradicional.balance_general),
+                    filaMonto('Balance de loterías', '', balanceLoterias),
+                    seccion('OTRAS VENTAS'),
+                    filaMonto('Recargas', '', (grupo) => grupo.recargas.recargas),
+                    filaMonto('Paqueticos', '', (grupo) => grupo.recargas.paqueticos),
+                    filaMonto('Total Recargas y Paqueticos', '', (grupo) => grupo.recargas.total_vendido),
+                    filaMonto('Seguros', '', (grupo) => grupo.ventas_externas.seguros),
+                    filaMonto('Boletos', '', (grupo) => grupo.ventas_externas.boletos),
+                    filaMonto('Total ventas externas', '', (grupo) => grupo.ventas_externas.total_vendido),
+                    filaMonto('BALANCE GENERAL NETO', 'Loterías + Recargas + Externas', balanceGeneralNeto),
                 ];
                 const secciones = [
                     'INGRESOS DE LOTERÍAS',
@@ -672,14 +706,14 @@
                 ];
 
                 doc.autoTable({
-                    head: [['Concepto', 'Clasificación', 'Monto']],
+                    head: [['Concepto', 'Clasificación', 'Joselito', 'Negosur', 'Higuey', 'Total consolidado']],
                     body: filasEstado,
                     startY: 86,
                     margin: { left: margin, right: margin, bottom: 36 },
                     theme: 'plain',
                     styles: {
-                        fontSize: 8.5,
-                        cellPadding: 4.5,
+                        fontSize: 7.5,
+                        cellPadding: 4,
                         textColor: [45, 52, 60],
                         lineColor: [220, 224, 228],
                         lineWidth: { bottom: 0.35 },
@@ -691,11 +725,20 @@
                         lineWidth: 0,
                     },
                     columnStyles: {
-                        0: { cellWidth: 230 },
-                        1: { cellWidth: 145 },
+                        0: { cellWidth: 155 },
+                        1: { cellWidth: 105 },
                         2: { halign: 'right' },
+                        3: { halign: 'right' },
+                        4: { halign: 'right' },
+                        5: { halign: 'right', fontStyle: 'bold' },
                     },
                     didParseCell: function (data) {
+                        if (data.section === 'head') {
+                            data.cell.styles.halign = data.column.index >= 2 ? 'right' : 'left';
+
+                            return;
+                        }
+
                         if (data.section !== 'body') {
                             return;
                         }

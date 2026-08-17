@@ -18,7 +18,7 @@ class ExportarMonitoreoAgenteVentaRequest extends FormRequest
         return [
             'formato' => ['required', Rule::in(['excel', 'pdf'])],
             'registros' => ['required', 'array', 'min:1', 'max:5000'],
-            'registros.*' => ['required', 'array:fecha,fecha_iso,sistema,cedula,agente,entrada,salida,marca_validar,ultima_venta,terminal,agencia,empresa,coordinador,estado,observacion'],
+            'registros.*' => ['required', 'array:fecha,fecha_iso,sistema,cedula,agente,entrada,salida,marca_validar,ultima_venta,terminal,agencia_id,es_agencia_plaza,agencia,empresa,coordinador,estado,observacion'],
             'registros.*.fecha' => ['required', 'string', 'max:20'],
             'registros.*.fecha_iso' => ['required', 'date_format:Y-m-d'],
             'registros.*.sistema' => ['required', Rule::in(['LOTOBET', 'LOTONET'])],
@@ -29,6 +29,8 @@ class ExportarMonitoreoAgenteVentaRequest extends FormRequest
             'registros.*.marca_validar' => ['nullable', 'string', 'max:30'],
             'registros.*.ultima_venta' => ['nullable', 'string', 'max:30'],
             'registros.*.terminal' => ['required', 'string', 'max:50'],
+            'registros.*.agencia_id' => ['nullable', 'integer', 'min:1'],
+            'registros.*.es_agencia_plaza' => ['sometimes', 'boolean'],
             'registros.*.agencia' => ['required', 'string', 'max:255'],
             'registros.*.empresa' => ['required', 'string', 'max:150'],
             'registros.*.coordinador' => ['required', 'string', 'max:255'],
