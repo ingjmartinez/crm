@@ -95,7 +95,10 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             ->assertSee('Compartir PDF')
             ->assertSee('Enviar por correo')
             ->assertSee('bootstrap.Modal.getOrCreateInstance', false)
-            ->assertSee("event.target.closest('.btn-ver-volante')", false);
+            ->assertSee("event.target.closest('.btn-ver-volante')", false)
+            ->assertSee('prepareShareFile()', false)
+            ->assertSee('navigator.share({', false)
+            ->assertDontSee("addEventListener('click', async function", false);
     }
 
     public function test_rechaza_archivo_cuyo_total_no_coincide(): void

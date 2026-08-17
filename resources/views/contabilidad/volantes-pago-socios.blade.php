@@ -157,7 +157,7 @@
                         </button>
                     </form>
                     <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-outline-secondary" id="btn-compartir-volante">
+                        <button type="button" class="btn btn-outline-secondary" id="btn-compartir-volante" disabled>
                             <i class="ri-share-forward-line me-1"></i>Compartir PDF
                         </button>
                         <a class="btn btn-primary" id="btn-generar-volante" href="#">
@@ -178,8 +178,11 @@
             const preview = document.getElementById('volante-preview');
             const download = document.getElementById('btn-generar-volante');
             const emailForm = document.getElementById('form-enviar-volante');
+            const shareButton = document.getElementById('btn-compartir-volante');
             let currentDownloadUrl = '';
             let currentName = '';
+            let currentShareFile = null;
+            let shareLoadToken = 0;
 
             if (window.jQuery && jQuery.fn.DataTable && document.getElementById('tabla-volantes')) {
                 jQuery('#tabla-volantes').DataTable({
@@ -200,32 +203,80 @@
                 download.href = currentDownloadUrl;
                 emailForm.action = button.dataset.email;
                 emailForm.reset();
+                prepareShareFile();
                 modal.show();
             });
 
-            document.getElementById('btn-compartir-volante').addEventListener('click', async function () {
-                try {
-                    const response = await fetch(currentDownloadUrl);
-                    if (!response.ok) throw new Error('No se pudo generar el PDF.');
-                    const file = new File([await response.blob()], `volante_${currentName.replace(/[^a-z0-9]+/gi, '_')}.pdf`, {
-                        type: 'application/pdf'
-                    });
+            shareButton.addEventListener('click', function () {
+                if (!currentShareFile) {
+                    return;
+                }
 
-                    if (navigator.canShare?.({ files: [file] })) {
-                        await navigator.share({ title: `Volante de pago - ${currentName}`, files: [file] });
+                try {
+                    if (navigator.canShare?.({ files: [currentShareFile] })) {
+                        navigator.share({
+                            title: `Volante de pago - ${currentName}`,
+                            files: [currentShareFile]
+                        }).catch(showShareError);
                     } else {
                         download.click();
                     }
                 } catch (error) {
-                    if (error.name !== 'AbortError') {
-                        window.Swal ? Swal.fire('No se pudo compartir', error.message, 'error') : alert(error.message);
-                    }
+                    showShareError(error);
                 }
             });
 
             modalElement.addEventListener('hidden.bs.modal', function () {
                 preview.src = 'about:blank';
+                shareLoadToken++;
+                currentShareFile = null;
+                setShareButtonLoading();
             });
+
+            function prepareShareFile() {
+                const token = ++shareLoadToken;
+                currentShareFile = null;
+                setShareButtonLoading();
+
+                fetch(currentDownloadUrl)
+                    .then(response => {
+                        if (!response.ok) throw new Error('No se pudo generar el PDF.');
+                        return response.blob();
+                    })
+                    .then(blob => {
+                        if (token !== shareLoadToken) return;
+
+                        currentShareFile = new File(
+                            [blob],
+                            `volante_${currentName.replace(/[^a-z0-9]+/gi, '_')}.pdf`,
+                            { type: 'application/pdf' }
+                        );
+                        shareButton.disabled = false;
+                        shareButton.innerHTML = '<i class="ri-share-forward-line me-1"></i>Compartir PDF';
+                    })
+                    .catch(error => {
+                        if (token !== shareLoadToken) return;
+
+                        shareButton.disabled = false;
+                        shareButton.innerHTML = '<i class="ri-download-2-line me-1"></i>Descargar PDF';
+                        shareButton.onclick = () => download.click();
+                        console.error(error);
+                    });
+            }
+
+            function setShareButtonLoading() {
+                shareButton.disabled = true;
+                shareButton.onclick = null;
+                shareButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparando PDF';
+            }
+
+            function showShareError(error) {
+                if (error.name === 'AbortError') return;
+
+                window.Swal
+                    ? Swal.fire('No se pudo compartir', error.message, 'error')
+                    : alert(error.message);
+            }
         });
     </script>
 @endsection
