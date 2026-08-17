@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use App\Services\FavoritoCatalogoService;
+
 class ModuleHubController extends Controller
 {
+    public function __construct(private readonly FavoritoCatalogoService $favoritoCatalogo) {}
+
     public function dashboard()
     {
         return $this->show('dashboard');
@@ -65,7 +70,9 @@ class ModuleHubController extends Controller
 
         abort_unless(is_array($hub), 404);
 
+        /** @var User|null $user */
         $user = auth()->user();
+        $favoritos = $user ? $this->favoritoCatalogo->favoritos($user)->pluck('key')->flip() : collect();
 
         $items = collect($hub['items'] ?? [])
             ->filter(function ($item) use ($user) {
@@ -83,9 +90,12 @@ class ModuleHubController extends Controller
 
                 return true;
             })
-            ->map(function ($item) {
+            ->map(function ($item) use ($module, $favoritos) {
+                $path = ltrim((string) parse_url((string) $item['url'], PHP_URL_PATH), '/');
                 $item['url'] = url($item['url']);
                 $item['tags'] = $item['tags'] ?? [];
+                $item['favorito_key'] = $item['key'] ?? $module.':'.$path;
+                $item['es_favorito'] = $favoritos->has($item['favorito_key']);
 
                 return $item;
             })

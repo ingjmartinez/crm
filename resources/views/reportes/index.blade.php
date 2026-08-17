@@ -53,6 +53,17 @@
             transform: translate(1px, -1px);
             color: var(--vz-primary) !important;
         }
+
+        .reporte-item {
+            position: relative;
+        }
+
+        .reporte-favorite {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            z-index: 3;
+        }
     </style>
 
     <div class="main-content">
@@ -109,7 +120,16 @@
                         <div class="col-xxl-3 col-xl-4 col-md-6 reporte-item"
                             data-categoria="{{ strtolower($reporte['categoria'] ?? '') }}"
                             data-search="{{ $textoBusqueda }}">
-                            <a href="{{ $reporte['url'] }}" class="text-decoration-none">
+                            <button type="button"
+                                class="btn btn-icon btn-sm btn-ghost-warning rounded-circle reporte-favorite btn-app-favorito"
+                                data-favorito-key="{{ $reporte['favorito_key'] }}"
+                                data-favorito-variant="icon"
+                                aria-label="{{ $reporte['es_favorito'] ? 'Quitar de favoritos' : 'Agregar a favoritos' }}"
+                                aria-pressed="{{ $reporte['es_favorito'] ? 'true' : 'false' }}"
+                                title="{{ $reporte['es_favorito'] ? 'Quitar de favoritos' : 'Agregar a favoritos' }}">
+                                <i class="{{ $reporte['es_favorito'] ? 'ri-star-fill text-warning' : 'ri-star-line text-muted' }} fs-18"></i>
+                            </button>
+                            <a href="{{ $reporte['url'] }}" class="text-decoration-none d-block h-100">
                                 <div class="card border h-100 reporte-card">
                                     <div class="card-body">
                                         <div class="d-flex align-items-start gap-3">
@@ -119,9 +139,8 @@
                                                 </span>
                                             </div>
                                             <div class="flex-grow-1">
-                                                <div class="d-flex align-items-start justify-content-between gap-2">
+                                                <div class="d-flex align-items-start justify-content-between gap-2 pe-4">
                                                     <h5 class="mb-1 text-dark">{{ $reporte['nombre'] }}</h5>
-                                                    <i class="ri-arrow-right-up-line text-muted reporte-arrow"></i>
                                                 </div>
                                                 <span class="badge bg-light text-muted mb-2">
                                                     {{ $reporte['categoria'] }}

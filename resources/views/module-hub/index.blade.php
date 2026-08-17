@@ -48,6 +48,17 @@
             transform: translate(1px, -1px);
             color: var(--vz-primary) !important;
         }
+
+        .module-hub-favorite {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 3;
+        }
+
+        .module-hub-item {
+            position: relative;
+        }
     </style>
 
     <div class="main-content">
@@ -104,7 +115,16 @@
                         <div class="col-xxl-3 col-xl-4 col-md-6 module-hub-item"
                             data-categoria="{{ strtolower($item['categoria'] ?? '') }}"
                             data-search="{{ $textoBusqueda }}">
-                            <a href="{{ $item['url'] }}" class="text-decoration-none">
+                            <button type="button"
+                                class="btn btn-icon btn-sm btn-ghost-warning rounded-circle module-hub-favorite btn-app-favorito"
+                                data-favorito-key="{{ $item['favorito_key'] }}"
+                                data-favorito-variant="icon"
+                                aria-label="{{ $item['es_favorito'] ? 'Quitar de favoritos' : 'Agregar a favoritos' }}"
+                                aria-pressed="{{ $item['es_favorito'] ? 'true' : 'false' }}"
+                                title="{{ $item['es_favorito'] ? 'Quitar de favoritos' : 'Agregar a favoritos' }}">
+                                <i class="{{ $item['es_favorito'] ? 'ri-star-fill text-warning' : 'ri-star-line text-muted' }} fs-18"></i>
+                            </button>
+                            <a href="{{ $item['url'] }}" class="text-decoration-none d-block h-100">
                                 <div class="card border h-100 module-hub-card">
                                     <div class="card-body">
                                         <div class="d-flex align-items-start gap-3">
@@ -114,7 +134,7 @@
                                                 </span>
                                             </div>
                                             <div class="flex-grow-1">
-                                                <div class="d-flex align-items-start justify-content-between gap-2">
+                                                <div class="d-flex align-items-start justify-content-between gap-2 pe-4">
                                                     <h5 class="mb-1 text-dark">{{ $item['nombre'] }}</h5>
                                                     <i class="ri-arrow-right-up-line text-muted module-hub-arrow"></i>
                                                 </div>

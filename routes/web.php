@@ -67,6 +67,7 @@ use App\Http\Controllers\Tecnologia\MonitoreoTerminalController;
 use App\Http\Controllers\TecnologiaSolicitudController;
 use App\Http\Controllers\TokenController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserFavoritoController;
 use App\Http\Controllers\VentaFlashController;
 use App\Http\Controllers\VentasController;
 use App\Http\Controllers\VentasProductosController;
@@ -96,6 +97,7 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'force.password.change'])->group(function () {
+    Route::post('/favoritos/toggle', [UserFavoritoController::class, 'toggle'])->name('favoritos.toggle');
     Route::get('/gerencia', [ModuleHubController::class, 'gerencia'])->name('gerencia.index');
     Route::get('/gerencia/beneficio-bruto', [BeneficioBrutoController::class, 'index'])
         ->name('gerencia.beneficio-bruto');

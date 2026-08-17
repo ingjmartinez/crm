@@ -230,6 +230,22 @@
             overscroll-behavior: contain;
         }
 
+        .topbar-favorites-list {
+            max-height: min(60vh, 360px);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .topbar-favorite-link {
+            min-width: 0;
+        }
+
+        .topbar-favorite-link span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .task-notif-item .flex-grow-1 {
             min-width: 0;
         }
@@ -731,6 +747,71 @@
                                     <a href="apps-ecommerce-checkout.html" class="btn btn-success text-center w-100">
                                         Checkout
                                     </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        @php
+                            $appFavoritos = $appFavoritos ?? collect();
+                            $appFavoritoActual = $appFavoritoActual ?? null;
+                            $appFavoritoActualActivo = $appFavoritoActual
+                                ? $appFavoritos->contains('key', $appFavoritoActual['key'])
+                                : false;
+                        @endphp
+                        <div class="dropdown topbar-head-dropdown ms-1 header-item">
+                            <button type="button" class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle"
+                                id="page-header-favorites-dropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                                aria-haspopup="true" aria-expanded="false" title="Favoritos">
+                                <i class="bx bx-star fs-22"></i>
+                                <span id="topbar-favorites-count"
+                                    class="position-absolute topbar-badge fs-10 translate-middle badge rounded-pill bg-warning text-dark {{ $appFavoritos->isEmpty() ? 'd-none' : '' }}">
+                                    {{ $appFavoritos->count() }}
+                                </span>
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
+                                aria-labelledby="page-header-favorites-dropdown">
+                                <div class="p-3 border-bottom d-flex justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <h6 class="m-0 fs-16 fw-semibold">Mis favoritos</h6>
+                                        <small class="text-muted">Accesos directos personales</small>
+                                    </div>
+                                    @if ($appFavoritoActual)
+                                        <button type="button"
+                                            class="btn btn-sm {{ $appFavoritoActualActivo ? 'btn-warning' : 'btn-soft-warning' }} btn-app-favorito"
+                                            data-favorito-key="{{ $appFavoritoActual['key'] }}"
+                                            data-favorito-variant="current"
+                                            aria-pressed="{{ $appFavoritoActualActivo ? 'true' : 'false' }}">
+                                            <i class="{{ $appFavoritoActualActivo ? 'ri-star-fill' : 'ri-star-line' }} me-1"></i>
+                                            {{ $appFavoritoActualActivo ? 'Quitar página' : 'Guardar página' }}
+                                        </button>
+                                    @endif
+                                </div>
+                                <div id="topbar-favorites-list" class="topbar-favorites-list">
+                                    @forelse ($appFavoritos as $favorito)
+                                        <div class="d-flex align-items-center border-bottom px-2 py-1 topbar-favorite-item">
+                                            <a href="{{ $favorito['url'] }}"
+                                                class="dropdown-item d-flex align-items-center gap-2 py-2 px-2 topbar-favorite-link">
+                                                <i class="{{ $favorito['icono'] }} fs-18 text-warning"></i>
+                                                <span>
+                                                    <strong class="d-block">{{ $favorito['nombre'] }}</strong>
+                                                    <small class="text-muted">{{ $favorito['modulo'] }}</small>
+                                                </span>
+                                            </a>
+                                            <button type="button"
+                                                class="btn btn-icon btn-sm btn-ghost-danger rounded-circle flex-shrink-0 btn-app-favorito"
+                                                data-favorito-key="{{ $favorito['key'] }}"
+                                                data-favorito-variant="remove"
+                                                aria-label="Quitar {{ $favorito['nombre'] }} de favoritos"
+                                                title="Quitar de favoritos">
+                                                <i class="ri-close-line"></i>
+                                            </button>
+                                        </div>
+                                    @empty
+                                        <div class="p-4 text-center text-muted" id="topbar-favorites-empty">
+                                            <i class="ri-star-line fs-28 d-block mb-2"></i>
+                                            Aún no tienes favoritos.
+                                        </div>
+                                    @endforelse
                                 </div>
                             </div>
                         </div>
@@ -2017,6 +2098,7 @@
         const TASK_NOTIF_URL = '{{ url('/tareas/notificaciones') }}';
         const TASK_NOTIF_MARK_ALL_URL = '{{ url('/tareas/notificaciones/leer-todas') }}';
         const TASK_NOTIF_MARK_ONE_BASE = '{{ url('/tareas/notificaciones') }}';
+        const FAVORITES_TOGGLE_URL = '{{ route('favoritos.toggle') }}';
         const APP_CSRF = '{{ csrf_token() }}';
 
         function escapeHtml(value) {
@@ -2101,6 +2183,94 @@
             .catch(() => {});
         }
 
+        function renderTopbarFavorites(items) {
+            const list = document.getElementById('topbar-favorites-list');
+            const badge = document.getElementById('topbar-favorites-count');
+            if (!list || !badge) return;
+
+            badge.textContent = items.length;
+            badge.classList.toggle('d-none', items.length === 0);
+
+            if (!items.length) {
+                list.innerHTML = `
+                    <div class="p-4 text-center text-muted" id="topbar-favorites-empty">
+                        <i class="ri-star-line fs-28 d-block mb-2"></i>
+                        Aún no tienes favoritos.
+                    </div>`;
+                return;
+            }
+
+            list.innerHTML = items.map(item => `
+                <div class="d-flex align-items-center border-bottom px-2 py-1 topbar-favorite-item">
+                    <a href="${escapeHtml(item.url)}" class="dropdown-item d-flex align-items-center gap-2 py-2 px-2 topbar-favorite-link">
+                        <i class="${escapeHtml(item.icono)} fs-18 text-warning"></i>
+                        <span>
+                            <strong class="d-block">${escapeHtml(item.nombre)}</strong>
+                            <small class="text-muted">${escapeHtml(item.modulo)}</small>
+                        </span>
+                    </a>
+                    <button type="button" class="btn btn-icon btn-sm btn-ghost-danger rounded-circle flex-shrink-0 btn-app-favorito"
+                        data-favorito-key="${escapeHtml(item.key)}" data-favorito-variant="remove"
+                        aria-label="Quitar ${escapeHtml(item.nombre)} de favoritos" title="Quitar de favoritos">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>`).join('');
+        }
+
+        function updateFavoriteButtons(key, active) {
+            document.querySelectorAll('.btn-app-favorito').forEach(button => {
+                if (button.dataset.favoritoKey !== key) return;
+
+                button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                button.disabled = false;
+                const variant = button.dataset.favoritoVariant;
+
+                if (variant === 'current') {
+                    button.classList.toggle('btn-warning', active);
+                    button.classList.toggle('btn-soft-warning', !active);
+                    button.innerHTML = active
+                        ? '<i class="ri-star-fill me-1"></i>Quitar página'
+                        : '<i class="ri-star-line me-1"></i>Guardar página';
+                } else if (variant === 'icon') {
+                    button.title = active ? 'Quitar de favoritos' : 'Agregar a favoritos';
+                    button.setAttribute('aria-label', button.title);
+                    button.innerHTML = active
+                        ? '<i class="ri-star-fill text-warning fs-18"></i>'
+                        : '<i class="ri-star-line text-muted fs-18"></i>';
+                }
+            });
+        }
+
+        async function toggleFavorite(button) {
+            const key = button.dataset.favoritoKey;
+            if (!key || button.disabled) return;
+            button.disabled = true;
+
+            try {
+                const response = await fetch(FAVORITES_TOGGLE_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': APP_CSRF,
+                    },
+                    body: JSON.stringify({ favorito_key: key }),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'No se pudo actualizar el favorito.');
+                }
+
+                updateFavoriteButtons(key, data.activo);
+                renderTopbarFavorites(data.favoritos || []);
+            } catch (error) {
+                button.disabled = false;
+                window.Swal
+                    ? Swal.fire('Favoritos', error.message, 'error')
+                    : alert(error.message);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const btnMarkAll = document.getElementById('btn-marcar-todas-leidas');
 
@@ -2118,6 +2288,15 @@
 
             cargarTaskNotifications();
             setInterval(cargarTaskNotifications, 30000);
+        });
+
+        document.addEventListener('click', function(event) {
+            const button = event.target.closest('.btn-app-favorito');
+            if (!button) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            toggleFavorite(button);
         });
     </script>
 

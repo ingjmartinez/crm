@@ -3,21 +3,30 @@
 namespace App\Http\Controllers;
 
 use App\Exports\VentasUsuarioExport;
+use App\Services\FavoritoCatalogoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReporteController extends Controller
 {
-    public function indexReportes()
+    public function indexReportes(Request $request, FavoritoCatalogoService $favoritoCatalogo): View
     {
+        $favoritos = $request->user()
+            ? $favoritoCatalogo->favoritos($request->user())->pluck('key')->flip()
+            : collect();
+
         $reportes = collect(config('reportes', []))
             ->filter(fn ($reporte) => (bool) ($reporte['activo'] ?? true))
-            ->map(function ($reporte) {
+            ->map(function ($reporte) use ($favoritos) {
+                $path = ltrim((string) parse_url((string) $reporte['url'], PHP_URL_PATH), '/');
                 $reporte['url'] = url($reporte['url']);
                 $reporte['tags'] = $reporte['tags'] ?? [];
+                $reporte['favorito_key'] = $reporte['key'] ?? 'reportes:'.$path;
+                $reporte['es_favorito'] = $favoritos->has($reporte['favorito_key']);
 
                 return $reporte;
             })
