@@ -226,6 +226,15 @@ return [
                 'tags' => ['movimiento mayor', 'entradas diario', 'sincronizar', 'contabilidad'],
                 'activo' => true,
             ],
+            [
+                'nombre' => 'Volantes de Pago de Socios',
+                'descripcion' => 'Carga pagos del Banco Santa Cruz y genera un volante individual por transacción.',
+                'url' => '/contabilidad/volantes-pago-socios',
+                'icono' => 'ri-file-paper-2-line',
+                'categoria' => 'Reportes',
+                'tags' => ['volantes', 'pagos', 'socios', 'banco santa cruz', 'pdf'],
+                'activo' => true,
+            ],
         ],
     ],
 

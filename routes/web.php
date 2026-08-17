@@ -16,6 +16,7 @@ use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\ContabilidadFlujoRutaController;
 use App\Http\Controllers\ContabilidadGastoIncentivoAgenciaController;
 use App\Http\Controllers\ContabilidadValidadorAgenciaController;
+use App\Http\Controllers\ContabilidadVolantePagoSocioController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\CruceUsuarioSeguimientoController;
 use App\Http\Controllers\EmpleadoController;
@@ -160,6 +161,16 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('validador-agencia.aplicar');
         Route::get('/validador-agencia/{companyId}/{terminal}/historial', [ContabilidadValidadorAgenciaController::class, 'historial'])
             ->name('validador-agencia.historial');
+        Route::get('/volantes-pago-socios', [ContabilidadVolantePagoSocioController::class, 'index'])
+            ->name('volantes-pago-socios');
+        Route::post('/volantes-pago-socios/procesar', [ContabilidadVolantePagoSocioController::class, 'procesar'])
+            ->name('volantes-pago-socios.procesar');
+        Route::get('/volantes-pago-socios/{detalle}/vista-previa', [ContabilidadVolantePagoSocioController::class, 'vistaPrevia'])
+            ->name('volantes-pago-socios.vista-previa');
+        Route::get('/volantes-pago-socios/{detalle}/pdf', [ContabilidadVolantePagoSocioController::class, 'descargar'])
+            ->name('volantes-pago-socios.pdf');
+        Route::post('/volantes-pago-socios/{detalle}/correo', [ContabilidadVolantePagoSocioController::class, 'enviar'])
+            ->name('volantes-pago-socios.correo');
         Route::view('/movimiento-mayor', 'contabilidad.movimiento-mayor')->name('movimiento-mayor');
         Route::get('/reportes/comisiones', [ContabilidadComisionController::class, 'index'])->name('reportes.comisiones');
         Route::post('/reportes/comisiones/calcular-todas', [ContabilidadComisionController::class, 'calcularTodas'])->name('reportes.comisiones.calcular-todas');
