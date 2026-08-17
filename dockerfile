@@ -16,7 +16,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 COPY . .
 
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress \
+    || (sleep 5 && composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress) \
+    || (sleep 10 && composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress)
 
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
