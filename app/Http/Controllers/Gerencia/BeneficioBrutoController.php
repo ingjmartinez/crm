@@ -43,6 +43,11 @@ class BeneficioBrutoController extends Controller
     {
         $filasPorGrupo = collect(self::GRUPOS)->mapWithKeys(function (string $nombreGrupo, string $grupo) use ($request): array {
             $campo = "archivo_{$grupo}";
+
+            if (! $request->hasFile($campo)) {
+                return [$grupo => collect()];
+            }
+
             /** @var UploadedFile $archivo */
             $archivo = $request->validated($campo);
             $filas = $this->leerCsv($archivo, $campo)->map(function (array $fila) use ($grupo, $nombreGrupo): array {
@@ -55,7 +60,9 @@ class BeneficioBrutoController extends Controller
             return [$grupo => $filas];
         });
         $filas = $filasPorGrupo->collapse()->values();
-        $nombresArchivos = collect(self::GRUPOS)->mapWithKeys(function (string $nombreGrupo, string $grupo) use ($request, $filasPorGrupo): array {
+        $nombresArchivos = collect(self::GRUPOS)->filter(function (string $nombreGrupo, string $grupo) use ($request): bool {
+            return $request->hasFile("archivo_{$grupo}");
+        })->mapWithKeys(function (string $nombreGrupo, string $grupo) use ($request, $filasPorGrupo): array {
             /** @var UploadedFile $archivo */
             $archivo = $request->validated("archivo_{$grupo}");
 

@@ -69,21 +69,21 @@
                             @csrf
                             <div class="col-lg-4">
                                 <label for="archivo_joselito" class="form-label">Documento Joselito</label>
-                                <input type="file" class="form-control" id="archivo_joselito" name="archivo_joselito" accept=".csv,.txt,text/csv,text/plain" required>
+                                <input type="file" class="form-control" id="archivo_joselito" name="archivo_joselito" accept=".csv,.txt,text/csv,text/plain">
                             </div>
                             <div class="col-lg-4">
                                 <label for="archivo_negosur" class="form-label">Documento Negosur</label>
-                                <input type="file" class="form-control" id="archivo_negosur" name="archivo_negosur" accept=".csv,.txt,text/csv,text/plain" required>
+                                <input type="file" class="form-control" id="archivo_negosur" name="archivo_negosur" accept=".csv,.txt,text/csv,text/plain">
                             </div>
                             <div class="col-lg-4">
                                 <label for="archivo_higuey" class="form-label">Documento Higuey</label>
-                                <input type="file" class="form-control" id="archivo_higuey" name="archivo_higuey" accept=".csv,.txt,text/csv,text/plain" required>
+                                <input type="file" class="form-control" id="archivo_higuey" name="archivo_higuey" accept=".csv,.txt,text/csv,text/plain">
                             </div>
                             <div class="col-12">
-                                <div class="form-text mb-2">Los tres documentos deben mantener la misma estructura: terminal en columna C y bloques de ventas en E–P. Pueden contener cantidades diferentes de registros.</div>
+                                <div class="form-text mb-2">Puedes cargar uno, dos o los tres documentos. Todos deben mantener la misma estructura: terminal en columna C y bloques de ventas en E–P.</div>
                                 <button type="submit" class="btn btn-primary w-100" id="btn-procesar-beneficio">
                                     <i class="ri-upload-cloud-2-line align-bottom me-1"></i>
-                                    Procesar y consolidar los tres documentos
+                                    Procesar y consolidar documentos
                                 </button>
                             </div>
                         </form>
@@ -401,6 +401,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             const form = document.getElementById('form-beneficio-bruto');
             const button = document.getElementById('btn-procesar-beneficio');
+            const fileInputs = form ? Array.from(form.querySelectorAll('input[type="file"]')) : [];
             const pdfButton = document.getElementById('btn-pdf-tarjetas');
             const estadoResultadosPdfButton = document.getElementById('btn-pdf-estado-resultados');
             const resumenPdf = @json($resumen);
@@ -408,7 +409,18 @@
             const informePdf = @json($informeGerencial);
 
             if (form && button) {
-                form.addEventListener('submit', function () {
+                form.addEventListener('submit', function (event) {
+                    if (!fileInputs.some((input) => input.files.length > 0)) {
+                        event.preventDefault();
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Selecciona un documento',
+                            text: 'Debes cargar al menos uno de los tres documentos CSV.',
+                        });
+
+                        return;
+                    }
+
                     button.disabled = true;
                     Swal.fire({
                         title: 'Procesando documento...',

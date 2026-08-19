@@ -22,9 +22,9 @@ class ProcesarBeneficioBrutoRequest extends FormRequest
         $reglaArchivo = File::types(['csv', 'txt'])->max(50 * 1024);
 
         return [
-            'archivo_joselito' => ['required', $reglaArchivo],
-            'archivo_negosur' => ['required', $reglaArchivo],
-            'archivo_higuey' => ['required', $reglaArchivo],
+            'archivo_joselito' => ['required_without_all:archivo_negosur,archivo_higuey', $reglaArchivo],
+            'archivo_negosur' => ['required_without_all:archivo_joselito,archivo_higuey', $reglaArchivo],
+            'archivo_higuey' => ['required_without_all:archivo_joselito,archivo_negosur', $reglaArchivo],
         ];
     }
 
@@ -34,9 +34,9 @@ class ProcesarBeneficioBrutoRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'archivo_joselito.required' => 'Selecciona el documento CSV de Joselito.',
-            'archivo_negosur.required' => 'Selecciona el documento CSV de Negosur.',
-            'archivo_higuey.required' => 'Selecciona el documento CSV de Higuey.',
+            'archivo_joselito.required_without_all' => 'Selecciona al menos uno de los tres documentos CSV.',
+            'archivo_negosur.required_without_all' => 'Selecciona al menos uno de los tres documentos CSV.',
+            'archivo_higuey.required_without_all' => 'Selecciona al menos uno de los tres documentos CSV.',
             'archivo_joselito.file' => 'El documento de Joselito no es un archivo válido.',
             'archivo_negosur.file' => 'El documento de Negosur no es un archivo válido.',
             'archivo_higuey.file' => 'El documento de Higuey no es un archivo válido.',
