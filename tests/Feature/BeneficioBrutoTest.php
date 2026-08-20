@@ -181,9 +181,13 @@ class BeneficioBrutoTest extends TestCase
             ->assertSee('PDF estado de resultado')
             ->assertSee('terminal vendió')
             ->assertSee('informe_gerencial_beneficio_bruto.pdf')
-            ->assertSee('estado_resultado_beneficio_bruto.pdf')
+            ->assertSee('const fechaGeneracion = new Date()', false)
+            ->assertSee('doc.save(`Beneficio Bruto ${fechaArchivo}.pdf`)', false)
             ->assertSee('Estado de Resultado Consolidado')
             ->assertSee('Total consolidado')
+            ->assertSee('Informe Gerencial - Promedios')
+            ->assertSee('const filasPromediosEstado = (informePdf.bloques || []).map', false)
+            ->assertSee('El promedio por terminal se calcula dividiendo el total vendido')
             ->assertSee("data.section === 'head'", false)
             ->assertSee("data.column.index >= 2 ? 'right' : 'left'", false)
             ->assertDontSee("doc.text('Archivo: '")
@@ -282,7 +286,10 @@ class BeneficioBrutoTest extends TestCase
             ->assertViewHas('filas', fn ($filas): bool => $filas->count() === 2
                 && $filas->pluck('grupo')->all() === ['joselito', 'higuey'])
             ->assertViewHas('nombresArchivos', fn (array $archivos): bool => array_keys($archivos) === ['joselito', 'higuey'])
-            ->assertViewHas('resumen', fn (array $resumen): bool => $resumen['tradicional']['total_vendido'] === 400.0);
+            ->assertViewHas('resumen', fn (array $resumen): bool => $resumen['tradicional']['total_vendido'] === 400.0)
+            ->assertSee('const gruposCargadosPdf = ["joselito","higuey"]', false)
+            ->assertSee('.filter((grupo) => gruposCargadosPdf.includes(grupo.clave))', false)
+            ->assertSee('...gruposEstado.map((grupo) => grupo.nombre)', false);
     }
 
     public function test_at_least_one_group_document_is_required(): void

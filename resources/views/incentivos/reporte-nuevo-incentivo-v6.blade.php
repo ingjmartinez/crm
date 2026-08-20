@@ -4842,7 +4842,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             const className = value === '60'
                 ? 'bg-success-subtle text-success'
                 : (value === '70' ? 'bg-info-subtle text-info' : 'bg-warning-subtle text-warning');
-            const title = `Ventas: ${formatMoney(detail?.ventas)} | Incentivo: ${formatMoney(detail?.incentivo)} | Dias: ${toNumber(detail?.dias)}`;
+            const title = `Ventas del tipo: ${formatMoney(detail?.ventas)} | Base total de la escala: ${formatMoney(detail?.ventas_base_escala)} | Incentivo proporcional: ${formatMoney(detail?.incentivo)} | Dias: ${toNumber(detail?.dias)}`;
 
             return `<span class="badge ${className} me-1" title="${escapeHtml(title)}">${escapeHtml(value)}</span>`;
         }).join('');

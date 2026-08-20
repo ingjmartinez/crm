@@ -427,8 +427,8 @@ class IncentivoV6CalendarTest extends TestCase
             'terminales_excluidas' => [],
         ], $this->paymentRanges());
 
-        $this->assertSame('3,000', $payload['data'][0]['nuevo_incentivo']);
-        $this->assertSame(3000, $payload['meta']['total_incentivo']);
+        $this->assertSame('4,500', $payload['data'][0]['nuevo_incentivo']);
+        $this->assertSame(4500, $payload['meta']['total_incentivo']);
         $this->assertSame(4, $payload['meta']['configuraciones_diarias_aplicadas']);
         $this->assertSame(1, $payload['meta']['distribucion_tipos_pago']['tramos_60']['agencias']);
         $this->assertSame(1, $payload['meta']['distribucion_tipos_pago']['tramos_80']['agencias']);
@@ -454,6 +454,71 @@ class IncentivoV6CalendarTest extends TestCase
             ['tramos_80', 'tramos_60'],
             array_column($payload['data'][0]['tipos_pago_detalle'], 'tipo_pago')
         );
+        $this->assertSame(
+            [1500, 3000],
+            array_column($payload['data'][0]['tipos_pago_detalle'], 'incentivo')
+        );
+        $this->assertSame(
+            [600000, 600000],
+            array_column($payload['data'][0]['tipos_pago_detalle'], 'ventas_base_escala')
+        );
+    }
+
+    public function test_mixed_payment_types_use_combined_sales_as_the_scale_base(): void
+    {
+        DB::table('agencias')->insert([
+            'terminal' => '1001',
+            'sistema' => 'Lotobet',
+            'empresa' => 'Grupo Joselito',
+        ]);
+        DB::table('vt_usuarios_bet')->insert([
+            [
+                'agencia_id' => '1001',
+                'cedula' => '00112345678',
+                'fecha' => '2026-07-01',
+                'monto' => 50000,
+            ],
+            [
+                'agencia_id' => '1001',
+                'cedula' => '00112345678',
+                'fecha' => '2026-07-02',
+                'monto' => 59807,
+            ],
+        ]);
+        IncentivoTerminalTipoPago::query()->create([
+            'sistema' => 'Lotobet',
+            'terminal' => '1001',
+            'fecha' => '2026-07-01',
+            'tipo_pago' => 'tramos_80',
+        ]);
+
+        $payload = app(IncentivoV6Calculator::class)->applyDailyPaymentTypes([
+            'meta' => [
+                'coordinador_detalle_usuarios' => [],
+                'coordinador_monto_usuarios' => [],
+            ],
+            'data' => [[
+                'cedula' => '00112345678',
+                'empresa' => 'Grupo Joselito',
+                'ventas_mes_actual' => '109,807',
+                'nuevo_incentivo' => '0',
+            ]],
+        ], [
+            'fecha_ini' => '2026-07-01',
+            'fecha_fin' => '2026-07-02',
+            'sistema' => 'Lotobet',
+            'tipo_pago' => 'tramos_60',
+            'min_dias_venta' => 1,
+            'terminales_excluidas' => [],
+        ], $this->paymentRanges());
+
+        $details = collect($payload['data'][0]['tipos_pago_detalle'])->keyBy('tipo_pago');
+
+        $this->assertSame('773', $payload['data'][0]['nuevo_incentivo']);
+        $this->assertSame(109807, $details['tramos_60']['ventas_base_escala']);
+        $this->assertSame(109807, $details['tramos_80']['ventas_base_escala']);
+        $this->assertSame(545, $details['tramos_60']['incentivo']);
+        $this->assertSame(228, $details['tramos_80']['incentivo']);
     }
 
     public function test_calendar_pdf_breakdown_groups_agencies_with_the_same_effective_range(): void
@@ -529,6 +594,7 @@ class IncentivoV6CalendarTest extends TestCase
 
         $this->assertStringNotContainsString('btnCalendarioTiposPago', $v5);
         $this->assertStringContainsString('btnCalendarioTiposPago', $v6);
+        $this->assertStringContainsString('Base total de la escala', $v6);
         $this->assertStringContainsString('/incentivos/reporte-nuevo-incentivo-v6?', $v6);
         $this->assertStringContainsString('Agencias calculadas por tipo de pago', $v6);
         $this->assertStringContainsString('Informe Gerencial de Incentivos V6', $v6);

@@ -97,17 +97,25 @@ class IncentivoV6Calculator
 
         foreach ($calculations as &$calculation) {
             $qualifies = count($calculation['dias'] ?? []) >= $minimumDays;
+            $totalSales = (int) collect($calculation['tipos'] ?? [])->sum(
+                fn (array $segment): int => (int) ($segment['ventas'] ?? 0)
+            );
             $calculation['incentivo'] = 0;
             $calculation['detalle'] = [];
 
             foreach ($calculation['tipos'] ?? [] as $paymentType => $segment) {
-                $incentive = $qualifies
-                    ? $this->calculateIncentive((int) $segment['ventas'], $rangesByType[$paymentType] ?? [])
+                $segmentSales = (int) $segment['ventas'];
+                $fullScaleIncentive = $qualifies
+                    ? $this->calculateIncentive($totalSales, $rangesByType[$paymentType] ?? [])
+                    : 0;
+                $incentive = $totalSales > 0
+                    ? (int) round($fullScaleIncentive * ($segmentSales / $totalSales))
                     : 0;
                 $calculation['incentivo'] += $incentive;
                 $calculation['detalle'][] = [
                     'tipo_pago' => $paymentType,
-                    'ventas' => (int) $segment['ventas'],
+                    'ventas' => $segmentSales,
+                    'ventas_base_escala' => $totalSales,
                     'incentivo' => $incentive,
                     'dias' => count($segment['dias'] ?? []),
                     'terminales' => count($segment['terminales'] ?? []),

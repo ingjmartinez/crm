@@ -407,6 +407,7 @@
             const resumenPdf = @json($resumen);
             const resumenPorGrupoPdf = @json($resumenPorGrupo);
             const informePdf = @json($informeGerencial);
+            const gruposCargadosPdf = @json(array_keys($nombresArchivos ?? []));
 
             if (form && button) {
                 form.addEventListener('submit', function (event) {
@@ -646,7 +647,9 @@
                     { clave: 'joselito', nombre: 'Joselito' },
                     { clave: 'negosur', nombre: 'Negosur' },
                     { clave: 'higuey', nombre: 'Higuey' },
-                ];
+                ].filter((grupo) => gruposCargadosPdf.includes(grupo.clave));
+                const cantidadColumnasEstado = gruposEstado.length + 3;
+                const indiceTotalConsolidado = cantidadColumnasEstado - 1;
                 const filaMonto = (concepto, clasificacion, calcular, deduccion = false) => {
                     const valores = gruposEstado.map((grupo) => Number(calcular(resumenPorGrupoPdf[grupo.clave]) || 0));
                     const total = valores.reduce((acumulado, valor) => acumulado + valor, 0);
@@ -654,7 +657,7 @@
 
                     return [concepto, clasificacion, ...valores.map(formatear), formatear(total)];
                 };
-                const seccion = (titulo) => [titulo, '', '', '', '', ''];
+                const seccion = (titulo) => [titulo, ...Array(cantidadColumnasEstado - 1).fill('')];
                 const ventasLoterias = (grupo) => Number(grupo.tradicional.total_vendido || 0)
                     + Number(grupo.no_tradicional.total_vendido || 0);
                 const premiosSacados = (grupo) => Number(grupo.tradicional.premios_sacados || 0)
@@ -718,7 +721,7 @@
                 ];
 
                 doc.autoTable({
-                    head: [['Concepto', 'Clasificación', 'Joselito', 'Negosur', 'Higuey', 'Total consolidado']],
+                    head: [['Concepto', 'Clasificación', ...gruposEstado.map((grupo) => grupo.nombre), 'Total consolidado']],
                     body: filasEstado,
                     startY: 86,
                     margin: { left: margin, right: margin, bottom: 36 },
@@ -742,7 +745,7 @@
                         2: { halign: 'right' },
                         3: { halign: 'right' },
                         4: { halign: 'right' },
-                        5: { halign: 'right', fontStyle: 'bold' },
+                        [indiceTotalConsolidado]: { halign: 'right', fontStyle: 'bold' },
                     },
                     didParseCell: function (data) {
                         if (data.section === 'head') {
@@ -787,7 +790,74 @@
                     margin,
                     doc.internal.pageSize.getHeight() - 18
                 );
-                doc.save('estado_resultado_beneficio_bruto.pdf');
+
+                doc.addPage('letter', 'landscape');
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(19);
+                doc.setTextColor(41, 50, 60);
+                doc.text('Informe Gerencial - Promedios', margin, 38);
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(10);
+                doc.setTextColor(90, 98, 108);
+                doc.text('Promedio de ventas por cada terminal que vendió en el período.', margin, 58);
+
+                const filasPromediosEstado = (informePdf.bloques || []).map(function (bloque) {
+                    return [
+                        bloque.nombre,
+                        formatoMontoPdf(bloque.ventas),
+                        Number(bloque.participacion || 0).toFixed(2) + '%',
+                        Number(bloque.terminales || 0).toLocaleString('en-US'),
+                        formatoMontoPdf(bloque.promedio_terminal),
+                    ];
+                });
+
+                doc.autoTable({
+                    head: [['Bloque', 'Total vendido', 'Participación', 'Terminales que vendieron', 'Promedio por terminal']],
+                    body: filasPromediosEstado,
+                    foot: [['Total general', formatoMontoPdf(resumenPdf.balance), '100.00%', 'No acumulable', '-']],
+                    startY: 76,
+                    margin: { left: margin, right: margin },
+                    theme: 'grid',
+                    styles: {
+                        fontSize: 10,
+                        cellPadding: 8,
+                        lineColor: [215, 220, 226],
+                        lineWidth: 0.5,
+                    },
+                    headStyles: {
+                        fillColor: [41, 59, 80],
+                        textColor: [255, 255, 255],
+                        fontStyle: 'bold',
+                    },
+                    footStyles: {
+                        fillColor: [235, 238, 241],
+                        textColor: [41, 50, 60],
+                        fontStyle: 'bold',
+                    },
+                    columnStyles: {
+                        1: { halign: 'right' },
+                        2: { halign: 'right' },
+                        3: { halign: 'right' },
+                        4: { halign: 'right', fontStyle: 'bold' },
+                    },
+                });
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
+                doc.setTextColor(110, 116, 122);
+                doc.text(
+                    'El promedio por terminal se calcula dividiendo el total vendido entre las terminales que registraron ventas.',
+                    margin,
+                    doc.lastAutoTable.finalY + 22
+                );
+
+                const fechaGeneracion = new Date();
+                const fechaArchivo = [
+                    fechaGeneracion.getFullYear(),
+                    String(fechaGeneracion.getMonth() + 1).padStart(2, '0'),
+                    String(fechaGeneracion.getDate()).padStart(2, '0'),
+                ].join('-');
+                doc.save(`Beneficio Bruto ${fechaArchivo}.pdf`);
             }
 
             if (pdfButton) {
