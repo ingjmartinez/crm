@@ -29,12 +29,30 @@
         .formula { background: #f8fafc; color: #475569; }
         .total td { background: #e8f0fb; font-weight: bold; }
         .note { background: #f8fafc; border-left: 4px solid #002d72; margin-top: 16px; padding: 10px; }
+        .page-break { page-break-after: always; }
     </style>
 </head>
 <body>
     @php
         $meses = [1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'];
     @endphp
+
+    @php
+        $reportesPdf = $reportes ?? [[
+            'detalle' => $detalle,
+            'periodo' => $periodo,
+            'tiposPago' => $tiposPago,
+            'resumen' => $resumen,
+        ]];
+    @endphp
+
+    @foreach ($reportesPdf as $reportePdf)
+        @php
+            $detalle = $reportePdf['detalle'];
+            $periodo = $reportePdf['periodo'];
+            $tiposPago = $reportePdf['tiposPago'];
+            $resumen = $reportePdf['resumen'];
+        @endphp
 
     <div class="header">
         <h1 class="title">Desglose de Pago por Cédula</h1>
@@ -87,5 +105,9 @@
     </div>
 
     <p class="muted" style="margin-top:18px">Documento generado el {{ now()->format('d/m/Y H:i') }} para consulta interna.</p>
+        @if (! $loop->last)
+            <div class="page-break"></div>
+        @endif
+    @endforeach
 </body>
 </html>

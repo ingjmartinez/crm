@@ -34,11 +34,12 @@
                 @else
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-1">Consultar cálculo individual</h5>
+                            <h5 class="card-title mb-1">Consultar desglose por listado de cédulas</h5>
                             <p class="text-muted mb-0">El período más reciente queda seleccionado automáticamente.</p>
                         </div>
                         <div class="card-body">
-                            <form method="GET" action="{{ route('incentivos.desglose-pago-cedula.index') }}">
+                            <form method="POST" action="{{ route('incentivos.desglose-pago-cedula.index') }}" enctype="multipart/form-data">
+                                @csrf
                                 <input type="hidden" name="consultar" value="1">
                                 <div class="row g-3 align-items-end">
                                     <div class="col-lg-4">
@@ -51,11 +52,31 @@
                                             @endforeach
                                         </select>
                                     </div>
+                                    <div class="col-lg-4">
+                                        <label for="cedulas_manual" class="form-label">Listado de cédulas</label>
+                                        <textarea id="cedulas_manual" name="cedulas_manual" rows="4"
+                                            class="form-control {{ isset($errors) && $errors->has('cedulas_manual') ? 'is-invalid' : '' }}"
+                                            placeholder="Una cédula por línea">{{ old('cedulas_manual', $cedulasManual) }}</textarea>
+                                        <div class="form-text">Sepáralas por líneas, comas o punto y coma.</div>
+                                        @if (isset($errors) && $errors->has('cedulas_manual'))
+                                            <div class="invalid-feedback">{{ $errors->first('cedulas_manual') }}</div>
+                                        @endif
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <label for="archivo_cedulas" class="form-label">Cargar listado</label>
+                                        <input id="archivo_cedulas" name="archivo_cedulas" type="file"
+                                            accept=".xlsx,.xls,.csv"
+                                            class="form-control {{ isset($errors) && $errors->has('archivo_cedulas') ? 'is-invalid' : '' }}">
+                                        <div class="form-text">XLSX, XLS o CSV; cédulas en la primera columna.</div>
+                                        @if (isset($errors) && $errors->has('archivo_cedulas'))
+                                            <div class="invalid-feedback">{{ $errors->first('archivo_cedulas') }}</div>
+                                        @endif
+                                    </div>
                                     <div class="col-lg-5">
                                         <label for="cedula" class="form-label">Cédula</label>
                                         <input id="cedula" name="cedula" class="form-control {{ isset($errors) && $errors->has('cedula') ? 'is-invalid' : '' }}"
                                             value="{{ old('cedula', $cedula) }}" inputmode="numeric" maxlength="13"
-                                            placeholder="Ej. 40238509620" required>
+                                            placeholder="Ej. 40238509620">
                                         @if (isset($errors) && $errors->has('cedula'))
                                             <div class="invalid-feedback">{{ $errors->first('cedula') }}</div>
                                         @endif
@@ -74,13 +95,38 @@
                         <div class="card border-info">
                             <div class="card-body py-5 text-center">
                                 <i class="ri-file-user-line display-5 text-info"></i>
-                                <h5 class="mt-3">Consulta una cédula para visualizar su cálculo</h5>
+                                <h5 class="mt-3">Carga o escribe las cédulas que deseas consultar</h5>
                                 <p class="text-muted mb-0">El reporte utilizará exclusivamente los datos conservados en el período V6.</p>
                             </div>
                         </div>
                     @elseif ($reportes->isEmpty())
                         <div class="alert alert-warning">No se encontró esa cédula en el período seleccionado.</div>
                     @else
+                        <div class="card border-success">
+                            <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                <div>
+                                    <h5 class="mb-1">{{ $reportes->pluck('detalle.cedula')->unique()->count() }} cédula(s) encontrada(s)</h5>
+                                    <p class="text-muted mb-0">Resultados obtenidos del período guardado.</p>
+                                </div>
+                                <form method="POST" action="{{ route('incentivos.desglose-pago-cedula.pdf-listado') }}">
+                                    @csrf
+                                    <input type="hidden" name="periodo_id" value="{{ $periodo->id }}">
+                                    @foreach ($reportes->pluck('detalle.cedula')->unique() as $cedulaEncontrada)
+                                        <input type="hidden" name="cedulas[]" value="{{ $cedulaEncontrada }}">
+                                    @endforeach
+                                    <button class="btn btn-danger" type="submit">
+                                        <i class="ri-file-pdf-2-line me-1"></i> Descargar PDF consolidado
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        @if ($cedulasNoEncontradas->isNotEmpty())
+                            <div class="alert alert-warning">
+                                <strong>No encontradas:</strong> {{ $cedulasNoEncontradas->implode(', ') }}
+                            </div>
+                        @endif
+
                         @foreach ($reportes as $reporte)
                             @php($detalle = $reporte['detalle'])
                             <div class="card border-primary">

@@ -605,11 +605,13 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/incentivos/rendimiento-coordinador/{coordinador}/excel', [RendimientoCoordinadorController::class, 'excel'])
         ->whereNumber('coordinador')
         ->name('incentivos.rendimiento-coordinador.excel');
-    Route::get('/incentivos/desglose-pago-cedula', [DesglosePagoCedulaController::class, 'index'])
+    Route::match(['get', 'post'], '/incentivos/desglose-pago-cedula', [DesglosePagoCedulaController::class, 'index'])
         ->name('incentivos.desglose-pago-cedula.index');
     Route::get('/incentivos/desglose-pago-cedula/{detalle}/pdf', [DesglosePagoCedulaController::class, 'pdf'])
         ->whereNumber('detalle')
         ->name('incentivos.desglose-pago-cedula.pdf');
+    Route::post('/incentivos/desglose-pago-cedula/pdf-listado', [DesglosePagoCedulaController::class, 'pdfListado'])
+        ->name('incentivos.desglose-pago-cedula.pdf-listado');
     Route::get('/incentivos/reporte-nuevo-incentivo-view', [IncentivosController::class, 'reporteNuevoIncentivoView']);
     Route::get('/incentivos/reporte-nuevo-incentivo', [IncentivosController::class, 'reporteNuevoIncentivo']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v2-view', [IncentivosController::class, 'reporteNuevoIncentivoV2View']);

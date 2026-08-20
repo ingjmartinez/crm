@@ -6,6 +6,7 @@ use App\Models\IncentivoPeriodo;
 use App\Models\IncentivoPeriodoDetalle;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Mockery;
@@ -99,7 +100,7 @@ class DesglosePagoCedulaTest extends TestCase
         $this->get(route('incentivos.desglose-pago-cedula.index'))
             ->assertOk()
             ->assertSee('Julio 2026')
-            ->assertSee('Consulta una cédula')
+            ->assertSee('Carga o escribe las cédulas')
             ->assertDontSee('Klismairy Corporan Reyes');
 
         $this->get(route('incentivos.desglose-pago-cedula.index', [
@@ -125,6 +126,88 @@ class DesglosePagoCedulaTest extends TestCase
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf')
             ->assertDownload('desglose-incentivo-40238509620-2026-07.pdf');
+    }
+
+    public function test_user_can_consult_a_manual_list_of_cedulas(): void
+    {
+        $firstDetail = $this->createDetail();
+        $secondDetail = $firstDetail->replicate();
+        $secondDetail->fill([
+            'cedula' => '00123456789',
+            'empleadoid' => '6001',
+            'nombre' => 'Segundo Empleado',
+        ]);
+        $secondDetail->save();
+
+        $this->post(route('incentivos.desglose-pago-cedula.index'), [
+            'consultar' => 1,
+            'periodo_id' => $firstDetail->incentivo_periodo_id,
+            'cedulas_manual' => "402-3850962-0\n00123456789\n99999999999",
+        ])->assertOk()
+            ->assertSee('Klismairy Corporan Reyes')
+            ->assertSee('Segundo Empleado')
+            ->assertSee('2 cédula(s) encontrada(s)')
+            ->assertSee('99999999999');
+    }
+
+    public function test_user_can_upload_a_csv_list_and_preserve_leading_zeroes(): void
+    {
+        $firstDetail = $this->createDetail();
+        $secondDetail = $firstDetail->replicate();
+        $secondDetail->fill([
+            'cedula' => '00123456789',
+            'empleadoid' => '6001',
+            'nombre' => 'Segundo Empleado',
+        ]);
+        $secondDetail->save();
+        $archivo = UploadedFile::fake()->createWithContent(
+            'cedulas.csv',
+            "Cedula\n40238509620\n00123456789\n"
+        );
+
+        $this->post(route('incentivos.desglose-pago-cedula.index'), [
+            'consultar' => 1,
+            'periodo_id' => $firstDetail->incentivo_periodo_id,
+            'archivo_cedulas' => $archivo,
+        ])->assertOk()
+            ->assertSee('Klismairy Corporan Reyes')
+            ->assertSee('Segundo Empleado');
+    }
+
+    public function test_user_can_download_a_consolidated_pdf_for_the_selected_cedulas(): void
+    {
+        $firstDetail = $this->createDetail();
+        $secondDetail = $firstDetail->replicate();
+        $secondDetail->fill([
+            'cedula' => '00123456789',
+            'empleadoid' => '6001',
+            'nombre' => 'Segundo Empleado',
+        ]);
+        $secondDetail->save();
+
+        $this->post(route('incentivos.desglose-pago-cedula.pdf-listado'), [
+            'periodo_id' => $firstDetail->incentivo_periodo_id,
+            'cedulas' => [$firstDetail->cedula, $secondDetail->cedula],
+        ])->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertDownload('desglose-incentivos-listado-2026-07.pdf');
+    }
+
+    public function test_list_query_rejects_invalid_cedulas_and_files(): void
+    {
+        $detail = $this->createDetail();
+
+        $this->post(route('incentivos.desglose-pago-cedula.index'), [
+            'consultar' => 1,
+            'periodo_id' => $detail->incentivo_periodo_id,
+            'cedulas_manual' => '12345',
+        ])->assertSessionHasErrors('cedulas_manual');
+
+        $this->post(route('incentivos.desglose-pago-cedula.index'), [
+            'consultar' => 1,
+            'periodo_id' => $detail->incentivo_periodo_id,
+            'archivo_cedulas' => UploadedFile::fake()->create('cedulas.pdf', 10, 'application/pdf'),
+        ])->assertSessionHasErrors('archivo_cedulas');
     }
 
     private function createDetail(): IncentivoPeriodoDetalle
