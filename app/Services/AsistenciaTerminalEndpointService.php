@@ -11,7 +11,7 @@ use RuntimeException;
 class AsistenciaTerminalEndpointService
 {
     /**
-     * @return array<string, array{fuente: string, entrada: string}>
+     * @return array<string, array{fuente: string, entrada: string, entradas: list<string>}>
      */
     public function terminalesConPonche(string $fecha): array
     {
@@ -73,7 +73,7 @@ class AsistenciaTerminalEndpointService
     }
 
     /**
-     * @param  array<string, array{fuente: string, entrada: string}>  $terminales
+     * @param  array<string, array{fuente: string, entrada: string, entradas: list<string>}>  $terminales
      * @param  array<string, mixed>  $asistencia
      */
     private function agregarPonche(array &$terminales, array $asistencia, string $fuente): void
@@ -92,11 +92,21 @@ class AsistenciaTerminalEndpointService
 
         $entradaNormalizada = (string) $entrada;
 
-        if (! isset($terminales[$terminal]) || strtotime($entradaNormalizada) < strtotime($terminales[$terminal]['entrada'])) {
+        if (! isset($terminales[$terminal])) {
             $terminales[$terminal] = [
                 'fuente' => $fuente,
                 'entrada' => $entradaNormalizada,
+                'entradas' => [$entradaNormalizada],
             ];
+
+            return;
+        }
+
+        $terminales[$terminal]['entradas'][] = $entradaNormalizada;
+        $terminales[$terminal]['entradas'] = array_values(array_unique($terminales[$terminal]['entradas']));
+
+        if (strtotime($entradaNormalizada) < strtotime($terminales[$terminal]['entrada'])) {
+            $terminales[$terminal]['entrada'] = $entradaNormalizada;
         }
     }
 

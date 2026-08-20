@@ -19,6 +19,7 @@ use App\Http\Controllers\ContabilidadValidadorAgenciaController;
 use App\Http\Controllers\ContabilidadVolantePagoSocioController;
 use App\Http\Controllers\CoordinadorOperadorController;
 use App\Http\Controllers\CruceUsuarioSeguimientoController;
+use App\Http\Controllers\DesglosePagoCedulaController;
 use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\EntrevistaOnlineController;
 use App\Http\Controllers\FaltantesController;
@@ -604,6 +605,11 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/incentivos/rendimiento-coordinador/{coordinador}/excel', [RendimientoCoordinadorController::class, 'excel'])
         ->whereNumber('coordinador')
         ->name('incentivos.rendimiento-coordinador.excel');
+    Route::get('/incentivos/desglose-pago-cedula', [DesglosePagoCedulaController::class, 'index'])
+        ->name('incentivos.desglose-pago-cedula.index');
+    Route::get('/incentivos/desglose-pago-cedula/{detalle}/pdf', [DesglosePagoCedulaController::class, 'pdf'])
+        ->whereNumber('detalle')
+        ->name('incentivos.desglose-pago-cedula.pdf');
     Route::get('/incentivos/reporte-nuevo-incentivo-view', [IncentivosController::class, 'reporteNuevoIncentivoView']);
     Route::get('/incentivos/reporte-nuevo-incentivo', [IncentivosController::class, 'reporteNuevoIncentivo']);
     Route::get('/incentivos/reporte-nuevo-incentivo-v2-view', [IncentivosController::class, 'reporteNuevoIncentivoV2View']);

@@ -634,6 +634,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Desglose de Pago por Cédula',
+                'descripcion' => 'Consulta el cálculo exacto por tipo de pago y genera un PDF individual.',
+                'url' => '/incentivos/desglose-pago-cedula',
+                'icono' => 'ri-file-user-line',
+                'categoria' => 'Reportes',
+                'tags' => ['desglose', 'pago', 'cedula', 'pdf', 'incentivos'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Incentivo Administrativo',
                 'descripcion' => 'Administra empleados base para distribucion administrativa.',
                 'url' => '/incentivos/incentivo-administrativo',

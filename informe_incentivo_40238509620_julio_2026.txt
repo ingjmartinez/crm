@@ -1,0 +1,82 @@
+INFORME PRELIMINAR DE VERIFICACIÓN DEL INCENTIVO
+
+Período evaluado: julio de 2026
+Cédula: 40238509620
+IdEmpleado: 5906
+Nombre: Klismairy Corporan Reyes
+Empresa: Grupo Joselito
+
+DATOS CONFIRMADOS EN EL REPORTE V6
+
+- Ventas del mes anterior: RD$100,610.00
+- Ventas del mes actual: RD$111,717.00
+- Días con ventas: 29
+- Tipos de pago aplicados: 60 y 80
+- Incentivo total mostrado: RD$612.00
+
+TRAMO APLICABLE
+
+Las ventas del mes actual, RD$111,717.00, se encuentran en el tramo de
+RD$100,001.00 a RD$250,000.00.
+
+Para ese tramo, las escalas predeterminadas son:
+
+- Tipo de pago 60: premio completo de RD$1,000.00.
+- Tipo de pago 80: premio completo de RD$500.00.
+
+El sistema separa las ventas según el tipo de pago asignado a cada terminal y
+fecha. Después calcula una parte proporcional del premio de cada escala y
+redondea cada resultado por separado.
+
+FÓRMULA UTILIZADA POR EL SISTEMA
+
+Incentivo tipo 60 = redondear(
+    RD$1,000.00 x ventas tipo 60 / RD$111,717.00
+)
+
+Incentivo tipo 80 = redondear(
+    RD$500.00 x ventas tipo 80 / RD$111,717.00
+)
+
+Incentivo total = incentivo tipo 60 + incentivo tipo 80 = RD$612.00
+
+ACLARACIÓN SOBRE EL PORCENTAJE
+
+Sin considerar momentáneamente el redondeo separado, RD$612.00 equivale a una
+mezcla matemática aproximada de:
+
+- Tipo 60: 22.40%, equivalente a RD$25,024.61 de las ventas.
+- Tipo 80: 77.60%, equivalente a RD$86,692.39 de las ventas.
+
+Incentivo equivalente por bloque:
+
+- Incentivo de la escala 60:
+  RD$1,000.00 x 22.40% = RD$224.00
+
+- Incentivo de la escala 80:
+  RD$500.00 x 77.60% = RD$388.00
+
+- Incentivo total:
+  RD$224.00 + RD$388.00 = RD$612.00
+
+Comprobación de ventas equivalentes:
+
+RD$25,024.61 + RD$86,692.39 = RD$111,717.00
+
+IMPORTANTE: estos dos importes son una equivalencia matemática aproximada; no
+deben presentarse como el desglose real de ventas. Como la aplicación redondea
+por separado los incentivos de los tipos 60 y 80, varias distribuciones cercanas
+pueden producir el mismo total de RD$612.00.
+
+DATOS PENDIENTES PARA EMITIR EL INFORME DEFINITIVO
+
+El desglose real debe copiarse de los textos emergentes de las insignias 60 y 80
+en el reporte V6. Cada texto muestra:
+
+- Ventas del tipo.
+- Base total de la escala.
+- Incentivo proporcional.
+- Días correspondientes al tipo.
+
+Hasta obtener esos dos textos no es correcto afirmar una cantidad exacta de
+ventas para cada tipo de pago.

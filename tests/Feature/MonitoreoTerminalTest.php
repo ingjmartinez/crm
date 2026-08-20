@@ -663,6 +663,84 @@ class MonitoreoTerminalTest extends TestCase
             ]);
     }
 
+    public function test_pm_monitoring_ignores_the_am_punch_and_uses_the_pm_punch(): void
+    {
+        $agenciaId = $this->insertAgency([
+            'terminal' => '001',
+            'horario_am' => '7:30 AM / 2:00 PM',
+            'horario_pm' => '2:00 PM / 9:00 PM',
+        ]);
+
+        $service = $this->mock(AsistenciaTerminalEndpointService::class);
+        $service->shouldReceive('terminalesConPonche')
+            ->once()
+            ->with('2026-07-21')
+            ->andReturn([
+                '1' => [
+                    'fuente' => 'BET',
+                    'entrada' => '2026-07-21 07:25:00',
+                    'entradas' => [
+                        '2026-07-21 07:25:00',
+                        '2026-07-21 14:04:00',
+                    ],
+                ],
+            ]);
+
+        $this->getJson(route('tecnologia.monitoreo-terminales.generar', [
+            'fecha_inicio' => '2026-07-21',
+            'fecha_fin' => '2026-07-21',
+            'hora_monitoreo' => '14:20',
+            'tipo_horario' => 'PM',
+        ]))->assertOk()
+            ->assertJsonPath('cumplen', 1)
+            ->assertJsonPath('sin_agente', 0)
+            ->assertJsonFragment([
+                'agencia_id' => $agenciaId,
+                'hora_apertura' => '02:00 PM',
+                'hora_ponche' => '02:04 PM',
+                'minutos_tardanza' => 4,
+                'tipo_horario' => 'PM',
+                'estado' => 'CUMPLE',
+            ]);
+    }
+
+    public function test_pm_monitoring_does_not_count_an_am_punch_as_pm_attendance(): void
+    {
+        $agenciaId = $this->insertAgency([
+            'terminal' => '001',
+            'horario_am' => '7:30 AM / 2:00 PM',
+            'horario_pm' => '2:00 PM / 9:00 PM',
+        ]);
+
+        $service = $this->mock(AsistenciaTerminalEndpointService::class);
+        $service->shouldReceive('terminalesConPonche')
+            ->once()
+            ->with('2026-07-21')
+            ->andReturn([
+                '1' => [
+                    'fuente' => 'BET',
+                    'entrada' => '2026-07-21 07:25:00',
+                    'entradas' => ['2026-07-21 07:25:00'],
+                ],
+            ]);
+
+        $this->getJson(route('tecnologia.monitoreo-terminales.generar', [
+            'fecha_inicio' => '2026-07-21',
+            'fecha_fin' => '2026-07-21',
+            'hora_monitoreo' => '14:20',
+            'tipo_horario' => 'PM',
+        ]))->assertOk()
+            ->assertJsonPath('cumplen', 0)
+            ->assertJsonPath('sin_agente', 1)
+            ->assertJsonFragment([
+                'agencia_id' => $agenciaId,
+                'hora_ponche' => null,
+                'minutos_tardanza' => null,
+                'tipo_horario' => 'PM',
+                'estado' => 'SIN AGENTE DE VENTA',
+            ]);
+    }
+
     public function test_warning_and_call_details_can_be_downloaded_as_pdf_and_excel(): void
     {
         $registro = [
@@ -898,6 +976,7 @@ class MonitoreoTerminalTest extends TestCase
                 'code' => 200,
                 'Content' => [
                     ['agencia' => '0001', 'primer_login' => '2026-07-22 07:20:00'],
+                    ['agencia' => '0001', 'primer_login' => '2026-07-22 14:04:00'],
                     ['agencia' => '0003', 'primer_login' => null],
                 ],
             ]),
@@ -907,6 +986,10 @@ class MonitoreoTerminalTest extends TestCase
 
         $this->assertSame('BET', $terminales['1']['fuente']);
         $this->assertSame('2026-07-22 07:20:00', $terminales['1']['entrada']);
+        $this->assertSame([
+            '2026-07-22 07:20:00',
+            '2026-07-22 14:04:00',
+        ], $terminales['1']['entradas']);
         $this->assertArrayNotHasKey('2', $terminales);
         $this->assertArrayNotHasKey('3', $terminales);
         Http::assertSentCount(1);

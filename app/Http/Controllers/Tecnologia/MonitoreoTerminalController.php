@@ -32,6 +32,8 @@ use Throwable;
 
 class MonitoreoTerminalController extends Controller
 {
+    private const MINUTOS_ANTICIPACION_TURNO_PM = 60;
+
     public function __construct(private AsistenciaTerminalEndpointService $asistenciaTerminalEndpointService) {}
 
     public function index(): View
@@ -115,7 +117,12 @@ class MonitoreoTerminalController extends Controller
                     $asistencia = $terminalesConPonche[$terminal] ?? null;
                     $fechaApertura = Carbon::createFromFormat('Y-m-d g:i A', $fecha->toDateString().' '.$horaApertura);
                     $fechaPonche = $asistencia
-                        ? $this->fechaPonche($fecha->toDateString(), $asistencia['entrada'])
+                        ? $this->fechaPoncheTurno(
+                            $fecha->toDateString(),
+                            $asistencia,
+                            $validated['tipo_horario'],
+                            $fechaApertura
+                        )
                         : null;
                     $estado = $this->estadoAsistencia($fechaApertura, $fechaPonche);
                     $minutosTardanza = $fechaPonche
@@ -573,6 +580,28 @@ class MonitoreoTerminalController extends Controller
         } catch (Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param  array{entrada?: string, entradas?: array<int, string>}  $asistencia
+     */
+    private function fechaPoncheTurno(
+        string $fecha,
+        array $asistencia,
+        string $tipoHorario,
+        Carbon $fechaApertura
+    ): ?Carbon {
+        $entradas = $asistencia['entradas'] ?? [$asistencia['entrada'] ?? null];
+        $fechaInicioTurno = $tipoHorario === 'PM'
+            ? $fechaApertura->copy()->subMinutes(self::MINUTOS_ANTICIPACION_TURNO_PM)
+            : Carbon::parse($fecha)->startOfDay();
+
+        return collect($entradas)
+            ->filter(fn (mixed $entrada): bool => is_string($entrada) && filled($entrada))
+            ->map(fn (string $entrada): ?Carbon => $this->fechaPonche($fecha, $entrada))
+            ->filter(fn (?Carbon $ponche): bool => $ponche !== null && $ponche->greaterThanOrEqualTo($fechaInicioTurno))
+            ->sortBy(fn (Carbon $ponche): int => $ponche->getTimestamp())
+            ->first();
     }
 
     private function nombreAgencia(Agencia $agencia): string
