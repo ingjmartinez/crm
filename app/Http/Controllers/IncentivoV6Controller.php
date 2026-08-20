@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ConsultarCalendarioIncentivoV6Request;
 use App\Http\Requests\GuardarCalendarioIncentivoV6Request;
+use App\Http\Requests\GuardarPeriodoIncentivoV6Request;
 use App\Http\Requests\ReconocerTerminalesCalendarioIncentivoV6Request;
 use App\Http\Requests\ReporteNuevoIncentivoV6Request;
 use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Models\Agencia;
+use App\Models\IncentivoPeriodo;
+use App\Models\IncentivoPeriodoDetalle;
 use App\Models\IncentivoTerminalTipoPago;
 use App\Services\IncentivoV6Calculator;
 use Carbon\Carbon;
@@ -290,6 +293,140 @@ class IncentivoV6Controller extends Controller
         return response()->json($payload);
     }
 
+    public function guardarPeriodo(GuardarPeriodoIncentivoV6Request $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $fechaInicio = Carbon::createFromFormat('Y-m-d', $validated['fecha_inicio'])->startOfDay();
+        $fechaFin = Carbon::createFromFormat('Y-m-d', $validated['fecha_fin'])->startOfDay();
+        $userId = auth()->id();
+
+        $result = DB::transaction(function () use ($validated, $fechaInicio, $fechaFin, $userId): array {
+            $periodo = IncentivoPeriodo::query()
+                ->where('anio', $fechaInicio->year)
+                ->where('mes', $fechaInicio->month)
+                ->lockForUpdate()
+                ->first();
+            $actualizado = $periodo !== null;
+
+            if ($periodo === null) {
+                $periodo = new IncentivoPeriodo([
+                    'anio' => $fechaInicio->year,
+                    'mes' => $fechaInicio->month,
+                    'revision' => 1,
+                    'created_by' => $userId,
+                ]);
+            } else {
+                $periodo->revision++;
+            }
+
+            $periodo->fill([
+                'fecha_inicio' => $fechaInicio->toDateString(),
+                'fecha_fin' => $fechaFin->toDateString(),
+                'sistema' => $validated['sistema'],
+                'modo_calculo' => $validated['modo_calculo'],
+                'tipo_pago_defecto' => $validated['tipo_pago_defecto'],
+                'min_dias_venta' => $validated['min_dias_venta'],
+                'rangos_pago_por_tipo' => $validated['rangos_pago_por_tipo'] ?? [],
+                'terminales_excluidas' => $validated['terminales_excluidas'] ?? [],
+                'updated_by' => $userId,
+            ]);
+            $periodo->save();
+
+            $detalles = collect($validated['detalles'])
+                ->map(function (array $detalle) use ($periodo): array {
+                    $incentivoGenerado = (int) round((float) $detalle['incentivo_generado']);
+                    $montoPagado = min(
+                        $incentivoGenerado,
+                        (int) round((float) $detalle['monto_pagado'])
+                    );
+                    $montoNoPagado = max($incentivoGenerado - $montoPagado, 0);
+                    $motivos = $incentivoGenerado <= 0
+                        ? ['meta_no_alcanzada']
+                        : collect($detalle['motivos'] ?? [])
+                            ->reject(fn (string $motivo): bool => $motivo === 'meta_no_alcanzada')
+                            ->unique()
+                            ->values()
+                            ->all();
+                    $estado = match (true) {
+                        $incentivoGenerado <= 0 => 'no_califica',
+                        $montoPagado <= 0 => 'no_pagado',
+                        $montoNoPagado > 0 => 'pagado_parcial',
+                        default => 'pagado',
+                    };
+
+                    return [
+                        'incentivo_periodo_id' => $periodo->id,
+                        'cedula' => preg_replace('/\D+/', '', (string) $detalle['cedula']),
+                        'empleadoid' => $this->nullableTrimmedString($detalle['empleadoid'] ?? null),
+                        'nombre' => trim((string) $detalle['nombre']),
+                        'empresa' => trim((string) $detalle['empresa']),
+                        'ultima_terminal' => $this->nullableTrimmedString($detalle['ultima_terminal'] ?? null),
+                        'ultima_agencia_nombre' => $this->nullableTrimmedString($detalle['ultima_agencia_nombre'] ?? null),
+                        'ventas_ultimo_mes' => (int) round((float) $detalle['ventas_ultimo_mes']),
+                        'ventas_mes_actual' => (int) round((float) $detalle['ventas_mes_actual']),
+                        'dias_ventas' => (int) $detalle['dias_ventas'],
+                        'horas_total' => round((float) ($detalle['horas_total'] ?? 0), 2),
+                        'incentivo_generado' => $incentivoGenerado,
+                        'monto_pagado' => $montoPagado,
+                        'monto_no_pagado' => $montoNoPagado,
+                        'estado' => $estado,
+                        'motivos' => json_encode($motivos, JSON_THROW_ON_ERROR),
+                        'tipos_pago_detalle' => json_encode(
+                            $detalle['tipos_pago_detalle'] ?? [],
+                            JSON_THROW_ON_ERROR
+                        ),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                })
+                ->unique(fn (array $detalle): string => mb_strtolower(
+                    $detalle['cedula'].'|'.$detalle['empresa']
+                ))
+                ->values();
+
+            $periodo->detalles()->delete();
+            $detalles->chunk(500)->each(
+                fn (Collection $chunk) => IncentivoPeriodoDetalle::query()->insert($chunk->all())
+            );
+
+            $resumen = [
+                'registros' => $detalles->count(),
+                'pagados' => $detalles->where('estado', 'pagado')->count(),
+                'pagados_parciales' => $detalles->where('estado', 'pagado_parcial')->count(),
+                'no_pagados' => $detalles->where('estado', 'no_pagado')->count(),
+                'no_califican' => $detalles->where('estado', 'no_califica')->count(),
+                'incentivo_generado' => (int) $detalles->sum('incentivo_generado'),
+                'monto_pagado' => (int) $detalles->sum('monto_pagado'),
+                'monto_no_pagado' => (int) $detalles->sum('monto_no_pagado'),
+            ];
+            $periodo->update(['resumen' => $resumen]);
+
+            return [
+                'periodo' => $periodo->fresh(),
+                'actualizado' => $actualizado,
+                'resumen' => $resumen,
+            ];
+        });
+
+        /** @var IncentivoPeriodo $periodo */
+        $periodo = $result['periodo'];
+
+        return response()->json([
+            'ok' => true,
+            'actualizado' => $result['actualizado'],
+            'message' => $result['actualizado']
+                ? 'El período existente fue actualizado correctamente.'
+                : 'El período fue guardado correctamente.',
+            'periodo' => [
+                'id' => $periodo->id,
+                'anio' => $periodo->anio,
+                'mes' => $periodo->mes,
+                'revision' => $periodo->revision,
+            ],
+            'resumen' => $result['resumen'],
+        ]);
+    }
+
     private function terminalesConVentas(
         string $fechaInicio,
         string $fechaFin,
@@ -364,6 +501,13 @@ class IncentivoV6Controller extends Controller
     private function terminalKey(string $sistema, string $terminal): string
     {
         return mb_strtolower(trim($sistema)).'|'.trim($terminal);
+    }
+
+    private function nullableTrimmedString(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
     }
 
     /**

@@ -68,6 +68,7 @@ use App\Http\Controllers\TecnologiaSolicitudController;
 use App\Http\Controllers\TokenController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserFavoritoController;
+use App\Http\Controllers\ValidadorIncentivoController;
 use App\Http\Controllers\VentaFlashController;
 use App\Http\Controllers\VentasController;
 use App\Http\Controllers\VentasProductosController;
@@ -333,6 +334,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
     Route::middleware('role_or_permission:superadmin|admin|rh|recursos_humanos.view')->group(function () {
         Route::get('/recursos-humanos', [RecursosHumanosController::class, 'index'])->name('recursos-humanos.index');
+        Route::get('/recursos-humanos/validador-incentivos', [ValidadorIncentivoController::class, 'index'])
+            ->name('recursos-humanos.validador-incentivos.index');
+        Route::get('/recursos-humanos/validador-incentivos/exportar', [ValidadorIncentivoController::class, 'export'])
+            ->name('recursos-humanos.validador-incentivos.export');
         Route::get('/empleados', [EmpleadoController::class, 'index']);
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
         Route::get('/empleados/exportar', [EmpleadoController::class, 'export'])->name('empleados.export');
@@ -622,6 +627,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('incentivos.reporte-nuevo-incentivo-v6.index');
     Route::get('/incentivos/reporte-nuevo-incentivo-v6', [IncentivoV6Controller::class, 'reporte'])
         ->name('incentivos.reporte-nuevo-incentivo-v6.reporte');
+    Route::post('/incentivos/reporte-nuevo-incentivo-v6/periodo', [IncentivoV6Controller::class, 'guardarPeriodo'])
+        ->name('incentivos.reporte-nuevo-incentivo-v6.periodo.guardar');
     Route::get('/incentivos/reporte-nuevo-incentivo-v6/calendario', [IncentivoV6Controller::class, 'calendario'])
         ->name('incentivos.reporte-nuevo-incentivo-v6.calendario');
     Route::post('/incentivos/reporte-nuevo-incentivo-v6/calendario/terminales/reconocer', [IncentivoV6Controller::class, 'reconocerTerminalesCalendario'])

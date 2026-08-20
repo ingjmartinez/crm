@@ -595,6 +595,13 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringNotContainsString('btnCalendarioTiposPago', $v5);
         $this->assertStringContainsString('btnCalendarioTiposPago', $v6);
         $this->assertStringContainsString('Base total de la escala', $v6);
+        $this->assertStringContainsString('btnGuardarPeriodoIncentivo', $v6);
+        $this->assertStringContainsString('guardarPeriodoIncentivo', $v6);
+        $this->assertStringContainsString('estadoFaltantesPeriodo', $v6);
+        $this->assertStringContainsString('estadoDesvinculadosPeriodo', $v6);
+        $this->assertStringContainsString('faltantesPeriodoAplicados && desvinculadosPeriodoAplicados', $v6);
+        $this->assertStringContainsString('agencia_excluida', $v6);
+        $this->assertStringContainsString('meta_no_alcanzada', $v6);
         $this->assertStringContainsString('/incentivos/reporte-nuevo-incentivo-v6?', $v6);
         $this->assertStringContainsString('Agencias calculadas por tipo de pago', $v6);
         $this->assertStringContainsString('Informe Gerencial de Incentivos V6', $v6);

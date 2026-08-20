@@ -337,12 +337,19 @@
                                         Excluir Terminales <span class="badge bg-danger ms-1" id="terminalesExcluidasCount">0</span>
                                     </button>
                                     <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
+                                    <button type="button" class="btn btn-success" id="btnGuardarPeriodoIncentivo" disabled>
+                                        <i class="ri-save-3-line me-1"></i>Guardar período
+                                    </button>
                                     <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
                                     <button type="button" class="btn btn-info" id="btnValidacionGerencial">Validacion Gerencial</button>
                                     <button type="button" class="btn btn-info" id="btnInformeGerencialProceso">Informe Gerencial PDF</button>
                                     <button type="button" class="btn btn-info" id="btnDetalleCalendarioPdf">Detalle Calendario PDF</button>
-                                    <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">Faltantes</button>
-                                    <button type="button" class="btn btn-success" id="btnConsultarDesvinculados">Usu. Desvinculados</button>
+                                    <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">
+                                        Faltantes <span class="badge bg-secondary ms-1" id="estadoFaltantesPeriodo">Pendiente</span>
+                                    </button>
+                                    <button type="button" class="btn btn-success" id="btnConsultarDesvinculados">
+                                        Usu. Desvinculados <span class="badge bg-secondary ms-1" id="estadoDesvinculadosPeriodo">Pendiente</span>
+                                    </button>
                                 </div>
                             </div>
                             <div class="card-body">
@@ -1163,6 +1170,9 @@
     let cachedSistema = null;
     let cachedTipoPago = null;
     let cachedModoCalculo = null;
+    let cachedFechaInicio = null;
+    let cachedFechaFin = null;
+    let cachedReportSignature = null;
     let calendarPaymentDates = [];
     let calendarPaymentRows = [];
     let calendarRecognizedTerminals = [];
@@ -1185,6 +1195,10 @@
     let lastDesvinculadosEmpleadoIds = new Set();
     let excludedDesvinculadosCedulas = new Set();
     let excludedDesvinculadosEmpleadoIds = new Set();
+    let faltantesPeriodoConsultados = false;
+    let faltantesPeriodoAplicados = false;
+    let desvinculadosPeriodoConsultados = false;
+    let desvinculadosPeriodoAplicados = false;
     let excludedAdministrativeDesvinculadosCedulas = new Set();
     let excludedAdministrativeDesvinculadosEmpleadoIds = new Set();
     let excludedCoordinatorDesvinculadosCedulas = new Set();
@@ -1837,6 +1851,265 @@
         const normalized = digits.replace(/^0+/, '');
 
         return normalized || (digits ? '0' : '');
+    }
+
+    function getPeriodoDetalleKey(row) {
+        return `${getCedulaKey(row?.cedula)}|${normalizeEmpresaValue(row?.empresa)}`;
+    }
+
+    function getReportConfigurationSignature() {
+        return JSON.stringify({
+            sistema: document.getElementById('ni_sistema').value,
+            fecha_inicio: document.getElementById('ni_fecha_ini').value,
+            fecha_fin: document.getElementById('ni_fecha_fin').value,
+            min_dias: document.getElementById('ni_min_dias').value,
+            tipo_pago: document.getElementById('ni_tipo_pago').value,
+            modo_calculo: document.getElementById('ni_modo_calculo').value,
+            rangos_pago: payoutRangesByType,
+            terminales_excluidas: getExcludedTerminalesArray().sort(),
+        });
+    }
+
+    function buildPeriodoDetalles(baselineRows) {
+        const finalRowsByKey = new Map(cachedRows.map((row) => [getPeriodoDetalleKey(row), row]));
+
+        return (Array.isArray(baselineRows) ? baselineRows : [])
+            .map((baselineRow) => {
+                const finalRow = finalRowsByKey.get(getPeriodoDetalleKey(baselineRow));
+                const incentivoGenerado = toIntegerAmount(baselineRow?.nuevo_incentivo);
+                const incentivoDespuesAgencias = toIntegerAmount(finalRow?.nuevo_incentivo);
+                const cedula = getCedulaKey(baselineRow?.cedula);
+                const empleadoId = getEmpleadoIdKey(baselineRow?.empleadoid);
+                const motivos = [];
+
+                if (incentivoGenerado <= 0) {
+                    motivos.push('meta_no_alcanzada');
+                } else {
+                    if (incentivoDespuesAgencias < incentivoGenerado) {
+                        motivos.push('agencia_excluida');
+                    }
+                    if (cedula && excludedFaltantesCedulas.has(cedula)) {
+                        motivos.push('faltante');
+                    }
+                    if (
+                        (cedula && excludedDesvinculadosCedulas.has(cedula))
+                        || (empleadoId && excludedDesvinculadosEmpleadoIds.has(empleadoId))
+                    ) {
+                        motivos.push('desvinculado');
+                    }
+                }
+
+                const tieneRetencionTotal = motivos.includes('faltante') || motivos.includes('desvinculado');
+                const montoPagado = tieneRetencionTotal ? 0 : incentivoDespuesAgencias;
+
+                return {
+                    cedula: String(baselineRow?.cedula || ''),
+                    empleadoid: String(baselineRow?.empleadoid || ''),
+                    nombre: String(baselineRow?.nombre || 'Actualizar en maestro de empleados'),
+                    empresa: normalizeEmpresaLabel(baselineRow?.empresa),
+                    ultima_terminal: String(baselineRow?.ultima_terminal || ''),
+                    ultima_agencia_nombre: String(baselineRow?.ultima_agencia_nombre || ''),
+                    ventas_ultimo_mes: toIntegerAmount(baselineRow?.ventas_ultimo_mes),
+                    ventas_mes_actual: toIntegerAmount(baselineRow?.ventas_mes_actual),
+                    dias_ventas: toNumber(baselineRow?.dias_ventas_mes_actual),
+                    horas_total: toNumber(baselineRow?.horas_total),
+                    incentivo_generado: incentivoGenerado,
+                    monto_pagado: montoPagado,
+                    motivos,
+                    tipos_pago_detalle: Array.isArray(baselineRow?.tipos_pago_detalle)
+                        ? baselineRow.tipos_pago_detalle
+                        : [],
+                };
+            });
+    }
+
+    function updatePeriodoValidationState() {
+        const saveButton = document.getElementById('btnGuardarPeriodoIncentivo');
+        const faltantesBadge = document.getElementById('estadoFaltantesPeriodo');
+        const desvinculadosBadge = document.getElementById('estadoDesvinculadosPeriodo');
+
+        const updateBadge = (badge, consulted, applied) => {
+            badge.className = 'badge ms-1';
+
+            if (applied) {
+                badge.classList.add('bg-success');
+                badge.textContent = 'Aplicado';
+                return;
+            }
+
+            if (consulted) {
+                badge.classList.add('bg-info');
+                badge.textContent = 'Consultado';
+                return;
+            }
+
+            badge.classList.add('bg-secondary');
+            badge.textContent = 'Pendiente';
+        };
+
+        updateBadge(faltantesBadge, faltantesPeriodoConsultados, faltantesPeriodoAplicados);
+        updateBadge(desvinculadosBadge, desvinculadosPeriodoConsultados, desvinculadosPeriodoAplicados);
+
+        const validationsCompleted = faltantesPeriodoAplicados && desvinculadosPeriodoAplicados;
+        saveButton.disabled = !cachedRows.length || !validationsCompleted;
+        saveButton.title = validationsCompleted
+            ? 'Guardar el cierre mensual validado'
+            : 'Primero consulta y aplica faltantes y usuarios desvinculados';
+    }
+
+    function resetPeriodoValidationState() {
+        faltantesPeriodoConsultados = false;
+        faltantesPeriodoAplicados = false;
+        desvinculadosPeriodoConsultados = false;
+        desvinculadosPeriodoAplicados = false;
+        updatePeriodoValidationState();
+    }
+
+    async function guardarPeriodoIncentivo() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Información', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        if (!faltantesPeriodoAplicados || !desvinculadosPeriodoAplicados) {
+            Swal.fire({
+                title: 'Validaciones pendientes',
+                text: 'Antes de guardar debes consultar y aplicar faltantes y usuarios desvinculados.',
+                icon: 'warning',
+            });
+            return;
+        }
+
+        const sistema = document.getElementById('ni_sistema').value;
+        const fechaInicio = document.getElementById('ni_fecha_ini').value;
+        const fechaFin = document.getElementById('ni_fecha_fin').value;
+        const tipoPago = document.getElementById('ni_tipo_pago').value;
+        const modoCalculo = document.getElementById('ni_modo_calculo').value;
+        const minDias = document.getElementById('ni_min_dias').value;
+
+        if (sistema !== 'Todos') {
+            Swal.fire({
+                title: 'Cierre mensual incompleto',
+                text: 'Selecciona el sistema Todos y genera nuevamente el reporte antes de guardar.',
+                icon: 'warning',
+            });
+            return;
+        }
+
+        if (
+            cachedSistema !== sistema
+            || cachedTipoPago !== tipoPago
+            || cachedModoCalculo !== modoCalculo
+            || cachedFechaInicio !== fechaInicio
+            || cachedFechaFin !== fechaFin
+            || cachedReportSignature !== getReportConfigurationSignature()
+        ) {
+            Swal.fire({
+                title: 'Reporte desactualizado',
+                text: 'Los parámetros cambiaron. Genera nuevamente el reporte antes de guardar el período.',
+                icon: 'warning',
+            });
+            return;
+        }
+
+        const confirmation = await Swal.fire({
+            title: 'Guardar período de incentivos',
+            text: 'Si este mes ya fue guardado, sus datos serán actualizados sin crear un duplicado.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Guardar período',
+            cancelButtonText: 'Cancelar',
+        });
+
+        if (!confirmation.isConfirmed) {
+            return;
+        }
+
+        Swal.fire({
+            title: 'Preparando cierre mensual...',
+            text: 'Comparando el cálculo generado con las exclusiones aplicadas.',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        try {
+            let baselineRows = cachedRows;
+            const terminalesExcluidas = getExcludedTerminalesArray();
+
+            if (terminalesExcluidas.length) {
+                const baselineParams = new URLSearchParams({
+                    sistema,
+                    filtro_cumplimiento: 'todos',
+                    fecha_ini: fechaInicio,
+                    fecha_fin: fechaFin,
+                    min_dias_venta: minDias,
+                    tipo_pago: tipoPago,
+                    modo_calculo: modoCalculo,
+                    rangos_pago: JSON.stringify(payoutRangesByType[tipoPago]),
+                    rangos_pago_por_tipo: JSON.stringify(payoutRangesByType),
+                    terminales_excluidas: JSON.stringify([]),
+                });
+                const baselineResponse = await fetch('/incentivos/reporte-nuevo-incentivo-v6?' + baselineParams.toString(), {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const baselinePayload = await parseResponseAsJson(
+                    baselineResponse,
+                    'No se pudo calcular la base sin agencias excluidas'
+                );
+                baselineRows = normalizeIntegerReportRows(baselinePayload.data || []);
+            }
+
+            const detalles = buildPeriodoDetalles(baselineRows);
+            if (!detalles.length) {
+                throw new Error('No hay personas en el reporte para guardar en este período.');
+            }
+
+            const response = await fetch(@json(route('incentivos.reporte-nuevo-incentivo-v6.periodo.guardar')), {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+                body: JSON.stringify({
+                    fecha_inicio: fechaInicio,
+                    fecha_fin: fechaFin,
+                    sistema,
+                    modo_calculo: modoCalculo,
+                    tipo_pago_defecto: tipoPago,
+                    min_dias_venta: Number(minDias),
+                    rangos_pago_por_tipo: payoutRangesByType,
+                    terminales_excluidas: terminalesExcluidas,
+                    faltantes_aplicados: faltantesPeriodoAplicados,
+                    desvinculados_aplicados: desvinculadosPeriodoAplicados,
+                    detalles,
+                }),
+            });
+            const payload = await parseResponseAsJson(response, 'No se pudo guardar el período');
+            const resumen = payload.resumen || {};
+
+            Swal.fire({
+                title: payload.actualizado ? 'Período actualizado' : 'Período guardado',
+                html: `
+                    <div class="text-start">
+                        <div><strong>Revisión:</strong> ${toNumber(payload?.periodo?.revision)}</div>
+                        <div><strong>Pagados:</strong> ${toNumber(resumen.pagados).toLocaleString('en-US')}</div>
+                        <div><strong>Pagados parcialmente:</strong> ${toNumber(resumen.pagados_parciales).toLocaleString('en-US')}</div>
+                        <div><strong>No pagados:</strong> ${toNumber(resumen.no_pagados).toLocaleString('en-US')}</div>
+                        <div><strong>Monto pagado:</strong> ${formatMoney(resumen.monto_pagado)}</div>
+                        <div><strong>Monto no pagado:</strong> ${formatMoney(resumen.monto_no_pagado)}</div>
+                    </div>
+                `,
+                icon: 'success',
+            });
+        } catch (error) {
+            Swal.fire({ title: 'Error', text: error?.message || String(error), icon: 'error' });
+        }
     }
 
     function getEmpleadoIdKey(value) {
@@ -5450,8 +5723,16 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
     }
 
     function aplicarFaltantesIncentivo() {
+        if (!faltantesPeriodoConsultados) {
+            Swal.fire({ title: 'Consulta pendiente', text: 'Primero debes consultar los faltantes del reporte.', icon: 'warning' });
+            return;
+        }
+
         if (!lastFaltantesCedulas.size) {
-            Swal.fire({ title: 'Sin faltantes', text: 'No hay cedulas con faltantes para aplicar.', icon: 'info' });
+            faltantesPeriodoAplicados = true;
+            updatePeriodoValidationState();
+            bootstrap.Modal.getInstance(document.getElementById('modalFaltantesIncentivo'))?.hide();
+            Swal.fire({ title: 'Faltantes validados', text: 'La consulta no encontró cédulas con faltantes.', icon: 'success' });
             return;
         }
 
@@ -5469,6 +5750,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 ...excludedFaltantesCedulas,
                 ...[...lastFaltantesCedulas].map(getCedulaKey).filter(Boolean),
             ]);
+            faltantesPeriodoAplicados = true;
+            updatePeriodoValidationState();
             applyLocalFilters(false);
             bootstrap.Modal.getInstance(document.getElementById('modalFaltantesIncentivo'))?.hide();
 
@@ -5489,6 +5772,9 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         const fechaIni = document.getElementById('ni_fecha_ini').value;
         const fechaFin = document.getElementById('ni_fecha_fin').value;
         const cedulas = getCedulasReporteActual();
+        faltantesPeriodoConsultados = false;
+        faltantesPeriodoAplicados = false;
+        updatePeriodoValidationState();
 
         if (!fechaIni || !fechaFin) {
             Swal.fire({ title: 'Informacion', text: 'Debe seleccionar fecha inicio y fecha fin.', icon: 'warning' });
@@ -5529,6 +5815,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 lastFaltantesCedulas = new Set(faltantesRows
                     .map(row => getCedulaKey(row?.cedula))
                     .filter(Boolean));
+                faltantesPeriodoConsultados = true;
+                updatePeriodoValidationState();
                 const montoIncentivosConFaltantes = calcularMontoIncentivosPorCedulas([...lastFaltantesCedulas]);
 
                 document.getElementById('faltantesIncentivoTotalMonto').textContent = formatMoney(resp.total_monto || 0);
@@ -5547,8 +5835,16 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
     }
 
     function aplicarDesvinculadosIncentivo() {
+        if (!desvinculadosPeriodoConsultados) {
+            Swal.fire({ title: 'Consulta pendiente', text: 'Primero debes consultar los usuarios desvinculados.', icon: 'warning' });
+            return;
+        }
+
         if (!lastDesvinculadosCedulas.size && !lastDesvinculadosEmpleadoIds.size) {
-            Swal.fire({ title: 'Sin desvinculados', text: 'No hay usuarios desvinculados para aplicar.', icon: 'info' });
+            desvinculadosPeriodoAplicados = true;
+            updatePeriodoValidationState();
+            bootstrap.Modal.getInstance(document.getElementById('modalDesvinculadosIncentivo'))?.hide();
+            Swal.fire({ title: 'Desvinculados validados', text: 'La consulta no encontró usuarios desvinculados.', icon: 'success' });
             return;
         }
 
@@ -5570,6 +5866,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 ...excludedDesvinculadosEmpleadoIds,
                 ...[...lastDesvinculadosEmpleadoIds].map(getEmpleadoIdKey).filter(Boolean),
             ]);
+            desvinculadosPeriodoAplicados = true;
+            updatePeriodoValidationState();
             applyLocalFilters(false);
             bootstrap.Modal.getInstance(document.getElementById('modalDesvinculadosIncentivo'))?.hide();
 
@@ -5588,6 +5886,9 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         }
 
         const cedulas = getCedulasReporteActual();
+        desvinculadosPeriodoConsultados = false;
+        desvinculadosPeriodoAplicados = false;
+        updatePeriodoValidationState();
 
         if (!cedulas.length) {
             Swal.fire({ title: 'Sin cedulas', text: 'No hay cedulas disponibles en el reporte actual.', icon: 'warning' });
@@ -5622,6 +5923,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                     .map(row => getCedulaKey(row?.cedula))
                     .filter(Boolean));
                 lastDesvinculadosEmpleadoIds = new Set();
+                desvinculadosPeriodoConsultados = true;
+                updatePeriodoValidationState();
                 const montoIncentivosConDesvinculados = calcularMontoIncentivosPorDesvinculados(lastDesvinculadosCedulas, lastDesvinculadosEmpleadoIds);
 
                 document.getElementById('desvinculadosIncentivoTotalUsuarios').textContent = Number(resp.total_desvinculados || 0).toLocaleString('en-US');
@@ -6316,6 +6619,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         appliedCoordinatorAmounts = {};
         currentFixedBagTopUp = 0;
         currentExcludedApplication = getEmptyExcludedApplication();
+        resetPeriodoValidationState();
 
         const params = new URLSearchParams({
             sistema: sistema,
@@ -6329,6 +6633,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             rangos_pago_por_tipo: JSON.stringify(payoutRangesByType),
             terminales_excluidas: JSON.stringify(getExcludedTerminalesArray()),
         });
+        const reportSignature = getReportConfigurationSignature();
 
         fetch('/incentivos/reporte-nuevo-incentivo-v6?' + params.toString(), {
             headers: {
@@ -6350,7 +6655,11 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 cachedSistema = sistema;
                 cachedTipoPago = tipoPago;
                 cachedModoCalculo = modoCalculo;
+                cachedFechaInicio = fechaIni;
+                cachedFechaFin = fechaFin;
+                cachedReportSignature = reportSignature;
                 populateEmpresaFilterOptions(cachedRows);
+                updatePeriodoValidationState();
 
                 Swal.close();
                 applyLocalFilters(showFilterAlert);
@@ -6366,6 +6675,10 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
     document.querySelector('#btnGenerarNuevoIncentivo').addEventListener('click', function() {
         listNuevoIncentivo();
+    });
+
+    document.querySelector('#btnGuardarPeriodoIncentivo').addEventListener('click', function() {
+        guardarPeriodoIncentivo();
     });
 
     document.querySelector('#btnGenerarExcelPago').addEventListener('click', function() {

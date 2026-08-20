@@ -38,6 +38,15 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Validador de Incentivos',
+        'descripcion' => 'Valida por periodo quienes fueron pagados y los motivos de incentivos retenidos.',
+        'url' => '/recursos-humanos/validador-incentivos',
+        'icono' => 'ri-shield-check-line',
+        'categoria' => 'Control',
+        'tags' => ['incentivos', 'pagados', 'no pagados', 'cedulas', 'validacion'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Entrevista Online',
         'descripcion' => 'Registra entrevistas telefonicas u online realizadas a candidatos.',
         'url' => '/entrevistas-online',
