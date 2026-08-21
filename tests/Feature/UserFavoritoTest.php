@@ -11,6 +11,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class UserFavoritoTest extends TestCase
@@ -38,10 +40,54 @@ class UserFavoritoTest extends TestCase
             $table->timestamps();
             $table->unique(['user_id', 'favorito_key']);
         });
+
+        Schema::create('permissions', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+            $table->unique(['name', 'guard_name']);
+        });
+
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+            $table->unique(['name', 'guard_name']);
+        });
+
+        Schema::create('model_has_permissions', function (Blueprint $table): void {
+            $table->unsignedBigInteger('permission_id');
+            $table->string('model_type');
+            $table->unsignedBigInteger('model_id');
+            $table->primary(['permission_id', 'model_id', 'model_type']);
+        });
+
+        Schema::create('model_has_roles', function (Blueprint $table): void {
+            $table->unsignedBigInteger('role_id');
+            $table->string('model_type');
+            $table->unsignedBigInteger('model_id');
+            $table->primary(['role_id', 'model_id', 'model_type']);
+        });
+
+        Schema::create('role_has_permissions', function (Blueprint $table): void {
+            $table->unsignedBigInteger('permission_id');
+            $table->unsignedBigInteger('role_id');
+            $table->primary(['permission_id', 'role_id']);
+        });
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
     protected function tearDown(): void
     {
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        Schema::dropIfExists('role_has_permissions');
+        Schema::dropIfExists('model_has_roles');
+        Schema::dropIfExists('model_has_permissions');
+        Schema::dropIfExists('roles');
+        Schema::dropIfExists('permissions');
         Schema::dropIfExists('user_favoritos');
         Schema::dropIfExists('users');
         parent::tearDown();
@@ -108,11 +154,48 @@ class UserFavoritoTest extends TestCase
         ]);
     }
 
+    public function test_usuario_de_recursos_humanos_puede_agregar_un_reporte_favorito(): void
+    {
+        $usuario = $this->usuario('recursos-humanos@example.com');
+        Role::query()->create(['name' => 'rh', 'guard_name' => 'web']);
+        $usuario->assignRole('rh');
+        $key = 'recursos-humanos:recursos-humanos/novedades-horario';
+
+        $this->actingAs($usuario)
+            ->get(route('recursos-humanos.index'))
+            ->assertOk()
+            ->assertSee('data-favorito-key="'.$key.'"', false);
+
+        $this->actingAs($usuario)
+            ->postJson(route('favoritos.toggle'), ['favorito_key' => $key])
+            ->assertOk()
+            ->assertJsonPath('activo', true)
+            ->assertJsonPath('favorito.nombre', 'Novedades de Horario')
+            ->assertJsonPath('favorito.modulo', 'Recursos Humanos');
+
+        $this->assertDatabaseHas('user_favoritos', [
+            'user_id' => $usuario->id,
+            'favorito_key' => $key,
+        ]);
+    }
+
+    public function test_usuario_sin_acceso_no_puede_agregar_un_reporte_de_recursos_humanos(): void
+    {
+        $usuario = $this->usuario('sin-recursos-humanos@example.com');
+
+        $this->actingAs($usuario)
+            ->postJson(route('favoritos.toggle'), [
+                'favorito_key' => 'recursos-humanos:recursos-humanos/novedades-horario',
+            ])
+            ->assertNotFound();
+    }
+
     public function test_hub_muestra_estrellas_y_barra_superior_con_favoritos(): void
     {
         $layout = file_get_contents(resource_path('views/app.blade.php'));
         $hub = file_get_contents(resource_path('views/module-hub/index.blade.php'));
         $reportes = file_get_contents(resource_path('views/reportes/index.blade.php'));
+        $recursosHumanos = file_get_contents(resource_path('views/recursos_humanos/index.blade.php'));
 
         $this->assertStringContainsString('Mis favoritos', $layout);
         $this->assertStringContainsString('const FAVORITES_TOGGLE_URL', $layout);
@@ -121,6 +204,8 @@ class UserFavoritoTest extends TestCase
         $this->assertStringContainsString('data-favorito-variant="icon"', $hub);
         $this->assertStringContainsString('btn-app-favorito', $reportes);
         $this->assertStringContainsString("data-favorito-key=\"{{ \$reporte['favorito_key'] }}\"", $reportes);
+        $this->assertStringContainsString('btn-app-favorito', $recursosHumanos);
+        $this->assertStringContainsString("data-favorito-key=\"{{ \$modulo['favorito_key'] }}\"", $recursosHumanos);
 
         $this->assertTrue(Route::has('favoritos.toggle'));
     }

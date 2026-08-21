@@ -118,6 +118,7 @@
                                             <option value="pagado_parcial" @selected(($filtros['estado'] ?? '') === 'pagado_parcial')>Pagado parcial</option>
                                             <option value="no_pagado" @selected(($filtros['estado'] ?? '') === 'no_pagado')>No pagado</option>
                                             <option value="no_califica" @selected(($filtros['estado'] ?? '') === 'no_califica')>No calificó</option>
+                                            <option value="sin_idempleado" @selected(($filtros['estado'] ?? '') === 'sin_idempleado')>Sin IdEmpleado</option>
                                         </select>
                                     </div>
                                     <div class="col-xl-2 col-md-4">
@@ -194,6 +195,12 @@
                                 <h4 class="mb-0 text-danger">{{ number_format((int) $resumen['no_pagados']) }}</h4>
                             </div></div>
                         </div>
+                        <div class="col-xl col-md-4 col-6">
+                            <div class="card card-animate h-100"><div class="card-body">
+                                <p class="text-uppercase fw-medium text-muted mb-1">Sin IdEmpleado</p>
+                                <h4 class="mb-0 text-info">{{ number_format((int) $resumen['sin_idempleado']) }}</h4>
+                            </div></div>
+                        </div>
                         <div class="col-xl-3 col-md-8">
                             <div class="card card-animate h-100"><div class="card-body">
                                 <p class="text-uppercase fw-medium text-muted mb-1">Pagado / Retenido</p>
@@ -247,6 +254,9 @@
                                                 <td class="text-end text-success fw-medium">RD$ {{ number_format($detalle->monto_pagado) }}</td>
                                                 <td class="text-end text-danger fw-medium">RD$ {{ number_format($detalle->monto_no_pagado) }}</td>
                                                 <td class="estado-motivo-column">
+                                                    @if (blank($detalle->empleadoid) && $detalle->monto_pagado > 0)
+                                                        <span class="badge bg-info-subtle text-info">Sin IdEmpleado</span>
+                                                    @endif
                                                     @if ($detalle->estado === 'pagado')
                                                         <span class="badge bg-success-subtle text-success">Pagado</span>
                                                     @elseif ($detalle->estado === 'pagado_parcial')

@@ -54,8 +54,28 @@ class FavoritoCatalogoService
                 ];
             });
 
+        $recursosHumanos = $this->puedeAccederRecursosHumanos($usuario)
+            ? collect(config('recursos_humanos', []))
+                ->filter(fn (mixed $item): bool => is_array($item) && (bool) ($item['activo'] ?? true))
+                ->map(function (array $item): array {
+                    $path = '/'.ltrim((string) parse_url((string) $item['url'], PHP_URL_PATH), '/');
+
+                    return [
+                        'key' => $item['key'] ?? 'recursos-humanos:'.ltrim($path, '/'),
+                        'nombre' => $item['nombre'],
+                        'descripcion' => $item['descripcion'] ?? '',
+                        'url' => url($path),
+                        'path' => $path,
+                        'icono' => $item['icono'] ?? 'ri-user-settings-line',
+                        'categoria' => $item['categoria'] ?? 'General',
+                        'modulo' => 'Recursos Humanos',
+                    ];
+                })
+            : collect();
+
         return $modulos
             ->concat($reportes)
+            ->concat($recursosHumanos)
             ->unique('key')
             ->values();
     }
@@ -144,5 +164,19 @@ class FavoritoCatalogoService
         }
 
         return true;
+    }
+
+    private function puedeAccederRecursosHumanos(?User $usuario): bool
+    {
+        if (! $usuario) {
+            return false;
+        }
+
+        try {
+            return $usuario->hasAnyRole(['superadmin', 'admin', 'rh'])
+                || $usuario->can('recursos_humanos.view');
+        } catch (QueryException) {
+            return false;
+        }
     }
 }

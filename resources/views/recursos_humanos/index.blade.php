@@ -48,6 +48,17 @@
             transform: translate(1px, -1px);
             color: var(--vz-primary) !important;
         }
+
+        .rrhh-favorite {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 3;
+        }
+
+        .rrhh-item {
+            position: relative;
+        }
     </style>
 
     <div class="main-content">
@@ -104,7 +115,16 @@
                         <div class="col-xxl-3 col-xl-4 col-md-6 rrhh-item"
                             data-categoria="{{ strtolower($modulo['categoria'] ?? '') }}"
                             data-search="{{ $textoBusqueda }}">
-                            <a href="{{ $modulo['url'] }}" class="text-decoration-none">
+                            <button type="button"
+                                class="btn btn-icon btn-sm btn-ghost-warning rounded-circle rrhh-favorite btn-app-favorito"
+                                data-favorito-key="{{ $modulo['favorito_key'] }}"
+                                data-favorito-variant="icon"
+                                aria-label="{{ $modulo['es_favorito'] ? 'Quitar de favoritos' : 'Agregar a favoritos' }}"
+                                aria-pressed="{{ $modulo['es_favorito'] ? 'true' : 'false' }}"
+                                title="{{ $modulo['es_favorito'] ? 'Quitar de favoritos' : 'Agregar a favoritos' }}">
+                                <i class="{{ $modulo['es_favorito'] ? 'ri-star-fill text-warning' : 'ri-star-line text-muted' }} fs-18"></i>
+                            </button>
+                            <a href="{{ $modulo['url'] }}" class="text-decoration-none d-block h-100">
                                 <div class="card border h-100 rrhh-card">
                                     <div class="card-body">
                                         <div class="d-flex align-items-start gap-3">

@@ -199,6 +199,45 @@ class ValidadorIncentivoTest extends TestCase
             ->assertDontSee('Persona pagada');
     }
 
+    public function test_report_identifies_only_payable_people_without_employee_id(): void
+    {
+        $period = $this->period(2026, 7);
+        $payableWithoutId = $this->detail($period, '40211111111', 'Sin ID pagable', 'pagado', 2000, 2000);
+        $excludedWithoutId = $this->detail($period, '40222222222', 'Sin ID excluido', 'no_pagado', 2000, 0, ['faltante']);
+        $this->detail($period, '40233333333', 'Con ID pagable', 'pagado', 2000, 2000);
+        $payableWithoutId->update(['empleadoid' => null]);
+        $excludedWithoutId->update(['empleadoid' => null]);
+
+        $this->get(route('recursos-humanos.validador-incentivos.index', [
+            'periodo_id' => $period->id,
+            'estado' => 'sin_idempleado',
+            'consultar' => 1,
+        ]))
+            ->assertOk()
+            ->assertSee('Sin ID pagable')
+            ->assertSee('Sin IdEmpleado')
+            ->assertDontSee('Sin ID excluido')
+            ->assertDontSee('Con ID pagable');
+    }
+
+    public function test_export_marks_payable_people_without_employee_id(): void
+    {
+        $period = $this->period(2026, 7);
+        $detail = $this->detail($period, '40211111111', 'Sin ID exportable', 'pagado', 2000, 2000);
+        $detail->update(['empleadoid' => null]);
+
+        $response = $this->get(route('recursos-humanos.validador-incentivos.export', [
+            'periodo_id' => $period->id,
+            'estado' => 'sin_idempleado',
+        ]));
+
+        $response->assertOk();
+
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('Sin ID exportable', $content);
+        $this->assertStringContainsString('Sin IdEmpleado / Pagado', $content);
+    }
+
     public function test_report_shows_guidance_when_there_are_no_saved_periods(): void
     {
         $this->get(route('recursos-humanos.validador-incentivos.index'))

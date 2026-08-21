@@ -26,7 +26,7 @@ class ConsultarValidadorIncentivoRequest extends FormRequest
         return [
             'periodo_id' => ['nullable', 'integer', 'exists:incentivo_periodos,id'],
             'buscar' => ['nullable', 'string', 'max:200'],
-            'estado' => ['nullable', Rule::in(['pagado', 'pagado_parcial', 'no_pagado', 'no_califica'])],
+            'estado' => ['nullable', Rule::in(['pagado', 'pagado_parcial', 'no_pagado', 'no_califica', 'sin_idempleado'])],
             'motivo' => ['nullable', Rule::in(['faltante', 'desvinculado', 'agencia_excluida', 'meta_no_alcanzada'])],
             'empresa' => ['nullable', 'string', 'max:100'],
             'por_pagina' => ['nullable', Rule::in([25, 50, 100])],

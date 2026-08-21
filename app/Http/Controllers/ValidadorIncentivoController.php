@@ -39,12 +39,14 @@ class ValidadorIncentivoController extends Controller
             ->selectRaw("SUM(CASE WHEN estado = 'pagado_parcial' THEN 1 ELSE 0 END) AS pagados_parciales")
             ->selectRaw("SUM(CASE WHEN estado = 'no_pagado' THEN 1 ELSE 0 END) AS no_pagados")
             ->selectRaw("SUM(CASE WHEN estado = 'no_califica' THEN 1 ELSE 0 END) AS no_califican")
+            ->selectRaw("SUM(CASE WHEN TRIM(COALESCE(empleadoid, '')) = '' AND monto_pagado > 0 THEN 1 ELSE 0 END) AS sin_idempleado")
             ->selectRaw('COALESCE(SUM(incentivo_generado), 0) AS incentivo_generado')
             ->selectRaw('COALESCE(SUM(monto_pagado), 0) AS monto_pagado')
             ->selectRaw('COALESCE(SUM(monto_no_pagado), 0) AS monto_no_pagado')
             ->first()
             ?->toArray() ?? $this->emptySummary();
         $detalles = $query
+            ->orderByRaw("CASE WHEN TRIM(COALESCE(empleadoid, '')) = '' AND monto_pagado > 0 THEN 0 ELSE 1 END")
             ->orderByRaw("CASE estado WHEN 'no_pagado' THEN 1 WHEN 'pagado_parcial' THEN 2 WHEN 'no_califica' THEN 3 ELSE 4 END")
             ->orderBy('nombre')
             ->paginate((int) ($filtros['por_pagina'] ?? 25))
@@ -99,7 +101,10 @@ class ValidadorIncentivoController extends Controller
                     $detalle->incentivo_generado,
                     $detalle->monto_pagado,
                     $detalle->monto_no_pagado,
-                    $this->stateLabel($detalle->estado),
+                    $this->stateLabel(
+                        $detalle->estado,
+                        $this->isMissingEmployeeId($detalle->empleadoid, $detalle->monto_pagado)
+                    ),
                     collect($detalle->motivos)->map($this->reasonLabel(...))->implode(', '),
                 ]);
             }
@@ -131,7 +136,16 @@ class ValidadorIncentivoController extends Controller
                         ->orWhere('cedula', 'like', $identity !== '' ? "%{$identity}%" : $term);
                 });
             })
-            ->when($filters['estado'] ?? null, fn (Builder $query, string $state): Builder => $query->where('estado', $state))
+            ->when($filters['estado'] ?? null, function (Builder $query, string $state): void {
+                if ($state === 'sin_idempleado') {
+                    $query->whereRaw("TRIM(COALESCE(empleadoid, '')) = ''")
+                        ->where('monto_pagado', '>', 0);
+
+                    return;
+                }
+
+                $query->where('estado', $state);
+            })
             ->when($filters['motivo'] ?? null, fn (Builder $query, string $reason): Builder => $query->whereJsonContains('motivos', $reason))
             ->when($filters['empresa'] ?? null, fn (Builder $query, string $company): Builder => $query->where('empresa', $company));
     }
@@ -155,20 +169,28 @@ class ValidadorIncentivoController extends Controller
             'pagados_parciales' => 0,
             'no_pagados' => 0,
             'no_califican' => 0,
+            'sin_idempleado' => 0,
             'incentivo_generado' => 0,
             'monto_pagado' => 0,
             'monto_no_pagado' => 0,
         ];
     }
 
-    private function stateLabel(string $state): string
+    private function stateLabel(string $state, bool $missingEmployeeId = false): string
     {
-        return match ($state) {
+        $paymentState = match ($state) {
             'pagado' => 'Pagado',
             'pagado_parcial' => 'Pagado parcial',
             'no_califica' => 'No calificó',
             default => 'No pagado',
         };
+
+        return $missingEmployeeId ? "Sin IdEmpleado / {$paymentState}" : $paymentState;
+    }
+
+    private function isMissingEmployeeId(?string $employeeId, int|float|string $paidAmount): bool
+    {
+        return trim((string) $employeeId) === '' && (float) $paidAmount > 0;
     }
 
     private function reasonLabel(string $reason): string
