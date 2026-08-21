@@ -191,6 +191,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Ingresos Loteka',
+                'descripcion' => 'Consulta ventas no tradicionales por terminal y centro de costo.',
+                'url' => '/contabilidad/reportes/ingresos-loteka',
+                'icono' => 'ri-money-dollar-circle-line',
+                'categoria' => 'Reportes',
+                'tags' => ['ingresos', 'loteka', 'ventas no tradicionales', 'centro costo'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Electricidad',
                 'descripcion' => 'Gestiona facturas, averias y seguimiento electrico de agencias.',
                 'url' => '/contabilidad/electricidad',

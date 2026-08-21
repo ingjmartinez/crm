@@ -15,6 +15,7 @@ use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\ContabilidadFlujoRutaController;
 use App\Http\Controllers\ContabilidadGastoIncentivoAgenciaController;
+use App\Http\Controllers\ContabilidadIngresoLotekaController;
 use App\Http\Controllers\ContabilidadValidadorAgenciaController;
 use App\Http\Controllers\ContabilidadVolantePagoSocioController;
 use App\Http\Controllers\CoordinadorOperadorController;
@@ -198,6 +199,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('reportes.gastos-incentivo-agencia');
         Route::get('/reportes/gastos-por-agencia-incentivo/data', [ContabilidadGastoIncentivoAgenciaController::class, 'data'])
             ->name('reportes.gastos-incentivo-agencia.data');
+        Route::get('/reportes/ingresos-loteka', [ContabilidadIngresoLotekaController::class, 'index'])
+            ->name('reportes.ingresos-loteka');
     });
 
     Route::get('/api-cuentas', [Api::class, 'getCuentas']);

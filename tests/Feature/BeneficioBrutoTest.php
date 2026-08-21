@@ -61,6 +61,9 @@ class BeneficioBrutoTest extends TestCase
             ->assertSee('Documento Joselito')
             ->assertSee('Documento Negosur')
             ->assertSee('Documento Higuey')
+            ->assertSee('paging: true', false)
+            ->assertSee('pageLength: 25', false)
+            ->assertSee("pagingType: 'full_numbers'", false)
             ->assertSee('Puedes cargar uno, dos o los tres documentos.');
     }
 

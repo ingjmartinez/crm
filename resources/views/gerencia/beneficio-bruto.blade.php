@@ -876,7 +876,10 @@
 
             table.DataTable({
                 scrollX: true,
+                paging: true,
                 pageLength: 25,
+                lengthChange: false,
+                pagingType: 'full_numbers',
                 order: [[0, 'asc']],
                 buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
                 dom: 'Bfrtip',
