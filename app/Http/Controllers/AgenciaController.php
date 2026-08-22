@@ -803,6 +803,7 @@ class AgenciaController extends Controller
         $directorio = 'agencias/boletines';
         $rutaPdf = $directorio.'/'.$nombrePdf;
         $rutaMetadata = $directorio.'/'.pathinfo($nombrePdf, PATHINFO_FILENAME).'.json';
+        $contenidoPdf = $documento->output();
         $metadata = json_encode([
             'archivo' => $nombrePdf,
             'tipo' => $tipo,
@@ -817,7 +818,7 @@ class AgenciaController extends Controller
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
         $disco = Storage::disk('local');
-        $pdfGuardado = $disco->put($rutaPdf, $documento->output());
+        $pdfGuardado = $disco->put($rutaPdf, $contenidoPdf);
         $metadataGuardada = is_string($metadata) && $disco->put($rutaMetadata, $metadata);
 
         if (! $pdfGuardado || ! $metadataGuardada) {
@@ -825,7 +826,10 @@ class AgenciaController extends Controller
             abort(500, 'No se pudo guardar el boletin de cambios en el servidor.');
         }
 
-        return $documento->download($nombrePdf);
+        return response($contenidoPdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$nombrePdf.'"',
+        ]);
     }
 
     /**

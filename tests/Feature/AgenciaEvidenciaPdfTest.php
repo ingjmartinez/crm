@@ -61,6 +61,7 @@ class AgenciaEvidenciaPdfTest extends TestCase
         $this->assertNotNull($rutaPdf);
         $this->assertNotNull($rutaMetadata);
         Storage::disk('local')->assertExists([$rutaPdf, $rutaMetadata]);
+        $this->assertSame(Storage::disk('local')->get($rutaPdf), $response->getContent());
 
         $metadata = json_decode(Storage::disk('local')->get($rutaMetadata), true);
         $this->assertSame('Agencias desactivadas', $metadata['titulo']);
