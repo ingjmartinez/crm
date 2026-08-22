@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\AgenciasExport;
+use App\Http\Requests\GenerarEvidenciaAgenciasRequest;
 use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Imports\AgenciasImport;
 use App\Mail\IncumplimientoHorarioReportMail;
@@ -11,14 +12,19 @@ use App\Models\AgenciaHorario;
 use App\Models\CentroDeCosto;
 use App\Models\CoordinadorOperador;
 use App\Models\OperadorRuta;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class AgenciaController extends Controller
 {
@@ -741,6 +747,142 @@ class AgenciaController extends Controller
             'activas' => 0,
             'inactivas' => 0,
             'agencias' => $resultado['agencias'],
+        ]);
+    }
+
+    /**
+     * Descarga una evidencia del estado de las agencias antes de ejecutar acciones.
+     */
+    public function evidenciaPdf(GenerarEvidenciaAgenciasRequest $request): Response
+    {
+        $tipo = $request->validated('tipo');
+        $configuracion = match ($tipo) {
+            'inactivas' => [
+                'titulo' => 'Agencias desactivadas',
+                'descripcion' => 'Agencias que se encontraban desactivadas al momento de generar esta evidencia.',
+                'resultado' => [
+                    'desde' => null,
+                    'hasta' => null,
+                    'agencias' => $this->obtenerAgenciasInactivas(),
+                ],
+            ],
+            'sin_venta' => [
+                'titulo' => 'Agencias activas sin ventas',
+                'descripcion' => 'Agencias activas sin venta positiva durante los ultimos 30 dias.',
+                'resultado' => $this->obtenerAgenciasSinVentaTreintaDias(),
+            ],
+            'inactivas_con_venta' => [
+                'titulo' => 'Agencias inactivas con ventas',
+                'descripcion' => 'Agencias desactivadas que registraron ventas positivas durante los ultimos 30 dias.',
+                'resultado' => $this->obtenerAgenciasInactivasConVentaTreintaDias(),
+            ],
+            'no_registradas_con_venta' => [
+                'titulo' => 'Terminales no registradas con ventas',
+                'descripcion' => 'Terminales con ventas positivas durante los ultimos 30 dias que no existian en el maestro de agencias.',
+                'resultado' => $this->obtenerAgenciasNoRegistradasConVentaTreintaDias(),
+            ],
+        };
+
+        $generadoEn = now();
+        $usuario = $request->user();
+        $generadoPor = data_get($usuario, 'name')
+            ?? data_get($usuario, 'nombre')
+            ?? data_get($usuario, 'email')
+            ?? 'Usuario autenticado';
+        $documento = Pdf::loadView('agencias.evidencia-pdf', [
+            'tipo' => $tipo,
+            'titulo' => $configuracion['titulo'],
+            'descripcion' => $configuracion['descripcion'],
+            'resultado' => $configuracion['resultado'],
+            'generadoEn' => $generadoEn,
+            'generadoPor' => $generadoPor,
+        ])->setPaper('letter', 'landscape');
+
+        $identificador = substr(str_replace('-', '', (string) \Illuminate\Support\Str::uuid()), 0, 8);
+        $nombrePdf = 'boletin_cambios_'.$tipo.'_'.$generadoEn->format('Ymd_His').'_'.$identificador.'.pdf';
+        $directorio = 'agencias/boletines';
+        $rutaPdf = $directorio.'/'.$nombrePdf;
+        $rutaMetadata = $directorio.'/'.pathinfo($nombrePdf, PATHINFO_FILENAME).'.json';
+        $metadata = json_encode([
+            'archivo' => $nombrePdf,
+            'tipo' => $tipo,
+            'titulo' => $configuracion['titulo'],
+            'descripcion' => $configuracion['descripcion'],
+            'generado_en' => $generadoEn->toIso8601String(),
+            'generado_por' => $generadoPor,
+            'generado_por_id' => $usuario?->getAuthIdentifier(),
+            'desde' => $configuracion['resultado']['desde'] ?? null,
+            'hasta' => $configuracion['resultado']['hasta'] ?? null,
+            'total' => count($configuracion['resultado']['agencias'] ?? []),
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        $disco = Storage::disk('local');
+        $pdfGuardado = $disco->put($rutaPdf, $documento->output());
+        $metadataGuardada = is_string($metadata) && $disco->put($rutaMetadata, $metadata);
+
+        if (! $pdfGuardado || ! $metadataGuardada) {
+            $disco->delete([$rutaPdf, $rutaMetadata]);
+            abort(500, 'No se pudo guardar el boletin de cambios en el servidor.');
+        }
+
+        return $documento->download($nombrePdf);
+    }
+
+    /**
+     * Muestra los boletines de cambios conservados en el servidor.
+     */
+    public function boletines(): View
+    {
+        $disco = Storage::disk('local');
+        $directorio = 'agencias/boletines';
+        $boletines = collect($disco->files($directorio))
+            ->filter(fn (string $ruta): bool => str_ends_with(strtolower($ruta), '.json'))
+            ->map(function (string $ruta) use ($disco): ?array {
+                $metadata = json_decode($disco->get($ruta), true);
+
+                if (! is_array($metadata)) {
+                    return null;
+                }
+
+                $archivo = basename((string) ($metadata['archivo'] ?? ''));
+                $rutaPdf = 'agencias/boletines/'.$archivo;
+
+                if ($archivo === '' || ! $disco->exists($rutaPdf)) {
+                    return null;
+                }
+
+                return [
+                    ...$metadata,
+                    'archivo' => $archivo,
+                    'tamano' => $disco->size($rutaPdf),
+                    'url' => route('agencias.boletines.ver', ['archivo' => $archivo]),
+                ];
+            })
+            ->filter()
+            ->sortByDesc('generado_en')
+            ->values();
+
+        return view('agencias.boletines', compact('boletines'));
+    }
+
+    /**
+     * Abre un boletin privado previamente generado.
+     */
+    public function verBoletin(string $archivo): BinaryFileResponse
+    {
+        abort_unless(
+            preg_match('/^boletin_cambios_[a-z_]+_\d{8}_\d{6}_[a-f0-9]{8}\.pdf$/', $archivo) === 1,
+            404
+        );
+
+        $ruta = 'agencias/boletines/'.$archivo;
+        $disco = Storage::disk('local');
+
+        abort_unless($disco->exists($ruta), 404, 'El boletin solicitado no esta disponible.');
+
+        return response()->file($disco->path($ruta), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$archivo.'"',
         ]);
     }
 

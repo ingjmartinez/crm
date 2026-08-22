@@ -441,6 +441,12 @@
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <a href="{{ route('agencias.boletines.index') }}" class="btn btn-outline-secondary" target="_blank" rel="noopener">
+                        <i class="ri-archive-line me-1"></i>Boletines guardados
+                    </a>
+                    <a href="{{ route('agencias.evidencia-pdf', ['tipo' => 'inactivas']) }}" class="btn btn-outline-danger" id="btnDescargarEvidenciaInactivas" target="_blank" rel="noopener">
+                        <i class="ri-file-pdf-2-line me-1"></i>Descargar PDF
+                    </a>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -533,6 +539,8 @@
         var btnConsultarInactivasConVentas = $('#btnConsultarInactivasConVentas');
         var btnConsultarNoRegistradasConVentas = $('#btnConsultarNoRegistradasConVentas');
         var btnDesactivarInactivasMasivo = $('#btnDesactivarInactivasMasivo');
+        var btnDescargarEvidenciaInactivas = $('#btnDescargarEvidenciaInactivas');
+        var evidenciaInactivasPdfUrl = @json(route('agencias.evidencia-pdf'));
         var paraActualizarModal = $('#paraActualizarModal');
         var tablaParaActualizarBody = $('#tablaParaActualizar tbody');
         var paraActualizarTotalTexto = $('#paraActualizarTotalTexto');
@@ -885,6 +893,10 @@
             btnDesactivarInactivasMasivo
                 .toggle(inactivasModo === 'sin_venta')
                 .prop('disabled', inactivasModo !== 'sin_venta' || activas <= 0 || cargandoInactivas);
+            btnDescargarEvidenciaInactivas
+                .attr('href', evidenciaInactivasPdfUrl + '?tipo=' + encodeURIComponent(inactivasModo))
+                .toggleClass('disabled', cargandoInactivas)
+                .attr('aria-disabled', cargandoInactivas ? 'true' : 'false');
 
             btnConsultarInactivas.toggleClass('active', inactivasModo === 'inactivas');
             btnConsultarSinVentas.toggleClass('active', inactivasModo === 'sin_venta');
@@ -1735,6 +1747,12 @@
 
         btnDesactivarInactivasMasivo.on('click', function() {
             desactivarAgenciasSinVentaMasivo();
+        });
+
+        btnDescargarEvidenciaInactivas.on('click', function(event) {
+            if (cargandoInactivas) {
+                event.preventDefault();
+            }
         });
 
         $('#btnActualizarDesdeCc').on('click', function() {

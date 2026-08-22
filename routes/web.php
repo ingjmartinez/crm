@@ -450,6 +450,11 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('agencias-sin-venta-30-dias', [AgenciaController::class, 'agenciasSinVentaTreintaDias'])->name('agencias.sin-venta-30-dias');
     Route::get('agencias-inactivas-con-venta-30-dias', [AgenciaController::class, 'agenciasInactivasConVentaTreintaDias'])->name('agencias.inactivas-con-venta-30-dias');
     Route::get('agencias-no-registradas-con-venta-30-dias', [AgenciaController::class, 'agenciasNoRegistradasConVentaTreintaDias'])->name('agencias.no-registradas-con-venta-30-dias');
+    Route::get('agencias-evidencia-pdf', [AgenciaController::class, 'evidenciaPdf'])->name('agencias.evidencia-pdf');
+    Route::get('agencias-boletines', [AgenciaController::class, 'boletines'])->name('agencias.boletines.index');
+    Route::get('agencias-boletines/{archivo}', [AgenciaController::class, 'verBoletin'])
+        ->where('archivo', '[A-Za-z0-9_.-]+')
+        ->name('agencias.boletines.ver');
     Route::post('agencias-sin-venta-30-dias-desactivar', [AgenciaController::class, 'desactivarAgenciasSinVentaTreintaDias'])->name('agencias.sin-venta-30-dias.desactivar');
     Route::post('agencias-actualizar-estatus', [AgenciaController::class, 'actualizarEstatusAgencia'])->name('agencias.actualizar-estatus');
     Route::get('agencias-para-actualizar', [AgenciaController::class, 'agenciasParaActualizar'])->name('agencias.para-actualizar');
