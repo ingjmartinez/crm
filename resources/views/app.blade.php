@@ -41,97 +41,15 @@
     <link href="{{ asset('css/mobile.css') }}" rel="stylesheet" type="text/css" />
 
     <style>
-        :root {
-            --crm-sidebar-height: 100vh;
-            --crm-sidebar-brand-height: 70px;
-        }
-
-        @supports (height: 100dvh) {
-            :root {
-                --crm-sidebar-height: 100dvh;
-            }
-        }
-
         html {
             scroll-behavior: smooth;
         }
 
         body,
         .main-content,
-        .page-content,
-        #scrollbar,
-        #scrollbar .simplebar-content-wrapper,
-        [data-simplebar] .simplebar-content-wrapper {
+        .page-content {
             -webkit-overflow-scrolling: touch;
             scroll-behavior: smooth;
-        }
-
-        #scrollbar,
-        #scrollbar .simplebar-content-wrapper {
-            overscroll-behavior: contain;
-            will-change: scroll-position;
-        }
-
-        html[data-layout="vertical"] .app-menu.navbar-menu,
-        html[data-layout="twocolumn"] .app-menu.navbar-menu {
-            display: flex;
-            flex-direction: column;
-            height: var(--crm-sidebar-height);
-            max-height: var(--crm-sidebar-height);
-            overflow: hidden;
-        }
-
-        html[data-layout="vertical"] .app-menu.navbar-menu .navbar-brand-box,
-        html[data-layout="twocolumn"] .app-menu.navbar-menu .navbar-brand-box {
-            flex: 0 0 var(--crm-sidebar-brand-height);
-        }
-
-        html[data-layout="vertical"] #scrollbar,
-        html[data-layout="twocolumn"] #scrollbar {
-            flex: 1 1 auto;
-            min-height: 0;
-            height: calc(var(--crm-sidebar-height) - var(--crm-sidebar-brand-height)) !important;
-            max-height: calc(var(--crm-sidebar-height) - var(--crm-sidebar-brand-height));
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-
-        html[data-layout="vertical"] #scrollbar .container-fluid,
-        html[data-layout="twocolumn"] #scrollbar .container-fluid {
-            height: 100%;
-            min-height: 0;
-            padding-bottom: 2rem;
-        }
-
-        html[data-layout="vertical"] #scrollbar .simplebar-content,
-        html[data-layout="twocolumn"] #scrollbar .simplebar-content {
-            min-height: 100%;
-        }
-
-        html[data-layout="vertical"] #navbar-nav,
-        html[data-layout="twocolumn"] #navbar-nav {
-            min-height: 0;
-            padding-bottom: 1.25rem;
-        }
-
-        html[data-layout="vertical"] #navbar-nav[data-simplebar],
-        html[data-layout="twocolumn"] #navbar-nav[data-simplebar] {
-            height: 100%;
-            max-height: 100%;
-            overflow: hidden;
-        }
-
-        html[data-layout="vertical"] #scrollbar .simplebar-content-wrapper,
-        html[data-layout="twocolumn"] #scrollbar .simplebar-content-wrapper,
-        html[data-layout="vertical"] #navbar-nav .simplebar-content-wrapper,
-        html[data-layout="twocolumn"] #navbar-nav .simplebar-content-wrapper {
-            max-height: 100%;
-            overflow-y: auto !important;
-        }
-
-        html[data-layout="vertical"] #navbar-nav .simplebar-content,
-        html[data-layout="twocolumn"] #navbar-nav .simplebar-content {
-            padding-bottom: 1.25rem !important;
         }
 
         #navbar-nav .nav-link,
@@ -267,10 +185,7 @@
             html,
             body,
             .main-content,
-            .page-content,
-            #scrollbar,
-            #scrollbar .simplebar-content-wrapper,
-            [data-simplebar] .simplebar-content-wrapper {
+            .page-content {
                 scroll-behavior: auto;
             }
 
@@ -1938,161 +1853,6 @@
     <script src="{{ asset('js/app.js') }}"></script>
     <!-- Mobile Optimization JS -->
     <script src="{{ asset('js/mobile-optimization.js') }}"></script>
-
-    <script>
-        (function () {
-            let menuScrollAnimationFrame = null;
-            let menuScrollElement = null;
-            let menuScrollTarget = 0;
-
-            function getMenuScrollElement() {
-                const candidates = [
-                    document.querySelector('#navbar-nav .simplebar-content-wrapper'),
-                    document.querySelector('#scrollbar .simplebar-content-wrapper'),
-                    document.getElementById('navbar-nav'),
-                    document.getElementById('scrollbar')
-                ];
-
-                return candidates.find(function (element) {
-                    return element && element.scrollHeight > element.clientHeight + 1;
-                }) || document.querySelector('#scrollbar .simplebar-content-wrapper') || document.getElementById('scrollbar');
-            }
-
-            function clampScrollTop(element, value) {
-                const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
-                return Math.min(Math.max(value, 0), maxScrollTop);
-            }
-
-            function scrollMenuTo(element, targetScrollTop) {
-                if (!element) {
-                    return;
-                }
-
-                if (menuScrollElement !== element) {
-                    if (menuScrollAnimationFrame) {
-                        window.cancelAnimationFrame(menuScrollAnimationFrame);
-                        menuScrollAnimationFrame = null;
-                    }
-
-                    menuScrollElement = element;
-                    menuScrollTarget = element.scrollTop;
-                }
-
-                menuScrollTarget = clampScrollTop(element, targetScrollTop);
-
-                if (menuScrollAnimationFrame) {
-                    return;
-                }
-
-                function animateMenuScroll() {
-                    if (menuScrollElement !== element) {
-                        menuScrollAnimationFrame = null;
-                        return;
-                    }
-
-                    const distance = menuScrollTarget - element.scrollTop;
-
-                    if (Math.abs(distance) < 0.75) {
-                        element.scrollTop = menuScrollTarget;
-                        menuScrollAnimationFrame = null;
-                        return;
-                    }
-
-                    element.scrollTop += distance * 1.0;
-                    menuScrollAnimationFrame = window.requestAnimationFrame(animateMenuScroll);
-                }
-
-                menuScrollAnimationFrame = window.requestAnimationFrame(animateMenuScroll);
-            }
-
-            function getWheelDelta(event) {
-                if (event.deltaMode === 1) {
-                    return event.deltaY * 18;
-                }
-
-                if (event.deltaMode === 2) {
-                    return event.deltaY * window.innerHeight * 0.75;
-                }
-
-                return event.deltaY;
-            }
-
-            function recalculateMenuScroll() {
-                const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-                document.documentElement.style.setProperty('--crm-sidebar-height', viewportHeight + 'px');
-
-                window.requestAnimationFrame(function () {
-                    if (!window.SimpleBar || !window.SimpleBar.instances || typeof window.SimpleBar.instances.get !== 'function') {
-                        return;
-                    }
-
-                    ['scrollbar', 'navbar-nav'].forEach(function (elementId) {
-                        const element = document.getElementById(elementId);
-                        const instance = element ? window.SimpleBar.instances.get(element) : null;
-
-                        if (instance && typeof instance.recalculate === 'function') {
-                            instance.recalculate();
-                        }
-                    });
-                });
-            }
-
-            function keepMenuSectionVisible(element) {
-                if (!element || !element.closest || !element.closest('#navbar-nav')) {
-                    return;
-                }
-
-                window.requestAnimationFrame(function () {
-                    const scrollbar = document.getElementById('scrollbar');
-                    const scrollElement = getMenuScrollElement() || scrollbar;
-
-                    if (!scrollElement) {
-                        return;
-                    }
-
-                    const sectionRect = element.getBoundingClientRect();
-                    const scrollRect = scrollElement.getBoundingClientRect();
-                    const bottomGap = sectionRect.bottom - scrollRect.bottom + 24;
-                    const topGap = scrollRect.top - sectionRect.top + 16;
-
-                    if (bottomGap > 0) {
-                        scrollMenuTo(scrollElement, scrollElement.scrollTop + bottomGap);
-                    } else if (topGap > 0) {
-                        scrollMenuTo(scrollElement, scrollElement.scrollTop - topGap);
-                    }
-                });
-            }
-
-            recalculateMenuScroll();
-            window.addEventListener('resize', recalculateMenuScroll);
-            window.addEventListener('orientationchange', recalculateMenuScroll);
-            document.addEventListener('shown.bs.collapse', function (event) {
-                recalculateMenuScroll();
-                keepMenuSectionVisible(event.target);
-            });
-            document.addEventListener('hidden.bs.collapse', recalculateMenuScroll);
-
-            document.addEventListener('wheel', function (event) {
-                if (!event.target.closest || !event.target.closest('.app-menu.navbar-menu')) {
-                    return;
-                }
-
-                const scrollElement = getMenuScrollElement();
-
-                if (!scrollElement) {
-                    return;
-                }
-
-                const previousTarget = menuScrollElement === scrollElement ? menuScrollTarget : scrollElement.scrollTop;
-                const nextTarget = clampScrollTop(scrollElement, previousTarget + getWheelDelta(event));
-
-                if (nextTarget !== previousTarget) {
-                    event.preventDefault();
-                    scrollMenuTo(scrollElement, nextTarget);
-                }
-            }, { passive: false });
-        })();
-    </script>
 
     <script>
         const TASK_NOTIF_URL = '{{ url('/tareas/notificaciones') }}';
