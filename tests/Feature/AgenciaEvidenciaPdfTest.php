@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -14,6 +15,8 @@ class AgenciaEvidenciaPdfTest extends TestCase
     {
         parent::setUp();
 
+        config(['cache.default' => 'array']);
+        Cache::clear();
         Storage::fake('local');
         Schema::dropIfExists('agencias');
         Schema::create('agencias', function (Blueprint $table): void {
@@ -87,6 +90,36 @@ class AgenciaEvidenciaPdfTest extends TestCase
             ->getJson(route('agencias.evidencia-pdf', ['tipo' => 'desconocido']))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('tipo');
+    }
+
+    public function test_pdf_reuses_the_result_already_loaded_in_the_modal(): void
+    {
+        DB::table('agencias')->insert([
+            'agencia' => '1002',
+            'terminal' => '5002',
+            'nombre_agencia' => 'Agencia consultada',
+            'estatus' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->withoutMiddleware()
+            ->getJson(route('agencias.inactivas'))
+            ->assertOk()
+            ->assertJsonPath('total', 1);
+
+        DB::table('agencias')->delete();
+
+        $this->withoutMiddleware()
+            ->get(route('agencias.evidencia-pdf', ['tipo' => 'inactivas']))
+            ->assertOk();
+
+        $rutaMetadata = collect(Storage::disk('local')->files('agencias/boletines'))
+            ->first(fn (string $ruta): bool => str_ends_with($ruta, '.json'));
+        $this->assertNotNull($rutaMetadata);
+
+        $metadata = json_decode(Storage::disk('local')->get($rutaMetadata), true);
+        $this->assertSame(1, $metadata['total']);
     }
 
     public function test_it_does_not_expose_a_missing_saved_bulletin(): void

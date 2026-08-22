@@ -16,6 +16,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -686,6 +687,11 @@ class AgenciaController extends Controller
     public function agenciasInactivas(Request $request)
     {
         $agencias = $this->obtenerAgenciasInactivas();
+        $this->guardarResultadoBoletin($request, 'inactivas', [
+            'desde' => null,
+            'hasta' => null,
+            'agencias' => $agencias,
+        ]);
 
         return response()->json([
             'ok' => true,
@@ -702,6 +708,7 @@ class AgenciaController extends Controller
     public function agenciasSinVentaTreintaDias(Request $request)
     {
         $resultado = $this->obtenerAgenciasSinVentaTreintaDias();
+        $this->guardarResultadoBoletin($request, 'sin_venta', $resultado);
 
         return response()->json([
             'ok' => true,
@@ -720,6 +727,7 @@ class AgenciaController extends Controller
     public function agenciasInactivasConVentaTreintaDias(Request $request)
     {
         $resultado = $this->obtenerAgenciasInactivasConVentaTreintaDias();
+        $this->guardarResultadoBoletin($request, 'inactivas_con_venta', $resultado);
 
         return response()->json([
             'ok' => true,
@@ -738,6 +746,7 @@ class AgenciaController extends Controller
     public function agenciasNoRegistradasConVentaTreintaDias(Request $request)
     {
         $resultado = $this->obtenerAgenciasNoRegistradasConVentaTreintaDias();
+        $this->guardarResultadoBoletin($request, 'no_registradas_con_venta', $resultado);
 
         return response()->json([
             'ok' => true,
@@ -760,26 +769,22 @@ class AgenciaController extends Controller
             'inactivas' => [
                 'titulo' => 'Agencias desactivadas',
                 'descripcion' => 'Agencias que se encontraban desactivadas al momento de generar esta evidencia.',
-                'resultado' => [
-                    'desde' => null,
-                    'hasta' => null,
-                    'agencias' => $this->obtenerAgenciasInactivas(),
-                ],
+                'resultado' => $this->obtenerResultadoBoletin($request, $tipo),
             ],
             'sin_venta' => [
                 'titulo' => 'Agencias activas sin ventas',
                 'descripcion' => 'Agencias activas sin venta positiva durante los ultimos 30 dias.',
-                'resultado' => $this->obtenerAgenciasSinVentaTreintaDias(),
+                'resultado' => $this->obtenerResultadoBoletin($request, $tipo),
             ],
             'inactivas_con_venta' => [
                 'titulo' => 'Agencias inactivas con ventas',
                 'descripcion' => 'Agencias desactivadas que registraron ventas positivas durante los ultimos 30 dias.',
-                'resultado' => $this->obtenerAgenciasInactivasConVentaTreintaDias(),
+                'resultado' => $this->obtenerResultadoBoletin($request, $tipo),
             ],
             'no_registradas_con_venta' => [
                 'titulo' => 'Terminales no registradas con ventas',
                 'descripcion' => 'Terminales con ventas positivas durante los ultimos 30 dias que no existian en el maestro de agencias.',
-                'resultado' => $this->obtenerAgenciasNoRegistradasConVentaTreintaDias(),
+                'resultado' => $this->obtenerResultadoBoletin($request, $tipo),
             ],
         };
 
@@ -1248,6 +1253,51 @@ class AgenciaController extends Controller
             'hasta' => $fechaFin,
             'agencias' => $agencias,
         ];
+    }
+
+    /**
+     * Conserva temporalmente el mismo resultado que el usuario visualiza en el modal.
+     *
+     * @param  array{desde: ?string, hasta: ?string, agencias: array<int, array<string, mixed>>}  $resultado
+     */
+    private function guardarResultadoBoletin(Request $request, string $tipo, array $resultado): void
+    {
+        Cache::put(
+            $this->claveResultadoBoletin($request, $tipo),
+            $resultado,
+            now()->addMinutes(10)
+        );
+    }
+
+    /**
+     * @return array{desde: ?string, hasta: ?string, agencias: array<int, array<string, mixed>>}
+     */
+    private function obtenerResultadoBoletin(Request $request, string $tipo): array
+    {
+        $resultadoGuardado = Cache::get($this->claveResultadoBoletin($request, $tipo));
+
+        if (is_array($resultadoGuardado) && isset($resultadoGuardado['agencias'])) {
+            return $resultadoGuardado;
+        }
+
+        return match ($tipo) {
+            'inactivas' => [
+                'desde' => null,
+                'hasta' => null,
+                'agencias' => $this->obtenerAgenciasInactivas(),
+            ],
+            'sin_venta' => $this->obtenerAgenciasSinVentaTreintaDias(),
+            'inactivas_con_venta' => $this->obtenerAgenciasInactivasConVentaTreintaDias(),
+            'no_registradas_con_venta' => $this->obtenerAgenciasNoRegistradasConVentaTreintaDias(),
+        };
+    }
+
+    private function claveResultadoBoletin(Request $request, string $tipo): string
+    {
+        $usuario = (string) ($request->user()?->getAuthIdentifier() ?? 'invitado');
+        $sesion = $request->hasSession() ? $request->session()->getId() : (string) $request->ip();
+
+        return 'agencias:boletin:'.hash('sha256', $usuario.'|'.$sesion.'|'.$tipo);
     }
 
     private function obtenerAgenciasInactivas(): array
