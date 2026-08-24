@@ -167,6 +167,7 @@
                                                 <th class="text-end">Venta bruta mensual</th>
                                                 <th class="text-end">Costos</th>
                                                 <th class="text-end">Gastos</th>
+                                                <th>Cuentas</th>
                                                 <th class="text-end">Balance</th>
                                                 <th class="text-center">Cumplimiento</th>
                                             </tr>
@@ -392,6 +393,37 @@
                         data: 'gastos',
                         className: 'text-end fw-semibold text-danger',
                         render: (data, type) => type === 'display' ? `RD$ ${formatMoney(data)}` : Number(data || 0),
+                    },
+                    {
+                        data: 'cuentas',
+                        orderable: false,
+                        render: function (data, type) {
+                            const cuentas = Array.isArray(data) ? data : [];
+
+                            if (type !== 'display') {
+                                return cuentas
+                                    .map((cuenta) => `${cuenta.cuenta ?? ''} ${cuenta.descripcion ?? ''} ${cuenta.tipo ?? ''} ${cuenta.importe ?? 0}`)
+                                    .join(' ');
+                            }
+
+                            if (cuentas.length === 0) {
+                                return '<span class="text-muted small">Sin costos ni gastos</span>';
+                            }
+
+                            const filas = cuentas.map((cuenta) => {
+                                const esCosto = cuenta.tipo === 'costo';
+                                const clase = esCosto ? 'text-warning' : 'text-danger';
+                                const tipo = esCosto ? 'Costo' : 'Gasto';
+
+                                return `<div class="d-flex justify-content-between gap-3 py-1 border-bottom">`
+                                    + `<div><span class="fw-semibold">${escapeHtml(cuenta.cuenta)}</span>`
+                                    + `<div class="small text-muted">${escapeHtml(cuenta.descripcion)} · ${tipo}</div></div>`
+                                    + `<span class="fw-semibold text-nowrap ${clase}">RD$ ${formatMoney(cuenta.importe)}</span>`
+                                    + `</div>`;
+                            }).join('');
+
+                            return `<div class="small" style="min-width: 280px">${filas}</div>`;
+                        },
                     },
                     {
                         data: 'balance',

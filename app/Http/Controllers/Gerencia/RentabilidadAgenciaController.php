@@ -219,6 +219,7 @@ class RentabilidadAgenciaController extends Controller
             'venta_bruta' => (float) $agencia->venta_bruta_mes,
             'costos' => (float) $agencia->costos_mes,
             'gastos' => (float) $agencia->gastos_mes,
+            'cuentas' => $agencia->cuentas_mes,
             'balance' => (float) $agencia->balance_mes,
             'cumple' => (bool) $agencia->cumple,
         ]);
@@ -279,19 +280,24 @@ class RentabilidadAgenciaController extends Controller
     ): RentabilidadAgencia {
         $terminal = trim((string) $agencia->terminal);
         $sistema = mb_strtoupper(trim((string) $agencia->sistema));
-        $movimiento = $costosYGastos->get($terminal);
+        $movimientos = $costosYGastos->get($terminal, collect());
         $ventaBruta = match ($sistema) {
             'LOTOBET' => (float) $ventasBet->get($terminal, 0),
             'LOTONET', 'LOTENET' => (float) $ventasNet->get($terminal, 0),
             default => (float) $ventasBet->get($terminal, 0) + (float) $ventasNet->get($terminal, 0),
         };
-        $costos = (float) ($movimiento->costos ?? 0);
-        $gastos = (float) ($movimiento->gastos ?? 0);
+        $costos = (float) $movimientos
+            ->where('tipo', 'costo')
+            ->sum('importe');
+        $gastos = (float) $movimientos
+            ->where('tipo', 'gasto')
+            ->sum('importe');
         $balance = $ventaBruta - $costos - $gastos;
 
         $agencia->setAttribute('venta_bruta_mes', $ventaBruta);
         $agencia->setAttribute('costos_mes', $costos);
         $agencia->setAttribute('gastos_mes', $gastos);
+        $agencia->setAttribute('cuentas_mes', $movimientos->values()->all());
         $agencia->setAttribute('balance_mes', $balance);
         $agencia->setAttribute('cumple', $balance >= 0);
 
@@ -334,10 +340,20 @@ class RentabilidadAgenciaController extends Controller
             ->whereIn(DB::raw('TRIM(CAST(movimientos.id_viejo AS CHAR))'), $terminales->all())
             ->whereIn(DB::raw('LOWER(TRIM(cuentas.tipo))'), ['costo', 'gasto'])
             ->selectRaw('TRIM(CAST(movimientos.id_viejo AS CHAR)) AS terminal')
-            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(cuentas.tipo)) = 'costo' THEN COALESCE(movimientos.debito, 0) - COALESCE(movimientos.credito, 0) ELSE 0 END) AS costos")
-            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(cuentas.tipo)) = 'gasto' THEN COALESCE(movimientos.debito, 0) - COALESCE(movimientos.credito, 0) ELSE 0 END) AS gastos")
-            ->groupByRaw('TRIM(CAST(movimientos.id_viejo AS CHAR))')
+            ->selectRaw('TRIM(cuentas.cuenta) AS cuenta')
+            ->selectRaw("COALESCE(NULLIF(TRIM(cuentas.descripcion), ''), 'Sin descripción') AS descripcion")
+            ->selectRaw('LOWER(TRIM(cuentas.tipo)) AS tipo')
+            ->selectRaw('SUM(COALESCE(movimientos.debito, 0) - COALESCE(movimientos.credito, 0)) AS importe')
+            ->groupByRaw('TRIM(CAST(movimientos.id_viejo AS CHAR)), TRIM(cuentas.cuenta), cuentas.descripcion, LOWER(TRIM(cuentas.tipo))')
+            ->orderByRaw('TRIM(cuentas.cuenta)')
             ->get()
-            ->keyBy('terminal');
+            ->map(fn (EntradaDiario $movimiento): array => [
+                'terminal' => (string) $movimiento->terminal,
+                'cuenta' => (string) $movimiento->cuenta,
+                'descripcion' => (string) $movimiento->descripcion,
+                'tipo' => (string) $movimiento->tipo,
+                'importe' => (float) $movimiento->importe,
+            ])
+            ->groupBy('terminal');
     }
 }

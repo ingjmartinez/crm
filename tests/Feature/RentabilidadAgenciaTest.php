@@ -43,6 +43,7 @@ class RentabilidadAgenciaTest extends TestCase
         Schema::create('cuentas_contables', function (Blueprint $table): void {
             $table->id();
             $table->string('cuenta')->unique();
+            $table->string('descripcion')->nullable();
             $table->string('tipo')->nullable();
         });
         Schema::create('entradas_diario', function (Blueprint $table): void {
@@ -85,6 +86,10 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertStringContainsString("No cumplen: {{ number_format(\$resumenCumplimiento['no_cumple']) }}", $viewSource);
         $this->assertStringContainsString('Rentabilidad por ciudad', $viewSource);
         $this->assertStringContainsString('Rentabilidad por ruta', $viewSource);
+        $this->assertStringContainsString('<th>Cuentas</th>', $viewSource);
+        $this->assertStringContainsString("data: 'cuentas'", $viewSource);
+        $this->assertStringContainsString('Sin costos ni gastos', $viewSource);
+        $this->assertStringContainsString("->orderByRaw('TRIM(cuentas.cuenta)')", file_get_contents(app_path('Http/Controllers/Gerencia/RentabilidadAgenciaController.php')));
         $this->assertStringContainsString('id="buscarAgenciaRentabilidad"', $viewSource);
         $this->assertStringContainsString('placeholder="Terminal o nombre de agencia"', $viewSource);
         $this->assertStringContainsString("'buscador' => 'buscarCiudadRentabilidad'", $viewSource);
@@ -239,9 +244,9 @@ class RentabilidadAgenciaTest extends TestCase
             ['agencia_id' => '2001', 'monto' => 275000, 'fecha' => '2026-06-15'],
         ]);
         DB::table('cuentas_contables')->insert([
-            ['cuenta' => '5001', 'tipo' => 'Costo'],
-            ['cuenta' => '6001', 'tipo' => 'Gasto'],
-            ['cuenta' => '4001', 'tipo' => 'Ingreso'],
+            ['cuenta' => '5001', 'descripcion' => 'Costo de operación', 'tipo' => 'Costo'],
+            ['cuenta' => '6001', 'descripcion' => 'Energía eléctrica', 'tipo' => 'Gasto'],
+            ['cuenta' => '4001', 'descripcion' => 'Ventas', 'tipo' => 'Ingreso'],
         ]);
         DB::table('entradas_diario')->insert([
             ['fecha' => '2026-06-05', 'cuenta' => '5001', 'debito' => 10000, 'credito' => 1000, 'id_viejo' => '1001'],
@@ -276,6 +281,22 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertSame(275000.0, $agenciasPorTerminal->get('2001')->venta_bruta_mes);
         $this->assertSame(9000.0, $agenciasPorTerminal->get('1001')->costos_mes);
         $this->assertSame(2000.0, $agenciasPorTerminal->get('1001')->gastos_mes);
+        $this->assertSame([
+            [
+                'terminal' => '1001',
+                'cuenta' => '5001',
+                'descripcion' => 'Costo de operación',
+                'tipo' => 'costo',
+                'importe' => 9000.0,
+            ],
+            [
+                'terminal' => '1001',
+                'cuenta' => '6001',
+                'descripcion' => 'Energía eléctrica',
+                'tipo' => 'gasto',
+                'importe' => 2000.0,
+            ],
+        ], $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['cuentas']);
         $this->assertSame(139000.0, $agenciasPorTerminal->get('1001')->balance_mes);
         $this->assertTrue($agenciasPorTerminal->get('1001')->cumple);
         $this->assertSame(0.0, $agenciasPorTerminal->get('2001')->costos_mes);

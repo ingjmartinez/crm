@@ -3394,11 +3394,15 @@ class IncentivosController extends Controller
             ]);
         }
 
-        $hasActivo = Schema::hasColumn('empleados', 'activo');
-        $hasFechaSalida = Schema::hasColumn('empleados', 'fechasalida');
-        $hasFechaSalidaAlt = Schema::hasColumn('empleados', 'fecha_salida');
+        $columnasEstado = collect(['activo', 'estatus'])
+            ->filter(fn (string $columna): bool => Schema::hasColumn('empleados', $columna))
+            ->values();
+        $columnasFechaSalida = collect(['fechasalida', 'fecha_salida', 'fecha_egreso'])
+            ->filter(fn (string $columna): bool => Schema::hasColumn('empleados', $columna))
+            ->values();
+        $tieneEliminacionLogica = Schema::hasColumn('empleados', 'deleted_at');
 
-        if (!$hasActivo && !$hasFechaSalida && !$hasFechaSalidaAlt) {
+        if ($columnasEstado->isEmpty() && $columnasFechaSalida->isEmpty() && ! $tieneEliminacionLogica) {
             return response()->json([
                 'total_desvinculados' => 0,
                 'total_desactivados' => 0,
@@ -3407,44 +3411,64 @@ class IncentivosController extends Controller
             ]);
         }
 
-        $rows = DB::table('empleados')
-            ->where(function ($query) use ($cedulas, $empleadoIds) {
+        $condicionEstadoActivo = function (string $alias) use ($columnasEstado): string {
+            if ($columnasEstado->isEmpty()) {
+                return '1 = 1';
+            }
+
+            return $columnasEstado
+                ->map(fn (string $columna): string => "COALESCE({$alias}.{$columna}, 1) = 1")
+                ->implode(' AND ');
+        };
+        $condicionEmpleadoActivo = function (string $alias) use (
+            $columnasFechaSalida,
+            $tieneEliminacionLogica,
+            $condicionEstadoActivo
+        ): string {
+            $condiciones = collect([$condicionEstadoActivo($alias)]);
+
+            $columnasFechaSalida->each(function (string $columna) use ($alias, $condiciones): void {
+                $condiciones->push(
+                    "(NULLIF(TRIM(CAST({$alias}.{$columna} AS CHAR)), '') IS NULL "
+                    ."OR TRIM(CAST({$alias}.{$columna} AS CHAR)) = '0000-00-00')"
+                );
+            });
+
+            if ($tieneEliminacionLogica) {
+                $condiciones->push("{$alias}.deleted_at IS NULL");
+            }
+
+            return $condiciones->implode(' AND ');
+        };
+        $expresionesFechaSalida = $columnasFechaSalida
+            ->map(fn (string $columna): string => "NULLIF(TRIM(CAST(empleados.{$columna} AS CHAR)), '')")
+            ->push("''")
+            ->implode(', ');
+
+        $rows = DB::table('empleados as empleados')
+            ->where(function ($query) use ($cedulas, $empleadoIds): void {
                 if ($cedulas->isNotEmpty()) {
-                    $query->orWhereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulas->all());
+                    $query->orWhereIn(DB::raw('CAST(empleados.cedula AS UNSIGNED)'), $cedulas->all());
                 }
 
                 if ($empleadoIds->isNotEmpty()) {
-                    $query->orWhereIn(DB::raw('TRIM(CAST(empleadoid AS CHAR))'), $empleadoIds->all());
+                    $query->orWhereIn(DB::raw('TRIM(CAST(empleados.empleadoid AS CHAR))'), $empleadoIds->all());
                 }
             })
-            ->where(function ($query) use ($hasActivo, $hasFechaSalida, $hasFechaSalidaAlt) {
-                if ($hasActivo) {
-                    $query->orWhereRaw('COALESCE(activo, 1) = 0');
-                }
-
-                if ($hasFechaSalida) {
-                    $query->orWhereRaw("fechasalida IS NOT NULL AND TRIM(CAST(fechasalida AS CHAR)) <> '' AND TRIM(CAST(fechasalida AS CHAR)) <> '0000-00-00'");
-                }
-
-                if ($hasFechaSalidaAlt) {
-                    $query->orWhereRaw("fecha_salida IS NOT NULL AND TRIM(CAST(fecha_salida AS CHAR)) <> '' AND TRIM(CAST(fecha_salida AS CHAR)) <> '0000-00-00'");
-                }
+            ->whereRaw('NOT ('.$condicionEmpleadoActivo('empleados').')')
+            ->whereNotExists(function ($query) use ($condicionEmpleadoActivo): void {
+                $query->selectRaw('1')
+                    ->from('empleados as empleados_activos')
+                    ->whereRaw('CAST(empleados_activos.cedula AS UNSIGNED) = CAST(empleados.cedula AS UNSIGNED)')
+                    ->whereRaw($condicionEmpleadoActivo('empleados_activos'));
             })
-            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
-            ->selectRaw('TRIM(CAST(empleadoid AS CHAR)) AS empleadoid')
-            ->selectRaw('TRIM(CAST(companyid AS CHAR)) AS companyid')
-            ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
-            ->selectRaw($hasActivo ? 'MIN(COALESCE(activo, 1)) AS activo' : '1 AS activo')
-            ->selectRaw(
-                $hasFechaSalida && $hasFechaSalidaAlt
-                    ? "MAX(COALESCE(NULLIF(TRIM(CAST(fecha_salida AS CHAR)), ''), NULLIF(TRIM(CAST(fechasalida AS CHAR)), ''))) AS fecha_salida"
-                    : ($hasFechaSalidaAlt
-                        ? "MAX(NULLIF(TRIM(CAST(fecha_salida AS CHAR)), '')) AS fecha_salida"
-                        : ($hasFechaSalida
-                            ? "MAX(NULLIF(TRIM(CAST(fechasalida AS CHAR)), '')) AS fecha_salida"
-                            : "'' AS fecha_salida"))
-            )
-            ->groupByRaw('CAST(cedula AS UNSIGNED), TRIM(CAST(empleadoid AS CHAR)), TRIM(CAST(companyid AS CHAR))')
+            ->selectRaw('CAST(empleados.cedula AS UNSIGNED) AS cedula')
+            ->selectRaw('TRIM(CAST(empleados.empleadoid AS CHAR)) AS empleadoid')
+            ->selectRaw('TRIM(CAST(empleados.companyid AS CHAR)) AS companyid')
+            ->selectRaw("MAX(TRIM(CONCAT(COALESCE(empleados.nombres, ''), ' ', COALESCE(empleados.apellidos, '')))) AS nombre")
+            ->selectRaw("MIN(CASE WHEN {$condicionEstadoActivo('empleados')} THEN 1 ELSE 0 END) AS activo")
+            ->selectRaw("MAX(COALESCE({$expresionesFechaSalida})) AS fecha_salida")
+            ->groupByRaw('CAST(empleados.cedula AS UNSIGNED), TRIM(CAST(empleados.empleadoid AS CHAR)), TRIM(CAST(empleados.companyid AS CHAR))')
             ->orderBy('nombre')
             ->get()
             ->map(function ($row) {
@@ -3637,4 +3661,3 @@ class IncentivosController extends Controller
         return response()->json($data);
     }
 }
-
