@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\ForcePasswordChange;
 use App\Mail\VolantePagoSocioMail;
+use App\Models\VolantePagoSocioCarga;
 use App\Models\VolantePagoSocioDetalle;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Database\Schema\Blueprint;
@@ -36,6 +37,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             $table->string('estado');
             $table->decimal('monto_total', 15, 2);
             $table->dateTime('fecha_transaccion');
+            $table->date('fecha_correspondiente')->nullable();
             $table->unsignedInteger('cantidad_transacciones');
             $table->unsignedBigInteger('usuario_id')->nullable();
             $table->timestamps();
@@ -78,22 +80,32 @@ class ContabilidadVolantePagoSocioTest extends TestCase
     {
         $response = $this->post(route('contabilidad.volantes-pago-socios.procesar'), [
             'archivo_csv' => UploadedFile::fake()->createWithContent('pagos.csv', $this->csvValido()),
+            'fecha_correspondiente' => '2026-08-15',
         ]);
 
         $carga = \App\Models\VolantePagoSocioCarga::query()->with('detalles')->sole();
-        $response->assertRedirect(route('contabilidad.volantes-pago-socios', ['carga' => $carga]));
+        $response->assertRedirect(route('contabilidad.volantes-pago-socios'));
         $this->assertSame(2, $carga->detalles->count());
         $this->assertSame('CONSORCIO DE BANCAS JOSELITO E.I.R.L.', $carga->empresa_origen);
         $this->assertSame('131329888', $carga->rnc_origen);
         $this->assertSame('******3411', $carga->detalles->first()->cuenta);
         $this->assertSame('80700.00', $carga->monto_total);
+        $this->assertSame('2026-08-15', $carga->fecha_correspondiente->toDateString());
 
-        $this->get(route('contabilidad.volantes-pago-socios', ['carga' => $carga]))
+        $this->get(route('contabilidad.volantes-pago-socios', [
+            'nombre' => 'Aramis',
+            'fecha_desde' => '2026-08-14',
+            'fecha_hasta' => '2026-08-16',
+        ]))
             ->assertOk()
             ->assertSee('Aramis Morel Arroyo')
             ->assertSee('Ver volante')
             ->assertSee('Compartir PDF')
             ->assertSee('Enviar por correo')
+            ->assertSee('Buscar volantes')
+            ->assertSee('Escribe el nombre del socio')
+            ->assertSee('Volantes guardados')
+            ->assertSee('15/08/2026')
             ->assertSee('bootstrap.Modal.getOrCreateInstance', false)
             ->assertSee("event.target.closest('.btn-ver-volante')", false)
             ->assertSee('prepareShareFile()', false)
@@ -108,15 +120,80 @@ class ContabilidadVolantePagoSocioTest extends TestCase
         $this->from(route('contabilidad.volantes-pago-socios'))
             ->post(route('contabilidad.volantes-pago-socios.procesar'), [
                 'archivo_csv' => UploadedFile::fake()->createWithContent('pagos.csv', $csv),
+                'fecha_correspondiente' => '2026-08-15',
             ])
             ->assertRedirect(route('contabilidad.volantes-pago-socios'))
             ->assertSessionHasErrors('archivo_csv');
     }
 
+    public function test_exige_la_fecha_correspondiente_al_guardar(): void
+    {
+        $this->from(route('contabilidad.volantes-pago-socios'))
+            ->post(route('contabilidad.volantes-pago-socios.procesar'), [
+                'archivo_csv' => UploadedFile::fake()->createWithContent('pagos.csv', $this->csvValido()),
+            ])
+            ->assertRedirect(route('contabilidad.volantes-pago-socios'))
+            ->assertSessionHasErrors('fecha_correspondiente');
+
+        $this->assertDatabaseCount('volante_pago_socio_cargas', 0);
+    }
+
+    public function test_consulta_volantes_guardados_por_nombre_y_fecha(): void
+    {
+        $cargaEsperada = VolantePagoSocioCarga::factory()->create([
+            'usuario_id' => null,
+            'nombre_archivo' => 'volantes-15.csv',
+            'fecha_correspondiente' => '2026-08-15',
+        ]);
+        VolantePagoSocioDetalle::factory()->create([
+            'carga_id' => $cargaEsperada->id,
+            'nombre' => 'Aramis Morel Arroyo',
+        ]);
+        $otraCarga = VolantePagoSocioCarga::factory()->create([
+            'usuario_id' => null,
+            'nombre_archivo' => 'volantes-20.csv',
+            'fecha_correspondiente' => '2026-08-20',
+        ]);
+        VolantePagoSocioDetalle::factory()->create([
+            'carga_id' => $otraCarga->id,
+            'nombre' => 'Leiry Saba De León',
+        ]);
+
+        $this->get(route('contabilidad.volantes-pago-socios'))
+            ->assertOk()
+            ->assertSee('Utiliza el panel de búsqueda para consultar los volantes guardados.')
+            ->assertDontSee('Aramis Morel Arroyo')
+            ->assertDontSee('Leiry Saba De León');
+
+        $this->get(route('contabilidad.volantes-pago-socios', [
+            'nombre' => 'Aramis',
+            'fecha_desde' => '2026-08-14',
+            'fecha_hasta' => '2026-08-16',
+        ]))
+            ->assertOk()
+            ->assertSee('Aramis Morel Arroyo')
+            ->assertSee('volantes-15.csv')
+            ->assertSee('15/08/2026')
+            ->assertDontSee('Leiry Saba De León')
+            ->assertDontSee('volantes-20.csv');
+    }
+
+    public function test_rechaza_un_rango_de_fechas_invertido(): void
+    {
+        $this->get(route('contabilidad.volantes-pago-socios', [
+            'fecha_desde' => '2026-08-20',
+            'fecha_hasta' => '2026-08-15',
+        ]))
+            ->assertSessionHasErrors('fecha_hasta');
+    }
+
     public function test_genera_pdf_individual_y_lo_envia_por_correo(): void
     {
         Mail::fake();
-        $carga = \App\Models\VolantePagoSocioCarga::factory()->create(['usuario_id' => null]);
+        $carga = VolantePagoSocioCarga::factory()->create([
+            'usuario_id' => null,
+            'fecha_correspondiente' => '2026-08-15',
+        ]);
         $detalle = VolantePagoSocioDetalle::factory()->create([
             'nombre' => 'Socio Prueba',
             'carga_id' => $carga->id,
@@ -126,6 +203,8 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             ->assertOk()
             ->assertSee('Socio Prueba')
             ->assertSee('Datos de la Transacción')
+            ->assertSee('Fecha correspondiente')
+            ->assertSee('15/08/2026')
             ->assertSee('data:image/png;base64,', false);
 
         $this->get(route('contabilidad.volantes-pago-socios.pdf', $detalle))

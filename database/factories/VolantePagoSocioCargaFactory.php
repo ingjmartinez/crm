@@ -28,6 +28,7 @@ class VolantePagoSocioCargaFactory extends Factory
             'estado' => 'Completado',
             'monto_total' => 5000,
             'fecha_transaccion' => now(),
+            'fecha_correspondiente' => today(),
             'cantidad_transacciones' => 1,
             'usuario_id' => User::factory(),
         ];

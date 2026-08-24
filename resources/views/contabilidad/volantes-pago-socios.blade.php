@@ -40,97 +40,109 @@
                         <form method="POST" action="{{ route('contabilidad.volantes-pago-socios.procesar') }}"
                             enctype="multipart/form-data" class="row g-3 align-items-end">
                             @csrf
-                            <div class="col-lg-9">
+                            <div class="col-lg-6">
                                 <label for="archivo_csv" class="form-label">Archivo CSV de Banco Santa Cruz</label>
                                 <input type="file" class="form-control" id="archivo_csv" name="archivo_csv"
                                     accept=".csv,.txt,text/csv,text/plain" required>
                             </div>
                             <div class="col-lg-3">
+                                <label for="fecha_correspondiente" class="form-label">Fecha correspondiente</label>
+                                <input type="date" class="form-control" id="fecha_correspondiente"
+                                    name="fecha_correspondiente" value="{{ old('fecha_correspondiente') }}" required>
+                            </div>
+                            <div class="col-lg-3">
                                 <button type="submit" class="btn btn-primary w-100">
-                                    <i class="ri-upload-cloud-2-line align-bottom me-1"></i>Cargar archivo
+                                    <i class="ri-save-line align-bottom me-1"></i>Guardar volantes
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
 
-                @if ($carga)
-                    <div class="row g-3 mb-4">
-                        <div class="col-xl-4 col-md-6">
-                            <div class="card h-100 mb-0"><div class="card-body">
-                                <p class="text-muted mb-1">Cuenta de origen</p>
-                                <h6 class="mb-1">{{ $carga->empresa_origen }}</h6>
-                                <span>{{ $carga->cuenta_origen }}</span>
-                            </div></div>
-                        </div>
-                        <div class="col-xl-3 col-md-6">
-                            <div class="card h-100 mb-0"><div class="card-body">
-                                <p class="text-muted mb-1">Fecha de transacción</p>
-                                <h5 class="mb-0">{{ $carga->fecha_transaccion->format('d/m/Y h:i:s A') }}</h5>
-                            </div></div>
-                        </div>
-                        <div class="col-xl-2 col-md-6">
-                            <div class="card h-100 mb-0"><div class="card-body">
-                                <p class="text-muted mb-1">Transacciones</p>
-                                <h3 class="mb-0 text-primary">{{ number_format($carga->cantidad_transacciones) }}</h3>
-                            </div></div>
-                        </div>
-                        <div class="col-xl-3 col-md-6">
-                            <div class="card h-100 mb-0"><div class="card-body">
-                                <p class="text-muted mb-1">Monto total validado</p>
-                                <h3 class="mb-0 text-success">RD${{ number_format((float) $carga->monto_total, 2) }}</h3>
-                            </div></div>
-                        </div>
+                <div class="card border-primary-subtle">
+                    <div class="card-header bg-primary-subtle">
+                        <h5 class="card-title mb-1">Buscar volantes</h5>
+                        <p class="text-muted mb-0">Localiza los volantes guardados por nombre del socio y fecha correspondiente.</p>
                     </div>
+                    <div class="card-body">
+                        <form method="GET" action="{{ route('contabilidad.volantes-pago-socios') }}" class="row g-3 align-items-end">
+                            <div class="col-lg-4">
+                                <label for="nombre" class="form-label">Nombre del socio</label>
+                                <input type="search" class="form-control" id="nombre" name="nombre"
+                                    value="{{ $nombreBuscado }}" placeholder="Escribe el nombre del socio">
+                            </div>
+                            <div class="col-lg-2">
+                                <label for="fecha_desde" class="form-label">Fecha desde</label>
+                                <input type="date" class="form-control" id="fecha_desde" name="fecha_desde"
+                                    value="{{ $fechaDesdeBuscada }}">
+                            </div>
+                            <div class="col-lg-2">
+                                <label for="fecha_hasta" class="form-label">Fecha hasta</label>
+                                <input type="date" class="form-control" id="fecha_hasta" name="fecha_hasta"
+                                    value="{{ $fechaHastaBuscada }}">
+                            </div>
+                            <div class="col-lg-4 d-flex gap-2">
+                                <button type="submit" class="btn btn-primary flex-grow-1">
+                                    <i class="ri-search-line align-bottom me-1"></i>Buscar
+                                </button>
+                                <a href="{{ route('contabilidad.volantes-pago-socios') }}" class="btn btn-light">Limpiar</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
 
-                    <div class="card">
-                        <div class="card-header d-flex flex-wrap justify-content-between gap-2">
-                            <div>
-                                <h5 class="card-title mb-1">Detalle del archivo</h5>
-                                <p class="text-muted mb-0">{{ $carga->nombre_archivo }}</p>
-                            </div>
-                            <span class="badge bg-success-subtle text-success align-self-center">{{ $carga->estado }}</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-striped table-bordered align-middle w-100" id="tabla-volantes">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Nombre</th>
-                                            <th>Identificación</th>
-                                            <th>Cuenta</th>
-                                            <th>Tipo de cuenta</th>
-                                            <th class="text-end">Monto</th>
-                                            <th>Estado</th>
-                                            <th class="text-center">Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach ($detalles as $detalle)
-                                            <tr>
-                                                <td>{{ $detalle->nombre }}</td>
-                                                <td>{{ $detalle->tipo_identificacion }} · {{ $detalle->identificacion }}</td>
-                                                <td>{{ $detalle->cuenta }}</td>
-                                                <td>{{ $detalle->tipo_cuenta }}</td>
-                                                <td class="text-end fw-semibold">RD${{ number_format((float) $detalle->monto, 2) }}</td>
-                                                <td><span class="badge bg-success-subtle text-success">{{ $detalle->estado }}</span></td>
-                                                <td class="text-center">
-                                                    <button type="button" class="btn btn-sm btn-primary btn-ver-volante"
-                                                        data-nombre="{{ $detalle->nombre }}"
-                                                        data-preview="{{ route('contabilidad.volantes-pago-socios.vista-previa', $detalle) }}"
-                                                        data-download="{{ route('contabilidad.volantes-pago-socios.pdf', $detalle) }}"
-                                                        data-email="{{ route('contabilidad.volantes-pago-socios.correo', $detalle) }}">
-                                                        <i class="ri-eye-line me-1"></i>Ver volante
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-1">Volantes guardados</h5>
+                        <p class="text-muted mb-0">Consulta los volantes conservados por socio y fecha correspondiente.</p>
                     </div>
-                @endif
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered align-middle w-100">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Fecha correspondiente</th>
+                                        <th>Identificación</th>
+                                        <th>Archivo</th>
+                                        <th class="text-end">Monto</th>
+                                        <th>Estado</th>
+                                        <th class="text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse ($historial as $detalle)
+                                        <tr>
+                                            <td>{{ $detalle->nombre }}</td>
+                                            <td>{{ ($detalle->carga->fecha_correspondiente ?? $detalle->carga->fecha_transaccion)->format('d/m/Y') }}</td>
+                                            <td>{{ $detalle->tipo_identificacion }} · {{ $detalle->identificacion }}</td>
+                                            <td>{{ $detalle->carga->nombre_archivo }}</td>
+                                            <td class="text-end fw-semibold">RD${{ number_format((float) $detalle->monto, 2) }}</td>
+                                            <td><span class="badge bg-success-subtle text-success">{{ $detalle->estado }}</span></td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-primary btn-ver-volante"
+                                                    data-nombre="{{ $detalle->nombre }}"
+                                                    data-preview="{{ route('contabilidad.volantes-pago-socios.vista-previa', $detalle) }}"
+                                                    data-download="{{ route('contabilidad.volantes-pago-socios.pdf', $detalle) }}"
+                                                    data-email="{{ route('contabilidad.volantes-pago-socios.correo', $detalle) }}">
+                                                    <i class="ri-eye-line me-1"></i>Ver volante
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">
+                                                {{ $consultaRealizada ? 'No se encontraron volantes con los filtros indicados.' : 'Utiliza el panel de búsqueda para consultar los volantes guardados.' }}
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-3">{{ $historial->links() }}</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -183,14 +195,6 @@
             let currentName = '';
             let currentShareFile = null;
             let shareLoadToken = 0;
-
-            if (window.jQuery && jQuery.fn.DataTable && document.getElementById('tabla-volantes')) {
-                jQuery('#tabla-volantes').DataTable({
-                    pageLength: 25,
-                    order: [],
-                    language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json' }
-                });
-            }
 
             document.addEventListener('click', function (event) {
                 const button = event.target.closest('.btn-ver-volante');

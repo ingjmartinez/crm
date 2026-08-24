@@ -30,6 +30,7 @@
         $logoData = is_file($logoPath)
             ? 'data:image/png;base64,'.base64_encode(file_get_contents($logoPath))
             : null;
+        $fechaVolante = $detalle->carga->fecha_correspondiente ?? $detalle->carga->fecha_transaccion;
     @endphp
     <table class="top">
         <tr>
@@ -40,7 +41,7 @@
                 <div class="bank-info">Banco Santa Cruz<br>RNC: 1-02-01292-1<br>Contacto: 809-726-1000</div>
             </td>
             <td class="date">
-                {{ $detalle->carga->fecha_transaccion->format('j/n/y, H:i') }}<br><br>
+                {{ $fechaVolante->format('d/m/Y') }}<br><br>
                 Volante de pago
             </td>
         </tr>
@@ -62,7 +63,7 @@
                 <td><div class="label">Tipo de Transacción</div><div class="value">{{ $detalle->carga->tipo_transaccion }}</div></td>
             </tr>
             <tr>
-                <td colspan="2"><div class="label">Fecha de Transacción</div><div class="value">{{ $detalle->carga->fecha_transaccion->format('d/m/Y h:i:s A') }}</div></td>
+                <td colspan="2"><div class="label">Fecha correspondiente</div><div class="value">{{ $fechaVolante->format('d/m/Y') }}</div></td>
                 <td colspan="2"><div class="label">Estado</div><div class="value">{{ $detalle->estado }}</div></td>
             </tr>
         </table>

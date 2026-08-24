@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Contabilidad\CargarVolantesPagoSociosRequest;
+use App\Http\Requests\Contabilidad\ConsultarVolantesPagoSociosRequest;
 use App\Http\Requests\Contabilidad\EnviarVolantePagoSocioRequest;
 use App\Mail\VolantePagoSocioMail;
 use App\Models\VolantePagoSocioCarga;
@@ -10,7 +11,6 @@ use App\Models\VolantePagoSocioDetalle;
 use App\Services\Contabilidad\VolantePagoSocioCsvService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -22,17 +22,35 @@ class ContabilidadVolantePagoSocioController extends Controller
 {
     public function __construct(private readonly VolantePagoSocioCsvService $csvService) {}
 
-    public function index(Request $request): View
+    public function index(ConsultarVolantesPagoSociosRequest $request): View
     {
-        $cargaId = $request->integer('carga');
-        $carga = VolantePagoSocioCarga::query()
-            ->with(['detalles' => fn ($query) => $query->orderBy('numero_linea')])
-            ->when($cargaId > 0, fn ($query) => $query->whereKey($cargaId), fn ($query) => $query->latest('id'))
-            ->first();
+        $datos = $request->validated();
+        $nombre = trim((string) ($datos['nombre'] ?? ''));
+        $fechaDesde = (string) ($datos['fecha_desde'] ?? '');
+        $fechaHasta = (string) ($datos['fecha_hasta'] ?? '');
+        $consultaRealizada = $nombre !== '' || $fechaDesde !== '' || $fechaHasta !== '';
+        $historial = VolantePagoSocioDetalle::query()
+            ->with('carga')
+            ->when(! $consultaRealizada, fn ($query) => $query->whereRaw('1 = 0'))
+            ->when($nombre !== '', fn ($query) => $query->where('nombre', 'like', "%{$nombre}%"))
+            ->when(
+                $fechaDesde !== '' || $fechaHasta !== '',
+                fn ($query) => $query->whereHas('carga', function ($cargaQuery) use ($fechaDesde, $fechaHasta): void {
+                    $cargaQuery
+                        ->when($fechaDesde !== '', fn ($query) => $query->whereDate('fecha_correspondiente', '>=', $fechaDesde))
+                        ->when($fechaHasta !== '', fn ($query) => $query->whereDate('fecha_correspondiente', '<=', $fechaHasta));
+                })
+            )
+            ->latest('id')
+            ->paginate(25)
+            ->withQueryString();
 
         return view('contabilidad.volantes-pago-socios', [
-            'carga' => $carga,
-            'detalles' => $carga?->detalles ?? collect(),
+            'historial' => $historial,
+            'nombreBuscado' => $nombre,
+            'fechaDesdeBuscada' => $fechaDesde,
+            'fechaHastaBuscada' => $fechaHasta,
+            'consultaRealizada' => $consultaRealizada,
         ]);
     }
 
@@ -48,6 +66,7 @@ class ContabilidadVolantePagoSocioController extends Controller
                 ...$resultado['carga'],
                 'nombre_archivo' => $archivo->getClientOriginalName(),
                 'hash_archivo' => $ruta !== false ? hash_file('sha256', $ruta) : null,
+                'fecha_correspondiente' => $request->validated('fecha_correspondiente'),
                 'usuario_id' => $request->user()?->getAuthIdentifier(),
             ]);
             $carga->detalles()->createMany($resultado['detalles']);
@@ -55,8 +74,8 @@ class ContabilidadVolantePagoSocioController extends Controller
             return $carga;
         });
 
-        return redirect()->route('contabilidad.volantes-pago-socios', ['carga' => $carga])
-            ->with('success', "Se cargaron {$carga->cantidad_transacciones} transacciones correctamente.");
+        return redirect()->route('contabilidad.volantes-pago-socios')
+            ->with('success', "Se guardaron {$carga->cantidad_transacciones} volantes correctamente.");
     }
 
     public function vistaPrevia(VolantePagoSocioDetalle $detalle): View

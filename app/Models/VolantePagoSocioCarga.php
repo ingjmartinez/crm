@@ -15,12 +15,16 @@ class VolantePagoSocioCarga extends Model
     protected $fillable = [
         'nombre_archivo', 'hash_archivo', 'empresa_origen', 'rnc_origen', 'cuenta_origen',
         'tipo_transaccion', 'estado', 'monto_total', 'fecha_transaccion',
-        'cantidad_transacciones', 'usuario_id',
+        'fecha_correspondiente', 'cantidad_transacciones', 'usuario_id',
     ];
 
     protected function casts(): array
     {
-        return ['monto_total' => 'decimal:2', 'fecha_transaccion' => 'datetime'];
+        return [
+            'monto_total' => 'decimal:2',
+            'fecha_transaccion' => 'datetime',
+            'fecha_correspondiente' => 'date',
+        ];
     }
 
     public function detalles(): HasMany
