@@ -28,7 +28,16 @@
                                         <label class="form-label">Fecha</label>
                                         <input type="date" name="fecha" class="form-control" value="{{ $fecha ?? now()->format('Y-m-d') }}" required>
                                     </div>
-                                    <div class="col-md-9">
+                                    <div class="col-md-3">
+                                        <label for="empresa" class="form-label">Empresa</label>
+                                        <select id="empresa" name="empresa" class="form-select">
+                                            <option value="">Todas las empresas</option>
+                                            @foreach (($empresas ?? collect()) as $empresa)
+                                                <option value="{{ $empresa }}" @selected(($empresaSeleccionada ?? '') === $empresa)>{{ $empresa }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
                                         <button type="submit" class="btn btn-primary me-2" id="btn-filtrar-kpi-ventas-v">
                                             <i class="ri-filter-3-line me-1"></i>Filtrar
                                         </button>
@@ -42,6 +51,9 @@
                         <div class="alert alert-info py-2 mb-3" role="alert">
                             <strong>Fecha aplicada:</strong>
                             {{ $fecha ?? now()->format('Y-m-d') }}
+                            <span class="mx-2">|</span>
+                            <strong>Empresa:</strong>
+                            {{ ($empresaSeleccionada ?? '') !== '' ? $empresaSeleccionada : 'Todas las empresas' }}
                         </div>
                     </div>
 
@@ -357,7 +369,7 @@
                     <div class="col-12 mt-2">
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between">
-                                <h5 class="card-title mb-0">Tabla de Validación (vt_usuarios_bet)</h5>
+                                <h5 class="card-title mb-0">Ventas comparativas</h5>
                                 <span class="badge bg-light text-dark">Filtrado por día</span>
                             </div>
                             <div class="card-body">

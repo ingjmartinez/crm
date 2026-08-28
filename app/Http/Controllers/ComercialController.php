@@ -3,10 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Exports\AgenciaPlanExport;
+use App\Http\Requests\ConsultarKpiVentasVRequest;
+use App\Models\Agencia;
 use Carbon\Carbon;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Throwable;
 
@@ -75,7 +80,7 @@ class ComercialController extends Controller
     {
         $mes = $request->query('mes');
 
-        if (!is_string($mes) || !preg_match('/^\d{4}-\d{2}$/', $mes)) {
+        if (! is_string($mes) || ! preg_match('/^\d{4}-\d{2}$/', $mes)) {
             $mes = now()->format('Y-m');
         }
 
@@ -104,7 +109,7 @@ class ComercialController extends Controller
 
     private function getCantidadAgenciasConVentaPorTipo(string $mes): array
     {
-        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+        if (! preg_match('/^\d{4}-\d{2}$/', $mes)) {
             $mes = now()->format('Y-m');
         }
 
@@ -131,11 +136,13 @@ class ComercialController extends Controller
 
             if ($tipo === 'tradicional') {
                 $resultado['tradicional'] += $cantidad;
+
                 continue;
             }
 
             if ($tipo === 'no tradicional' || $tipo === 'no_tradicional') {
                 $resultado['no_tradicional'] += $cantidad;
+
                 continue;
             }
 
@@ -147,7 +154,7 @@ class ComercialController extends Controller
         return $resultado;
     }
 
-    public function kpiVentasV(Request $request)
+    public function kpiVentasV(ConsultarKpiVentasVRequest $request): View
     {
         $fechaInput = $request->query('fecha')
             ?? $request->query('fecha_inicio')
@@ -158,11 +165,13 @@ class ComercialController extends Controller
         $fechaSemanaAnterior = $fechaObj->copy()->subWeek()->format('Y-m-d');
         $fechaMesAnterior = $fechaObj->copy()->subMonthNoOverflow()->format('Y-m-d');
         $fechaAnioAnterior = $fechaObj->copy()->subYearNoOverflow()->format('Y-m-d');
+        $empresa = (string) ($request->validated('empresa') ?? '');
+        $terminalesEmpresa = $this->terminalesEmpresaKpiVentasV($empresa);
 
-        $indicadoresActual = $this->getIndicadoresBetPorRango($fecha, $fecha);
-        $indicadoresSemanaAnterior = $this->getIndicadoresBetPorRango($fechaSemanaAnterior, $fechaSemanaAnterior);
-        $indicadoresMesAnterior = $this->getIndicadoresBetPorRango($fechaMesAnterior, $fechaMesAnterior);
-        $indicadoresAnioAnterior = $this->getIndicadoresBetPorRango($fechaAnioAnterior, $fechaAnioAnterior);
+        $indicadoresActual = $this->getIndicadoresBetPorRango($fecha, $fecha, $terminalesEmpresa);
+        $indicadoresSemanaAnterior = $this->getIndicadoresBetPorRango($fechaSemanaAnterior, $fechaSemanaAnterior, $terminalesEmpresa);
+        $indicadoresMesAnterior = $this->getIndicadoresBetPorRango($fechaMesAnterior, $fechaMesAnterior, $terminalesEmpresa);
+        $indicadoresAnioAnterior = $this->getIndicadoresBetPorRango($fechaAnioAnterior, $fechaAnioAnterior, $terminalesEmpresa);
 
         $kpis = $this->extractMontosFromIndicadores($indicadoresActual);
         $ventasSemanaAnterior = $this->extractMontosFromIndicadores($indicadoresSemanaAnterior);
@@ -189,7 +198,54 @@ class ComercialController extends Controller
             'indicadoresMesAnterior' => $indicadoresMesAnterior,
             'indicadoresAnioAnterior' => $indicadoresAnioAnterior,
             'comparativasTabla' => $comparativasTabla,
+            'empresaSeleccionada' => $empresa,
+            'empresas' => $this->empresasKpiVentasV(),
         ]);
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private function empresasKpiVentasV(): Collection
+    {
+        return Agencia::query()
+            ->whereNotNull('empresa')
+            ->whereRaw("TRIM(empresa) <> ''")
+            ->orderBy('empresa')
+            ->pluck('empresa')
+            ->map(fn (mixed $empresa): string => trim((string) $empresa))
+            ->uniqueStrict()
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, string>|null
+     */
+    private function terminalesEmpresaKpiVentasV(string $empresa): ?Collection
+    {
+        if ($empresa === '') {
+            return null;
+        }
+
+        return Agencia::query()
+            ->whereNotNull('terminal')
+            ->whereRaw('TRIM(empresa) = ?', [$empresa])
+            ->pluck('terminal')
+            ->flatMap(function (mixed $terminal): array {
+                $terminalOriginal = trim((string) $terminal);
+
+                return [$terminalOriginal, $this->normalizarTerminalKpiVentasV($terminalOriginal)];
+            })
+            ->filter()
+            ->uniqueStrict()
+            ->values();
+    }
+
+    private function normalizarTerminalKpiVentasV(mixed $terminal): string
+    {
+        $normalizada = ltrim(trim((string) $terminal), '0');
+
+        return $normalizada === '' ? '0' : $normalizada;
     }
 
     private function extractMontosFromIndicadores(array $indicadores): array
@@ -267,12 +323,15 @@ class ComercialController extends Controller
         ];
     }
 
-    private function getIndicadoresBetPorRango(string $fechaInicio, string $fechaFin): array
+    /**
+     * @param  Collection<int, string>|null  $terminalesEmpresa
+     */
+    private function getIndicadoresBetPorRango(string $fechaInicio, string $fechaFin, ?Collection $terminalesEmpresa = null): array
     {
         $row = DB::table('vt_usuarios_bet')
-            ->selectRaw("COUNT(*) AS total_registros")
-            ->selectRaw("SUM(COALESCE(monto, 0)) AS monto_general")
-            ->selectRaw("COUNT(DISTINCT CASE WHEN COALESCE(monto, 0) > 0 AND agencia_id IS NOT NULL THEN TRIM(CAST(agencia_id AS CHAR)) END) AS agencias_con_venta")
+            ->selectRaw('COUNT(*) AS total_registros')
+            ->selectRaw('SUM(COALESCE(monto, 0)) AS monto_general')
+            ->selectRaw('COUNT(DISTINCT CASE WHEN COALESCE(monto, 0) > 0 AND agencia_id IS NOT NULL THEN TRIM(CAST(agencia_id AS CHAR)) END) AS agencias_con_venta')
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) = 'tradicional' THEN COALESCE(monto, 0) ELSE 0 END) AS monto_tradicional")
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) IN ('no tradicional','no_tradicional') THEN COALESCE(monto, 0) ELSE 0 END) AS monto_no_tradicional")
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tipo)) IN ('recarga','recargas') THEN COALESCE(monto, 0) ELSE 0 END) AS monto_recargas")
@@ -281,6 +340,9 @@ class ComercialController extends Controller
             ->selectRaw("COUNT(DISTINCT CASE WHEN LOWER(TRIM(tipo)) IN ('recarga','recargas') AND COALESCE(monto, 0) > 0 AND agencia_id IS NOT NULL THEN TRIM(CAST(agencia_id AS CHAR)) END) AS agencias_recargas")
             ->whereNotNull('fecha')
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->when($terminalesEmpresa !== null, function (Builder $query) use ($terminalesEmpresa): void {
+                $query->whereIn('agencia_id', $terminalesEmpresa->all());
+            })
             ->first();
 
         $tradMonto = (float) ($row->monto_tradicional ?? 0);
@@ -321,7 +383,7 @@ class ComercialController extends Controller
 
     private function parseFechaOrDefault($fecha, Carbon $default): Carbon
     {
-        if (!is_string($fecha) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+        if (! is_string($fecha) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
             return $default->copy();
         }
 
@@ -379,7 +441,7 @@ class ComercialController extends Controller
 
     private function getResumenVentasAgenciaMensual(string $mes): array
     {
-        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+        if (! preg_match('/^\d{4}-\d{2}$/', $mes)) {
             $mes = now()->format('Y-m');
         }
 
@@ -388,21 +450,21 @@ class ComercialController extends Controller
         $fechaFin = date('Y-m-t', strtotime($fechaInicio));
 
         $ventasRows = DB::table('vt_usuarios_bet')
-            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS agencia")
+            ->selectRaw('TRIM(CAST(agencia_id AS CHAR)) AS agencia')
             ->selectRaw('SUM(COALESCE(monto, 0)) AS total_vendido')
             ->whereNotNull('agencia_id')
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-            ->groupBy(DB::raw("TRIM(CAST(agencia_id AS CHAR))"))
+            ->groupBy(DB::raw('TRIM(CAST(agencia_id AS CHAR))'))
             ->orderByDesc('total_vendido')
             ->get();
 
         $premiosAotra = DB::table('pagos_aotra_empresa_bet')
-            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS agencia")
+            ->selectRaw('TRIM(CAST(agencia_id AS CHAR)) AS agencia')
             ->selectRaw('COALESCE(monto, 0) AS monto')
             ->whereBetween('fecha', [$fechaInicio, $fechaFin]);
 
         $premiosMisma = DB::table('pagos_misma_empresa_bet')
-            ->selectRaw("TRIM(CAST(agencia_id AS CHAR)) AS agencia")
+            ->selectRaw('TRIM(CAST(agencia_id AS CHAR)) AS agencia')
             ->selectRaw('COALESCE(monto, 0) AS monto')
             ->whereBetween('fecha', [$fechaInicio, $fechaFin]);
 
@@ -415,12 +477,13 @@ class ComercialController extends Controller
         $premiosByAgencia = $premiosRows
             ->mapWithKeys(function ($row) {
                 $agencia = (string) ($row->agencia ?? '');
+
                 return [$agencia => (float) ($row->premios_pagados ?? 0)];
             })
             ->toArray();
 
         $nombresAgenciaByTerminal = DB::table('agencias')
-            ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal")
+            ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')
             ->selectRaw('TRIM(COALESCE(nombre_agencia, "")) AS nombre_agencia')
             ->whereNotNull('terminal')
             ->get()
@@ -482,13 +545,13 @@ class ComercialController extends Controller
         @ini_set('max_execution_time', '300');
 
         $mes = trim((string) $request->query('mes', now()->format('Y-m')));
-        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+        if (! preg_match('/^\d{4}-\d{2}$/', $mes)) {
             $mes = now()->format('Y-m');
         }
 
         $sistemas = ['Lotonet', 'Lotobet'];
         $sistema = trim((string) $request->query('sistema', 'Lotonet'));
-        if (!in_array($sistema, $sistemas, true)) {
+        if (! in_array($sistema, $sistemas, true)) {
             $sistema = 'Lotonet';
         }
 
@@ -522,7 +585,7 @@ class ComercialController extends Controller
                 ->orderByDesc('fecha')
                 ->value('fecha');
 
-            if (!empty($fechaCorteData)) {
+            if (! empty($fechaCorteData)) {
                 $rangoFin = Carbon::parse($fechaCorteData)->toDateString();
 
                 $ventasDiarias = DB::table("{$tabla} as v")
@@ -557,7 +620,7 @@ class ComercialController extends Controller
                     ->get();
 
                 $nombresAgencia = DB::table('agencias')
-                    ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal")
+                    ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')
                     ->selectRaw("TRIM(COALESCE(nombre_agencia, '')) AS nombre_agencia")
                     ->whereNotNull('terminal')
                     ->get()
@@ -630,6 +693,7 @@ class ComercialController extends Controller
         $handle = fopen($path, 'rb');
         if ($handle === false) {
             $payload['errores'][] = 'No se pudo abrir el archivo cargado.';
+
             return $payload;
         }
 
@@ -650,6 +714,7 @@ class ComercialController extends Controller
                 if (in_array('NumeroExterno3', $row, true)) {
                     $header = $row;
                 }
+
                 continue;
             }
 
@@ -662,7 +727,7 @@ class ComercialController extends Controller
             }
 
             $assoc = array_combine($header, array_slice($row, 0, count($header)));
-            if (!is_array($assoc)) {
+            if (! is_array($assoc)) {
                 continue;
             }
 
@@ -700,7 +765,7 @@ class ComercialController extends Controller
 
                 $fila['producto'] = count($productos) <= 1
                     ? ($productos[0] ?? '')
-                    : 'Varios (' . count($productos) . ')';
+                    : 'Varios ('.count($productos).')';
 
                 return $fila;
             })
@@ -718,7 +783,7 @@ class ComercialController extends Controller
             ? $fila['cedula']
             : implode('|', [$fila['numero_externo'], $fila['banca'], $fila['descripcion']]);
 
-        if (!isset($cedulas[$key])) {
+        if (! isset($cedulas[$key])) {
             $cedulas[$key] = [
                 'numero_externo' => $fila['numero_externo'],
                 'banca' => $fila['banca'],
@@ -758,7 +823,7 @@ class ComercialController extends Controller
             $fila['turno'],
         ]);
 
-        if (!isset($cedulas[$key]['turnos'][$turnoKey])) {
+        if (! isset($cedulas[$key]['turnos'][$turnoKey])) {
             $cedulas[$key]['turnos'][$turnoKey] = [
                 'tickets_tradicional' => [],
                 'ventas_tradicional' => [],
@@ -855,7 +920,7 @@ class ComercialController extends Controller
     {
         $value = str_replace([',', 'RD$', '$', ' '], '', (string) $value);
 
-        if ($value === '' || !is_numeric($value)) {
+        if ($value === '' || ! is_numeric($value)) {
             return 0.0;
         }
 

@@ -306,6 +306,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Agencia sin cuadrar',
+                'descripcion' => 'Clasifica por terminal los depósitos y retiros pendientes de cuadrar desde un archivo CSV.',
+                'url' => '/operaciones/agencias-sin-cuadrar',
+                'icono' => 'ri-error-warning-line',
+                'categoria' => 'Reportes',
+                'tags' => ['agencias', 'cuadre', 'depositos', 'retiros', 'csv'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Movimientos por Ruta',
                 'descripcion' => 'Analiza retiros y depositos por ruta desde el informe de transacciones.',
                 'url' => '/operaciones/movimientos-rutas',

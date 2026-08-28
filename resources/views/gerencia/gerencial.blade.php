@@ -55,7 +55,18 @@
                                             @endfor
                                         </select>
                                     </div>
-                                    <div class="col-12 col-lg-6">
+                                    <div class="col-12 col-md-4 col-lg-2">
+                                        <label class="form-label" for="empresa">Empresa</label>
+                                        <select id="empresa" name="empresa" class="form-select">
+                                            <option value="">Todas las empresas</option>
+                                            @foreach (($empresas ?? collect()) as $empresa)
+                                                <option value="{{ $empresa }}" @selected(($empresaSeleccionada ?? '') === $empresa)>
+                                                    {{ $empresa }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-lg-4">
                                         <label class="form-label d-none d-lg-block">Acciones</label>
                                         <div class="d-flex flex-wrap gap-2">
                                             <button type="submit" class="btn btn-primary" id="btn-filtrar-gerencial">
@@ -275,6 +286,7 @@
                                 <tr>
                                     <th style="width: 160px;">Codigo agencia</th>
                                     <th>Nombre agencia</th>
+                                    <th style="width: 180px;">Ciudad</th>
                                     <th style="width: 140px;">Categoria inicio</th>
                                     <th style="width: 200px;">Rango inicio</th>
                                     <th style="width: 140px;">Categoria fin</th>
@@ -501,6 +513,7 @@
             const inputAnio = document.getElementById('anio');
             const inputMesInicio = document.getElementById('mes_inicio');
             const inputMesFin = document.getElementById('mes_fin');
+            const inputEmpresaPdf = document.getElementById('empresa');
             const mapMeses = {
                 1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
                 7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
@@ -508,6 +521,7 @@
             const anio = inputAnio?.value || '';
             const mesInicio = mapMeses[Number(inputMesInicio?.value)] || '';
             const mesFin = mapMeses[Number(inputMesFin?.value)] || '';
+            const empresaPdf = inputEmpresaPdf?.value || 'Todas las empresas';
             let periodo = '';
             if (anio && mesInicio && mesFin) {
                 periodo = `Periodo analizado: ${mesInicio} vs ${mesFin} de ${anio}`;
@@ -530,6 +544,10 @@
             } else {
                 y += 10;
             }
+            doc.setFontSize(10);
+            doc.setTextColor(90, 90, 90);
+            doc.text('Empresa: ' + empresaPdf, margin, y);
+            y += 16;
             y += 18;
 
             // =========================
@@ -834,6 +852,7 @@
         const inputAnio = document.getElementById('anio');
         const inputMesInicio = document.getElementById('mes_inicio');
         const inputMesFin = document.getElementById('mes_fin');
+        const inputEmpresa = document.getElementById('empresa');
         const thMesInicio = document.getElementById('th-mes-inicio');
         const thMesFin = document.getElementById('th-mes-fin');
         const tituloComparativa = document.getElementById('titulo-comparativa');
@@ -929,6 +948,13 @@
                         return renderTextoTruncado(data || '-', 280);
                     }
                 },
+                {
+                    data: 'ciudad',
+                    defaultContent: 'Sin ciudad registrada',
+                    render: function (data) {
+                        return renderTextoTruncado(data || 'Sin ciudad registrada', 180);
+                    }
+                },
                 { data: 'categoria_inicio', defaultContent: '-', className: 'text-center text-nowrap' },
                 {
                     data: 'rango_inicio',
@@ -950,11 +976,12 @@
             columnDefs: [
                 { targets: 0, width: '140px', responsivePriority: 2 },
                 { targets: 1, width: '280px', responsivePriority: 1 },
-                { targets: 2, width: '120px', responsivePriority: 3 },
-                { targets: 3, width: '220px', responsivePriority: 5 },
-                { targets: 4, width: '120px', responsivePriority: 4 },
-                { targets: 5, width: '220px', responsivePriority: 6 },
-                { targets: 6, width: '130px', responsivePriority: 2 }
+                { targets: 2, width: '180px', responsivePriority: 3 },
+                { targets: 3, width: '120px', responsivePriority: 4 },
+                { targets: 4, width: '220px', responsivePriority: 6 },
+                { targets: 5, width: '120px', responsivePriority: 5 },
+                { targets: 6, width: '220px', responsivePriority: 7 },
+                { targets: 7, width: '130px', responsivePriority: 2 }
             ],
             language: {
                 paginate: {
@@ -1156,6 +1183,7 @@
                     return {
                         codigo_agencia: item.codigo_agencia || '-',
                         nombre_agencia: item.nombre_agencia || '-',
+                        ciudad: item.ciudad || 'Sin ciudad registrada',
                         categoria_inicio: item.categoria_inicio || '-',
                         rango_inicio: getRangoCategoria(item.categoria_inicio),
                         categoria_fin: item.categoria_fin || '-',
@@ -1192,6 +1220,7 @@
                 return {
                     codigo_agencia: item.codigo_agencia,
                     nombre_agencia: item.nombre_agencia,
+                    ciudad: item.ciudad,
                     categoria_inicio: item.categoria_inicio,
                     rango_inicio: item.rango_inicio,
                     categoria_fin: item.categoria_fin,
@@ -1208,7 +1237,7 @@
                 return;
             }
 
-            const headers = ['codigo_agencia', 'nombre_agencia', 'categoria_inicio', 'rango_inicio', 'categoria_fin', 'rango_fin', 'movimiento'];
+            const headers = ['codigo_agencia', 'nombre_agencia', 'ciudad', 'categoria_inicio', 'rango_inicio', 'categoria_fin', 'rango_fin', 'movimiento'];
             const csv = [headers.join(',')]
                 .concat(filas.map(function (row) {
                     return headers.map(function (key) {
@@ -1413,6 +1442,7 @@
                 anio: inputAnio?.value || '{{ now()->year }}',
                 mes_inicio: inputMesInicio?.value || '',
                 mes_fin: inputMesFin?.value || '',
+                empresa: inputEmpresa?.value || '',
                 agencia_aaa: configuracion.agencia.AAA,
                 agencia_aa: configuracion.agencia.AA,
                 agencia_a: configuracion.agencia.A,

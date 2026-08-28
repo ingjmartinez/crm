@@ -3,33 +3,41 @@
 namespace App\Http\Controllers\Gerencia;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ConsultarGerencialRequest;
+use App\Models\Agencia;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
 
 class GerencialController extends Controller
 {
-    public function index(Request $request)
+    public function index(ConsultarGerencialRequest $request): View
     {
         $anio = $this->normalizeYear($request->query('anio'));
         $mesInicio = $this->normalizeMonth($request->query('mes_inicio'));
         $mesFin = $this->normalizeMonth($request->query('mes_fin'));
+        $empresa = trim((string) ($request->validated('empresa') ?? ''));
         $configuracion = $this->resolveThresholdConfig($request);
 
         return view('gerencia.gerencial', [
             'anioSeleccionado' => $anio,
             'mesInicioSeleccionado' => $mesInicio,
             'mesFinSeleccionado' => $mesFin,
+            'empresaSeleccionada' => $empresa,
+            'empresas' => $this->empresasDisponibles(),
             'configuracionClasificacion' => $configuracion,
         ]);
     }
 
-    public function data(Request $request): JsonResponse
+    public function data(ConsultarGerencialRequest $request): JsonResponse
     {
         $anio = $this->normalizeYear($request->query('anio'));
         $mesInicio = $this->normalizeMonth($request->query('mes_inicio'));
         $mesFin = $this->normalizeMonth($request->query('mes_fin'));
+        $empresa = trim((string) ($request->validated('empresa') ?? ''));
         $configuracion = $this->resolveThresholdConfig($request);
 
         if ($mesInicio === null || $mesFin === null || $mesInicio === $mesFin) {
@@ -39,6 +47,7 @@ class GerencialController extends Controller
                     'anio' => $anio,
                     'mes_inicio' => $mesInicio,
                     'mes_fin' => $mesFin,
+                    'empresa' => $empresa,
                     'configuracion' => $configuracion,
                 ],
             ]);
@@ -46,7 +55,7 @@ class GerencialController extends Controller
 
         set_time_limit(300);
 
-        $ventasPorAgenciaMes = $this->ventasAgenciasPorMes($anio, $mesInicio, $mesFin);
+        $ventasPorAgenciaMes = $this->ventasAgenciasPorMes($anio, $mesInicio, $mesFin, $empresa);
         $clasificadas = $this->clasificarVentasAgencias($ventasPorAgenciaMes, $configuracion['agencia']);
         $resultados = $this->resumenClasificacionesAgencias($clasificadas, $mesInicio, $mesFin);
         $transicionesAgencias = $this->transicionesAgencias($clasificadas, $mesInicio, $mesFin);
@@ -60,6 +69,7 @@ class GerencialController extends Controller
                 'anio' => $anio,
                 'mes_inicio' => $mesInicio,
                 'mes_fin' => $mesFin,
+                'empresa' => $empresa,
                 'configuracion' => $configuracion,
             ],
         ]);
@@ -90,7 +100,7 @@ class GerencialController extends Controller
         return $month;
     }
 
-    private function ventasAgenciasPorMes(int $anio, int $mesInicio, int $mesFin)
+    private function ventasAgenciasPorMes(int $anio, int $mesInicio, int $mesFin, string $empresa): Collection
     {
         $inicioDesde = Carbon::create($anio, $mesInicio, 1)->startOfDay();
         $inicioHasta = $inicioDesde->copy()->addMonthNoOverflow();
@@ -139,7 +149,7 @@ FROM (
 GROUP BY agencia_id, mes
 SQL;
 
-        return collect(DB::select($sql, [
+        $ventas = collect(DB::select($sql, [
             $mesInicio,
             $inicioDesde->toDateTimeString(),
             $inicioHasta->toDateTimeString(),
@@ -153,6 +163,54 @@ SQL;
             $finDesde->toDateTimeString(),
             $finHasta->toDateTimeString(),
         ]));
+
+        return $this->filtrarVentasPorEmpresa($ventas, $empresa);
+    }
+
+    /**
+     * @param  Collection<int, object>  $ventas
+     * @return Collection<int, object>
+     */
+    private function filtrarVentasPorEmpresa(Collection $ventas, string $empresa): Collection
+    {
+        if ($empresa === '') {
+            return $ventas;
+        }
+
+        $terminales = Agencia::query()
+            ->whereNotNull('terminal')
+            ->whereRaw('TRIM(empresa) = ?', [$empresa])
+            ->pluck('terminal')
+            ->map(fn (mixed $terminal): string => $this->normalizarTerminal($terminal))
+            ->flip();
+
+        return $ventas
+            ->filter(fn (object $venta): bool => $terminales->has(
+                $this->normalizarTerminal($venta->agencia_id ?? '')
+            ))
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private function empresasDisponibles(): Collection
+    {
+        return Agencia::query()
+            ->whereNotNull('empresa')
+            ->whereRaw("TRIM(empresa) <> ''")
+            ->orderBy('empresa')
+            ->pluck('empresa')
+            ->map(fn (mixed $empresa): string => trim((string) $empresa))
+            ->unique()
+            ->values();
+    }
+
+    private function normalizarTerminal(mixed $terminal): string
+    {
+        $normalizada = ltrim(trim((string) $terminal), '0');
+
+        return $normalizada === '' ? '0' : $normalizada;
     }
 
     private function clasificarVentasAgencias($ventasPorAgenciaMes, array $umbrales)
@@ -168,7 +226,7 @@ SQL;
                     'categoria' => $this->clasificarMontoAgencia($total, $umbrales),
                 ];
             })
-            ->filter(fn($row) => $row['agencia_id'] !== '' && $row['mes'] > 0)
+            ->filter(fn ($row) => $row['agencia_id'] !== '' && $row['mes'] > 0)
             ->values();
     }
 
@@ -210,7 +268,7 @@ SQL;
             ->map(function ($items) use ($mesInicio, $mesFin) {
                 $inicio = $items->firstWhere('mes', $mesInicio);
 
-                if (!$inicio) {
+                if (! $inicio) {
                     return null;
                 }
 
@@ -222,7 +280,7 @@ SQL;
                 ];
             })
             ->filter()
-            ->groupBy(fn($item) => $item['categoria_inicio'] . '|' . $item['categoria_fin'])
+            ->groupBy(fn ($item) => $item['categoria_inicio'].'|'.$item['categoria_fin'])
             ->map(function ($items, $key) {
                 [$inicio, $fin] = explode('|', $key);
 
@@ -249,21 +307,23 @@ SQL;
             ->where('mes', $mesFin)
             ->keyBy('agencia_id');
         $agencias = DB::table('agencias')
-            ->whereIn('terminal', $inicioPorAgencia->keys()->all())
-            ->select('terminal', 'nombre_agencia')
+            ->whereNotNull('terminal')
+            ->select('terminal', 'nombre_agencia', 'ciudad')
             ->get()
-            ->keyBy(fn($row) => (string) $row->terminal);
+            ->keyBy(fn ($row): string => $this->normalizarTerminal($row->terminal));
         $orden = array_flip($this->ordenCategoriasAgencia());
 
         return $inicioPorAgencia
             ->map(function ($inicio, $agenciaId) use ($finPorAgencia, $agencias) {
-                $agencia = $agencias->get((string) $agenciaId);
+                $agencia = $agencias->get($this->normalizarTerminal($agenciaId));
+                $ciudad = trim((string) ($agencia->ciudad ?? ''));
 
                 return [
                     'codigo_agencia' => (string) $agenciaId,
                     'nombre_agencia' => $agencia && trim((string) $agencia->nombre_agencia) !== ''
                         ? (string) $agencia->nombre_agencia
-                        : 'Agencia ' . $agenciaId,
+                        : 'Agencia '.$agenciaId,
+                    'ciudad' => $ciudad !== '' ? $ciudad : 'Sin ciudad registrada',
                     'categoria_inicio' => $inicio['categoria'],
                     'categoria_fin' => $finPorAgencia->get($agenciaId)['categoria'] ?? 'D',
                 ];
@@ -271,20 +331,24 @@ SQL;
             ->sortBy(function ($item) use ($orden) {
                 return (($orden[$item['categoria_inicio']] ?? 99) * 10)
                     + ($orden[$item['categoria_fin']] ?? 99)
-                    . '|' . $item['nombre_agencia']
-                    . '|' . $item['codigo_agencia'];
+                    .'|'.$item['nombre_agencia']
+                    .'|'.$item['codigo_agencia'];
             })
             ->values();
     }
 
     private function ventasAgenciaIndexHint(string $table, string $coveringIndex, string $fallbackIndex): string
     {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return '';
+        }
+
         static $cache = [];
 
         foreach ([$coveringIndex, $fallbackIndex] as $indexName) {
-            $cacheKey = strtolower($table . ':' . $indexName);
+            $cacheKey = strtolower($table.':'.$indexName);
 
-            if (!array_key_exists($cacheKey, $cache)) {
+            if (! array_key_exists($cacheKey, $cache)) {
                 $database = DB::getDatabaseName();
                 $row = DB::selectOne(
                     'SELECT COUNT(*) AS total FROM information_schema.statistics WHERE table_schema = ? AND LOWER(table_name) = LOWER(?) AND LOWER(index_name) = LOWER(?)',

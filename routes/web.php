@@ -40,6 +40,7 @@ use App\Http\Controllers\MetaIncentivoController;
 use App\Http\Controllers\ModuleHubController;
 use App\Http\Controllers\NovedadHorarioController;
 use App\Http\Controllers\OperacionDepositoRutaController;
+use App\Http\Controllers\OperacionesAgenciasSinCuadrarController;
 use App\Http\Controllers\OperacionesMovimientosRutasController;
 use App\Http\Controllers\OperacionesMovimientosRutasV2Controller;
 use App\Http\Controllers\OperacionesReporteDiarioController;
@@ -521,6 +522,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/operaciones/gestion', fn () => view('operaciones.gestion'))->name('operaciones.gestion');
     Route::get('/operaciones/rutas-consolidadas', [OperacionesRutasConsolidadasController::class, 'index'])->name('operaciones.rutas-consolidadas');
     Route::post('/operaciones/rutas-consolidadas/procesar', [OperacionesRutasConsolidadasController::class, 'procesar'])->name('operaciones.rutas-consolidadas.procesar');
+    Route::get('/operaciones/agencias-sin-cuadrar', [OperacionesAgenciasSinCuadrarController::class, 'index'])->name('operaciones.agencias-sin-cuadrar');
+    Route::post('/operaciones/agencias-sin-cuadrar/procesar', [OperacionesAgenciasSinCuadrarController::class, 'procesar'])->name('operaciones.agencias-sin-cuadrar.procesar');
     Route::get('/operaciones/movimientos-rutas', [OperacionesMovimientosRutasController::class, 'index'])->name('operaciones.movimientos-rutas');
     Route::post('/operaciones/movimientos-rutas/procesar', [OperacionesMovimientosRutasController::class, 'procesar'])->name('operaciones.movimientos-rutas.procesar');
     Route::get('/operaciones/movimientos-rutas-v2', [OperacionesMovimientosRutasV2Controller::class, 'index'])->name('operaciones.movimientos-rutas-v2');
