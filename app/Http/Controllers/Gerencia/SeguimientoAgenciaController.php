@@ -100,6 +100,7 @@ class SeguimientoAgenciaController extends Controller
                 'coordinador' => $request->query('coordinador'),
                 'ruta' => $request->query('ruta'),
                 'agencia' => $request->query('agencia'),
+                'buscar' => trim((string) $request->query('buscar')) ?: null,
             ],
             'metas' => [
                 'tradicional' => (float) $request->query('meta_tradicional', 7000),

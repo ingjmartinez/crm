@@ -31,6 +31,7 @@ class ConsultarSeguimientoAgenciaRequest extends FormRequest
             'coordinador' => ['nullable', 'string', 'max:150'],
             'ruta' => ['nullable', 'string', 'max:150'],
             'agencia' => ['nullable', 'string', 'max:150'],
+            'buscar' => ['nullable', 'string', 'max:150'],
             'meta_tradicional' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
             'meta_no_tradicional' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
             'meta_recargas' => ['nullable', 'numeric', 'min:0', 'max:999999999'],

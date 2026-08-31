@@ -110,6 +110,8 @@ class SeguimientoAgenciaTest extends TestCase
         $this->assertStringContainsString('<th>Ver</th>', $source);
         $this->assertStringContainsString('modalDetalleSeguimiento', $source);
         $this->assertStringContainsString('<div class="row g-4 mb-5">', $source);
+        $this->assertStringContainsString('name="buscar"', $source);
+        $this->assertStringContainsString('Nombre de agencia o terminal', $source);
     }
 
     public function test_daily_modal_detail_marks_compliant_and_non_compliant_days_by_product(): void
@@ -179,5 +181,45 @@ class SeguimientoAgenciaTest extends TestCase
         $this->assertSame('2026-06', $view->getData()['mesSeleccionado']);
 
         Carbon::setTestNow();
+    }
+
+    public function test_filters_agencies_by_partial_name_or_terminal_digits(): void
+    {
+        DB::table('agencias')->insert([
+            [
+                'terminal' => '0012345',
+                'agencia' => 'A-12345',
+                'nombre_agencia' => 'Agencia Centro Colonial',
+                'sistema' => 'Lotobet',
+                'estatus' => 1,
+            ],
+            [
+                'terminal' => '0098765',
+                'agencia' => 'A-98765',
+                'nombre_agencia' => 'Agencia Norte',
+                'sistema' => 'Lotobet',
+                'estatus' => 1,
+            ],
+        ]);
+        $servicio = app(SeguimientoAgenciaService::class);
+        $metas = ['tradicional' => 7000, 'no_tradicional' => 1500, 'recargas' => 700];
+
+        $porNombre = $servicio->generar(
+            Carbon::parse('2026-07-01'),
+            Carbon::parse('2026-07-02'),
+            ['sistema' => 'lotobet', 'buscar' => 'Centro'],
+            $metas
+        );
+        $porTerminal = $servicio->generar(
+            Carbon::parse('2026-07-01'),
+            Carbon::parse('2026-07-02'),
+            ['sistema' => 'lotobet', 'buscar' => '987'],
+            $metas
+        );
+
+        $this->assertSame(1, $porNombre['resumen']['agencias']);
+        $this->assertSame(['0012345'], $porNombre['filas']->pluck('terminal')->unique()->values()->all());
+        $this->assertSame(1, $porTerminal['resumen']['agencias']);
+        $this->assertSame(['0098765'], $porTerminal['filas']->pluck('terminal')->unique()->values()->all());
     }
 }

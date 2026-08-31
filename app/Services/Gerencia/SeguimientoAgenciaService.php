@@ -218,6 +218,15 @@ class SeguimientoAgenciaService
                     $subquery->where('nombre_agencia', $valor)->orWhere('agencia', $valor)->orWhere('terminal', $valor);
                 });
             })
+            ->when($filtros['buscar'] ?? null, function (Builder $query, string $valor): void {
+                $query->where(function (Builder $subquery) use ($valor): void {
+                    $busqueda = '%'.$valor.'%';
+
+                    $subquery->where('nombre_agencia', 'like', $busqueda)
+                        ->orWhere('agencia', 'like', $busqueda)
+                        ->orWhere('terminal', 'like', $busqueda);
+                });
+            })
             ->get(['id', 'empresa', 'ciudad', 'coordinador', 'ruta', 'nombre_agencia', 'agencia', 'terminal', 'sistema']);
     }
 

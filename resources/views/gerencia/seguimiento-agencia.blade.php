@@ -64,6 +64,10 @@
                                 </select>
                             </div>
                         @endforeach
+                        <div class="col-md-4">
+                            <label class="form-label" for="buscar-agencia-terminal">Nombre de agencia o terminal</label>
+                            <input type="search" class="form-control" id="buscar-agencia-terminal" name="buscar" value="{{ $filtros['buscar'] ?? '' }}" placeholder="Ej.: Agencia Centro o 00123">
+                        </div>
                         <div class="col-12 d-flex flex-wrap gap-2 mt-3">
                             <button class="btn btn-primary" type="submit" id="btn-generar-seguimiento"><i class="ri-bar-chart-box-line me-1"></i>Generar informe</button>
                             <button class="btn btn-soft-primary" type="button" data-bs-toggle="modal" data-bs-target="#modalMetasSeguimiento"><i class="ri-settings-3-line me-1"></i>Configurar metas</button>

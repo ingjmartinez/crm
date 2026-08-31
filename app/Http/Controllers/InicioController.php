@@ -91,7 +91,7 @@ class InicioController extends Controller
 
     private function parseFechaOrDefault($fecha, Carbon $default): Carbon
     {
-        if (!is_string($fecha) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+        if (! is_string($fecha) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
             return $default->copy();
         }
 
@@ -108,10 +108,10 @@ class InicioController extends Controller
             @set_time_limit(300);
         }
 
-        $cacheKey = 'inicio_resumen_ventas:v9:' . sha1(
-            InicioVentasCache::version() . '|' .
-            $fechaInicio->toDateTimeString() . '|' .
-            $fechaFin->toDateTimeString() . '|' .
+        $cacheKey = 'inicio_resumen_ventas:v10:'.sha1(
+            InicioVentasCache::version().'|'.
+            $fechaInicio->toDateTimeString().'|'.
+            $fechaFin->toDateTimeString().'|'.
             mb_strtolower($empresa)
         );
 
@@ -139,8 +139,9 @@ class InicioController extends Controller
         $resumen = $this->emptyResumenVentas();
         $catalogoProductos = $this->getCatalogoProductos();
         $agenciasActivasMap = $this->getAgenciasActivasMap($empresa);
-        $resumenLotobet = $this->getResumenVentasPorTabla('vt_usuarios_bet', $fechaInicio, $fechaFin, $catalogoProductos, $agenciasActivasMap);
-        $resumenLotonet = $this->getResumenVentasPorTabla('vt_usuarios_net', $fechaInicio, $fechaFin, $catalogoProductos, $agenciasActivasMap);
+        $terminalesEmpresaMap = $this->getTerminalesEmpresaMap($empresa);
+        $resumenLotobet = $this->getResumenVentasPorTabla('vt_usuarios_bet', $fechaInicio, $fechaFin, $catalogoProductos, $terminalesEmpresaMap);
+        $resumenLotonet = $this->getResumenVentasPorTabla('vt_usuarios_net', $fechaInicio, $fechaFin, $catalogoProductos, $terminalesEmpresaMap);
 
         $resumen['sistemas']['Lotobet'] = $resumenLotobet;
         $resumen['sistemas']['Lotonet'] = $resumenLotonet;
@@ -167,19 +168,18 @@ class InicioController extends Controller
         $agenciasConVentaIds = collect(array_merge(
             $resumenLotobet['agencias_con_venta_ids'] ?? [],
             $resumenLotonet['agencias_con_venta_ids'] ?? []
-        ))->unique()->values()->all();
-
-        $agenciasConVenta = 0;
-
-        foreach ($agenciasConVentaIds as $agenciaId) {
-            if (isset($agenciasActivasMap[$agenciaId])) {
-                $agenciasConVenta++;
-            }
-        }
+        ))
+            ->map(fn ($agenciaId): string => (string) $agenciaId)
+            ->uniqueStrict()
+            ->values()
+            ->all();
 
         $totalAgenciasActivas = count($agenciasActivasMap);
-        $resumen['agencias_con_venta'] = $agenciasConVenta;
-        $resumen['agencias_sin_venta'] = max(0, $totalAgenciasActivas - $agenciasConVenta);
+        $agenciasActivasConVenta = collect($agenciasConVentaIds)
+            ->filter(fn (string $agenciaId): bool => isset($agenciasActivasMap[$agenciaId]))
+            ->count();
+        $resumen['agencias_con_venta'] = count($agenciasConVentaIds);
+        $resumen['agencias_sin_venta'] = max(0, $totalAgenciasActivas - $agenciasActivasConVenta);
         $resumen['agencias_sin_ventas'] = collect($agenciasActivasMap)
             ->reject(function ($agenciaData, $agenciaId) use ($agenciasConVentaIds) {
                 return in_array((string) $agenciaId, $agenciasConVentaIds, true);
@@ -210,10 +210,10 @@ class InicioController extends Controller
             foreach ($productosSistema as $productoId => $producto) {
                 $key = (string) $productoId;
 
-                if (!isset($productosCombinados[$key])) {
+                if (! isset($productosCombinados[$key])) {
                     $productosCombinados[$key] = [
                         'producto_id' => $key,
-                        'nombre' => (string) ($producto['nombre'] ?? ('Producto ' . $key)),
+                        'nombre' => (string) ($producto['nombre'] ?? ('Producto '.$key)),
                         'tipo' => (string) ($producto['tipo'] ?? 'otros'),
                         'total' => 0,
                         'agencias_ids' => [],
@@ -259,9 +259,8 @@ class InicioController extends Controller
         try {
             $resumen['balance_mensual'] = $this->getBalanceMensualPorDia(
                 $fechaFin->copy()->startOfDay(),
-                $empresa,
                 $catalogoProductos,
-                $agenciasActivasMap
+                $terminalesEmpresaMap
             );
         } catch (\Throwable $e) {
             Log::warning('InicioController: fallo en balance mensual, se aplica fallback', [
@@ -276,7 +275,7 @@ class InicioController extends Controller
         return $resumen;
     }
 
-    private function getBalanceMensualPorDia(Carbon $fechaSeleccionada, string $empresa, array $catalogoProductos, array $agenciasActivasMap): array
+    private function getBalanceMensualPorDia(Carbon $fechaSeleccionada, array $catalogoProductos, ?array $terminalesEmpresaMap): array
     {
         $inicioMes = $fechaSeleccionada->copy()->startOfMonth();
         $finMes = $fechaSeleccionada->copy()->endOfMonth();
@@ -298,7 +297,7 @@ class InicioController extends Controller
             $cursor->addDay();
         }
 
-        if (empty($agenciasActivasMap)) {
+        if ($terminalesEmpresaMap !== null && empty($terminalesEmpresaMap)) {
             return [
                 'dias' => $dias,
                 'ingresos' => $ingresos,
@@ -311,22 +310,24 @@ class InicioController extends Controller
             ];
         }
 
-        $agenciasActivas = array_keys($agenciasActivasMap);
         $totalesPorFechaTipo = [];
 
         foreach (['vt_usuarios_bet', 'vt_usuarios_net'] as $tabla) {
-            $rows = DB::table($tabla . ' as v')
+            $rows = DB::table($tabla.' as v')
                 ->selectRaw('DATE(v.fecha) AS fecha')
                 ->selectRaw('v.producto_id')
                 ->selectRaw('SUM(COALESCE(v.monto, 0)) AS total')
                 ->whereBetween('v.fecha', [$inicioMes->toDateTimeString(), $finMes->toDateTimeString()])
-                ->whereIn(DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'), $agenciasActivas)
+                ->when($terminalesEmpresaMap !== null, fn ($query) => $query->whereIn(
+                    DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'),
+                    array_map('strval', array_keys($terminalesEmpresaMap))
+                ))
                 ->groupByRaw('DATE(v.fecha), v.producto_id')
                 ->get();
 
             foreach ($rows as $row) {
                 $fecha = (string) ($row->fecha ?? '');
-                if ($fecha === '' || !isset($indexPorFecha[$fecha])) {
+                if ($fecha === '' || ! isset($indexPorFecha[$fecha])) {
                     continue;
                 }
 
@@ -334,11 +335,11 @@ class InicioController extends Controller
                 $tipoBase = (string) ($catalogoProductos[$productoId]['tipo'] ?? 'otros');
                 $tipo = $this->normalizeTipo($tipoBase);
 
-                if (!in_array($tipo, ['tradicional', 'no_tradicional', 'recargas'], true)) {
+                if (! in_array($tipo, ['tradicional', 'no_tradicional', 'recargas'], true)) {
                     continue;
                 }
 
-                if (!isset($totalesPorFechaTipo[$fecha])) {
+                if (! isset($totalesPorFechaTipo[$fecha])) {
                     $totalesPorFechaTipo[$fecha] = [
                         'tradicional' => 0.0,
                         'no_tradicional' => 0.0,
@@ -369,16 +370,16 @@ class InicioController extends Controller
         ];
     }
 
-    private function getResumenVentasPorTabla(string $tabla, Carbon $fechaInicio, Carbon $fechaFin, array $catalogoProductos, array $agenciasActivasMap): array
+    private function getResumenVentasPorTabla(string $tabla, Carbon $fechaInicio, Carbon $fechaFin, array $catalogoProductos, ?array $terminalesEmpresaMap): array
     {
-        $rows = DB::table($tabla . ' as v')
-            ->selectRaw("TRIM(CAST(v.agencia_id AS CHAR)) AS agencia_id")
+        $rows = DB::table($tabla.' as v')
+            ->selectRaw('TRIM(CAST(v.agencia_id AS CHAR)) AS agencia_id')
             ->selectRaw('v.producto_id')
             ->selectRaw('MAX(v.tipo) AS tipo')
             ->selectRaw('SUM(COALESCE(v.monto, 0)) AS total')
             ->selectRaw('COUNT(*) AS registros')
             ->whereBetween('v.fecha', [$fechaInicio->toDateTimeString(), $fechaFin->toDateTimeString()])
-            ->groupByRaw("TRIM(CAST(v.agencia_id AS CHAR)), v.producto_id")
+            ->groupByRaw('TRIM(CAST(v.agencia_id AS CHAR)), v.producto_id')
             ->get();
 
         $resumen = [
@@ -406,7 +407,7 @@ class InicioController extends Controller
             $productoId = (string) ($row->producto_id ?? '');
             $catalogo = $catalogoProductos[$productoId] ?? [
                 'tipo' => (string) ($row->tipo ?? 'otros'),
-                'descripcion' => 'Producto ' . ($productoId !== '' ? $productoId : 'N/D'),
+                'descripcion' => 'Producto '.($productoId !== '' ? $productoId : 'N/D'),
             ];
             $tipoBase = (string) ($catalogo['tipo'] ?? (string) ($row->tipo ?? 'otros'));
             $tipoKey = $this->normalizeTipo($tipoBase);
@@ -417,10 +418,10 @@ class InicioController extends Controller
             $nombreProducto = trim((string) ($catalogo['descripcion'] ?? ''));
 
             if ($nombreProducto === '') {
-                $nombreProducto = 'Producto ' . ($productoId !== '' ? $productoId : 'N/D');
+                $nombreProducto = 'Producto '.($productoId !== '' ? $productoId : 'N/D');
             }
 
-            if ($agenciaId === '' || !isset($agenciasActivasMap[$agenciaId])) {
+            if ($agenciaId === '' || ($terminalesEmpresaMap !== null && ! isset($terminalesEmpresaMap[$agenciaId]))) {
                 continue;
             }
 
@@ -435,7 +436,7 @@ class InicioController extends Controller
                 $agenciasPorTipo[$tipoKey][$agenciaId] = true;
 
                 $productoKey = $productoId !== '' ? $productoId : 'sin_id';
-                if (!isset($resumen['productos'][$productoKey])) {
+                if (! isset($resumen['productos'][$productoKey])) {
                     $resumen['productos'][$productoKey] = [
                         'producto_id' => $productoKey,
                         'nombre' => $nombreProducto,
@@ -500,10 +501,10 @@ class InicioController extends Controller
         }
 
         return $query
-            ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS agencia_id")
+            ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS agencia_id')
             ->selectRaw("TRIM(COALESCE(nombre_agencia, '')) AS nombre_agencia")
             ->selectRaw("TRIM(COALESCE(agencia, '')) AS agencia")
-            ->selectRaw("TRIM(CAST(terminal AS CHAR)) AS terminal")
+            ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')
             ->get()
             ->mapWithKeys(function ($row) {
                 $agenciaId = trim((string) ($row->agencia_id ?? ''));
@@ -521,6 +522,22 @@ class InicioController extends Controller
                     ],
                 ];
             })
+            ->all();
+    }
+
+    private function getTerminalesEmpresaMap(string $empresa): ?array
+    {
+        if (mb_strtolower($empresa) === 'todos') {
+            return null;
+        }
+
+        return DB::table('agencias')
+            ->whereNotNull('terminal')
+            ->whereRaw("TRIM(CAST(terminal AS CHAR)) <> ''")
+            ->whereRaw("LOWER(TRIM(COALESCE(empresa, ''))) = ?", [mb_strtolower(trim($empresa))])
+            ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')
+            ->pluck('terminal')
+            ->mapWithKeys(fn ($terminal): array => [trim((string) $terminal) => true])
             ->all();
     }
 
