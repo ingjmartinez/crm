@@ -17,6 +17,8 @@ class OperacionesAgenciasSinCuadrarController extends Controller
             'grupos' => collect(),
             'resumen' => null,
             'nombreArchivo' => null,
+            'nombreArchivoConsolidado' => null,
+            'cantidadTerminalesSinCuadrar' => null,
         ]);
     }
 
@@ -24,7 +26,12 @@ class OperacionesAgenciasSinCuadrarController extends Controller
     {
         /** @var UploadedFile $archivo */
         $archivo = $request->validated('archivo_csv');
-        $filas = $this->procesarCsv($archivo);
+        /** @var UploadedFile $archivoConsolidado */
+        $archivoConsolidado = $request->validated('archivo_consolidado');
+        $terminalesSinCuadrar = $this->extraerTerminalesSinCuadrar($archivoConsolidado);
+        $filas = $this->consolidarUltimoEstadoPorTerminal($this->procesarCsv($archivo))
+            ->whereIn('terminal', $terminalesSinCuadrar)
+            ->values();
         $grupos = $this->agruparPorRutaYTipo($filas);
 
         return view('operaciones.agencias-sin-cuadrar', [
@@ -32,12 +39,79 @@ class OperacionesAgenciasSinCuadrarController extends Controller
             'grupos' => $grupos,
             'resumen' => [
                 'total_agencias' => $filas->count(),
-                'total_rutas' => $filas->pluck('ruta_id')->filter()->unique()->count(),
+                'total_rutas' => $filas
+                    ->map(fn (array $fila): string => implode('|', [$fila['ruta'], $fila['fecha']]))
+                    ->unique()
+                    ->count(),
                 'total_depositos' => $filas->where('tipo', 'Depósito')->sum('monto_asignado'),
                 'total_retiros' => $filas->where('tipo', 'Retiro')->sum('monto_asignado'),
             ],
             'nombreArchivo' => $archivo->getClientOriginalName(),
+            'nombreArchivoConsolidado' => $archivoConsolidado->getClientOriginalName(),
+            'cantidadTerminalesSinCuadrar' => $terminalesSinCuadrar->count(),
         ]);
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private function extraerTerminalesSinCuadrar(UploadedFile $archivo): Collection
+    {
+        $path = $archivo->getRealPath();
+
+        if (! $path) {
+            throw ValidationException::withMessages(['archivo_consolidado' => 'No se pudo leer el archivo consolidado.']);
+        }
+
+        $handle = fopen($path, 'rb');
+
+        if ($handle === false) {
+            throw ValidationException::withMessages(['archivo_consolidado' => 'No se pudo abrir el archivo consolidado.']);
+        }
+
+        try {
+            $separador = $this->detectarSeparador($path);
+            $encabezados = fgetcsv($handle, 0, $separador);
+
+            $columnas = $this->mapearColumnasConsolidado(is_array($encabezados) ? $encabezados : []);
+
+            $terminales = collect();
+
+            while (($fila = fgetcsv($handle, 0, $separador)) !== false) {
+                $terminal = $this->limpiarTexto($fila[$columnas['terminal']] ?? '');
+
+                if ($terminal !== '' && $this->valorEsCero($fila[$columnas['balance']] ?? '')) {
+                    $terminales->push($terminal);
+                }
+            }
+
+            return $terminales->unique()->values();
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * @param  array<int, string|null>  $encabezados
+     * @return array{terminal: int, balance: int}
+     */
+    private function mapearColumnasConsolidado(array $encabezados): array
+    {
+        $normalizados = collect($encabezados)
+            ->mapWithKeys(fn ($encabezado, $indice) => [$this->normalizarEncabezado((string) $encabezado) => $indice]);
+        $terminal = $normalizados->get('entidad');
+        $balance = $normalizados->get('textbox2139');
+
+        $terminal ??= array_key_exists(1, $encabezados) && array_key_exists(30, $encabezados) ? 1 : null;
+        $balance ??= array_key_exists(30, $encabezados) ? 30 : null;
+
+        if ($terminal === null || $balance === null) {
+            throw ValidationException::withMessages([
+                'archivo_consolidado' => 'El CSV consolidado debe contener las columnas B (terminal) y AE (balance).',
+            ]);
+        }
+
+        return ['terminal' => $terminal, 'balance' => $balance];
     }
 
     /**
@@ -46,15 +120,19 @@ class OperacionesAgenciasSinCuadrarController extends Controller
      */
     private function agruparPorRutaYTipo(Collection $filas): Collection
     {
+        $ultimoSerialPorRuta = $filas
+            ->groupBy(fn (array $fila): string => implode('|', [$fila['ruta'], $fila['fecha']]))
+            ->map(fn (Collection $filasRuta): string => $this->obtenerUltimoSerial($filasRuta));
+
         return $filas
             ->groupBy(fn (array $fila): string => implode('|', [
-                $fila['ruta_id'],
                 $fila['ruta'],
                 $fila['fecha'],
                 $fila['tipo'],
             ]))
-            ->map(function (Collection $filasRuta): array {
+            ->map(function (Collection $filasRuta) use ($ultimoSerialPorRuta): array {
                 $primeraFila = $filasRuta->first();
+                $claveRuta = implode('|', [$primeraFila['ruta'], $primeraFila['fecha']]);
                 $terminales = $filasRuta
                     ->groupBy('terminal')
                     ->map(function (Collection $filasTerminal): array {
@@ -69,7 +147,7 @@ class OperacionesAgenciasSinCuadrarController extends Controller
                     ->values();
 
                 return [
-                    'ruta_id' => $primeraFila['ruta_id'],
+                    'ruta_id' => $ultimoSerialPorRuta->get($claveRuta, ''),
                     'ruta' => $primeraFila['ruta'],
                     'fecha' => $primeraFila['fecha'],
                     'tipo' => $primeraFila['tipo'],
@@ -79,6 +157,39 @@ class OperacionesAgenciasSinCuadrarController extends Controller
                 ];
             })
             ->values();
+    }
+
+    /**
+     * @param  Collection<int, array{ruta_id: string, ruta: string, fecha: string, terminal: string, agencia: string, tipo: string, monto_asignado: float}>  $filas
+     * @return Collection<int, array{ruta_id: string, ruta: string, fecha: string, terminal: string, agencia: string, tipo: string, monto_asignado: float}>
+     */
+    private function consolidarUltimoEstadoPorTerminal(Collection $filas): Collection
+    {
+        return $filas
+            ->groupBy(fn (array $fila): string => implode('|', [
+                $fila['fecha'],
+                $fila['terminal'],
+            ]))
+            ->map(function (Collection $estadosTerminal): array {
+                return $estadosTerminal->reduce(function (?array $ultimoEstado, array $estado): array {
+                    if ($ultimoEstado === null || (int) $estado['ruta_id'] >= (int) $ultimoEstado['ruta_id']) {
+                        return $estado;
+                    }
+
+                    return $ultimoEstado;
+                });
+            })
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, array{ruta_id: string}>  $filas
+     */
+    private function obtenerUltimoSerial(Collection $filas): string
+    {
+        return (string) $filas->reduce(function (string $ultimoSerial, array $fila): string {
+            return (int) $fila['ruta_id'] >= (int) $ultimoSerial ? $fila['ruta_id'] : $ultimoSerial;
+        }, '');
     }
 
     /**
@@ -227,6 +338,13 @@ class OperacionesAgenciasSinCuadrarController extends Controller
         $numero = (float) str_replace([',', '(', ')', 'RD$', '$', ' '], '', $valor);
 
         return $negativoPorParentesis ? -abs($numero) : $numero;
+    }
+
+    private function valorEsCero(mixed $valor): bool
+    {
+        $numero = str_replace([',', '(', ')', 'RD$', '$', ' '], '', trim((string) $valor));
+
+        return $numero !== '' && is_numeric($numero) && abs((float) $numero) < 0.00001;
     }
 
     /**

@@ -32,25 +32,35 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-1">Cargar agencias pendientes de cuadre</h5>
-                        <p class="text-muted mb-0">La columna A identifica la ruta, la C el nombre de agencia, la D la terminal y la E el importe asignado.</p>
+                        <p class="text-muted mb-0">Carga el reporte de rutas y el consolidado. Del consolidado se usan la columna B (terminal) y la AE (balance en cero).</p>
                     </div>
                     <div class="card-body">
-                        <form method="POST" action="{{ route('operaciones.agencias-sin-cuadrar.procesar') }}" enctype="multipart/form-data" class="row g-3 align-items-end">
+                        <form method="POST" action="{{ route('operaciones.agencias-sin-cuadrar.procesar') }}" enctype="multipart/form-data" class="row g-3 align-items-end" id="form-agencias-sin-cuadrar">
                             @csrf
-                            <div class="col-lg-8">
-                                <label for="archivo_csv" class="form-label">Archivo CSV</label>
+                            <div class="col-lg-5">
+                                <label for="archivo_csv" class="form-label">Reporte de rutas</label>
                                 <input type="file" class="form-control" id="archivo_csv" name="archivo_csv" accept=".csv,text/csv,text/plain" required>
                             </div>
-                            <div class="col-lg-4">
-                                <button type="submit" class="btn btn-primary w-100">
+                            <div class="col-lg-5">
+                                <label for="archivo_consolidado" class="form-label">Consolidado</label>
+                                <input type="file" class="form-control" id="archivo_consolidado" name="archivo_consolidado" accept=".csv,text/csv,text/plain" required>
+                                <div class="form-text">Se reducirá automáticamente a las terminales con balance cero antes de cargarlo.</div>
+                            </div>
+                            <div class="col-lg-2">
+                                <button type="submit" class="btn btn-primary w-100" id="boton-procesar-reporte">
                                     <i class="ri-upload-cloud-2-line align-bottom me-1"></i>
                                     Procesar reporte
                                 </button>
                             </div>
                         </form>
 
-                        @if (! empty($nombreArchivo))
-                            <div class="alert alert-info mt-3 mb-0">Archivo procesado: <strong>{{ $nombreArchivo }}</strong></div>
+                        <div class="alert alert-danger mt-3 mb-0 d-none" id="error-procesamiento-consolidado"></div>
+
+                        @if (! empty($nombreArchivo) && ! empty($nombreArchivoConsolidado))
+                            <div class="alert alert-info mt-3 mb-0">
+                                Rutas: <strong>{{ $nombreArchivo }}</strong> · Consolidado: <strong>{{ $nombreArchivoConsolidado }}</strong>
+                                · Terminales en cero detectadas: <strong>{{ number_format($cantidadTerminalesSinCuadrar) }}</strong>
+                            </div>
                         @endif
                     </div>
                 </div>
@@ -175,6 +185,153 @@
             const subtituloModal = document.getElementById('subtitulo-modal-terminales');
             const encabezadoMonto = document.getElementById('encabezado-monto-terminal');
             const totalDetalle = document.getElementById('total-terminales-ruta');
+            const formulario = document.getElementById('form-agencias-sin-cuadrar');
+            const entradaConsolidado = document.getElementById('archivo_consolidado');
+            const botonProcesar = document.getElementById('boton-procesar-reporte');
+            const errorConsolidado = document.getElementById('error-procesamiento-consolidado');
+            let consolidadoOptimizado = false;
+
+            formulario.addEventListener('submit', async function (evento) {
+                if (consolidadoOptimizado) {
+                    return;
+                }
+
+                evento.preventDefault();
+                errorConsolidado.classList.add('d-none');
+                botonProcesar.disabled = true;
+                botonProcesar.textContent = 'Optimizando...';
+
+                try {
+                    const archivoReducido = await reducirConsolidado(entradaConsolidado.files[0]);
+                    const transferencia = new DataTransfer();
+                    transferencia.items.add(archivoReducido);
+                    entradaConsolidado.files = transferencia.files;
+                    consolidadoOptimizado = true;
+                    HTMLFormElement.prototype.submit.call(formulario);
+                } catch (error) {
+                    errorConsolidado.textContent = error.message || 'No se pudo optimizar el archivo consolidado.';
+                    errorConsolidado.classList.remove('d-none');
+                    botonProcesar.disabled = false;
+                    botonProcesar.innerHTML = '<i class="ri-upload-cloud-2-line align-bottom me-1"></i> Procesar reporte';
+                }
+            });
+
+            async function reducirConsolidado(archivo) {
+                if (!archivo) {
+                    throw new Error('Selecciona el archivo CSV consolidado.');
+                }
+
+                const contenido = await archivo.text();
+                const separador = detectarSeparadorCsv(contenido);
+                const filasReducidas = [['Entidad', 'Textbox2139']];
+                let columnas = null;
+
+                recorrerCsv(contenido, separador, function (fila, indice) {
+                    if (indice === 0) {
+                        const encabezados = fila.map(normalizarEncabezadoCsv);
+                        const terminal = encabezados.indexOf('entidad');
+                        const balance = encabezados.indexOf('textbox2139');
+
+                        if (terminal >= 0 && balance >= 0) {
+                            columnas = { terminal, balance };
+                        } else if (fila.length > 30) {
+                            columnas = { terminal: 1, balance: 30 };
+                        } else {
+                            throw new Error('El consolidado debe contener las columnas B y AE.');
+                        }
+
+                        return;
+                    }
+
+                    const terminal = String(fila[columnas.terminal] || '').trim();
+                    const balance = String(fila[columnas.balance] || '').trim();
+
+                    if (terminal !== '' && valorCsvEsCero(balance)) {
+                        filasReducidas.push([terminal, balance]);
+                    }
+                });
+
+                const csvReducido = filasReducidas
+                    .map(fila => fila.map(escaparCampoCsv).join(','))
+                    .join('\r\n');
+
+                return new File([csvReducido], 'consolidado_filtrado.csv', { type: 'text/csv' });
+            }
+
+            function recorrerCsv(contenido, separador, procesarFila) {
+                let fila = [];
+                let campo = '';
+                let enComillas = false;
+                let indiceFila = 0;
+
+                for (let indice = 0; indice < contenido.length; indice++) {
+                    const caracter = contenido[indice];
+
+                    if (caracter === '"') {
+                        if (enComillas && contenido[indice + 1] === '"') {
+                            campo += '"';
+                            indice++;
+                        } else {
+                            enComillas = !enComillas;
+                        }
+                    } else if (!enComillas && caracter === separador) {
+                        fila.push(campo);
+                        campo = '';
+                    } else if (!enComillas && (caracter === '\n' || caracter === '\r')) {
+                        fila.push(campo);
+
+                        if (fila.some(valor => valor !== '')) {
+                            procesarFila(fila, indiceFila++);
+                        }
+
+                        fila = [];
+                        campo = '';
+
+                        if (caracter === '\r' && contenido[indice + 1] === '\n') {
+                            indice++;
+                        }
+                    } else {
+                        campo += caracter;
+                    }
+                }
+
+                if (campo !== '' || fila.length) {
+                    fila.push(campo);
+                    procesarFila(fila, indiceFila);
+                }
+            }
+
+            function detectarSeparadorCsv(contenido) {
+                const candidatos = [',', ';', '\t', '|'];
+                const primeraFila = contenido.split(/\r?\n/, 1)[0];
+
+                return candidatos.reduce(function (mejor, candidato) {
+                    const cantidad = primeraFila.split(candidato).length;
+
+                    return cantidad > mejor.cantidad ? { separador: candidato, cantidad } : mejor;
+                }, { separador: ',', cantidad: 0 }).separador;
+            }
+
+            function normalizarEncabezadoCsv(valor) {
+                return String(valor).replace(/^\uFEFF/, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+            }
+
+            function valorCsvEsCero(valor) {
+                const numero = String(valor)
+                    .trim()
+                    .replace(/,/g, '')
+                    .replace(/[()$]/g, '')
+                    .replace(/RD/gi, '')
+                    .replace(/\s+/g, '');
+
+                return numero !== '' && Number.isFinite(Number(numero)) && Math.abs(Number(numero)) < 0.00001;
+            }
+
+            function escaparCampoCsv(valor) {
+                const texto = String(valor);
+
+                return /[",\r\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
+            }
 
             if (!tabla.length || tabla.find('tbody td[colspan]').length) {
                 return;
