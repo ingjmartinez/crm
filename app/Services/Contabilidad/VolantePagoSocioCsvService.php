@@ -83,19 +83,62 @@ class VolantePagoSocioCsvService
             throw ValidationException::withMessages(['archivo_csv' => 'La fecha general del archivo no tiene el formato esperado.']);
         }
 
+        $carga = [
+            'empresa_origen' => $empresa,
+            'rnc_origen' => $rnc !== '' ? $rnc : null,
+            'cuenta_origen' => $this->valorMetadata($metadatos[1]),
+            'tipo_transaccion' => $this->valorMetadata($metadatos[2]),
+            'estado' => $this->valorMetadata($metadatos[3]),
+            'monto_total' => $montoTotal,
+            'fecha_transaccion' => $fecha,
+            'cantidad_transacciones' => count($detalles),
+        ];
+        $carga['huella_contenido'] = $this->huellaContenido($carga, $detalles);
+
         return [
-            'carga' => [
-                'empresa_origen' => $empresa,
-                'rnc_origen' => $rnc !== '' ? $rnc : null,
-                'cuenta_origen' => $this->valorMetadata($metadatos[1]),
-                'tipo_transaccion' => $this->valorMetadata($metadatos[2]),
-                'estado' => $this->valorMetadata($metadatos[3]),
-                'monto_total' => $montoTotal,
-                'fecha_transaccion' => $fecha,
-                'cantidad_transacciones' => count($detalles),
-            ],
+            'carga' => $carga,
             'detalles' => $detalles,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $carga
+     * @param  array<int, array<string, mixed>>  $detalles
+     */
+    public function huellaContenido(array $carga, array $detalles): string
+    {
+        $fecha = $carga['fecha_transaccion'];
+        $fechaTransaccion = $fecha instanceof \DateTimeInterface
+            ? $fecha->format('Y-m-d H:i:s')
+            : CarbonImmutable::parse((string) $fecha)->format('Y-m-d H:i:s');
+        $encabezado = [
+            'empresa_origen' => $this->textoHuella($carga['empresa_origen'] ?? ''),
+            'rnc_origen' => $this->identificadorHuella($carga['rnc_origen'] ?? ''),
+            'cuenta_origen' => $this->identificadorHuella($carga['cuenta_origen'] ?? ''),
+            'tipo_transaccion' => $this->textoHuella($carga['tipo_transaccion'] ?? ''),
+            'estado' => $this->textoHuella($carga['estado'] ?? ''),
+            'monto_total_centavos' => (int) round(((float) ($carga['monto_total'] ?? 0)) * 100),
+            'fecha_transaccion' => $fechaTransaccion,
+            'cantidad_transacciones' => (int) ($carga['cantidad_transacciones'] ?? count($detalles)),
+        ];
+        $transacciones = collect($detalles)
+            ->map(fn (array $detalle): array => [
+                'nombre' => $this->textoHuella($detalle['nombre'] ?? ''),
+                'tipo_identificacion' => $this->textoHuella($detalle['tipo_identificacion'] ?? ''),
+                'identificacion' => $this->identificadorHuella($detalle['identificacion'] ?? ''),
+                'cuenta' => $this->identificadorHuella($detalle['cuenta'] ?? ''),
+                'tipo_cuenta' => $this->textoHuella($detalle['tipo_cuenta'] ?? ''),
+                'monto_centavos' => (int) round(((float) ($detalle['monto'] ?? 0)) * 100),
+                'estado' => $this->textoHuella($detalle['estado'] ?? ''),
+            ])
+            ->sortBy(fn (array $detalle): string => json_encode($detalle, JSON_THROW_ON_ERROR))
+            ->values()
+            ->all();
+
+        return hash('sha256', json_encode([
+            'encabezado' => $encabezado,
+            'transacciones' => $transacciones,
+        ], JSON_THROW_ON_ERROR));
     }
 
     private function valorMetadata(string $linea): string
@@ -106,6 +149,16 @@ class VolantePagoSocioCsvService
     private function monto(string $valor): float
     {
         return round((float) preg_replace('/[^0-9.-]/', '', $valor), 2);
+    }
+
+    private function textoHuella(mixed $valor): string
+    {
+        return Str::of((string) $valor)->ascii()->lower()->squish()->toString();
+    }
+
+    private function identificadorHuella(mixed $valor): string
+    {
+        return preg_replace('/[^a-z0-9]/', '', $this->textoHuella($valor)) ?? '';
     }
 
     private function normalizar(string $valor): string
