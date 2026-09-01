@@ -8,7 +8,7 @@ use App\Http\Requests\Contabilidad\EnviarVolantePagoSocioRequest;
 use App\Mail\VolantePagoSocioMail;
 use App\Models\VolantePagoSocioCarga;
 use App\Models\VolantePagoSocioDetalle;
-use App\Services\Contabilidad\VolantePagoSocioCsvService;
+use App\Services\Contabilidad\VolantePagoSocioArchivoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +20,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ContabilidadVolantePagoSocioController extends Controller
 {
-    public function __construct(private readonly VolantePagoSocioCsvService $csvService) {}
+    public function __construct(private readonly VolantePagoSocioArchivoService $archivoService) {}
 
     public function index(ConsultarVolantesPagoSociosRequest $request): View
     {
@@ -58,15 +58,16 @@ class ContabilidadVolantePagoSocioController extends Controller
     {
         /** @var UploadedFile $archivo */
         $archivo = $request->validated('archivo_csv');
-        $resultado = $this->csvService->procesar($archivo);
+        $banco = $request->validated('banco');
+        $resultado = $this->archivoService->procesar($archivo, $banco);
         $ruta = $archivo->getRealPath();
 
-        $carga = DB::transaction(function () use ($archivo, $resultado, $request, $ruta): VolantePagoSocioCarga {
+        $carga = DB::transaction(function () use ($archivo, $resultado, $request, $ruta, $banco): VolantePagoSocioCarga {
             $carga = VolantePagoSocioCarga::query()->create([
                 ...$resultado['carga'],
                 'nombre_archivo' => $archivo->getClientOriginalName(),
                 'hash_archivo' => $ruta !== false ? hash_file('sha256', $ruta) : null,
-                'banco' => $request->validated('banco'),
+                'banco' => $banco,
                 'fecha_correspondiente' => $request->validated('fecha_correspondiente'),
                 'usuario_id' => $request->user()?->getAuthIdentifier(),
             ]);

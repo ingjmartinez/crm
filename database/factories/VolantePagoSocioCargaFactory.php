@@ -27,6 +27,7 @@ class VolantePagoSocioCargaFactory extends Factory
             'tipo_transaccion' => 'Pago a Suplidores',
             'estado' => 'Completado',
             'monto_total' => 5000,
+            'impuesto_total' => 0,
             'fecha_transaccion' => now(),
             'fecha_correspondiente' => today(),
             'cantidad_transacciones' => 1,

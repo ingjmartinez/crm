@@ -26,7 +26,7 @@ class CargarVolantesPagoSociosRequest extends FormRequest
     {
         return [
             'banco' => ['required', Rule::in(array_keys(VolantePagoSocioCarga::BANCOS))],
-            'archivo_csv' => ['required', File::types(['csv', 'txt'])->max(20 * 1024)],
+            'archivo_csv' => ['required', File::types(['csv', 'txt', 'xls', 'xlsx'])->max(20 * 1024)],
             'fecha_correspondiente' => ['required', 'date_format:Y-m-d'],
         ];
     }
@@ -36,8 +36,8 @@ class CargarVolantesPagoSociosRequest extends FormRequest
         return [
             'banco.required' => 'Selecciona el banco correspondiente al archivo.',
             'banco.in' => 'El banco seleccionado no es válido.',
-            'archivo_csv.required' => 'Selecciona el archivo CSV del banco.',
-            'archivo_csv.mimes' => 'El documento debe estar en formato CSV o TXT.',
+            'archivo_csv.required' => 'Selecciona el archivo de pagos del banco.',
+            'archivo_csv.mimes' => 'El documento debe estar en formato CSV, TXT, XLS o XLSX.',
             'archivo_csv.max' => 'El documento no puede superar los 20 MB.',
             'fecha_correspondiente.required' => 'Indica la fecha que corresponde a estos volantes.',
             'fecha_correspondiente.date_format' => 'La fecha correspondiente debe tener un formato válido.',

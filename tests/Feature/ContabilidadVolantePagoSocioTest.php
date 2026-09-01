@@ -13,6 +13,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use Tests\TestCase;
 
 class ContabilidadVolantePagoSocioTest extends TestCase
@@ -30,6 +32,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             $table->id();
             $table->string('nombre_archivo');
             $table->string('hash_archivo')->nullable();
+            $table->string('huella_contenido')->nullable()->unique();
             $table->string('banco')->default(VolantePagoSocioCarga::BANCO_SANTA_CRUZ);
             $table->string('empresa_origen');
             $table->string('rnc_origen')->nullable();
@@ -37,6 +40,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             $table->string('tipo_transaccion');
             $table->string('estado');
             $table->decimal('monto_total', 15, 2);
+            $table->decimal('impuesto_total', 15, 2)->default(0);
             $table->dateTime('fecha_transaccion');
             $table->date('fecha_correspondiente')->nullable();
             $table->unsignedInteger('cantidad_transacciones');
@@ -49,8 +53,8 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             $table->unsignedBigInteger('carga_id');
             $table->unsignedInteger('numero_linea');
             $table->string('nombre');
-            $table->string('tipo_identificacion');
-            $table->string('identificacion');
+            $table->string('tipo_identificacion')->nullable();
+            $table->string('identificacion')->nullable();
             $table->string('cuenta');
             $table->string('tipo_cuenta');
             $table->decimal('monto', 15, 2);
@@ -130,6 +134,55 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             ])
             ->assertRedirect(route('contabilidad.volantes-pago-socios'))
             ->assertSessionHasErrors('archivo_csv');
+    }
+
+    public function test_carga_excel_de_banreservas_y_crea_volantes_sin_identificacion(): void
+    {
+        $response = $this->post(route('contabilidad.volantes-pago-socios.procesar'), [
+            'banco' => VolantePagoSocioCarga::BANCO_BANRESERVAS,
+            'archivo_csv' => $this->excelBanreservas(),
+            'fecha_correspondiente' => '2026-08-20',
+        ]);
+
+        $response
+            ->assertRedirect(route('contabilidad.volantes-pago-socios'))
+            ->assertSessionHasNoErrors();
+
+        $carga = VolantePagoSocioCarga::query()->with('detalles')->sole();
+        $primerDetalle = $carga->detalles->first();
+
+        $this->assertSame(VolantePagoSocioCarga::BANCO_BANRESERVAS, $carga->banco);
+        $this->assertSame('No especificada en el archivo', $carga->empresa_origen);
+        $this->assertSame('9603450629', $carga->cuenta_origen);
+        $this->assertSame('12500.00', $carga->monto_total);
+        $this->assertSame('25.00', $carga->impuesto_total);
+        $this->assertSame('2026-08-19 11:09:54', $carga->fecha_transaccion->format('Y-m-d H:i:s'));
+        $this->assertSame(2, $carga->detalles->count());
+        $this->assertSame('Leon Maria Calzado', $primerDetalle->nombre);
+        $this->assertSame('0301451674', $primerDetalle->cuenta);
+        $this->assertSame('Cuenta de Ahorro', $primerDetalle->tipo_cuenta);
+        $this->assertNull($primerDetalle->tipo_identificacion);
+        $this->assertNull($primerDetalle->identificacion);
+
+        $this->get(route('contabilidad.volantes-pago-socios.vista-previa', $primerDetalle))
+            ->assertOk()
+            ->assertSee('Impuesto del archivo')
+            ->assertSee('RD$25.00')
+            ->assertDontSee('Identificación');
+    }
+
+    public function test_rechaza_excel_de_banreservas_cuyo_total_no_coincide(): void
+    {
+        $this->from(route('contabilidad.volantes-pago-socios'))
+            ->post(route('contabilidad.volantes-pago-socios.procesar'), [
+                'banco' => VolantePagoSocioCarga::BANCO_BANRESERVAS,
+                'archivo_csv' => $this->excelBanreservas(13000),
+                'fecha_correspondiente' => '2026-08-20',
+            ])
+            ->assertRedirect(route('contabilidad.volantes-pago-socios'))
+            ->assertSessionHasErrors('archivo_csv');
+
+        $this->assertDatabaseCount('volante_pago_socio_cargas', 0);
     }
 
     public function test_exige_la_fecha_correspondiente_al_guardar(): void
@@ -268,5 +321,43 @@ Nombres,Tipo Identificación,No. Identificación,No. Cuenta,Tipo Cuenta,Monto,Es
 "Aramis Morel Arroyo","Cédula","001-1852552-6","******3411","Cuenta Corriente","RD$6500.00","Completada",
 "Leiry A. Saba De León","Cédula","001-1642962-2","******0011","Cuenta de Ahorro","RD$74200.00","Completada",
 CSV;
+    }
+
+    private function excelBanreservas(float $montoTotal = 12500): UploadedFile
+    {
+        $libro = new Spreadsheet;
+        $hoja = $libro->getActiveSheet();
+        $hoja->setTitle('Movimientos');
+        $hoja->fromArray(['Fecha', null, 'Tipo de Transacción', null, 'Usuario'], null, 'A6');
+        $hoja->fromArray(['19/8/2026 11:09:54', null, 'Pago de nómina masivo', null, 'nmontalvo'], null, 'A7');
+        $hoja->fromArray([
+            'Producto Débito',
+            'Importe',
+            'Importe Impuesto',
+            'Fecha',
+            'Tipo de Transacción',
+            'Estado',
+        ], null, 'A10');
+        $hoja->fromArray([
+            'Cuenta Corriente - 9603450629 - DOP',
+            $montoTotal,
+            25,
+            '19/08/2026',
+            'Pago de nómina masivo',
+            'Procesada',
+        ], null, 'A11');
+        $hoja->fromArray(['Producto crédito', 'Importe', 'Descripción', 'Estado'], null, 'C13');
+        $hoja->fromArray([
+            ['Cuenta de Ahorro - 0301451674', 3000, 'Leon Maria Calzado', 'Procesada'],
+            ['Cuenta Corriente - 9607376796', 9500, 'Metall Ferreteria Guerrero Soto', 'Procesada'],
+        ], null, 'C14');
+        $hoja->fromArray(['Nombre Usuario', 'Nombre Completo', 'Posición'], null, 'C17');
+        $hoja->getStyle('B11:D15')->getNumberFormat()->setFormatCode('#,##0.00');
+
+        $ruta = tempnam(sys_get_temp_dir(), 'banreservas_');
+        (new Xls($libro))->save($ruta);
+        $libro->disconnectWorksheets();
+
+        return new UploadedFile($ruta, 'Pago de Nómina Masivo.xls', 'application/vnd.ms-excel', null, true);
     }
 }

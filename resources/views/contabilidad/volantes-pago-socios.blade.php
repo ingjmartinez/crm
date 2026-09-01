@@ -51,9 +51,9 @@
                                 </select>
                             </div>
                             <div class="col-lg-4">
-                                <label for="archivo_csv" class="form-label">Archivo CSV o TXT del banco</label>
+                                <label for="archivo_csv" class="form-label">Archivo de pagos del banco</label>
                                 <input type="file" class="form-control" id="archivo_csv" name="archivo_csv"
-                                    accept=".csv,.txt,text/csv,text/plain" required>
+                                    accept=".csv,.txt,.xls,.xlsx,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
                             </div>
                             <div class="col-lg-2">
                                 <label for="fecha_correspondiente" class="form-label">Fecha correspondiente</label>
@@ -126,7 +126,11 @@
                                         <tr>
                                             <td>{{ $detalle->nombre }}</td>
                                             <td>{{ ($detalle->carga->fecha_correspondiente ?? $detalle->carga->fecha_transaccion)->format('d/m/Y') }}</td>
-                                            <td>{{ $detalle->tipo_identificacion }} · {{ $detalle->identificacion }}</td>
+                                            <td>
+                                                {{ $detalle->identificacion
+                                                    ? trim($detalle->tipo_identificacion.' · '.$detalle->identificacion, ' ·')
+                                                    : 'No suministrada' }}
+                                            </td>
                                             <td>{{ $detalle->carga->nombreBanco() }}</td>
                                             <td>{{ $detalle->carga->nombre_archivo }}</td>
                                             <td class="text-end fw-semibold">RD${{ number_format((float) $detalle->monto, 2) }}</td>

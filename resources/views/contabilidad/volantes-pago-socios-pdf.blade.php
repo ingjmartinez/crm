@@ -77,7 +77,10 @@
             </tr>
             <tr>
                 <td><div class="label">Tipo Cuenta</div><div class="value">Cuenta Corriente</div></td>
-                <td><div class="label">Impuesto</div><div class="value">RD$0.00</div></td>
+                <td>
+                    <div class="label">{{ $esBanreservas ? 'Impuesto del archivo' : 'Impuesto' }}</div>
+                    <div class="value">RD${{ number_format((float) $detalle->carga->impuesto_total, 2) }}</div>
+                </td>
                 <td><div class="label">Monto</div><div class="value amount">RD${{ number_format((float) $detalle->monto, 2) }}</div></td>
                 <td><div class="label">Tipo de Transacción</div><div class="value">{{ $detalle->carga->tipo_transaccion }}</div></td>
             </tr>
@@ -91,7 +94,9 @@
     <h2 class="detail-title">Detalle del Archivo</h2>
     <table class="grid detail">
         <tr><td class="label-cell">Nombre</td><td>{{ $detalle->nombre }}</td></tr>
-        <tr><td class="label-cell">{{ $detalle->tipo_identificacion }}</td><td>{{ $detalle->identificacion }}</td></tr>
+        @if ($detalle->tipo_identificacion || $detalle->identificacion)
+            <tr><td class="label-cell">{{ $detalle->tipo_identificacion ?: 'Identificación' }}</td><td>{{ $detalle->identificacion }}</td></tr>
+        @endif
         <tr><td class="label-cell">Cuenta del beneficiario</td><td>{{ $detalle->cuenta }}</td></tr>
         <tr><td class="label-cell">Tipo de cuenta</td><td>{{ $detalle->tipo_cuenta }}</td></tr>
         <tr><td class="label-cell">Monto pagado</td><td><strong>RD${{ number_format((float) $detalle->monto, 2) }}</strong></td></tr>
