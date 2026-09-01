@@ -30,6 +30,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             $table->id();
             $table->string('nombre_archivo');
             $table->string('hash_archivo')->nullable();
+            $table->string('banco')->default(VolantePagoSocioCarga::BANCO_SANTA_CRUZ);
             $table->string('empresa_origen');
             $table->string('rnc_origen')->nullable();
             $table->string('cuenta_origen');
@@ -69,6 +70,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
     {
         $this->assertTrue(Route::has('contabilidad.volantes-pago-socios'));
         $this->assertFileExists(public_path('images/banco-santa-cruz-volantes.png'));
+        $this->assertFileExists(public_path('images/banreservas-logo-volantes.png'));
 
         $item = collect(config('module_hubs.contabilidad.items'))
             ->firstWhere('nombre', 'Volantes de Pago de Socios');
@@ -79,6 +81,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
     public function test_carga_csv_y_crea_una_fila_por_transaccion(): void
     {
         $response = $this->post(route('contabilidad.volantes-pago-socios.procesar'), [
+            'banco' => VolantePagoSocioCarga::BANCO_BANRESERVAS,
             'archivo_csv' => UploadedFile::fake()->createWithContent('pagos.csv', $this->csvValido()),
             'fecha_correspondiente' => '2026-08-15',
         ]);
@@ -86,6 +89,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
         $carga = \App\Models\VolantePagoSocioCarga::query()->with('detalles')->sole();
         $response->assertRedirect(route('contabilidad.volantes-pago-socios'));
         $this->assertSame(2, $carga->detalles->count());
+        $this->assertSame(VolantePagoSocioCarga::BANCO_BANRESERVAS, $carga->banco);
         $this->assertSame('CONSORCIO DE BANCAS JOSELITO E.I.R.L.', $carga->empresa_origen);
         $this->assertSame('131329888', $carga->rnc_origen);
         $this->assertSame('******3411', $carga->detalles->first()->cuenta);
@@ -105,6 +109,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             ->assertSee('Buscar volantes')
             ->assertSee('Escribe el nombre del socio')
             ->assertSee('Volantes guardados')
+            ->assertSee('Banreservas')
             ->assertSee('15/08/2026')
             ->assertSee('bootstrap.Modal.getOrCreateInstance', false)
             ->assertSee("event.target.closest('.btn-ver-volante')", false)
@@ -119,6 +124,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
 
         $this->from(route('contabilidad.volantes-pago-socios'))
             ->post(route('contabilidad.volantes-pago-socios.procesar'), [
+                'banco' => VolantePagoSocioCarga::BANCO_SANTA_CRUZ,
                 'archivo_csv' => UploadedFile::fake()->createWithContent('pagos.csv', $csv),
                 'fecha_correspondiente' => '2026-08-15',
             ])
@@ -130,6 +136,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
     {
         $this->from(route('contabilidad.volantes-pago-socios'))
             ->post(route('contabilidad.volantes-pago-socios.procesar'), [
+                'banco' => VolantePagoSocioCarga::BANCO_SANTA_CRUZ,
                 'archivo_csv' => UploadedFile::fake()->createWithContent('pagos.csv', $this->csvValido()),
             ])
             ->assertRedirect(route('contabilidad.volantes-pago-socios'))
@@ -192,6 +199,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
         Mail::fake();
         $carga = VolantePagoSocioCarga::factory()->create([
             'usuario_id' => null,
+            'banco' => VolantePagoSocioCarga::BANCO_SANTA_CRUZ,
             'fecha_correspondiente' => '2026-08-15',
         ]);
         $detalle = VolantePagoSocioDetalle::factory()->create([
@@ -205,6 +213,7 @@ class ContabilidadVolantePagoSocioTest extends TestCase
             ->assertSee('Datos de la Transacción')
             ->assertSee('Fecha correspondiente')
             ->assertSee('15/08/2026')
+            ->assertSee('Banco Santa Cruz')
             ->assertSee('data:image/png;base64,', false);
 
         $this->get(route('contabilidad.volantes-pago-socios.pdf', $detalle))
@@ -217,6 +226,32 @@ class ContabilidadVolantePagoSocioTest extends TestCase
         Mail::assertSent(VolantePagoSocioMail::class, function (VolantePagoSocioMail $mail): bool {
             return $mail->hasTo('socio@example.com') && count($mail->attachments()) === 1;
         });
+    }
+
+    public function test_genera_volante_con_identidad_de_banreservas(): void
+    {
+        $carga = VolantePagoSocioCarga::factory()->create([
+            'usuario_id' => null,
+            'banco' => VolantePagoSocioCarga::BANCO_BANRESERVAS,
+            'fecha_correspondiente' => '2026-08-20',
+        ]);
+        $detalle = VolantePagoSocioDetalle::factory()->create([
+            'nombre' => 'Socio Banreservas',
+            'carga_id' => $carga->id,
+        ]);
+
+        $this->get(route('contabilidad.volantes-pago-socios.vista-previa', $detalle))
+            ->assertOk()
+            ->assertSee('Socio Banreservas')
+            ->assertSee('alt="Banreservas"', false)
+            ->assertSee('4-01-01006-2')
+            ->assertSee('809-960-2121')
+            ->assertSee('data:image/png;base64,', false)
+            ->assertSee('bank-logo-crop', false);
+
+        $this->get(route('contabilidad.volantes-pago-socios.pdf', $detalle))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
     }
 
     private function csvValido(): string

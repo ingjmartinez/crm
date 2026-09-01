@@ -9,6 +9,9 @@
         .top { width: 100%; margin-bottom: 45px; }
         .top td { vertical-align: top; }
         .bank-logo { display: block; width: 285px; height: auto; }
+        .bank-logo-crop { width: 285px; height: 95px; overflow: hidden; }
+        .bank-logo-crop .bank-logo { margin-top: -95px; }
+        .bank-wordmark { color: #005ca9; font-size: 27px; font-weight: bold; letter-spacing: .8px; margin-bottom: 8px; }
         .bank-info { margin: 8px 0 0 14px; font-size: 9px; font-weight: bold; line-height: 1.4; }
         .date { text-align: right; font-size: 10px; }
         h1 { font-size: 23px; margin: 0 0 18px; }
@@ -26,19 +29,35 @@
 </head>
 <body>
     @php
-        $logoPath = public_path('images/banco-santa-cruz-volantes.png');
+        $esBanreservas = $detalle->carga->banco === \App\Models\VolantePagoSocioCarga::BANCO_BANRESERVAS;
+        $logoPath = public_path($esBanreservas
+            ? 'images/banreservas-logo-volantes.png'
+            : 'images/banco-santa-cruz-volantes.png');
         $logoData = is_file($logoPath)
             ? 'data:image/png;base64,'.base64_encode(file_get_contents($logoPath))
             : null;
+        $bancoNombre = $detalle->carga->nombreBanco();
+        $bancoRnc = $esBanreservas ? '4-01-01006-2' : '1-02-01292-1';
+        $bancoContacto = $esBanreservas ? '809-960-2121' : '809-726-1000';
         $fechaVolante = $detalle->carga->fecha_correspondiente ?? $detalle->carga->fecha_transaccion;
     @endphp
     <table class="top">
         <tr>
             <td>
                 @if ($logoData)
-                    <img src="{{ $logoData }}" class="bank-logo" alt="Banco Santa Cruz">
+                    @if ($esBanreservas)
+                        <div class="bank-logo-crop">
+                            <img src="{{ $logoData }}" class="bank-logo" alt="{{ $bancoNombre }}">
+                        </div>
+                    @else
+                        <img src="{{ $logoData }}" class="bank-logo" alt="{{ $bancoNombre }}">
+                    @endif
+                @elseif ($esBanreservas)
+                    <div class="bank-wordmark">BANRESERVAS</div>
+                @else
+                    <div class="bank-wordmark">{{ strtoupper($bancoNombre) }}</div>
                 @endif
-                <div class="bank-info">Banco Santa Cruz<br>RNC: 1-02-01292-1<br>Contacto: 809-726-1000</div>
+                <div class="bank-info">{{ $bancoNombre }}<br>RNC: {{ $bancoRnc }}<br>Contacto: {{ $bancoContacto }}</div>
             </td>
             <td class="date">
                 {{ $fechaVolante->format('d/m/Y') }}<br><br>

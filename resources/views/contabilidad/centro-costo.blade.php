@@ -64,6 +64,12 @@
                                             <option value="inactivo">Inactivo</option>
                                         </select>
                                     </div>
+                                    <div class="col-12 col-md-4 col-lg-3">
+                                        <label class="form-label">Ruta</label>
+                                        <select id="filtroRutaCentroCosto" class="form-select form-select-sm">
+                                            <option value="">Todas</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div>
@@ -169,6 +175,7 @@
         let resizeCentrosCostoTimer = null;
         let resizeCentrosCostoBound = false;
         const filtroEmpresaCentroCostoEl = document.getElementById('filtroEmpresaCentroCosto');
+        const filtroRutaCentroCostoEl = document.getElementById('filtroRutaCentroCosto');
 
         async function parsearRespuestaJson(response, contextoError) {
             const contentType = (response.headers.get('content-type') || '').toLowerCase();
@@ -207,7 +214,8 @@
         document.getElementById('btnSincronizarCentros').addEventListener('click', sincronizarCentros);
         document.getElementById('btnEliminarCentrosEmpresa').addEventListener('click', eliminarDataCentrosPorEmpresa);
         document.getElementById('filtroEstadoCentroCosto').addEventListener('change', aplicarFiltroEstadoCentroCosto);
-        document.getElementById('filtroEmpresaCentroCosto').addEventListener('change', actualizarEtiquetaConsultar);
+        filtroRutaCentroCostoEl.addEventListener('change', aplicarFiltroEstadoCentroCosto);
+        document.getElementById('filtroEmpresaCentroCosto').addEventListener('change', manejarCambioEmpresaCentroCosto);
         document.getElementById('tablaConfigCentrosCosto').addEventListener('change', manejarCambioOcultarCentro);
         actualizarEtiquetaConsultar();
 
@@ -247,6 +255,7 @@
                     const dataFiltrada = centrosCostoData.filter(item => {
                         return String(item.IdViejo ?? '').trim() !== '' && !esOculto(item.Ocultar);
                     });
+                    cargarOpcionesRutaCentroCosto(dataFiltrada);
 
                     dataFiltrada.forEach(item => {
                         const inactivo = Boolean(item.Inactivo);
@@ -315,9 +324,32 @@
             if (!centrosCostoTable) return;
 
             const estado = document.getElementById('filtroEstadoCentroCosto').value;
-            const busqueda = estado === 'activo' ? '^Activo$' : (estado === 'inactivo' ? '^Inactivo$' : '');
-            centrosCostoTable.column(4).search(busqueda, true, false).draw();
+            const ruta = String(filtroRutaCentroCostoEl.value || '').trim();
+            const busquedaEstado = estado === 'activo' ? '^Activo$' : (estado === 'inactivo' ? '^Inactivo$' : '');
+            const busquedaRuta = ruta === '' ? '' : '^' + $.fn.dataTable.util.escapeRegex(ruta) + '$';
+            centrosCostoTable.column(4).search(busquedaEstado, true, false);
+            centrosCostoTable.column(5).search(busquedaRuta, true, false);
+            centrosCostoTable.draw();
             ajustarLayoutTablaCentrosCosto();
+        }
+
+        function cargarOpcionesRutaCentroCosto(registros) {
+            const rutaSeleccionada = String(filtroRutaCentroCostoEl.value || '').trim();
+            const rutas = [...new Set(registros
+                .map(item => String(item.IdGrupo ?? '').trim())
+                .filter(ruta => ruta !== ''))]
+                .sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }));
+            const opcionTodas = new Option('Todas', '');
+
+            filtroRutaCentroCostoEl.replaceChildren(opcionTodas);
+            rutas.forEach(ruta => filtroRutaCentroCostoEl.add(new Option(ruta, ruta)));
+            filtroRutaCentroCostoEl.value = rutas.includes(rutaSeleccionada) ? rutaSeleccionada : '';
+        }
+
+        function manejarCambioEmpresaCentroCosto() {
+            filtroRutaCentroCostoEl.replaceChildren(new Option('Todas', ''));
+            actualizarEtiquetaConsultar();
+            aplicarFiltroEstadoCentroCosto();
         }
 
         function destruirTablaCentrosCosto() {

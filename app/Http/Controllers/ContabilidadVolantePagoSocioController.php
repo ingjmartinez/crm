@@ -66,6 +66,7 @@ class ContabilidadVolantePagoSocioController extends Controller
                 ...$resultado['carga'],
                 'nombre_archivo' => $archivo->getClientOriginalName(),
                 'hash_archivo' => $ruta !== false ? hash_file('sha256', $ruta) : null,
+                'banco' => $request->validated('banco'),
                 'fecha_correspondiente' => $request->validated('fecha_correspondiente'),
                 'usuario_id' => $request->user()?->getAuthIdentifier(),
             ]);

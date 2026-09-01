@@ -12,8 +12,17 @@ class VolantePagoSocioCarga extends Model
     /** @use HasFactory<\Database\Factories\VolantePagoSocioCargaFactory> */
     use HasFactory;
 
+    public const BANCO_SANTA_CRUZ = 'santa_cruz';
+
+    public const BANCO_BANRESERVAS = 'banreservas';
+
+    public const BANCOS = [
+        self::BANCO_SANTA_CRUZ => 'Banco Santa Cruz',
+        self::BANCO_BANRESERVAS => 'Banreservas',
+    ];
+
     protected $fillable = [
-        'nombre_archivo', 'hash_archivo', 'empresa_origen', 'rnc_origen', 'cuenta_origen',
+        'nombre_archivo', 'hash_archivo', 'banco', 'empresa_origen', 'rnc_origen', 'cuenta_origen',
         'tipo_transaccion', 'estado', 'monto_total', 'fecha_transaccion',
         'fecha_correspondiente', 'cantidad_transacciones', 'usuario_id',
     ];
@@ -35,5 +44,10 @@ class VolantePagoSocioCarga extends Model
     public function usuario(): BelongsTo
     {
         return $this->belongsTo(User::class, 'usuario_id');
+    }
+
+    public function nombreBanco(): string
+    {
+        return self::BANCOS[$this->banco] ?? self::BANCOS[self::BANCO_SANTA_CRUZ];
     }
 }

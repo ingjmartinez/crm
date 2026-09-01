@@ -40,12 +40,22 @@
                         <form method="POST" action="{{ route('contabilidad.volantes-pago-socios.procesar') }}"
                             enctype="multipart/form-data" class="row g-3 align-items-end">
                             @csrf
-                            <div class="col-lg-6">
-                                <label for="archivo_csv" class="form-label">Archivo CSV de Banco Santa Cruz</label>
+                            <div class="col-lg-3">
+                                <label for="banco" class="form-label">Banco</label>
+                                <select class="form-select" id="banco" name="banco" required>
+                                    @foreach (\App\Models\VolantePagoSocioCarga::BANCOS as $valorBanco => $nombreBanco)
+                                        <option value="{{ $valorBanco }}" @selected(old('banco', \App\Models\VolantePagoSocioCarga::BANCO_SANTA_CRUZ) === $valorBanco)>
+                                            {{ $nombreBanco }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-lg-4">
+                                <label for="archivo_csv" class="form-label">Archivo CSV o TXT del banco</label>
                                 <input type="file" class="form-control" id="archivo_csv" name="archivo_csv"
                                     accept=".csv,.txt,text/csv,text/plain" required>
                             </div>
-                            <div class="col-lg-3">
+                            <div class="col-lg-2">
                                 <label for="fecha_correspondiente" class="form-label">Fecha correspondiente</label>
                                 <input type="date" class="form-control" id="fecha_correspondiente"
                                     name="fecha_correspondiente" value="{{ old('fecha_correspondiente') }}" required>
@@ -104,6 +114,7 @@
                                         <th>Nombre</th>
                                         <th>Fecha correspondiente</th>
                                         <th>Identificación</th>
+                                        <th>Banco</th>
                                         <th>Archivo</th>
                                         <th class="text-end">Monto</th>
                                         <th>Estado</th>
@@ -116,6 +127,7 @@
                                             <td>{{ $detalle->nombre }}</td>
                                             <td>{{ ($detalle->carga->fecha_correspondiente ?? $detalle->carga->fecha_transaccion)->format('d/m/Y') }}</td>
                                             <td>{{ $detalle->tipo_identificacion }} · {{ $detalle->identificacion }}</td>
+                                            <td>{{ $detalle->carga->nombreBanco() }}</td>
                                             <td>{{ $detalle->carga->nombre_archivo }}</td>
                                             <td class="text-end fw-semibold">RD${{ number_format((float) $detalle->monto, 2) }}</td>
                                             <td><span class="badge bg-success-subtle text-success">{{ $detalle->estado }}</span></td>
@@ -131,7 +143,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted py-4">
+                                            <td colspan="8" class="text-center text-muted py-4">
                                                 {{ $consultaRealizada ? 'No se encontraron volantes con los filtros indicados.' : 'Utiliza el panel de búsqueda para consultar los volantes guardados.' }}
                                             </td>
                                         </tr>
