@@ -341,6 +341,9 @@
                                         <i class="ri-save-3-line me-1"></i>Guardar período
                                     </button>
                                     <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
+                                    <button type="button" class="btn btn-danger" id="btnPreNomina">
+                                        <i class="ri-file-pdf-2-line me-1"></i>Pre nómina
+                                    </button>
                                     <button type="button" class="btn btn-info" id="btnValidacionGerencial">Validacion Gerencial</button>
                                     <button type="button" class="btn btn-info" id="btnInformeGerencialProceso">Informe Gerencial PDF</button>
                                     <button type="button" class="btn btn-info" id="btnDetalleCalendarioPdf">Detalle Calendario PDF</button>
@@ -375,6 +378,112 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalPreNomina" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Pre nómina</h5>
+                        <small class="text-muted">Genera los PDF separados por tipo de personal y empresa.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <div class="row g-3">
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card h-100 border-primary shadow-sm">
+                                <div class="card-body d-flex flex-column">
+                                    <span class="badge bg-primary-subtle text-primary align-self-start mb-3">Administrativos</span>
+                                    <h5 class="card-title">Joselito</h5>
+                                    <p class="text-muted mb-3">Personal administrativo y operativo de Consorcio Joselito.</p>
+                                    <div class="small mb-3">
+                                        <div><strong id="preNominaAdminJoselitoCount">0</strong> registros</div>
+                                        <div>RD$<strong id="preNominaAdminJoselitoTotal">0</strong></div>
+                                    </div>
+                                    <button type="button" class="btn btn-primary mt-auto btn-pre-nomina-pdf"
+                                        data-tipo="administrativos" data-empresa="joselito">
+                                        <i class="ri-download-2-line me-1"></i>Generar PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card h-100 border-info shadow-sm">
+                                <div class="card-body d-flex flex-column">
+                                    <span class="badge bg-info-subtle text-info align-self-start mb-3">Administrativos</span>
+                                    <h5 class="card-title">Negosur</h5>
+                                    <p class="text-muted mb-3">Personal administrativo y operativo de Negosur.</p>
+                                    <div class="small mb-3">
+                                        <div><strong id="preNominaAdminNegosurCount">0</strong> registros</div>
+                                        <div>RD$<strong id="preNominaAdminNegosurTotal">0</strong></div>
+                                    </div>
+                                    <button type="button" class="btn btn-info mt-auto btn-pre-nomina-pdf"
+                                        data-tipo="administrativos" data-empresa="negosur">
+                                        <i class="ri-download-2-line me-1"></i>Generar PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card h-100 border-success shadow-sm">
+                                <div class="card-body d-flex flex-column">
+                                    <span class="badge bg-success-subtle text-success align-self-start mb-3">Coordinadores</span>
+                                    <h5 class="card-title">Joselito</h5>
+                                    <p class="text-muted mb-3">Coordinadores asignados al grupo Joselito.</p>
+                                    <div class="small mb-3">
+                                        <div><strong id="preNominaCoordJoselitoCount">0</strong> registros</div>
+                                        <div>RD$<strong id="preNominaCoordJoselitoTotal">0</strong></div>
+                                    </div>
+                                    <button type="button" class="btn btn-success mt-auto btn-pre-nomina-pdf"
+                                        data-tipo="coordinadores" data-empresa="joselito">
+                                        <i class="ri-download-2-line me-1"></i>Generar PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card h-100 border-warning shadow-sm">
+                                <div class="card-body d-flex flex-column">
+                                    <span class="badge bg-warning-subtle text-warning align-self-start mb-3">Coordinadores</span>
+                                    <h5 class="card-title">Negosur</h5>
+                                    <p class="text-muted mb-3">Coordinadores asignados a Negosur.</p>
+                                    <div class="small mb-3">
+                                        <div><strong id="preNominaCoordNegosurCount">0</strong> registros</div>
+                                        <div>RD$<strong id="preNominaCoordNegosurTotal">0</strong></div>
+                                    </div>
+                                    <button type="button" class="btn btn-warning mt-auto btn-pre-nomina-pdf"
+                                        data-tipo="coordinadores" data-empresa="negosur">
+                                        <i class="ri-download-2-line me-1"></i>Generar PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12 col-xl-8">
+                            <div class="card h-100 border-danger shadow-sm">
+                                <div class="card-body d-flex flex-column">
+                                    <span class="badge bg-danger-subtle text-danger align-self-start mb-3">Revisión requerida</span>
+                                    <h5 class="card-title">Usuarios sin ID de empleado</h5>
+                                    <p class="text-muted mb-3">Usuarios del incentivo que no pueden incluirse en la nómina automática por no tener IdEmpleado.</p>
+                                    <div class="small mb-3">
+                                        <div><strong id="preNominaSinIdCount">0</strong> registros</div>
+                                        <div>RD$<strong id="preNominaSinIdTotal">0</strong></div>
+                                    </div>
+                                    <button type="button" class="btn btn-danger mt-auto btn-pre-nomina-pdf"
+                                        data-tipo="sin_id" data-empresa="">
+                                        <i class="ri-download-2-line me-1"></i>Generar PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -733,6 +842,12 @@
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-success" id="btnExportCoordinadorDetalleExcel">
+                        <i class="ri-file-excel-2-line me-1"></i>Excel
+                    </button>
+                    <button type="button" class="btn btn-danger" id="btnExportCoordinadorDetallePdf">
+                        <i class="ri-file-pdf-2-line me-1"></i>PDF
+                    </button>
                     <button type="button" class="btn btn-soft-secondary" id="btnBackToCoordinadores">Atras</button>
                 </div>
             </div>
@@ -1230,6 +1345,7 @@
     let currentAdministrativeBase = 0;
     let currentOperatorBase = 0;
     let currentCoordinatorBase = 0;
+    let currentCoordinatorDetailRow = null;
     let currentFixedBagTopUp = 0;
     let horasTotalMinimo = toNumber(localStorage.getItem('incentivo_v6_horas_total_minimo') || 0);
     let excludedTerminales = new Set(@json($terminalesExcluidasIncentivo ?? []));
@@ -3013,6 +3129,279 @@
             fechaFin: getFechaFinPagoIncentivo(),
             suffix: combineByCompany ? '_admi_coor_por_empresa' : '_admi_coor',
         };
+    }
+
+    function getPreNominaConfigurations() {
+        return [
+            {
+                tipo: 'administrativos',
+                empresa: 'joselito',
+                titulo: 'Administrativos - Consorcio Joselito',
+                countId: 'preNominaAdminJoselitoCount',
+                totalId: 'preNominaAdminJoselitoTotal',
+                filename: 'administrativos_joselito',
+            },
+            {
+                tipo: 'administrativos',
+                empresa: 'negosur',
+                titulo: 'Administrativos - Negosur',
+                countId: 'preNominaAdminNegosurCount',
+                totalId: 'preNominaAdminNegosurTotal',
+                filename: 'administrativos_negosur',
+            },
+            {
+                tipo: 'coordinadores',
+                empresa: 'joselito',
+                titulo: 'Coordinadores - Consorcio Joselito',
+                countId: 'preNominaCoordJoselitoCount',
+                totalId: 'preNominaCoordJoselitoTotal',
+                filename: 'coordinadores_joselito',
+            },
+            {
+                tipo: 'coordinadores',
+                empresa: 'negosur',
+                titulo: 'Coordinadores - Negosur',
+                countId: 'preNominaCoordNegosurCount',
+                totalId: 'preNominaCoordNegosurTotal',
+                filename: 'coordinadores_negosur',
+            },
+            {
+                tipo: 'sin_id',
+                empresa: '',
+                titulo: 'Usuarios sin ID de empleado',
+                countId: 'preNominaSinIdCount',
+                totalId: 'preNominaSinIdTotal',
+                filename: 'usuarios_sin_id_empleado',
+            },
+        ];
+    }
+
+    function getAllAdministrativePreNominaRows() {
+        const administrativos = administrativeRows.map((row, idx) => ({
+            ...row,
+            grupo: normalizeAdministrativeGroup(row.grupo),
+            empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
+            __tipo: 'admin',
+            __idx: idx,
+        }));
+        const operadores = operatorRows.map((row, idx) => ({
+            ...row,
+            grupo: normalizeAdministrativeGroup(row.grupo),
+            empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
+            __tipo: 'operador',
+            __idx: idx,
+        }));
+
+        return [...administrativos, ...operadores]
+            .filter((row) => !isAdministrativeDesvinculadoExcluded(row))
+            .map((row) => ({
+                grupo: row.grupo,
+                empleadoid: getEmpleadoIdKey(row.empleadoid),
+                nombre: String(row.nombre ?? '').trim(),
+                cedula: String(row.cedula ?? '').trim(),
+                empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
+                monto: getAdministrativeDisplayAmount(row),
+            }))
+            .filter((row) => toIntegerAmount(row.monto) > 0);
+    }
+
+    function getPreNominaRows(tipo, empresa = '') {
+        if (tipo === 'administrativos') {
+            return getAllAdministrativePreNominaRows()
+                .filter((row) => normalizePagoEmpresaGroupKey(row.empresa) === empresa);
+        }
+
+        if (tipo === 'coordinadores') {
+            return getCoordinatorDisplayRows()
+                .map((row) => ({
+                    empleadoid: getEmpleadoIdKey(row.empleadoid),
+                    nombre: String(row.nombre ?? '').trim(),
+                    cedula: String(row.cedula ?? '').trim(),
+                    empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
+                    agencias: toNumber(row.agencias_validas ?? row.agencias),
+                    monto: getCoordinatorDisplayAmount(row),
+                }))
+                .filter((row) => normalizePagoEmpresaGroupKey(row.empresa) === empresa)
+                .filter((row) => toIntegerAmount(row.monto) > 0);
+        }
+
+        return getPagoIncentivoExportRows()
+            .filter((row) => !hasEmpleadoId(row))
+            .map((row) => ({
+                cedula: String(row.cedula ?? '').trim(),
+                nombre: String(row.nombre ?? 'Actualizar en maestro de empleados').trim(),
+                empresa: normalizeEmpresaLabel(row.empresa),
+                terminal: String(row.ultima_terminal ?? '').trim(),
+                agencia: String(row.ultima_agencia_nombre ?? '').trim(),
+                monto: toIntegerAmount(row.nuevo_incentivo),
+            }))
+            .filter((row) => row.monto > 0);
+    }
+
+    function actualizarResumenPreNomina() {
+        getPreNominaConfigurations().forEach((configuration) => {
+            const rows = getPreNominaRows(configuration.tipo, configuration.empresa);
+            const total = rows.reduce((sum, row) => sum + toIntegerAmount(row.monto), 0);
+            const countElement = document.getElementById(configuration.countId);
+            const totalElement = document.getElementById(configuration.totalId);
+
+            if (countElement) countElement.textContent = rows.length.toLocaleString('en-US');
+            if (totalElement) totalElement.textContent = formatMoney(total);
+        });
+    }
+
+    function abrirModalPreNomina() {
+        if (!cachedRows.length) {
+            Swal.fire({
+                title: 'Reporte pendiente',
+                text: 'Primero debes generar el reporte para preparar la pre nómina.',
+                icon: 'warning',
+            });
+            return;
+        }
+
+        actualizarResumenPreNomina();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalPreNomina')).show();
+    }
+
+    function getPreNominaPdfTable(tipo, rows) {
+        const header = (text, alignment = 'left') => ({ text, style: 'tableHeader', alignment });
+        const amountCell = (amount, bold = false) => ({
+            text: `RD$${formatMoney(amount)}`,
+            alignment: 'right',
+            bold,
+        });
+
+        if (tipo === 'administrativos') {
+            return {
+                widths: ['18%', '12%', '23%', '16%', '16%', '15%'],
+                body: [
+                    [header('Grupo'), header('Id empleado'), header('Nombre'), header('Cédula'), header('Empresa'), header('Monto', 'right')],
+                    ...rows.map((row) => [
+                        row.grupo || '',
+                        row.empleadoid || 'Sin ID',
+                        row.nombre || '',
+                        row.cedula || '',
+                        row.empresa || '',
+                        amountCell(row.monto),
+                    ]),
+                ],
+            };
+        }
+
+        if (tipo === 'coordinadores') {
+            return {
+                widths: ['13%', '25%', '16%', '18%', '13%', '15%'],
+                body: [
+                    [header('Id empleado'), header('Nombre'), header('Cédula'), header('Empresa'), header('Agencias', 'center'), header('Monto', 'right')],
+                    ...rows.map((row) => [
+                        row.empleadoid || 'Sin ID',
+                        row.nombre || '',
+                        row.cedula || '',
+                        row.empresa || '',
+                        { text: String(row.agencias), alignment: 'center' },
+                        amountCell(row.monto),
+                    ]),
+                ],
+            };
+        }
+
+        return {
+            widths: ['15%', '24%', '15%', '12%', '19%', '15%'],
+            body: [
+                [header('Cédula'), header('Nombre'), header('Empresa'), header('Terminal'), header('Agencia'), header('Monto', 'right')],
+                ...rows.map((row) => [
+                    row.cedula || '',
+                    row.nombre || '',
+                    row.empresa || '',
+                    row.terminal || '',
+                    row.agencia || '',
+                    amountCell(row.monto),
+                ]),
+            ],
+        };
+    }
+
+    function generarPdfPreNomina(tipo, empresa = '') {
+        if (typeof pdfMake === 'undefined') {
+            Swal.fire({ title: 'Error', text: 'No se encontró la librería para generar PDF.', icon: 'error' });
+            return;
+        }
+
+        const configuration = getPreNominaConfigurations()
+            .find((item) => item.tipo === tipo && item.empresa === empresa);
+        const rows = getPreNominaRows(tipo, empresa);
+
+        if (!configuration || !rows.length) {
+            Swal.fire({
+                title: 'Sin datos',
+                text: 'No hay registros con monto mayor a cero para este PDF.',
+                icon: 'warning',
+            });
+            return;
+        }
+
+        const table = getPreNominaPdfTable(tipo, rows);
+        const total = rows.reduce((sum, row) => sum + toIntegerAmount(row.monto), 0);
+        const fechaInicio = document.getElementById('ni_fecha_ini')?.value || '';
+        const fechaFin = document.getElementById('ni_fecha_fin')?.value || '';
+        const sistema = document.getElementById('ni_sistema')?.value || 'Todos';
+        const totalColumns = table.widths.length;
+        table.body.push([
+            { text: 'TOTAL', colSpan: totalColumns - 1, alignment: 'right', bold: true, fillColor: '#e2e8f0' },
+            ...Array.from({ length: totalColumns - 2 }, () => ({})),
+            { text: `RD$${formatMoney(total)}`, alignment: 'right', bold: true, fillColor: '#e2e8f0' },
+        ]);
+
+        const docDefinition = {
+            pageSize: 'LETTER',
+            pageOrientation: 'landscape',
+            pageMargins: [28, 32, 28, 32],
+            content: [
+                { text: 'PRE NÓMINA DE INCENTIVOS', style: 'title' },
+                { text: configuration.titulo, style: 'subtitle' },
+                {
+                    columns: [
+                        { text: `Período: ${formatDateDisplay(fechaInicio)} al ${formatDateDisplay(fechaFin)}` },
+                        { text: `Sistema: ${sistema}`, alignment: 'center' },
+                        { text: `Registros: ${rows.length.toLocaleString('en-US')}`, alignment: 'right' },
+                    ],
+                    margin: [0, 6, 0, 12],
+                    fontSize: 9,
+                    color: '#475569',
+                },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: table.widths,
+                        body: table.body,
+                    },
+                    layout: {
+                        fillColor: (rowIndex) => rowIndex > 0 && rowIndex % 2 === 0 ? '#f8fafc' : null,
+                        hLineColor: () => '#cbd5e1',
+                        vLineColor: () => '#cbd5e1',
+                    },
+                    fontSize: 8,
+                },
+            ],
+            footer: (currentPage, pageCount) => ({
+                text: `Página ${currentPage} de ${pageCount}`,
+                alignment: 'center',
+                margin: [0, 10, 0, 0],
+                fontSize: 8,
+                color: '#64748b',
+            }),
+            styles: {
+                title: { fontSize: 17, bold: true, color: '#0f172a', alignment: 'center' },
+                subtitle: { fontSize: 12, bold: true, color: '#334155', alignment: 'center', margin: [0, 3, 0, 3] },
+                tableHeader: { bold: true, color: '#ffffff', fillColor: '#1e3a8a', fontSize: 8 },
+            },
+            defaultStyle: { fontSize: 9 },
+        };
+
+        pdfMake.createPdf(docDefinition).download(
+            `pre_nomina_${configuration.filename}_${fechaFin || 'incentivos'}.pdf`
+        );
     }
 
     function downloadBlob(filename, blob) {
@@ -4919,11 +5308,16 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
     function renderCoordinatorDetailTable(row) {
         const tbody = document.getElementById('tbodyCoordinadorDetalle');
         const title = document.getElementById('coordinatorDetailTitle');
+        const excelButton = document.getElementById('btnExportCoordinadorDetalleExcel');
+        const pdfButton = document.getElementById('btnExportCoordinadorDetallePdf');
         const users = getCoordinatorDetailUsers(row);
         const coordinatorName = row?.nombre || 'Coordinador';
 
+        currentCoordinatorDetailRow = row || null;
         title.textContent = `Detalle de Usuarios - ${coordinatorName}`;
         tbody.innerHTML = '';
+        excelButton.disabled = users.length === 0;
+        pdfButton.disabled = users.length === 0;
 
         if (!users.length) {
             tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No hay usuarios para este coordinador.</td></tr>';
@@ -4939,6 +5333,141 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             `;
             tbody.appendChild(tr);
         });
+    }
+
+    function getCoordinatorDetailExportData() {
+        const row = currentCoordinatorDetailRow;
+        const users = getCoordinatorDetailUsers(row);
+
+        if (!row || !users.length) {
+            Swal.fire({
+                title: 'Sin datos',
+                text: 'No hay usuarios disponibles para exportar en este coordinador.',
+                icon: 'warning',
+            });
+            return null;
+        }
+
+        return {
+            row,
+            users,
+            coordinatorName: String(row.nombre || 'Coordinador').trim(),
+            total: users.reduce((sum, user) => sum + toIntegerAmount(user?.incentivo), 0),
+        };
+    }
+
+    function coordinatorDetailFilename(value) {
+        return String(value || 'coordinador')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/gi, '_')
+            .replace(/^_+|_+$/g, '')
+            .toLowerCase() || 'coordinador';
+    }
+
+    function exportCoordinatorDetailExcel() {
+        const data = getCoordinatorDetailExportData();
+        if (!data) {
+            return;
+        }
+
+        const headers = ['Cédula', 'Usuario', 'Incentivo'];
+        const rows = [
+            ...data.users.map((user) => [
+                String(user?.cedula ?? ''),
+                String(user?.usuario ?? ''),
+                String(toIntegerAmount(user?.incentivo)),
+            ]),
+            ['', 'TOTAL', String(data.total)],
+        ];
+        const filename = `detalle_usuarios_${coordinatorDetailFilename(data.coordinatorName)}`;
+
+        if (typeof JSZip === 'undefined') {
+            downloadBlob(`${filename}.xls`, buildExcelHtmlBlob(headers, rows));
+            return;
+        }
+
+        buildXlsxBlob(headers, rows).then((blob) => downloadBlob(`${filename}.xlsx`, blob));
+    }
+
+    function exportCoordinatorDetailPdf() {
+        const data = getCoordinatorDetailExportData();
+        if (!data) {
+            return;
+        }
+
+        if (typeof pdfMake === 'undefined') {
+            Swal.fire({ title: 'Error', text: 'No se encontró la librería para generar PDF.', icon: 'error' });
+            return;
+        }
+
+        const fechaInicio = document.getElementById('ni_fecha_ini')?.value || '';
+        const fechaFin = document.getElementById('ni_fecha_fin')?.value || '';
+        const sistema = document.getElementById('ni_sistema')?.value || 'Todos';
+        const tableBody = [
+            [
+                { text: 'Cédula', style: 'tableHeader' },
+                { text: 'Usuario', style: 'tableHeader' },
+                { text: 'Incentivo', style: 'tableHeader', alignment: 'right' },
+            ],
+            ...data.users.map((user) => [
+                String(user?.cedula ?? ''),
+                String(user?.usuario ?? ''),
+                { text: `RD$${formatMoney(user?.incentivo)}`, alignment: 'right' },
+            ]),
+            [
+                { text: 'TOTAL', colSpan: 2, alignment: 'right', bold: true, fillColor: '#e2e8f0' },
+                {},
+                { text: `RD$${formatMoney(data.total)}`, alignment: 'right', bold: true, fillColor: '#e2e8f0' },
+            ],
+        ];
+        const docDefinition = {
+            pageSize: 'LETTER',
+            pageMargins: [36, 36, 36, 36],
+            content: [
+                { text: 'DETALLE DE USUARIOS POR COORDINADOR', style: 'title' },
+                { text: data.coordinatorName, style: 'subtitle' },
+                {
+                    columns: [
+                        { text: `Período: ${formatDateDisplay(fechaInicio)} al ${formatDateDisplay(fechaFin)}` },
+                        { text: `Sistema: ${sistema}`, alignment: 'center' },
+                        { text: `Usuarios: ${data.users.length.toLocaleString('en-US')}`, alignment: 'right' },
+                    ],
+                    margin: [0, 8, 0, 14],
+                    fontSize: 9,
+                    color: '#475569',
+                },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['25%', '50%', '25%'],
+                        body: tableBody,
+                    },
+                    layout: {
+                        fillColor: (rowIndex) => rowIndex > 0 && rowIndex % 2 === 0 ? '#f8fafc' : null,
+                        hLineColor: () => '#cbd5e1',
+                        vLineColor: () => '#cbd5e1',
+                    },
+                    fontSize: 9,
+                },
+            ],
+            footer: (currentPage, pageCount) => ({
+                text: `Página ${currentPage} de ${pageCount}`,
+                alignment: 'center',
+                margin: [0, 10, 0, 0],
+                fontSize: 8,
+                color: '#64748b',
+            }),
+            styles: {
+                title: { fontSize: 16, bold: true, alignment: 'center', color: '#0f172a' },
+                subtitle: { fontSize: 12, bold: true, alignment: 'center', color: '#334155', margin: [0, 4, 0, 4] },
+                tableHeader: { bold: true, color: '#ffffff', fillColor: '#1e3a8a' },
+            },
+            defaultStyle: { fontSize: 9 },
+        };
+        const filename = `detalle_usuarios_${coordinatorDetailFilename(data.coordinatorName)}_${fechaFin || 'incentivos'}.pdf`;
+
+        pdfMake.createPdf(docDefinition).download(filename);
     }
 
     function aplicarCoordinadoresBolsa() {
@@ -6321,6 +6850,14 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             modal.show();
         });
 
+        document.querySelector('#btnExportCoordinadorDetalleExcel').addEventListener('click', function() {
+            exportCoordinatorDetailExcel();
+        });
+
+        document.querySelector('#btnExportCoordinadorDetallePdf').addEventListener('click', function() {
+            exportCoordinatorDetailPdf();
+        });
+
         document.querySelector('#tbodyAdministrativos').addEventListener('input', function(event) {
             const input = event.target;
             if (input.tagName === 'SELECT') {
@@ -6683,6 +7220,19 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
     document.querySelector('#btnGenerarExcelPago').addEventListener('click', function() {
         seleccionarDescargaExcelPago();
+    });
+
+    document.querySelector('#btnPreNomina').addEventListener('click', function() {
+        abrirModalPreNomina();
+    });
+
+    document.querySelector('#modalPreNomina').addEventListener('click', function(event) {
+        const button = event.target.closest('button[data-tipo]');
+        if (!button) {
+            return;
+        }
+
+        generarPdfPreNomina(button.dataset.tipo, button.dataset.empresa || '');
     });
 
     document.querySelector('#btnFiltrarCumplimiento').addEventListener('click', function() {

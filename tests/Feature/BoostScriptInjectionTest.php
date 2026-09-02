@@ -56,6 +56,40 @@ class BoostScriptInjectionTest extends TestCase
         );
     }
 
+    public function test_incentive_v6_exposes_pre_nomina_pdf_mosaic(): void
+    {
+        $html = view('incentivos.reporte-nuevo-incentivo-v6', [
+            'coordinadores' => collect(),
+            'administrativosConfig' => [],
+            'terminalesExcluidasIncentivo' => [],
+        ])->render();
+
+        $this->assertStringContainsString('id="btnPreNomina"', $html);
+        $this->assertStringContainsString('id="modalPreNomina"', $html);
+        $this->assertSame(5, substr_count($html, 'btn-pre-nomina-pdf'));
+        $this->assertStringContainsString('data-tipo="administrativos" data-empresa="joselito"', $html);
+        $this->assertStringContainsString('data-tipo="administrativos" data-empresa="negosur"', $html);
+        $this->assertStringContainsString('data-tipo="coordinadores" data-empresa="joselito"', $html);
+        $this->assertStringContainsString('data-tipo="coordinadores" data-empresa="negosur"', $html);
+        $this->assertStringContainsString('data-tipo="sin_id"', $html);
+        $this->assertStringContainsString('function generarPdfPreNomina', $html);
+    }
+
+    public function test_incentive_v6_coordinator_detail_modal_exposes_excel_and_pdf_exports(): void
+    {
+        $html = view('incentivos.reporte-nuevo-incentivo-v6', [
+            'coordinadores' => collect(),
+            'administrativosConfig' => [],
+            'terminalesExcluidasIncentivo' => [],
+        ])->render();
+
+        $this->assertStringContainsString('id="btnExportCoordinadorDetalleExcel"', $html);
+        $this->assertStringContainsString('id="btnExportCoordinadorDetallePdf"', $html);
+        $this->assertStringContainsString('function exportCoordinatorDetailExcel', $html);
+        $this->assertStringContainsString('function exportCoordinatorDetailPdf', $html);
+        $this->assertStringContainsString('DETALLE DE USUARIOS POR COORDINADOR', $html);
+    }
+
     public function test_browser_logger_is_only_injected_once_in_commercial_sales_kpi_view(): void
     {
         $this->assertBrowserLoggerIsOnlyInjectedOnce(
