@@ -405,10 +405,16 @@
                                         <div><strong id="preNominaAdminJoselitoCount">0</strong> registros</div>
                                         <div>RD$<strong id="preNominaAdminJoselitoTotal">0</strong></div>
                                     </div>
-                                    <button type="button" class="btn btn-primary mt-auto btn-pre-nomina-pdf"
-                                        data-tipo="administrativos" data-empresa="joselito">
-                                        <i class="ri-download-2-line me-1"></i>Generar PDF
-                                    </button>
+                                    <div class="d-flex gap-2 mt-auto">
+                                        <button type="button" class="btn btn-primary flex-fill btn-pre-nomina-pdf"
+                                            data-tipo="administrativos" data-empresa="joselito" data-formato="pdf">
+                                            <i class="ri-file-pdf-2-line me-1"></i>PDF
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success flex-fill btn-pre-nomina-excel"
+                                            data-tipo="administrativos" data-empresa="joselito" data-formato="excel">
+                                            <i class="ri-file-excel-2-line me-1"></i>Excel
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -422,10 +428,16 @@
                                         <div><strong id="preNominaAdminNegosurCount">0</strong> registros</div>
                                         <div>RD$<strong id="preNominaAdminNegosurTotal">0</strong></div>
                                     </div>
-                                    <button type="button" class="btn btn-info mt-auto btn-pre-nomina-pdf"
-                                        data-tipo="administrativos" data-empresa="negosur">
-                                        <i class="ri-download-2-line me-1"></i>Generar PDF
-                                    </button>
+                                    <div class="d-flex gap-2 mt-auto">
+                                        <button type="button" class="btn btn-info flex-fill btn-pre-nomina-pdf"
+                                            data-tipo="administrativos" data-empresa="negosur" data-formato="pdf">
+                                            <i class="ri-file-pdf-2-line me-1"></i>PDF
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success flex-fill btn-pre-nomina-excel"
+                                            data-tipo="administrativos" data-empresa="negosur" data-formato="excel">
+                                            <i class="ri-file-excel-2-line me-1"></i>Excel
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -439,10 +451,16 @@
                                         <div><strong id="preNominaCoordJoselitoCount">0</strong> registros</div>
                                         <div>RD$<strong id="preNominaCoordJoselitoTotal">0</strong></div>
                                     </div>
-                                    <button type="button" class="btn btn-success mt-auto btn-pre-nomina-pdf"
-                                        data-tipo="coordinadores" data-empresa="joselito">
-                                        <i class="ri-download-2-line me-1"></i>Generar PDF
-                                    </button>
+                                    <div class="d-flex gap-2 mt-auto">
+                                        <button type="button" class="btn btn-success flex-fill btn-pre-nomina-pdf"
+                                            data-tipo="coordinadores" data-empresa="joselito" data-formato="pdf">
+                                            <i class="ri-file-pdf-2-line me-1"></i>PDF
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success flex-fill btn-pre-nomina-excel"
+                                            data-tipo="coordinadores" data-empresa="joselito" data-formato="excel">
+                                            <i class="ri-file-excel-2-line me-1"></i>Excel
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -456,14 +474,42 @@
                                         <div><strong id="preNominaCoordNegosurCount">0</strong> registros</div>
                                         <div>RD$<strong id="preNominaCoordNegosurTotal">0</strong></div>
                                     </div>
-                                    <button type="button" class="btn btn-warning mt-auto btn-pre-nomina-pdf"
-                                        data-tipo="coordinadores" data-empresa="negosur">
-                                        <i class="ri-download-2-line me-1"></i>Generar PDF
-                                    </button>
+                                    <div class="d-flex gap-2 mt-auto">
+                                        <button type="button" class="btn btn-warning flex-fill btn-pre-nomina-pdf"
+                                            data-tipo="coordinadores" data-empresa="negosur" data-formato="pdf">
+                                            <i class="ri-file-pdf-2-line me-1"></i>PDF
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success flex-fill btn-pre-nomina-excel"
+                                            data-tipo="coordinadores" data-empresa="negosur" data-formato="excel">
+                                            <i class="ri-file-excel-2-line me-1"></i>Excel
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-12 col-xl-8">
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card h-100 border-secondary shadow-sm">
+                                <div class="card-body d-flex flex-column">
+                                    <span class="badge bg-secondary-subtle text-secondary align-self-start mb-3">Agentes de ventas</span>
+                                    <h5 class="card-title">Con ID de empleado</h5>
+                                    <p class="text-muted mb-3">Agentes pagables con su coordinador asignado para revisión de pre nómina.</p>
+                                    <div class="small mb-3">
+                                        <div><strong id="preNominaAgentesConIdCount">0</strong> registros</div>
+                                    </div>
+                                    <div class="d-flex gap-2 mt-auto">
+                                        <button type="button" class="btn btn-secondary flex-fill btn-pre-nomina-pdf"
+                                            data-tipo="agentes_con_id" data-empresa="" data-formato="pdf">
+                                            <i class="ri-file-pdf-2-line me-1"></i>PDF
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success flex-fill btn-pre-nomina-excel"
+                                            data-tipo="agentes_con_id" data-empresa="" data-formato="excel">
+                                            <i class="ri-file-excel-2-line me-1"></i>Excel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-xl-4">
                             <div class="card h-100 border-danger shadow-sm">
                                 <div class="card-body d-flex flex-column">
                                     <span class="badge bg-danger-subtle text-danger align-self-start mb-3">Revisión requerida</span>
@@ -471,12 +517,17 @@
                                     <p class="text-muted mb-3">Usuarios del incentivo que no pueden incluirse en la nómina automática por no tener IdEmpleado.</p>
                                     <div class="small mb-3">
                                         <div><strong id="preNominaSinIdCount">0</strong> registros</div>
-                                        <div>RD$<strong id="preNominaSinIdTotal">0</strong></div>
                                     </div>
-                                    <button type="button" class="btn btn-danger mt-auto btn-pre-nomina-pdf"
-                                        data-tipo="sin_id" data-empresa="">
-                                        <i class="ri-download-2-line me-1"></i>Generar PDF
-                                    </button>
+                                    <div class="d-flex gap-2 mt-auto">
+                                        <button type="button" class="btn btn-danger flex-fill btn-pre-nomina-pdf"
+                                            data-tipo="sin_id" data-empresa="" data-formato="pdf">
+                                            <i class="ri-file-pdf-2-line me-1"></i>PDF
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success flex-fill btn-pre-nomina-excel"
+                                            data-tipo="sin_id" data-empresa="" data-formato="excel">
+                                            <i class="ri-file-excel-2-line me-1"></i>Excel
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -3166,11 +3217,19 @@
                 filename: 'coordinadores_negosur',
             },
             {
+                tipo: 'agentes_con_id',
+                empresa: '',
+                titulo: 'Agentes de ventas con ID de empleado',
+                countId: 'preNominaAgentesConIdCount',
+                totalId: null,
+                filename: 'agentes_ventas_con_id_empleado',
+            },
+            {
                 tipo: 'sin_id',
                 empresa: '',
                 titulo: 'Usuarios sin ID de empleado',
                 countId: 'preNominaSinIdCount',
-                totalId: 'preNominaSinIdTotal',
+                totalId: null,
                 filename: 'usuarios_sin_id_empleado',
             },
         ];
@@ -3223,6 +3282,38 @@
                 }))
                 .filter((row) => normalizePagoEmpresaGroupKey(row.empresa) === empresa)
                 .filter((row) => toIntegerAmount(row.monto) > 0);
+        }
+
+        if (tipo === 'agentes_con_id') {
+            const coordinatorNamesByCedula = new Map();
+
+            coordinatorRows.forEach((coordinator) => {
+                const coordinatorName = String(coordinator.nombre ?? '').trim();
+
+                getCoordinatorDetailUsers(coordinator).forEach((user) => {
+                    const cedulaKey = getCedulaKey(user?.cedula);
+                    if (!cedulaKey || !coordinatorName) {
+                        return;
+                    }
+
+                    const names = coordinatorNamesByCedula.get(cedulaKey) || new Set();
+                    names.add(coordinatorName);
+                    coordinatorNamesByCedula.set(cedulaKey, names);
+                });
+            });
+
+            return getPagoIncentivoExportRows()
+                .filter((row) => hasEmpleadoId(row))
+                .map((row) => ({
+                    empleadoid: getEmpleadoIdKey(row.empleadoid),
+                    cedula: String(row.cedula ?? '').trim(),
+                    nombre: String(row.nombre ?? '').trim(),
+                    empresa: normalizeEmpresaLabel(row.empresa),
+                    coordinador: Array.from(coordinatorNamesByCedula.get(getCedulaKey(row.cedula)) || []).join(', ')
+                        || 'Sin coordinador asignado',
+                    monto: toIntegerAmount(row.nuevo_incentivo),
+                }))
+                .filter((row) => row.monto > 0);
         }
 
         return getPagoIncentivoExportRows()
@@ -3306,17 +3397,34 @@
             };
         }
 
+        if (tipo === 'agentes_con_id') {
+            return {
+                widths: ['11%', '15%', '20%', '14%', '25%', '15%'],
+                body: [
+                    [header('Id empleado'), header('Cédula'), header('Nombre'), header('Empresa'), header('Coordinador'), header('Incentivo', 'center')],
+                    ...rows.map((row) => [
+                        row.empleadoid || '',
+                        row.cedula || '',
+                        row.nombre || '',
+                        row.empresa || '',
+                        row.coordinador || 'Sin coordinador asignado',
+                        { text: 'Califica', alignment: 'center', bold: true },
+                    ]),
+                ],
+            };
+        }
+
         return {
             widths: ['15%', '24%', '15%', '12%', '19%', '15%'],
             body: [
-                [header('Cédula'), header('Nombre'), header('Empresa'), header('Terminal'), header('Agencia'), header('Monto', 'right')],
+                [header('Cédula'), header('Nombre'), header('Empresa'), header('Terminal'), header('Agencia'), header('Incentivo', 'center')],
                 ...rows.map((row) => [
                     row.cedula || '',
                     row.nombre || '',
                     row.empresa || '',
                     row.terminal || '',
                     row.agencia || '',
-                    amountCell(row.monto),
+                    { text: 'Califica', alignment: 'center', bold: true },
                 ]),
             ],
         };
@@ -3347,11 +3455,24 @@
         const fechaFin = document.getElementById('ni_fecha_fin')?.value || '';
         const sistema = document.getElementById('ni_sistema')?.value || 'Todos';
         const totalColumns = table.widths.length;
-        table.body.push([
-            { text: 'TOTAL', colSpan: totalColumns - 1, alignment: 'right', bold: true, fillColor: '#e2e8f0' },
-            ...Array.from({ length: totalColumns - 2 }, () => ({})),
-            { text: `RD$${formatMoney(total)}`, alignment: 'right', bold: true, fillColor: '#e2e8f0' },
-        ]);
+        if (['agentes_con_id', 'sin_id'].includes(tipo)) {
+            table.body.push([
+                {
+                    text: `TOTAL REGISTROS: ${rows.length.toLocaleString('en-US')}`,
+                    colSpan: totalColumns,
+                    alignment: 'right',
+                    bold: true,
+                    fillColor: '#e2e8f0',
+                },
+                ...Array.from({ length: totalColumns - 1 }, () => ({})),
+            ]);
+        } else {
+            table.body.push([
+                { text: 'TOTAL', colSpan: totalColumns - 1, alignment: 'right', bold: true, fillColor: '#e2e8f0' },
+                ...Array.from({ length: totalColumns - 2 }, () => ({})),
+                { text: `RD$${formatMoney(total)}`, alignment: 'right', bold: true, fillColor: '#e2e8f0' },
+            ]);
+        }
 
         const docDefinition = {
             pageSize: 'LETTER',
@@ -3402,6 +3523,114 @@
         pdfMake.createPdf(docDefinition).download(
             `pre_nomina_${configuration.filename}_${fechaFin || 'incentivos'}.pdf`
         );
+    }
+
+    function getPreNominaExcelData(tipo, rows) {
+        const total = rows.reduce((sum, row) => sum + toIntegerAmount(row.monto), 0);
+
+        if (tipo === 'administrativos') {
+            return {
+                headers: ['Grupo', 'Id empleado', 'Nombre', 'Cédula', 'Empresa', 'Monto'],
+                rows: [
+                    ...rows.map((row) => [
+                        row.grupo || '',
+                        row.empleadoid || 'Sin ID',
+                        row.nombre || '',
+                        row.cedula || '',
+                        row.empresa || '',
+                        String(toIntegerAmount(row.monto)),
+                    ]),
+                    ['', '', '', '', 'TOTAL', String(total)],
+                ],
+            };
+        }
+
+        if (tipo === 'coordinadores') {
+            return {
+                headers: ['Id empleado', 'Nombre', 'Cédula', 'Empresa', 'Agencias', 'Monto'],
+                rows: [
+                    ...rows.map((row) => [
+                        row.empleadoid || 'Sin ID',
+                        row.nombre || '',
+                        row.cedula || '',
+                        row.empresa || '',
+                        String(row.agencias),
+                        String(toIntegerAmount(row.monto)),
+                    ]),
+                    ['', '', '', '', 'TOTAL', String(total)],
+                ],
+            };
+        }
+
+        if (tipo === 'agentes_con_id') {
+            return {
+                headers: ['Id empleado', 'Cédula', 'Nombre', 'Empresa', 'Coordinador', 'Incentivo'],
+                rows: [
+                    ...rows.map((row) => [
+                        row.empleadoid || '',
+                        row.cedula || '',
+                        row.nombre || '',
+                        row.empresa || '',
+                        row.coordinador || 'Sin coordinador asignado',
+                        'Califica',
+                    ]),
+                    ['', '', '', '', 'TOTAL REGISTROS', String(rows.length)],
+                ],
+            };
+        }
+
+        return {
+            headers: ['Cédula', 'Nombre', 'Empresa', 'Terminal', 'Agencia', 'Incentivo'],
+            rows: [
+                ...rows.map((row) => [
+                    row.cedula || '',
+                    row.nombre || '',
+                    row.empresa || '',
+                    row.terminal || '',
+                    row.agencia || '',
+                    'Califica',
+                ]),
+                ['', '', '', '', 'TOTAL REGISTROS', String(rows.length)],
+            ],
+        };
+    }
+
+    function generarExcelPreNomina(tipo, empresa = '') {
+        const configuration = getPreNominaConfigurations()
+            .find((item) => item.tipo === tipo && item.empresa === empresa);
+        const rows = getPreNominaRows(tipo, empresa);
+
+        if (!configuration || !rows.length) {
+            Swal.fire({
+                title: 'Sin datos',
+                text: 'No hay registros disponibles para este Excel.',
+                icon: 'warning',
+            });
+            return;
+        }
+
+        const excelData = getPreNominaExcelData(tipo, rows);
+        const fechaFin = document.getElementById('ni_fecha_fin')?.value || 'incentivos';
+        const filename = `pre_nomina_${configuration.filename}_${fechaFin}`;
+
+        if (typeof JSZip === 'undefined') {
+            downloadBlob(`${filename}.xls`, buildExcelHtmlBlob(excelData.headers, excelData.rows));
+            return;
+        }
+
+        buildXlsxWorkbookBlob([{
+            name: configuration.titulo,
+            headers: excelData.headers,
+            rows: excelData.rows,
+        }])
+            .then((blob) => downloadBlob(`${filename}.xlsx`, blob))
+            .catch((error) => {
+                Swal.fire({
+                    title: 'Error',
+                    text: error?.message || 'No se pudo generar el archivo Excel.',
+                    icon: 'error',
+                });
+            });
     }
 
     function downloadBlob(filename, blob) {
@@ -7229,6 +7458,11 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
     document.querySelector('#modalPreNomina').addEventListener('click', function(event) {
         const button = event.target.closest('button[data-tipo]');
         if (!button) {
+            return;
+        }
+
+        if (button.dataset.formato === 'excel') {
+            generarExcelPreNomina(button.dataset.tipo, button.dataset.empresa || '');
             return;
         }
 

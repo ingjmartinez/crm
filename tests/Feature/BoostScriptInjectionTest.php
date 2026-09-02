@@ -66,13 +66,26 @@ class BoostScriptInjectionTest extends TestCase
 
         $this->assertStringContainsString('id="btnPreNomina"', $html);
         $this->assertStringContainsString('id="modalPreNomina"', $html);
-        $this->assertSame(5, substr_count($html, 'btn-pre-nomina-pdf'));
+        $this->assertSame(6, substr_count($html, 'btn-pre-nomina-pdf'));
+        $this->assertSame(6, substr_count($html, 'btn-pre-nomina-excel'));
+        $this->assertSame(6, substr_count($html, 'data-formato="pdf"'));
+        $this->assertSame(6, substr_count($html, 'data-formato="excel"'));
         $this->assertStringContainsString('data-tipo="administrativos" data-empresa="joselito"', $html);
         $this->assertStringContainsString('data-tipo="administrativos" data-empresa="negosur"', $html);
         $this->assertStringContainsString('data-tipo="coordinadores" data-empresa="joselito"', $html);
         $this->assertStringContainsString('data-tipo="coordinadores" data-empresa="negosur"', $html);
+        $this->assertStringContainsString('data-tipo="agentes_con_id"', $html);
         $this->assertStringContainsString('data-tipo="sin_id"', $html);
+        $this->assertStringContainsString("header('Coordinador')", $html);
+        $this->assertStringContainsString('Sin coordinador asignado', $html);
+        $this->assertSame(2, substr_count($html, "header('Incentivo', 'center')"));
+        $this->assertSame(2, substr_count($html, "text: 'Califica', alignment: 'center', bold: true"));
+        $this->assertStringContainsString("['agentes_con_id', 'sin_id'].includes(tipo)", $html);
+        $this->assertStringNotContainsString('id="preNominaAgentesConIdTotal"', $html);
+        $this->assertStringNotContainsString('id="preNominaSinIdTotal"', $html);
         $this->assertStringContainsString('function generarPdfPreNomina', $html);
+        $this->assertStringContainsString('function generarExcelPreNomina', $html);
+        $this->assertStringContainsString("button.dataset.formato === 'excel'", $html);
     }
 
     public function test_incentive_v6_coordinator_detail_modal_exposes_excel_and_pdf_exports(): void
