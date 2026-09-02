@@ -86,6 +86,15 @@ class BoostScriptInjectionTest extends TestCase
         $this->assertStringContainsString('function generarPdfPreNomina', $html);
         $this->assertStringContainsString('function generarExcelPreNomina', $html);
         $this->assertStringContainsString("button.dataset.formato === 'excel'", $html);
+        $this->assertStringContainsString('function getAdministrativePreNominaGroupLabel', $html);
+        $this->assertStringContainsString('grupo: getAdministrativePreNominaGroupLabel(row.grupo)', $html);
+        $this->assertStringContainsString("[header('Departamento'), header('Id empleado')", $html);
+        $this->assertStringContainsString("headers: ['Departamento', 'Id empleado'", $html);
+        $this->assertStringContainsString("return '1. Gtes. y Encarg.'", $html);
+        $this->assertStringContainsString("return '2. Monitoreo'", $html);
+        $this->assertStringContainsString("return '4. Operadores'", $html);
+        $this->assertStringContainsString("return '5. Servs. Tecnicos'", $html);
+        $this->assertStringContainsString("return '6. Seguridad'", $html);
     }
 
     public function test_incentive_v6_coordinator_detail_modal_exposes_excel_and_pdf_exports(): void

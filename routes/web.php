@@ -54,6 +54,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PremioController;
 use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\RecargasController;
+use App\Http\Controllers\RecursosHumanos\AgenciasCerradasDomingosController;
 use App\Http\Controllers\RecursosHumanosController;
 use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\RendimientoCoordinadorController;
@@ -343,6 +344,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('recursos-humanos.validador-incentivos.index');
         Route::get('/recursos-humanos/validador-incentivos/exportar', [ValidadorIncentivoController::class, 'export'])
             ->name('recursos-humanos.validador-incentivos.export');
+        Route::get('/recursos-humanos/agencias-cerradas-domingos', [AgenciasCerradasDomingosController::class, 'index'])
+            ->name('recursos-humanos.agencias-cerradas-domingos.index');
+        Route::get('/recursos-humanos/agencias-cerradas-domingos/exportar', [AgenciasCerradasDomingosController::class, 'exportar'])
+            ->name('recursos-humanos.agencias-cerradas-domingos.exportar');
         Route::get('/empleados', [EmpleadoController::class, 'index']);
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
         Route::get('/empleados/exportar', [EmpleadoController::class, 'export'])->name('empleados.export');

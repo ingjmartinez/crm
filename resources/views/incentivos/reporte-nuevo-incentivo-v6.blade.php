@@ -3235,6 +3235,28 @@
         ];
     }
 
+    function getAdministrativePreNominaGroupLabel(value) {
+        const group = normalizeAdministrativeGroup(value).toLowerCase();
+
+        if (group.startsWith('1') && group.includes('gtes')) {
+            return '1. Gtes. y Encarg.';
+        }
+        if (group.startsWith('2') && group.includes('monitoreo')) {
+            return '2. Monitoreo';
+        }
+        if (group.startsWith('4') && group.includes('operadores')) {
+            return '4. Operadores';
+        }
+        if (group.startsWith('5') && group.includes('servs')) {
+            return '5. Servs. Tecnicos';
+        }
+        if (group.startsWith('6') && group.includes('seguridad')) {
+            return '6. Seguridad';
+        }
+
+        return '';
+    }
+
     function getAllAdministrativePreNominaRows() {
         const administrativos = administrativeRows.map((row, idx) => ({
             ...row,
@@ -3254,13 +3276,14 @@
         return [...administrativos, ...operadores]
             .filter((row) => !isAdministrativeDesvinculadoExcluded(row))
             .map((row) => ({
-                grupo: row.grupo,
+                grupo: getAdministrativePreNominaGroupLabel(row.grupo),
                 empleadoid: getEmpleadoIdKey(row.empleadoid),
                 nombre: String(row.nombre ?? '').trim(),
                 cedula: String(row.cedula ?? '').trim(),
                 empresa: normalizeAdministrativeEmpresaLabel(row.empresa),
                 monto: getAdministrativeDisplayAmount(row),
             }))
+            .filter((row) => row.grupo !== '')
             .filter((row) => toIntegerAmount(row.monto) > 0);
     }
 
@@ -3367,7 +3390,7 @@
             return {
                 widths: ['18%', '12%', '23%', '16%', '16%', '15%'],
                 body: [
-                    [header('Grupo'), header('Id empleado'), header('Nombre'), header('Cédula'), header('Empresa'), header('Monto', 'right')],
+                    [header('Departamento'), header('Id empleado'), header('Nombre'), header('Cédula'), header('Empresa'), header('Monto', 'right')],
                     ...rows.map((row) => [
                         row.grupo || '',
                         row.empleadoid || 'Sin ID',
@@ -3530,7 +3553,7 @@
 
         if (tipo === 'administrativos') {
             return {
-                headers: ['Grupo', 'Id empleado', 'Nombre', 'Cédula', 'Empresa', 'Monto'],
+                headers: ['Departamento', 'Id empleado', 'Nombre', 'Cédula', 'Empresa', 'Monto'],
                 rows: [
                     ...rows.map((row) => [
                         row.grupo || '',

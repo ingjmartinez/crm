@@ -47,6 +47,15 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Agencias Cerradas Domingos',
+        'descripcion' => 'Identifica agencias activas sin ventas ni ponches en un domingo específico.',
+        'url' => '/recursos-humanos/agencias-cerradas-domingos',
+        'icono' => 'ri-store-2-line',
+        'categoria' => 'Control',
+        'tags' => ['agencias', 'cerradas', 'domingos', 'ventas', 'ponches'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Entrevista Online',
         'descripcion' => 'Registra entrevistas telefonicas u online realizadas a candidatos.',
         'url' => '/entrevistas-online',
