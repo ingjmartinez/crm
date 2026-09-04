@@ -216,7 +216,7 @@
                                                 name="buscar_nombre"
                                                 class="form-control form-control-sm"
                                                 value="{{ $buscarNombre }}"
-                                                placeholder="Buscar por nombre">
+                                                placeholder="Buscar por nombre o cédula">
                                         </div>
                                         <div class="col-md-3">
                                             <select name="grupo_filter" class="form-select form-select-sm">

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\IncentivoAdministrativo;
 use App\Models\PorcentajeIncentivo;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -13,6 +14,7 @@ use Illuminate\Validation\ValidationException;
 class IncentivoConfiguracionController extends Controller
 {
     private const GRUPO_SEGURIDAD = '6. Seguridad';
+
     private const GRUPOS_MONTO_FIJO = ['4. Operadores', '5. Servs. Tecnicos', self::GRUPO_SEGURIDAD];
 
     public function incentivoAdministrativoIndex(Request $request)
@@ -33,7 +35,7 @@ class IncentivoConfiguracionController extends Controller
             ->orderBy('posicion')
             ->get(['posicion', 'bono_pct']);
 
-        if (!$posiciones->contains('posicion', self::GRUPO_SEGURIDAD)) {
+        if (! $posiciones->contains('posicion', self::GRUPO_SEGURIDAD)) {
             $posiciones->push((object) [
                 'posicion' => self::GRUPO_SEGURIDAD,
                 'bono_pct' => 0,
@@ -72,7 +74,7 @@ class IncentivoConfiguracionController extends Controller
             ->whereNotNull('cedula')
             ->whereRaw("TRIM(CAST(cedula AS CHAR)) <> ''")
             ->when($buscar !== '', function ($query) use ($buscar) {
-                $termino = '%' . $buscar . '%';
+                $termino = '%'.$buscar.'%';
 
                 $query->where(function ($subQuery) use ($termino) {
                     $subQuery
@@ -103,7 +105,7 @@ class IncentivoConfiguracionController extends Controller
                 return [
                     'id' => (int) $empleado->id,
                     'empleadoid' => (string) $empleado->empleadoid,
-                    'nombre' => trim(preg_replace('/\s+/', ' ', $empleado->nombres . ' ' . $empleado->apellidos)),
+                    'nombre' => trim(preg_replace('/\s+/', ' ', $empleado->nombres.' '.$empleado->apellidos)),
                     'cedula' => $cedula,
                     'empresa' => $this->empresaAdministrativaDesdeCompanyId($empleado->companyid),
                     'empresa_nombre' => $this->nombreEmpresaDesdeCompanyId($empleado->companyid),
@@ -216,18 +218,18 @@ class IncentivoConfiguracionController extends Controller
             echo '<table border="1">';
             echo '<thead><tr>';
             foreach (['Grupo', 'Nombre', 'Cedula', 'IdEmpleado', 'Empresa', '% Total / Monto fijo'] as $heading) {
-                echo '<th>' . e($heading) . '</th>';
+                echo '<th>'.e($heading).'</th>';
             }
             echo '</tr></thead><tbody>';
 
             foreach ($rows as $row) {
                 echo '<tr>';
-                echo '<td>' . e($row->grupo) . '</td>';
-                echo '<td>' . e($row->nombre) . '</td>';
-                echo '<td style="mso-number-format:\'@\';">' . e((string) $row->cedula) . '</td>';
-                echo '<td style="mso-number-format:\'@\';">' . e((string) $row->empleadoid) . '</td>';
-                echo '<td>' . e($row->empresa) . '</td>';
-                echo '<td>' . e(number_format((float) $row->pct_total, 2, '.', '')) . '</td>';
+                echo '<td>'.e($row->grupo).'</td>';
+                echo '<td>'.e($row->nombre).'</td>';
+                echo '<td style="mso-number-format:\'@\';">'.e((string) $row->cedula).'</td>';
+                echo '<td style="mso-number-format:\'@\';">'.e((string) $row->empleadoid).'</td>';
+                echo '<td>'.e($row->empresa).'</td>';
+                echo '<td>'.e(number_format((float) $row->pct_total, 2, '.', '')).'</td>';
                 echo '</tr>';
             }
 
@@ -257,8 +259,20 @@ class IncentivoConfiguracionController extends Controller
 
         $query = IncentivoAdministrativo::query()
             ->select('incentivo_administrativos.*')
-            ->when($buscarNombre !== '', function ($query) use ($buscarNombre) {
-                $query->where('nombre', 'like', '%' . $buscarNombre . '%');
+            ->when($buscarNombre !== '', function (Builder $query) use ($buscarNombre): void {
+                $terminoNombre = '%'.$buscarNombre.'%';
+                $terminoCedula = preg_replace('/\D+/', '', $buscarNombre);
+
+                $query->where(function (Builder $subQuery) use ($terminoNombre, $terminoCedula): void {
+                    $subQuery->where('incentivo_administrativos.nombre', 'like', $terminoNombre);
+
+                    if ($terminoCedula !== '') {
+                        $subQuery->orWhereRaw(
+                            "REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '') LIKE ?",
+                            ['%'.$terminoCedula.'%']
+                        );
+                    }
+                });
             })
             ->when($grupoFilter !== '', function ($query) use ($grupoFilter) {
                 $query->where('grupo', $grupoFilter);
@@ -283,7 +297,7 @@ class IncentivoConfiguracionController extends Controller
 
         $fechaSalidaCondition = empty($fechaSalidaChecks)
             ? '1 = 1'
-            : '(' . implode(' AND ', $fechaSalidaChecks) . ')';
+            : '('.implode(' AND ', $fechaSalidaChecks).')';
 
         $cedulaEmpleado = "CAST(REPLACE(REPLACE(COALESCE(empleados.cedula, ''), '-', ''), ' ', '') AS BINARY)";
         $cedulaAdministrativo = "CAST(REPLACE(REPLACE(COALESCE(incentivo_administrativos.cedula, ''), '-', ''), ' ', '') AS BINARY)";
@@ -371,14 +385,14 @@ class IncentivoConfiguracionController extends Controller
 
         $cedula = preg_replace('/\D+/', '', (string) ($empleado->cedula ?? ''));
 
-        if (!$empleado || strlen($cedula) !== 11) {
+        if (! $empleado || strlen($cedula) !== 11) {
             throw ValidationException::withMessages([
                 'empleado_id' => 'El empleado seleccionado no está activo o no tiene una cédula válida.',
             ]);
         }
 
         $request->merge([
-            'nombre' => trim(preg_replace('/\s+/', ' ', $empleado->nombres . ' ' . $empleado->apellidos)),
+            'nombre' => trim(preg_replace('/\s+/', ' ', $empleado->nombres.' '.$empleado->apellidos)),
             'cedula' => $cedula,
             'empresa' => $this->empresaAdministrativaDesdeCompanyId($empleado->companyid),
         ]);
@@ -426,12 +440,13 @@ class IncentivoConfiguracionController extends Controller
             $monto = (float) $request->input('pct_total', 0);
             $esMontoFijo = in_array($grupo, self::GRUPOS_MONTO_FIJO, true);
 
-            if (!$esMontoFijo && $monto > 100) {
+            if (! $esMontoFijo && $monto > 100) {
                 $validator->errors()->add('pct_total', 'El % Total no puede ser mayor que 100 para este grupo.');
             }
         });
 
         $validated = $validator->validate();
+
         return $validated;
     }
 
@@ -448,7 +463,7 @@ class IncentivoConfiguracionController extends Controller
                 ->where('posicion', $grupo)
                 ->exists();
 
-            if (!$exists) {
+            if (! $exists) {
                 $fail('El grupo seleccionado no es valido.');
             }
         };
