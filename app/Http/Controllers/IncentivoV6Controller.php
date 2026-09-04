@@ -43,13 +43,22 @@ class IncentivoV6Controller extends Controller
         $sistema = $request->string('sistema', 'Todos')->toString();
         $buscar = mb_strtolower(trim($request->string('buscar')->toString()));
         $agencias = $this->terminalesActivas($sistema);
-        $configuredTerminalKeys = IncentivoTerminalTipoPago::query()
-            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+        $assignmentHistory = IncentivoTerminalTipoPago::query()
+            ->whereDate('fecha', '<=', $fechaFin)
             ->when($sistema !== 'Todos', fn ($query) => $query->where('sistema', $sistema))
-            ->get(['sistema', 'terminal'])
-            ->mapWithKeys(fn (IncentivoTerminalTipoPago $item): array => [
-                $this->terminalKey($item->sistema, $item->terminal) => true,
-            ]);
+            ->orderBy('fecha')
+            ->orderBy('id')
+            ->get()
+            ->toBase()
+            ->groupBy(fn (IncentivoTerminalTipoPago $item): string => $this->terminalKey(
+                $item->sistema,
+                $item->terminal
+            ));
+        $configuredTerminalKeys = $assignmentHistory
+            ->filter(function (Collection $assignments) use ($fechaFin): bool {
+                return $this->effectiveCalendarAssignment($assignments, $fechaFin)?->tipo_pago !== null;
+            })
+            ->map(fn (): bool => true);
 
         if ($buscar !== '') {
             $agencias = $agencias->filter(function (Agencia $agencia) use ($buscar): bool {
@@ -96,16 +105,12 @@ class IncentivoV6Controller extends Controller
         $terminales = $agencias->pluck('terminal')->unique()->values();
         $ventas = $this->terminalesConVentas($fechaInicio, $fechaFin, $sistema, $terminales)
             ->keyBy(fn ($venta): string => $this->terminalKey((string) $venta->sistema, (string) $venta->terminal));
-        $asignaciones = IncentivoTerminalTipoPago::query()
-            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-            ->when($sistema !== 'Todos', fn ($query) => $query->where('sistema', $sistema))
-            ->whereIn('terminal', $terminales->all())
-            ->get()
-            ->keyBy(fn (IncentivoTerminalTipoPago $item): string => $this->calendarKey(
-                $item->sistema,
-                $item->terminal,
-                $item->fecha->toDateString()
-            ));
+        $asignaciones = $assignmentHistory->only(
+            $agencias->map(fn (Agencia $agencia): string => $this->terminalKey(
+                (string) $agencia->sistema_normalizado,
+                (string) $agencia->terminal
+            ))->all()
+        );
 
         $rows = $agencias
             ->map(function ($agencia) use ($ventas, $asignaciones, $configuredTerminalKeys, $fechaInicio, $fechaFin): array {
@@ -116,9 +121,12 @@ class IncentivoV6Controller extends Controller
 
                 foreach (CarbonPeriod::create($fechaInicio, $fechaFin) as $fecha) {
                     $fechaString = $fecha->toDateString();
-                    $tipoPago = $asignaciones->get($this->calendarKey($sistema, $terminal, $fechaString));
-                    if ($tipoPago) {
-                        $tiposPorFecha[$fechaString] = $tipoPago->tipo_pago;
+                    $asignacion = $this->effectiveCalendarAssignment(
+                        $asignaciones->get($this->terminalKey($sistema, $terminal), collect()),
+                        $fechaString
+                    );
+                    if ($asignacion?->tipo_pago !== null) {
+                        $tiposPorFecha[$fechaString] = $asignacion->tipo_pago;
                     }
                 }
 
@@ -172,24 +180,13 @@ class IncentivoV6Controller extends Controller
             })
             ->unique(fn (array $item): string => $this->calendarKey($item['sistema'], $item['terminal'], $item['fecha']))
             ->values();
-        $eliminadas = $asignaciones->whereNull('tipo_pago')->values();
+        $desactivadas = $asignaciones->whereNull('tipo_pago')->values();
         $guardadas = $asignaciones->whereNotNull('tipo_pago')->values();
 
-        DB::transaction(function () use ($eliminadas, $guardadas): void {
-            $eliminadas
-                ->groupBy(fn (array $item): string => $item['sistema'].'|'.$item['fecha'])
-                ->each(function (Collection $items): void {
-                    $first = $items->first();
-                    IncentivoTerminalTipoPago::query()
-                        ->where('sistema', $first['sistema'])
-                        ->whereDate('fecha', $first['fecha'])
-                        ->whereIn('terminal', $items->pluck('terminal')->all())
-                        ->delete();
-                });
-
-            if ($guardadas->isNotEmpty()) {
+        DB::transaction(function () use ($asignaciones): void {
+            if ($asignaciones->isNotEmpty()) {
                 IncentivoTerminalTipoPago::query()->upsert(
-                    $guardadas->all(),
+                    $asignaciones->all(),
                     ['sistema', 'terminal', 'fecha'],
                     ['tipo_pago', 'updated_by', 'updated_at']
                 );
@@ -200,7 +197,8 @@ class IncentivoV6Controller extends Controller
             'ok' => true,
             'message' => 'Calendario de tipos de pago actualizado.',
             'guardadas' => $guardadas->count(),
-            'eliminadas' => $eliminadas->count(),
+            'desactivadas' => $desactivadas->count(),
+            'eliminadas' => $desactivadas->count(),
         ]);
     }
 
@@ -496,6 +494,13 @@ class IncentivoV6Controller extends Controller
     private function calendarKey(string $sistema, string $terminal, string $fecha): string
     {
         return mb_strtolower(trim($sistema)).'|'.trim($terminal).'|'.$fecha;
+    }
+
+    private function effectiveCalendarAssignment(Collection $assignments, string $date): ?IncentivoTerminalTipoPago
+    {
+        return $assignments->last(
+            fn (IncentivoTerminalTipoPago $assignment): bool => $assignment->fecha->toDateString() <= $date
+        );
     }
 
     private function terminalKey(string $sistema, string $terminal): string

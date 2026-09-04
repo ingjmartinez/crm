@@ -1100,7 +1100,7 @@
                 <div class="modal-header">
                     <div>
                         <h5 class="modal-title">Calendario diario de tipos de pago</h5>
-                        <small class="text-muted">Configura 60, 70 u 80 por terminal y día. “General” usa el tipo seleccionado en el reporte.</small>
+                        <small class="text-muted">Cada cambio queda vigente desde ese día en adelante. “General” finaliza la asignación y usa el tipo seleccionado en el reporte.</small>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -1911,7 +1911,7 @@
             .then(response => parseResponseAsJson(response, 'No se pudo guardar el calendario de pagos'))
             .then((response) => {
                 calendarDirtyAssignments.clear();
-                updateCalendarPaymentSummary();
+                loadCalendarPaymentGrid(calendarPaymentPagination.pagina_actual || 1, false, false);
                 Swal.fire({ title: 'Calendario actualizado', text: response.message, icon: 'success' });
             })
             .catch((error) => Swal.fire({ title: 'Error', text: error.message || String(error), icon: 'error' }));

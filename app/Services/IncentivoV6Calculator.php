@@ -35,14 +35,15 @@ class IncentivoV6Calculator
         $dailySales = $this->dailySales($fechaInicio, $fechaFin, $sistema, $excludedTerminals);
         $agencies = $this->agenciesByTerminal($dailySales->pluck('terminal')->unique()->values());
         $assignments = IncentivoTerminalTipoPago::query()
-            ->whereDate('fecha', '>=', $fechaInicio)
             ->whereDate('fecha', '<=', $fechaFin)
             ->when($sistema !== 'Todos', fn ($query) => $query->where('sistema', $sistema))
+            ->orderBy('fecha')
+            ->orderBy('id')
             ->get()
-            ->keyBy(fn (IncentivoTerminalTipoPago $item): string => $this->calendarKey(
+            ->toBase()
+            ->groupBy(fn (IncentivoTerminalTipoPago $item): string => $this->terminalKey(
                 $item->sistema,
-                $item->terminal,
-                $item->fecha->toDateString()
+                $item->terminal
             ));
         $calculations = [];
         $typeDistribution = collect(IncentivoTerminalTipoPago::TIPOS_PAGO)
@@ -64,8 +65,9 @@ class IncentivoV6Calculator
                 ?? $agencies->get($this->terminalKey('', $terminal));
             $company = $this->normalizeCompany((string) ($agency->empresa ?? 'Agencias por asignar empresa'));
             $rowKey = $this->rowKey((string) $sale->cedula, $company);
-            $assignment = $assignments->get($this->calendarKey($system, $terminal, $date));
-            $paymentType = $assignment
+            $assignment = $this->effectiveCalendarAssignment($assignments, $system, $terminal, $date);
+            $hasConfiguredPaymentType = $assignment?->tipo_pago !== null;
+            $paymentType = $hasConfiguredPaymentType
                 ? $this->validPaymentType($assignment->tipo_pago)
                 : $defaultPaymentType;
             $amount = (int) round((float) $sale->ventas);
@@ -79,13 +81,13 @@ class IncentivoV6Calculator
             $calculations[$rowKey]['tipos'][$paymentType]['terminales'][$system.'|'.$terminal] = true;
             $calculations[$rowKey]['tipos'][$paymentType]['dias_terminal'][$system.'|'.$terminal.'|'.$date] = true;
             $calculations[$rowKey]['configuraciones_aplicadas'] =
-                ($calculations[$rowKey]['configuraciones_aplicadas'] ?? 0) + ($assignment ? 1 : 0);
+                ($calculations[$rowKey]['configuraciones_aplicadas'] ?? 0) + ($hasConfiguredPaymentType ? 1 : 0);
             $typeDistribution[$paymentType]['ventas'] += $amount;
             $typeDistribution[$paymentType]['dias_terminal']++;
             $terminalKey = $system.'|'.$terminal;
             $terminalsByPaymentType[$paymentType][$terminalKey] = true;
             $terminalsByPaymentTypeAndCompany[$paymentType][$company][$terminalKey] = true;
-            $configuredTerminalDays += $assignment ? 1 : 0;
+            $configuredTerminalDays += $hasConfiguredPaymentType ? 1 : 0;
         }
 
         foreach (IncentivoTerminalTipoPago::TIPOS_PAGO as $paymentType) {
@@ -237,12 +239,13 @@ class IncentivoV6Calculator
             };
 
             for ($dateString = $startDate; $dateString <= $endDate; $dateString = CarbonImmutable::parse($dateString)->addDay()->toDateString()) {
-                $assignment = $assignments->get($this->calendarKey(
+                $assignment = $this->effectiveCalendarAssignment(
+                    $assignments,
                     (string) $terminalData['sistema'],
                     (string) $terminalData['terminal'],
                     $dateString
-                ));
-                $paymentType = $assignment
+                );
+                $paymentType = $assignment?->tipo_pago !== null
                     ? $this->validPaymentType((string) $assignment->tipo_pago)
                     : $defaultPaymentType;
 
@@ -445,13 +448,19 @@ class IncentivoV6Calculator
         return (int) round((float) str_replace(',', '', (string) $value));
     }
 
-    private function calendarKey(string $system, string $terminal, string $date): string
-    {
-        return mb_strtolower(trim($system)).'|'.trim($terminal).'|'.$date;
-    }
-
     private function terminalKey(string $system, string $terminal): string
     {
         return mb_strtolower(trim($system)).'|'.trim($terminal);
+    }
+
+    private function effectiveCalendarAssignment(
+        Collection $assignments,
+        string $system,
+        string $terminal,
+        string $date
+    ): ?IncentivoTerminalTipoPago {
+        return $assignments
+            ->get($this->terminalKey($system, $terminal), collect())
+            ->last(fn (IncentivoTerminalTipoPago $assignment): bool => $assignment->fecha->toDateString() <= $date);
     }
 }

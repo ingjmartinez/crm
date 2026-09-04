@@ -27,7 +27,7 @@ class IncentivoV6CalendarTest extends TestCase
             $table->string('sistema', 20);
             $table->string('terminal', 50);
             $table->date('fecha');
-            $table->string('tipo_pago', 20);
+            $table->string('tipo_pago', 20)->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
             $table->timestamps();
@@ -103,12 +103,78 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertJsonPath('guardadas', 0)
             ->assertJsonPath('eliminadas', 1);
 
-        $this->assertDatabaseMissing('incentivo_terminal_tipo_pagos', [
+        $this->assertDatabaseHas('incentivo_terminal_tipo_pagos', [
             'sistema' => 'Lotobet',
             'terminal' => '1001',
             'fecha' => '2026-07-06',
+            'tipo_pago' => null,
         ]);
-        $this->assertDatabaseCount('incentivo_terminal_tipo_pagos', 2);
+        $this->assertDatabaseCount('incentivo_terminal_tipo_pagos', 3);
+    }
+
+    public function test_calendar_keeps_the_last_terminal_payment_type_visible_in_future_months(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+        DB::table('agencias')->insert([
+            'terminal' => '1001',
+            'sistema' => 'LOTOBET',
+            'empresa' => 'Grupo Joselito',
+            'nombre_agencia' => 'Agencia Central',
+            'estatus' => 1,
+        ]);
+        IncentivoTerminalTipoPago::query()->create([
+            'sistema' => 'Lotobet',
+            'terminal' => '1001',
+            'fecha' => '2026-07-31',
+            'tipo_pago' => 'tramos_80',
+        ]);
+
+        $this->getJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario', [
+            'fecha_ini' => '2026-08-01',
+            'fecha_fin' => '2026-08-03',
+            'sistema' => 'Lotobet',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('terminales.0.tiene_configuracion', true)
+            ->assertJsonPath('terminales.0.tipos_por_fecha.2026-08-01', 'tramos_80')
+            ->assertJsonPath('terminales.0.tipos_por_fecha.2026-08-03', 'tramos_80');
+    }
+
+    public function test_general_stops_a_terminal_payment_type_from_the_selected_date_forward(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+        DB::table('agencias')->insert([
+            'terminal' => '1001',
+            'sistema' => 'LOTOBET',
+            'empresa' => 'Grupo Joselito',
+            'nombre_agencia' => 'Agencia Central',
+            'estatus' => 1,
+        ]);
+        IncentivoTerminalTipoPago::query()->create([
+            'sistema' => 'Lotobet',
+            'terminal' => '1001',
+            'fecha' => '2026-07-31',
+            'tipo_pago' => 'tramos_80',
+        ]);
+
+        $this->putJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario.guardar'), [
+            'asignaciones' => [[
+                'sistema' => 'Lotobet',
+                'terminal' => '1001',
+                'fecha' => '2026-08-02',
+                'tipo_pago' => null,
+            ]],
+        ])->assertOk()->assertJsonPath('desactivadas', 1);
+
+        $this->getJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario', [
+            'fecha_ini' => '2026-08-01',
+            'fecha_fin' => '2026-08-03',
+            'sistema' => 'Lotobet',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('terminales.0.tipos_por_fecha.2026-08-01', 'tramos_80')
+            ->assertJsonMissingPath('terminales.0.tipos_por_fecha.2026-08-02')
+            ->assertJsonMissingPath('terminales.0.tipos_por_fecha.2026-08-03');
     }
 
     public function test_calendar_rejects_an_unknown_payment_type(): void
@@ -406,6 +472,12 @@ class IncentivoV6CalendarTest extends TestCase
                 'tipo_pago' => 'tramos_80',
             ]);
         }
+        IncentivoTerminalTipoPago::query()->create([
+            'sistema' => 'Lotobet',
+            'terminal' => '1001',
+            'fecha' => '2026-07-10',
+            'tipo_pago' => null,
+        ]);
 
         $payload = app(IncentivoV6Calculator::class)->applyDailyPaymentTypes([
             'meta' => [
@@ -490,6 +562,12 @@ class IncentivoV6CalendarTest extends TestCase
             'terminal' => '1001',
             'fecha' => '2026-07-01',
             'tipo_pago' => 'tramos_80',
+        ]);
+        IncentivoTerminalTipoPago::query()->create([
+            'sistema' => 'Lotobet',
+            'terminal' => '1001',
+            'fecha' => '2026-07-02',
+            'tipo_pago' => null,
         ]);
 
         $payload = app(IncentivoV6Calculator::class)->applyDailyPaymentTypes([
