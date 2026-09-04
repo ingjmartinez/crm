@@ -2,24 +2,26 @@
 
 namespace App\Exports;
 
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 
-class VentasUsuarioExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSize
+class VentasUsuarioExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapping
 {
     public function __construct(
-        protected $tipo = null,
-        protected $fecha = null,
-        protected $mes = null,
-        protected $empresa = 'todos',
-        protected $fechaInicio = null,
-        protected $fechaFin = null
+        protected ?string $tipo = null,
+        protected ?string $fecha = null,
+        protected ?string $mes = null,
+        protected string $empresa = 'todos',
+        protected ?string $fechaInicio = null,
+        protected ?string $fechaFin = null,
+        protected ?int $coordinadorId = null
     ) {}
 
-    public function query()
+    public function query(): Builder
     {
         ini_set('memory_limit', '2G');
 
@@ -55,9 +57,11 @@ class VentasUsuarioExport implements FromQuery, WithHeadings, WithMapping, Shoul
             $query->whereYear('v.fecha', $year)->whereMonth('v.fecha', $month);
         }
 
-        if ($this->empresa !== 'todos') {
-            $query->leftJoin('agencias as a', DB::raw("TRIM(CAST(v.agencia_id AS CHAR))"), '=', DB::raw("TRIM(CAST(a.terminal AS CHAR))"));
+        if ($this->empresa !== 'todos' || $this->coordinadorId !== null) {
+            $query->leftJoin('agencias as a', DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'), '=', DB::raw('TRIM(CAST(a.terminal AS CHAR))'));
+        }
 
+        if ($this->empresa !== 'todos') {
             if ($this->empresa === 'grupo_joselito') {
                 $query->whereRaw('LOWER(COALESCE(a.empresa, "")) LIKE ?', ['%joselito%']);
             }
@@ -65,6 +69,17 @@ class VentasUsuarioExport implements FromQuery, WithHeadings, WithMapping, Shoul
             if ($this->empresa === 'negosur') {
                 $query->whereRaw('LOWER(COALESCE(a.empresa, "")) LIKE ?', ['%negosur%']);
             }
+        }
+
+        if ($this->coordinadorId !== null) {
+            $query->whereExists(function ($subQuery): void {
+                $subQuery->selectRaw('1')
+                    ->from('coordinador_operador_agencia as coa_filter')
+                    ->join('coordinador_operador as co_filter', 'co_filter.id', '=', 'coa_filter.coordinador_operador_id')
+                    ->whereColumn('coa_filter.agencia_id', 'a.id')
+                    ->where('co_filter.puesto', 'coordinador')
+                    ->where('co_filter.id', $this->coordinadorId);
+            });
         }
 
         return $query
@@ -85,7 +100,7 @@ class VentasUsuarioExport implements FromQuery, WithHeadings, WithMapping, Shoul
         ];
     }
 
-    public function map($row): array
+    public function map(mixed $row): array
     {
         return [
             $row->cedula,

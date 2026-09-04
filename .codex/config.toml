@@ -1,0 +1,3 @@
+[mcp_servers.laravel-boost]
+command = 'D:\wamp\bin\php\php8.3.14\php.exe'
+args = ['D:\crm\artisan', 'boost:mcp']

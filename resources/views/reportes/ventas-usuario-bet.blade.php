@@ -40,6 +40,17 @@
                                         </select>
                                     </div>
                                     <div>
+                                        <label class="mb-0" for="coordinador">Coordinador</label>
+                                        <select id="coordinador" class="form-control">
+                                            <option value="">Todos</option>
+                                            @foreach($coordinadores as $coordinador)
+                                                <option value="{{ $coordinador->id }}">
+                                                    {{ trim($coordinador->nombre.' '.$coordinador->apellido) }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
                                         <label class="mb-0" for="fecha_inicio">Desde</label>
                                         <input type="date" class="form-control" id="fecha_inicio" value="{{ date('Y-m-01') }}">
                                     </div>
@@ -207,6 +218,7 @@
         function filtrosReporte(page = null) {
             const params = new URLSearchParams({
                 empresa: document.getElementById('empresa').value,
+                coordinador: document.getElementById('coordinador').value,
                 fecha_inicio: document.getElementById('fecha_inicio').value,
                 fecha_fin: document.getElementById('fecha_fin').value
             });

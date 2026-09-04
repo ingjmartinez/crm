@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Exports\VentasUsuarioExport;
+use App\Http\Requests\ConsultarVentasUsuarioBetRequest;
+use App\Models\CoordinadorOperador;
 use App\Services\FavoritoCatalogoService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ReporteController extends Controller
 {
@@ -43,9 +47,15 @@ class ReporteController extends Controller
         return view('reportes.index', compact('reportes', 'categorias'));
     }
 
-    public function ventasUsuarioBet(Request $request)
+    public function ventasUsuarioBet(): View
     {
-        return view('reportes.ventas-usuario-bet');
+        $coordinadores = CoordinadorOperador::query()
+            ->where('puesto', 'coordinador')
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get(['id', 'nombre', 'apellido']);
+
+        return view('reportes.ventas-usuario-bet', compact('coordinadores'));
     }
 
     public function compensacion()
@@ -358,18 +368,13 @@ class ReporteController extends Controller
         return $pdf->download($fileName);
     }
 
-    public function listVentasUsuarioBet(Request $request)
+    public function listVentasUsuarioBet(ConsultarVentasUsuarioBetRequest $request): JsonResponse
     {
-        header('Content-Type: application/json');
+        $validated = $request->validated();
 
-        $validated = $request->validate([
-            'empresa' => 'nullable|in:todos,grupo_joselito,negosur',
-            'fecha_inicio' => 'nullable|date',
-            'fecha_fin' => 'nullable|date|after_or_equal:fecha_inicio',
-        ]);
-
-        $page = $request->input('page', 1);
+        $page = $request->integer('page', 1);
         $empresa = $validated['empresa'] ?? 'todos';
+        $coordinadorId = $validated['coordinador'] ?? null;
         $fechaInicio = $validated['fecha_inicio'] ?? null;
         $fechaFin = $validated['fecha_fin'] ?? null;
 
@@ -392,9 +397,11 @@ class ReporteController extends Controller
                 ->whereDate('v.fecha', '<=', $fechaFin);
         }
 
-        if ($empresa !== 'todos') {
+        if ($empresa !== 'todos' || $coordinadorId !== null) {
             $query->leftJoin('agencias as a', DB::raw('TRIM(CAST(v.agencia_id AS CHAR))'), '=', DB::raw('TRIM(CAST(a.terminal AS CHAR))'));
+        }
 
+        if ($empresa !== 'todos') {
             if ($empresa === 'grupo_joselito') {
                 $query->whereRaw('LOWER(COALESCE(a.empresa, "")) LIKE ?', ['%joselito%']);
             }
@@ -404,16 +411,27 @@ class ReporteController extends Controller
             }
         }
 
+        if ($coordinadorId !== null) {
+            $query->whereExists(function ($subQuery) use ($coordinadorId): void {
+                $subQuery->selectRaw('1')
+                    ->from('coordinador_operador_agencia as coa_filter')
+                    ->join('coordinador_operador as co_filter', 'co_filter.id', '=', 'coa_filter.coordinador_operador_id')
+                    ->whereColumn('coa_filter.agencia_id', 'a.id')
+                    ->where('co_filter.puesto', 'coordinador')
+                    ->where('co_filter.id', $coordinadorId);
+            });
+        }
+
         $registros = $query
             ->whereRaw("NULLIF(REPLACE(REPLACE(COALESCE(v.cedula, ''), '-', ''), ' ', ''), '') IS NOT NULL")
             ->groupByRaw("REPLACE(REPLACE(COALESCE(v.cedula, ''), '-', ''), ' ', '')")
             ->orderByRaw("REPLACE(REPLACE(COALESCE(v.cedula, ''), '-', ''), ' ', '') DESC")
             ->paginate(50, ['*'], 'page', $page);
 
-        return $registros->toJson();
+        return response()->json($registros);
     }
 
-    public function excelVentasUsuarioBet(Request $request)
+    public function excelVentasUsuarioBet(ConsultarVentasUsuarioBetRequest $request): BinaryFileResponse
     {
         ini_set('memory_limit', '2G'); // Aumentar el límite de memoria
         ini_set('max_execution_time', 300); // Aumentar el tiempo máximo de entrada a 5 min
@@ -422,12 +440,13 @@ class ReporteController extends Controller
         $fecha = $request->input('fecha');
         $mes = $request->input('mes');
         $empresa = $request->input('empresa', 'todos');
+        $coordinadorId = $request->integer('coordinador') ?: null;
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
 
         $fileName = 'ventas_usuarioio_bet_'.now()->format('Ymd_His').'.xlsx';
 
-        return Excel::download(new VentasUsuarioExport($tipo, $fecha, $mes, $empresa, $fechaInicio, $fechaFin), $fileName);
+        return Excel::download(new VentasUsuarioExport($tipo, $fecha, $mes, $empresa, $fechaInicio, $fechaFin, $coordinadorId), $fileName);
     }
 
     public function pdfVentasUsuarioBet(Request $request)
