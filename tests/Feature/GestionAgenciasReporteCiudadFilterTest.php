@@ -185,6 +185,70 @@ class GestionAgenciasReporteCiudadFilterTest extends TestCase
         $this->assertStringContainsString('Mini tabla de detalle de agencias', $pdf);
     }
 
+    public function test_route_grouped_pdf_omits_terminal_detail_pages(): void
+    {
+        $viewData = [
+            'resumen' => [
+                'venta_por_hora' => 100,
+                'total_validas' => 1,
+                'total_eliminadas' => 0,
+                'total_apostado' => 100,
+            ],
+            'umbrales' => ['aviso' => 20, 'alerta' => 30, 'llamada' => 60],
+            'estatusResumen' => [
+                'Al dia' => 1,
+                'Aviso' => 0,
+                'En Alerta' => 0,
+                'Requiere llamada' => 0,
+            ],
+            'tendenciaVentasHora' => ['labels' => [], 'series' => [], 'total' => 0],
+            'filtrosAgencia' => ['empresa' => '', 'ciudad' => '', 'ruta' => '', 'coordinador' => ''],
+            'horaServidor' => now(),
+            'agrupacion' => 'ruta',
+            'agrupacionLabel' => 'Ruta',
+            'resumenAgrupado' => collect(),
+            'detalleAgencias' => collect([
+                [
+                    'grupo' => 'Ruta Norte',
+                    'terminal' => '001',
+                    'agencia' => 'Agencia Cibao',
+                    'ciudad' => 'Santiago',
+                    'ruta' => 'Ruta Norte',
+                    'coordinador' => 'Ana Perez',
+                    'estatus' => 'Al dia',
+                    'ultima_venta' => '06-09-2026 10:00:00 AM',
+                    'total_vendido' => 100,
+                ],
+            ]),
+            'detalleAgenciasTotal' => 1,
+            'detalleAgenciasLimite' => 200,
+        ];
+
+        $routePdf = view('reportes.gestion-agencias-pdf', $viewData)->render();
+        $cityPdf = view('reportes.gestion-agencias-pdf', [
+            ...$viewData,
+            'agrupacion' => 'ciudad',
+            'agrupacionLabel' => 'Ciudad',
+        ])->render();
+        $filteredRoutePdf = view('reportes.gestion-agencias-pdf', [
+            ...$viewData,
+            'agrupacion' => 'ciudad',
+            'agrupacionLabel' => 'Ciudad',
+            'filtrosAgencia' => [
+                ...$viewData['filtrosAgencia'],
+                'ruta' => 'Ruta Norte',
+            ],
+        ])->render();
+
+        $this->assertStringContainsString('Consolidado por ruta', $routePdf);
+        $this->assertStringNotContainsString('Mini tabla de detalle de agencias', $routePdf);
+        $this->assertStringNotContainsString('Agencia Cibao', $routePdf);
+        $this->assertStringContainsString('Mini tabla de detalle de agencias', $cityPdf);
+        $this->assertStringContainsString('Agencia Cibao', $cityPdf);
+        $this->assertStringNotContainsString('Mini tabla de detalle de agencias', $filteredRoutePdf);
+        $this->assertStringNotContainsString('Agencia Cibao', $filteredRoutePdf);
+    }
+
     public function test_compliance_color_scale_uses_the_confirmed_boundaries(): void
     {
         $controller = app(GestionAgenciasReporteController::class);

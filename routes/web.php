@@ -63,6 +63,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\RutaController;
 use App\Http\Controllers\ServicioGeneralMantenimientoEquipoController;
 use App\Http\Controllers\ServicioGeneralRequerimientoController;
+use App\Http\Controllers\SolicitudTerminalController;
 use App\Http\Controllers\SuperAdminSesionController;
 use App\Http\Controllers\TareaController;
 use App\Http\Controllers\Tecnologia\MonitoreoAgenciaPlazaController;
@@ -489,6 +490,12 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
     Route::prefix('mantenimiento')->name('mantenimiento.')->group(function () {
         Route::get('/', [ModuleHubController::class, 'mantenimiento'])->name('index');
+        Route::get('/solicitudes-terminales', [SolicitudTerminalController::class, 'index'])->name('solicitudes-terminales.index');
+        Route::post('/solicitudes-terminales/sugerir', [SolicitudTerminalController::class, 'preview'])->name('solicitudes-terminales.preview');
+        Route::post('/solicitudes-terminales', [SolicitudTerminalController::class, 'store'])->name('solicitudes-terminales.store');
+        Route::put('/solicitudes-terminales/{solicitudTerminal}/aprobaciones', [SolicitudTerminalController::class, 'updateAprobaciones'])->name('solicitudes-terminales.aprobaciones');
+        Route::get('/solicitudes-terminales/{solicitudTerminal}/pdf', [SolicitudTerminalController::class, 'pdf'])->name('solicitudes-terminales.pdf');
+        Route::post('/solicitudes-terminales/{solicitudTerminal}/correo', [SolicitudTerminalController::class, 'enviarCorreo'])->name('solicitudes-terminales.correo');
         Route::get('/catalogo-juegos', [CatalogoJuegoController::class, 'index'])->name('catalogo-juegos.index');
         Route::get('/catalogo-juegos/detectar-nuevos', [CatalogoJuegoController::class, 'detectarNuevos'])->name('catalogo-juegos.detectar-nuevos');
         Route::get('/catalogo-juegos/comparativo-sql', [CatalogoJuegoController::class, 'comparativoSql'])->name('catalogo-juegos.comparativo-sql');

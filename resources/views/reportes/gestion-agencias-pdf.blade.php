@@ -317,6 +317,7 @@
 <body>
     @php
         $filtrosActivos = array_filter($filtrosAgencia ?? [], fn ($value) => trim((string) $value) !== '');
+        $omitirDetalleTerminales = ($agrupacion ?? 'ruta') === 'ruta' || ! empty($filtrosActivos['ruta']);
     @endphp
     <div class="header">
         <h1 class="title">Reporte gestion de agencias</h1>
@@ -586,52 +587,54 @@
             @endif
         </div>
 
-        <div class="section page-break">
-            <h2 class="section-title">Mini tabla de detalle de agencias</h2>
-            <p class="note">
-                Se muestran {{ number_format(($detalleAgencias ?? collect())->count()) }}
-                de {{ number_format($detalleAgenciasTotal ?? 0) }} agencias.
-                @if (($detalleAgenciasTotal ?? 0) > ($detalleAgenciasLimite ?? 200))
-                    Para proteger el rendimiento del PDF, esta muestra se limita a las primeras
-                    {{ number_format($detalleAgenciasLimite ?? 200) }} agencias ordenadas por
-                    {{ strtolower($agrupacionLabel ?? 'ruta') }} y terminal.
-                @endif
-            </p>
-            <table class="report-table">
-                <thead>
-                    <tr>
-                        <th>{{ $agrupacionLabel ?? 'Ruta' }}</th>
-                        <th>Terminal</th>
-                        <th>Agencia</th>
-                        <th>Ciudad</th>
-                        <th>Ruta</th>
-                        <th>Coordinador</th>
-                        <th>Estatus</th>
-                        <th>Ultima venta</th>
-                        <th>Total vendido</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($detalleAgencias ?? [] as $agencia)
+        @unless ($omitirDetalleTerminales)
+            <div class="section page-break">
+                <h2 class="section-title">Mini tabla de detalle de agencias</h2>
+                <p class="note">
+                    Se muestran {{ number_format(($detalleAgencias ?? collect())->count()) }}
+                    de {{ number_format($detalleAgenciasTotal ?? 0) }} agencias.
+                    @if (($detalleAgenciasTotal ?? 0) > ($detalleAgenciasLimite ?? 200))
+                        Para proteger el rendimiento del PDF, esta muestra se limita a las primeras
+                        {{ number_format($detalleAgenciasLimite ?? 200) }} agencias ordenadas por
+                        {{ strtolower($agrupacionLabel ?? 'ruta') }} y terminal.
+                    @endif
+                </p>
+                <table class="report-table">
+                    <thead>
                         <tr>
-                            <td>{{ $agencia['grupo'] }}</td>
-                            <td>{{ $agencia['terminal'] ?: 'N/D' }}</td>
-                            <td>{{ $agencia['agencia'] ?: 'Sin nombre' }}</td>
-                            <td>{{ $agencia['ciudad'] }}</td>
-                            <td>{{ $agencia['ruta'] }}</td>
-                            <td>{{ $agencia['coordinador'] }}</td>
-                            <td>{{ $agencia['estatus'] }}</td>
-                            <td>{{ $agencia['ultima_venta'] }}</td>
-                            <td class="number">RD$ {{ number_format($agencia['total_vendido'], 2) }}</td>
+                            <th>{{ $agrupacionLabel ?? 'Ruta' }}</th>
+                            <th>Terminal</th>
+                            <th>Agencia</th>
+                            <th>Ciudad</th>
+                            <th>Ruta</th>
+                            <th>Coordinador</th>
+                            <th>Estatus</th>
+                            <th>Ultima venta</th>
+                            <th>Total vendido</th>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="9" class="center muted">No hay agencias para mostrar.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        @forelse ($detalleAgencias ?? [] as $agencia)
+                            <tr>
+                                <td>{{ $agencia['grupo'] }}</td>
+                                <td>{{ $agencia['terminal'] ?: 'N/D' }}</td>
+                                <td>{{ $agencia['agencia'] ?: 'Sin nombre' }}</td>
+                                <td>{{ $agencia['ciudad'] }}</td>
+                                <td>{{ $agencia['ruta'] }}</td>
+                                <td>{{ $agencia['coordinador'] }}</td>
+                                <td>{{ $agencia['estatus'] }}</td>
+                                <td>{{ $agencia['ultima_venta'] }}</td>
+                                <td class="number">RD$ {{ number_format($agencia['total_vendido'], 2) }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="9" class="center muted">No hay agencias para mostrar.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        @endunless
     @endif
 </body>
 </html>

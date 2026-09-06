@@ -1504,7 +1504,7 @@
                                     <input type="radio" name="agrupacionInformeGestion" value="ruta" class="form-check-input mt-0" checked>
                                     <span>
                                         <strong>Por ruta</strong>
-                                        <small class="d-block text-muted">Detalla las agencias y metricas correspondientes a cada ruta.</small>
+                                        <small class="d-block text-muted">Muestra unicamente las metricas consolidadas de cada ruta.</small>
                                     </span>
                                 </label>
                             </div>

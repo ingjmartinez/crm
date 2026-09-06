@@ -401,6 +401,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Solicitud de Terminales',
+                'descripcion' => 'Genera códigos de terminal, crea solicitudes PDF y registra aprobaciones de Loteka.',
+                'url' => '/mantenimiento/solicitudes-terminales',
+                'icono' => 'ri-file-list-3-line',
+                'categoria' => 'Agencias',
+                'tags' => ['solicitud', 'terminales', 'codigos', 'loteka', 'pdf'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Incumplimientos Horario',
                 'descripcion' => 'Da seguimiento a incumplimientos y asistencia por horario.',
                 'url' => '/agencias-incumplimientos-horario',
