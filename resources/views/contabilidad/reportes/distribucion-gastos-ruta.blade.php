@@ -1,6 +1,8 @@
 @extends('app')
 
 @section('content')
+    <link href="{{ asset('libs/choices.js/public/assets/styles/choices.min.css') }}" rel="stylesheet">
+
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -215,6 +217,7 @@
 @endsection
 
 @section('script')
+    <script src="{{ asset('libs/choices.js/public/assets/scripts/choices.min.js') }}"></script>
     <script>
         const dataUrlDistribucion = @json(route('operaciones.distribucion-gastos-ruta.data'));
         const pdfUrlDistribucion = @json(route('operaciones.distribucion-gastos-ruta.pdf'));
@@ -225,6 +228,8 @@
         document.addEventListener('DOMContentLoaded', function () {
             const hoy = new Date();
             const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+            habilitarBusquedaRutas('mapeoRutaKey');
+            habilitarBusquedaRutas('rutaPdf');
             document.getElementById('fechaIni').value = fechaLocal(primerDia);
             document.getElementById('fechaFin').value = fechaLocal(hoy);
             document.getElementById('formDistribucion').addEventListener('submit', generarDistribucion);
@@ -235,6 +240,23 @@
                 tablasDistribucion.socios?.button('.buttons-excel').trigger();
             });
         });
+
+        function habilitarBusquedaRutas(elementoId) {
+            const selector = document.getElementById(elementoId);
+
+            if (!selector || typeof Choices === 'undefined') return;
+
+            new Choices(selector, {
+                allowHTML: false,
+                itemSelectText: 'Seleccionar',
+                noChoicesText: 'No hay rutas disponibles',
+                noResultsText: 'No se encontraron rutas',
+                searchEnabled: true,
+                searchFloor: 1,
+                searchPlaceholderValue: 'Buscar ruta...',
+                shouldSort: false,
+            });
+        }
 
         function generarPdfDistribucion() {
             const rutaKey = document.getElementById('rutaPdf').value;

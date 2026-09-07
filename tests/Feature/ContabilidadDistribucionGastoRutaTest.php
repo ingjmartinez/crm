@@ -22,6 +22,7 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         Schema::dropIfExists('ruta_agencia');
         Schema::dropIfExists('centros_de_costo');
         Schema::dropIfExists('movimientos_rutas_v2_gastos');
+        Schema::dropIfExists('movimientos_rutas_v2_transacciones');
         Schema::dropIfExists('agencias');
         Schema::dropIfExists('rutas');
 
@@ -294,6 +295,70 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         );
     }
 
+    public function test_selector_busca_rutas_unicas_importadas_y_con_gastos_aplicados(): void
+    {
+        DB::table('movimientos_rutas_v2_transacciones')->insert([
+            'fecha' => '2026-09-01',
+            'ruta_key' => 'RUTA NUEVA',
+            'ruta' => 'Ruta Nueva',
+        ]);
+        DB::table('movimientos_rutas_v2_gastos')->insert([
+            [
+                'fecha' => '2026-09-01', 'ruta_key' => 'RUTA NORTE', 'ruta' => 'Ruta Norte',
+                'monto' => 100, 'concepto' => 'Combustible', 'estado' => 'aplicado',
+            ],
+            [
+                'fecha' => '2026-09-02', 'ruta_key' => 'RUTA NORTE', 'ruta' => 'Ruta Norte',
+                'monto' => 200, 'concepto' => 'Peaje', 'estado' => 'aplicado',
+            ],
+            [
+                'fecha' => '2026-09-03', 'ruta_key' => 'RUTA SUR', 'ruta' => 'Ruta Sur',
+                'monto' => 300, 'concepto' => 'Combustible', 'estado' => 'pendiente',
+            ],
+        ]);
+        DB::table('centros_de_costo')->insert([
+            'id_centro_costo' => 900,
+            'company_id' => '168-Grupo Joselito',
+            'id_viejo' => '009001',
+            'id_grupo' => '61-Ruta Nueva',
+            'id_sub_grupo' => '45-Socio Nuevo',
+            'inactivo' => false,
+            'ocultar' => false,
+        ]);
+
+        $response = $this->get(route('operaciones.distribucion-gastos-ruta'))
+            ->assertOk()
+            ->assertViewHas('rutasDisponibles', function ($rutas): bool {
+                return $rutas->pluck('ruta_key')->all() === ['RUTA NORTE', 'RUTA NUEVA'];
+            });
+
+        $response->assertSee('Ruta Norte')
+            ->assertSee('Ruta Nueva')
+            ->assertDontSee('Ruta Sur')
+            ->assertSee('Buscar ruta...')
+            ->assertSee("habilitarBusquedaRutas('mapeoRutaKey')", false)
+            ->assertSee("habilitarBusquedaRutas('rutaPdf')", false);
+
+        $this->postJson(route('operaciones.distribucion-gastos-ruta.mapeos.store'), [
+            'ruta_key' => 'RUTA INVENTADA',
+            'id_grupo' => '61',
+            'id_sub_grupo' => '45',
+            'company_id' => '168',
+        ])->assertUnprocessable()->assertJsonValidationErrors('ruta_key');
+
+        $this->postJson(route('operaciones.distribucion-gastos-ruta.mapeos.store'), [
+            'ruta_key' => 'RUTA NUEVA',
+            'id_grupo' => '61',
+            'id_sub_grupo' => '45',
+            'company_id' => '168',
+        ])->assertOk()->assertJsonPath('terminales', 1);
+
+        $this->assertDatabaseHas('distribucion_gasto_ruta_mapeos', [
+            'ruta_key' => 'RUTA NUEVA',
+            'nombre_socio' => 'Socio Nuevo',
+        ]);
+    }
+
     private function crearEsquema(): void
     {
         Schema::create('rutas', function (Blueprint $table): void {
@@ -332,6 +397,13 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
             $table->string('socio_codigo')->nullable();
             $table->string('socio_nombre')->nullable();
             $table->string('estado')->default('aplicado');
+            $table->timestamps();
+        });
+        Schema::create('movimientos_rutas_v2_transacciones', function (Blueprint $table): void {
+            $table->id();
+            $table->date('fecha');
+            $table->string('ruta_key');
+            $table->string('ruta');
             $table->timestamps();
         });
         Schema::create('centros_de_costo', function (Blueprint $table): void {

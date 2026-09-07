@@ -6,7 +6,6 @@ use App\Http\Requests\Contabilidad\ConsultarDistribucionGastoRutaRequest;
 use App\Http\Requests\Operaciones\GenerarDistribucionGastoRutaPdfRequest;
 use App\Http\Requests\Operaciones\GuardarDistribucionGastoRutaMapeoRequest;
 use App\Models\DistribucionGastoRutaMapeo;
-use App\Models\MovimientoRutaV2Gasto;
 use App\Services\Contabilidad\DistribucionGastoRutaService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -20,12 +19,7 @@ class ContabilidadDistribucionGastoRutaController extends Controller
 
     public function index(): View
     {
-        $rutasDisponibles = MovimientoRutaV2Gasto::query()
-            ->where('estado', 'aplicado')
-            ->orderBy('ruta')
-            ->get(['ruta_key', 'ruta'])
-            ->unique('ruta_key')
-            ->values();
+        $rutasDisponibles = $this->distribucionService->rutasDisponibles();
         $mapeos = DistribucionGastoRutaMapeo::query()
             ->orderBy('ruta_nombre')
             ->orderBy('nombre_socio')

@@ -6,6 +6,7 @@ use App\Models\Agencia;
 use App\Models\CentroDeCosto;
 use App\Models\DistribucionGastoRutaMapeo;
 use App\Models\MovimientoRutaV2Gasto;
+use App\Models\MovimientoRutaV2Transaccion;
 use App\Models\Ruta;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -13,19 +14,41 @@ use Illuminate\Validation\ValidationException;
 
 class DistribucionGastoRutaService
 {
+    /** @return Collection<int, MovimientoRutaV2Transaccion|MovimientoRutaV2Gasto> */
+    public function rutasDisponibles(): Collection
+    {
+        $rutasImportadas = MovimientoRutaV2Transaccion::query()
+            ->selectRaw('ruta_key, MAX(ruta) as ruta')
+            ->whereNotNull('ruta_key')
+            ->where('ruta_key', '<>', '')
+            ->groupBy('ruta_key')
+            ->get();
+        $rutasConGastos = MovimientoRutaV2Gasto::query()
+            ->selectRaw('ruta_key, MAX(ruta) as ruta')
+            ->where('estado', 'aplicado')
+            ->whereNotNull('ruta_key')
+            ->where('ruta_key', '<>', '')
+            ->groupBy('ruta_key')
+            ->get();
+
+        return $rutasImportadas
+            ->concat($rutasConGastos)
+            ->sortBy(fn (MovimientoRutaV2Transaccion|MovimientoRutaV2Gasto $ruta): string => mb_strtolower((string) $ruta->ruta))
+            ->unique(fn (MovimientoRutaV2Transaccion|MovimientoRutaV2Gasto $ruta): string => $this->normalizarRuta($ruta->ruta_key))
+            ->values();
+    }
+
     /**
      * @param  array{ruta_key: string, id_grupo: string, id_sub_grupo: string, company_id: string}  $datos
      * @return array{mapeo: DistribucionGastoRutaMapeo, terminales: int}
      */
     public function guardarMapeo(array $datos, int|string|null $userId): array
     {
-        $gasto = MovimientoRutaV2Gasto::query()
-            ->where('estado', 'aplicado')
-            ->get(['ruta_key', 'ruta'])
-            ->first(fn (MovimientoRutaV2Gasto $movimiento): bool => $this->normalizarRuta($movimiento->ruta_key) === $this->normalizarRuta($datos['ruta_key']));
+        $rutaDisponible = $this->rutasDisponibles()
+            ->first(fn (MovimientoRutaV2Transaccion|MovimientoRutaV2Gasto $ruta): bool => $this->normalizarRuta($ruta->ruta_key) === $this->normalizarRuta($datos['ruta_key']));
 
-        if (! $gasto instanceof MovimientoRutaV2Gasto) {
-            throw ValidationException::withMessages(['ruta_key' => 'La ruta seleccionada no tiene gastos aplicados.']);
+        if ($rutaDisponible === null) {
+            throw ValidationException::withMessages(['ruta_key' => 'La ruta seleccionada no existe en los archivos importados ni tiene gastos aplicados.']);
         }
 
         $centros = $this->centrosActivos()->filter(function (CentroDeCosto $centro) use ($datos): bool {
@@ -56,13 +79,13 @@ class DistribucionGastoRutaService
 
         $mapeo = DistribucionGastoRutaMapeo::query()->updateOrCreate(
             [
-                'ruta_key' => $this->normalizarRuta($gasto->ruta_key),
+                'ruta_key' => $this->normalizarRuta($rutaDisponible->ruta_key),
                 'company_id' => $companyId,
                 'id_grupo' => $datos['id_grupo'],
                 'id_sub_grupo' => $datos['id_sub_grupo'],
             ],
             [
-                'ruta_nombre' => trim((string) $gasto->ruta),
+                'ruta_nombre' => trim((string) $rutaDisponible->ruta),
                 'nombre_grupo' => $grupo['nombre'],
                 'nombre_socio' => $socio['nombre'],
                 'user_id' => is_numeric($userId) ? (int) $userId : null,
