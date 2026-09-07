@@ -1,6 +1,55 @@
 @extends('app')
 
 @section('content')
+    <link href="{{ asset('libs/choices.js/public/assets/styles/choices.min.css') }}" rel="stylesheet">
+    <style>
+        .filtro-ruta-centro-costo .choices {
+            margin-bottom: 0;
+        }
+
+        .filtro-ruta-centro-costo .choices__inner {
+            background-color: var(--vz-input-bg, #fff);
+            border-color: var(--vz-input-border, #ced4da);
+            border-radius: .2rem;
+            font-size: .7109375rem;
+            min-height: 31px;
+        }
+
+        .filtro-ruta-centro-costo .choices[data-type*='select-one'] .choices__inner {
+            padding: .25rem 2rem .25rem .5rem;
+        }
+
+        .filtro-ruta-centro-costo .choices__list--single {
+            align-items: center;
+            display: flex;
+            line-height: 1.5;
+            min-height: 21px;
+            padding: 0;
+        }
+
+        .filtro-ruta-centro-costo .choices__list--dropdown {
+            z-index: 1055;
+        }
+
+        .filtro-ruta-centro-costo .choices__list--dropdown .choices__list {
+            margin-left: 0 !important;
+            overflow-x: hidden;
+            padding-left: 0 !important;
+        }
+
+        .filtro-ruta-centro-costo .choices__list--dropdown .choices__item--selectable {
+            box-sizing: border-box;
+            left: 0;
+            margin-left: 0 !important;
+            padding: 9px 16px 9px 24px !important;
+            text-indent: 0 !important;
+            transform: none;
+            width: 100%;
+            white-space: normal;
+            word-break: normal;
+        }
+    </style>
+
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -64,7 +113,7 @@
                                             <option value="inactivo">Inactivo</option>
                                         </select>
                                     </div>
-                                    <div class="col-12 col-md-4 col-lg-3">
+                                    <div class="col-12 col-md-4 col-lg-3 filtro-ruta-centro-costo">
                                         <label class="form-label">Ruta</label>
                                         <select id="filtroRutaCentroCosto" class="form-select form-select-sm">
                                             <option value="">Todas</option>
@@ -166,6 +215,7 @@
 @endsection
 
 @section('script')
+    <script src="{{ asset('libs/choices.js/public/assets/scripts/choices.min.js') }}"></script>
     <script>
         const csrfToken = '{{ csrf_token() }}';
         let centrosCostoTable = null;
@@ -174,8 +224,22 @@
         let progresoSincronizacionTimer = null;
         let resizeCentrosCostoTimer = null;
         let resizeCentrosCostoBound = false;
+        let filtroRutaCentroCostoChoices = null;
         const filtroEmpresaCentroCostoEl = document.getElementById('filtroEmpresaCentroCosto');
         const filtroRutaCentroCostoEl = document.getElementById('filtroRutaCentroCosto');
+
+        if (filtroRutaCentroCostoEl && typeof Choices !== 'undefined') {
+            filtroRutaCentroCostoChoices = new Choices(filtroRutaCentroCostoEl, {
+                allowHTML: false,
+                itemSelectText: '',
+                noChoicesText: 'No hay rutas disponibles',
+                noResultsText: 'No se encontraron rutas',
+                searchEnabled: true,
+                searchFloor: 1,
+                searchPlaceholderValue: 'Buscar ruta por nombre...',
+                shouldSort: false,
+            });
+        }
 
         async function parsearRespuestaJson(response, contextoError) {
             const contentType = (response.headers.get('content-type') || '').toLowerCase();
@@ -339,17 +403,32 @@
                 .map(item => String(item.IdGrupo ?? '').trim())
                 .filter(ruta => ruta !== ''))]
                 .sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }));
-            const opcionTodas = new Option('Todas', '');
-
-            filtroRutaCentroCostoEl.replaceChildren(opcionTodas);
-            rutas.forEach(ruta => filtroRutaCentroCostoEl.add(new Option(ruta, ruta)));
-            filtroRutaCentroCostoEl.value = rutas.includes(rutaSeleccionada) ? rutaSeleccionada : '';
+            actualizarOpcionesRutaCentroCosto(rutas, rutas.includes(rutaSeleccionada) ? rutaSeleccionada : '');
         }
 
         function manejarCambioEmpresaCentroCosto() {
-            filtroRutaCentroCostoEl.replaceChildren(new Option('Todas', ''));
+            actualizarOpcionesRutaCentroCosto([], '');
             actualizarEtiquetaConsultar();
             aplicarFiltroEstadoCentroCosto();
+        }
+
+        function actualizarOpcionesRutaCentroCosto(rutas, rutaSeleccionada) {
+            const opciones = [
+                { value: '', label: 'Todas', selected: rutaSeleccionada === '' },
+                ...rutas.map(ruta => ({ value: ruta, label: ruta, selected: ruta === rutaSeleccionada })),
+            ];
+
+            if (filtroRutaCentroCostoChoices) {
+                filtroRutaCentroCostoChoices.setChoices(opciones, 'value', 'label', true);
+                return;
+            }
+
+            filtroRutaCentroCostoEl.replaceChildren(...opciones.map(opcion => new Option(
+                opcion.label,
+                opcion.value,
+                opcion.selected,
+                opcion.selected,
+            )));
         }
 
         function destruirTablaCentrosCosto() {

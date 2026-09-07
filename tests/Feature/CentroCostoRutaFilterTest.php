@@ -14,7 +14,12 @@ class CentroCostoRutaFilterTest extends TestCase
             ->assertSee('id="filtroRutaCentroCosto"', false)
             ->assertSee('centrosCostoTable.column(5).search(busquedaRuta, true, false);', false)
             ->assertSee('cargarOpcionesRutaCentroCosto(dataFiltrada);', false)
-            ->assertSee("String(item.IdGrupo ?? '').trim()", false);
+            ->assertSee("String(item.IdGrupo ?? '').trim()", false)
+            ->assertSee('Buscar ruta por nombre...')
+            ->assertSee('new Choices(filtroRutaCentroCostoEl', false)
+            ->assertSee('padding: 9px 16px 9px 24px !important;', false)
+            ->assertSee('overflow-x: hidden;', false)
+            ->assertSee("filtroRutaCentroCostoChoices.setChoices(opciones, 'value', 'label', true);", false);
 
         $documento = new \DOMDocument;
         @$documento->loadHTML($response->getContent());
