@@ -560,6 +560,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('operaciones.distribucion-gastos-ruta.pdf');
     Route::post('/operaciones/distribucion-gastos-ruta/mapeos', [ContabilidadDistribucionGastoRutaController::class, 'storeMapeo'])
         ->name('operaciones.distribucion-gastos-ruta.mapeos.store');
+    Route::get('/operaciones/distribucion-gastos-ruta/subgrupos', [ContabilidadDistribucionGastoRutaController::class, 'subgrupos'])
+        ->name('operaciones.distribucion-gastos-ruta.subgrupos');
     Route::delete('/operaciones/distribucion-gastos-ruta/mapeos/{mapeo}', [ContabilidadDistribucionGastoRutaController::class, 'destroyMapeo'])
         ->name('operaciones.distribucion-gastos-ruta.mapeos.destroy');
     Route::get('/operaciones/reportes/diario', [OperacionesReporteDiarioController::class, 'index'])->name('operaciones.reporte.diario');

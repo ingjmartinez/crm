@@ -68,7 +68,7 @@ return [
         'nombre' => 'Ventas por Cedula',
         'descripcion' => 'Busca ventas asociadas a una cedula especifica.',
         'url' => '/reportes-ventas-por-cedula',
-        'icono' => 'ri-id-card-line',
+        'icono' => 'ri-shopping-cart-2-line',
         'categoria' => 'Ventas',
         'tags' => ['cedula', 'ventas', 'usuarios'],
         'activo' => true,

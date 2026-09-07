@@ -99,6 +99,61 @@ class DistribucionGastoRutaService
     }
 
     /**
+     * @param  array{ruta_key: string, id_grupo: string, id_sub_grupo?: string, id_sub_grupos?: array<int, string>, company_id: string}  $datos
+     * @return array{mapeo: DistribucionGastoRutaMapeo, mapeos: array<int, DistribucionGastoRutaMapeo>, terminales: int}
+     */
+    public function guardarMapeos(array $datos, int|string|null $userId): array
+    {
+        $idSubGrupos = collect($datos['id_sub_grupos'] ?? [$datos['id_sub_grupo']])
+            ->unique()
+            ->values();
+
+        return (new DistribucionGastoRutaMapeo)->getConnection()->transaction(function () use ($datos, $idSubGrupos, $userId): array {
+            $resultados = $idSubGrupos->map(function (string $idSubGrupo) use ($datos, $userId): array {
+                return $this->guardarMapeo([
+                    'ruta_key' => $datos['ruta_key'],
+                    'id_grupo' => $datos['id_grupo'],
+                    'id_sub_grupo' => $idSubGrupo,
+                    'company_id' => $datos['company_id'],
+                ], $userId);
+            });
+
+            return [
+                'mapeo' => $resultados->first()['mapeo'],
+                'mapeos' => $resultados->pluck('mapeo')->all(),
+                'terminales' => $resultados->sum('terminales'),
+            ];
+        });
+    }
+
+    /**
+     * @return array<int, array{id: string, nombre: string, terminales: int}>
+     */
+    public function subgruposDisponibles(string $idGrupo, string $companyId): array
+    {
+        return $this->centrosActivos()
+            ->filter(fn (CentroDeCosto $centro): bool => $this->codigoCampo($centro->id_grupo) === $idGrupo
+                && $this->codigoCampo($centro->company_id) === $companyId)
+            ->groupBy(fn (CentroDeCosto $centro): string => $this->codigoCampo($centro->id_sub_grupo))
+            ->map(function (Collection $centros, string $idSubGrupo): array {
+                $socio = $this->parsearCodigoNombre($centros->first()->id_sub_grupo);
+
+                return [
+                    'id' => $idSubGrupo,
+                    'nombre' => $socio['nombre'],
+                    'terminales' => $centros->pluck('id_viejo')
+                        ->map(fn (mixed $terminal): string => $this->normalizarTerminal($terminal))
+                        ->unique()
+                        ->count(),
+                ];
+            })
+            ->filter(fn (array $subgrupo): bool => $subgrupo['id'] !== '')
+            ->sortBy(fn (array $subgrupo): string => str_pad($subgrupo['id'], 20, '0', STR_PAD_LEFT))
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array{
      *   data: array<int, array<string, mixed>>,
      *   detalle: array<int, array<string, mixed>>,

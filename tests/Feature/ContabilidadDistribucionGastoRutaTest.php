@@ -194,12 +194,24 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
             'ruta_key' => 'TAMAYO', 'id_grupo' => '61', 'id_sub_grupo' => '45',
         ])->assertUnprocessable()->assertJsonValidationErrors('company_id');
 
+        $this->getJson(route('operaciones.distribucion-gastos-ruta.subgrupos', [
+            'id_grupo' => '61',
+            'company_id' => '168',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('subgrupos.0.id', '45')
+            ->assertJsonPath('subgrupos.0.nombre', 'Socio A')
+            ->assertJsonPath('subgrupos.0.terminales', 4)
+            ->assertJsonPath('subgrupos.1.id', '46')
+            ->assertJsonPath('subgrupos.1.terminales', 2);
+
         $this->postJson(route('operaciones.distribucion-gastos-ruta.mapeos.store'), [
-            'ruta_key' => 'TAMAYO', 'id_grupo' => '61', 'id_sub_grupo' => '45', 'company_id' => '168',
-        ])->assertOk()->assertJsonPath('terminales', 4);
-        $this->postJson(route('operaciones.distribucion-gastos-ruta.mapeos.store'), [
-            'ruta_key' => 'TAMAYO', 'id_grupo' => '61', 'id_sub_grupo' => '46', 'company_id' => '168',
-        ])->assertOk()->assertJsonPath('terminales', 2);
+            'ruta_key' => 'TAMAYO', 'id_grupo' => '61', 'id_sub_grupos' => ['45', '46'], 'company_id' => '168',
+        ])->assertOk()
+            ->assertJsonCount(2, 'mapeos')
+            ->assertJsonPath('terminales', 6);
+
+        $this->assertDatabaseCount('distribucion_gasto_ruta_mapeos', 2);
 
         $this->postJson(route('operaciones.distribucion-gastos-ruta.mapeos.store'), [
             'ruta_key' => 'TAMAYO', 'id_grupo' => '61', 'id_sub_grupo' => '99', 'company_id' => '168',
@@ -341,7 +353,13 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
             ->assertSee('.choices__list--dropdown .choices__placeholder', false)
             ->assertSee('padding: 10px 16px 10px 24px !important', false)
             ->assertSee("habilitarBusquedaRutas('mapeoRutaKey')", false)
-            ->assertSee("habilitarBusquedaRutas('rutaPdf')", false);
+            ->assertSee("habilitarBusquedaRutas('rutaPdf')", false)
+            ->assertSee('Socios disponibles para la ruta')
+            ->assertSee('id="listaSubgrupos"', false)
+            ->assertSee('id="seleccionarTodosSubgrupos"', false)
+            ->assertSee('function cargarSubgruposRuta()', false)
+            ->assertSee('id_sub_grupos: idSubGrupos', false)
+            ->assertSee('const subgruposMapeoUrl =', false);
 
         $this->postJson(route('operaciones.distribucion-gastos-ruta.mapeos.store'), [
             'ruta_key' => 'RUTA INVENTADA',

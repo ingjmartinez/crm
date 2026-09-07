@@ -196,6 +196,8 @@ class UserFavoritoTest extends TestCase
         $hub = file_get_contents(resource_path('views/module-hub/index.blade.php'));
         $reportes = file_get_contents(resource_path('views/reportes/index.blade.php'));
         $recursosHumanos = file_get_contents(resource_path('views/recursos_humanos/index.blade.php'));
+        $ventasPorCedula = collect(config('reportes'))
+            ->firstWhere('url', '/reportes-ventas-por-cedula');
 
         $this->assertStringContainsString('Mis favoritos', $layout);
         $this->assertStringContainsString('const FAVORITES_TOGGLE_URL', $layout);
@@ -206,6 +208,7 @@ class UserFavoritoTest extends TestCase
         $this->assertStringContainsString("data-favorito-key=\"{{ \$reporte['favorito_key'] }}\"", $reportes);
         $this->assertStringContainsString('btn-app-favorito', $recursosHumanos);
         $this->assertStringContainsString("data-favorito-key=\"{{ \$modulo['favorito_key'] }}\"", $recursosHumanos);
+        $this->assertSame('ri-shopping-cart-2-line', $ventasPorCedula['icono']);
 
         $this->assertTrue(Route::has('favoritos.toggle'));
     }

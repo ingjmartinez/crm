@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Contabilidad\ConsultarDistribucionGastoRutaRequest;
+use App\Http\Requests\Operaciones\ConsultarDistribucionGastoRutaSubgruposRequest;
 use App\Http\Requests\Operaciones\GenerarDistribucionGastoRutaPdfRequest;
 use App\Http\Requests\Operaciones\GuardarDistribucionGastoRutaMapeoRequest;
 use App\Models\DistribucionGastoRutaMapeo;
@@ -67,15 +68,28 @@ class ContabilidadDistribucionGastoRutaController extends Controller
 
     public function storeMapeo(GuardarDistribucionGastoRutaMapeoRequest $request): JsonResponse
     {
-        $resultado = $this->distribucionService->guardarMapeo(
+        $resultado = $this->distribucionService->guardarMapeos(
             $request->validated(),
             $request->user()?->getAuthIdentifier(),
         );
 
         return response()->json([
-            'message' => 'Relacion de ruta y socio guardada correctamente.',
+            'message' => 'Relaciones de ruta y socios guardadas correctamente.',
             'mapeo' => $resultado['mapeo'],
+            'mapeos' => $resultado['mapeos'],
             'terminales' => $resultado['terminales'],
+        ]);
+    }
+
+    public function subgrupos(ConsultarDistribucionGastoRutaSubgruposRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        return response()->json([
+            'subgrupos' => $this->distribucionService->subgruposDisponibles(
+                $validated['id_grupo'],
+                $validated['company_id'],
+            ),
         ]);
     }
 

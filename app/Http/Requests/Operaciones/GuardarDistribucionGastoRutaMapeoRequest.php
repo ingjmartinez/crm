@@ -17,7 +17,9 @@ class GuardarDistribucionGastoRutaMapeoRequest extends FormRequest
         return [
             'ruta_key' => ['required', 'string', 'max:150'],
             'id_grupo' => ['required', 'string', 'max:20', 'regex:/^\d+$/'],
-            'id_sub_grupo' => ['required', 'string', 'max:20', 'regex:/^\d+$/'],
+            'id_sub_grupo' => ['required_without:id_sub_grupos', 'string', 'max:20', 'regex:/^\d+$/'],
+            'id_sub_grupos' => ['required_without:id_sub_grupo', 'array', 'min:1'],
+            'id_sub_grupos.*' => ['required', 'string', 'max:20', 'regex:/^\d+$/', 'distinct:strict'],
             'company_id' => ['required', 'string', 'max:20', 'in:168,169'],
         ];
     }
@@ -31,6 +33,10 @@ class GuardarDistribucionGastoRutaMapeoRequest extends FormRequest
             'id_grupo.regex' => 'El ID de Ruta empresa debe contener solo numeros.',
             'id_sub_grupo.required' => 'Digite el ID del socio.',
             'id_sub_grupo.regex' => 'El ID del socio debe contener solo numeros.',
+            'id_sub_grupos.required_without' => 'Seleccione al menos un socio.',
+            'id_sub_grupos.min' => 'Seleccione al menos un socio.',
+            'id_sub_grupos.*.regex' => 'Los ID de socios deben contener solo números.',
+            'id_sub_grupos.*.distinct' => 'No puede seleccionar el mismo socio más de una vez.',
             'company_id.required' => 'Seleccione la empresa.',
             'company_id.in' => 'La empresa seleccionada no es valida.',
         ];
@@ -38,11 +44,22 @@ class GuardarDistribucionGastoRutaMapeoRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
+        $datos = [
             'ruta_key' => trim((string) $this->input('ruta_key')),
             'id_grupo' => trim((string) $this->input('id_grupo')),
-            'id_sub_grupo' => trim((string) $this->input('id_sub_grupo')),
             'company_id' => trim((string) $this->input('company_id')),
-        ]);
+        ];
+
+        if ($this->has('id_sub_grupo')) {
+            $datos['id_sub_grupo'] = trim((string) $this->input('id_sub_grupo'));
+        }
+
+        if ($this->has('id_sub_grupos')) {
+            $datos['id_sub_grupos'] = collect($this->input('id_sub_grupos'))
+                ->map(fn (mixed $idSubGrupo): string => trim((string) $idSubGrupo))
+                ->all();
+        }
+
+        $this->merge($datos);
     }
 }

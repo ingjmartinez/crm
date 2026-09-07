@@ -47,6 +47,39 @@
         .selector-ruta-con-busqueda .choices__list--dropdown .choices__placeholder {
             display: none;
         }
+
+        .subgrupos-selector {
+            background: var(--vz-light, #f8f9fa);
+            border: 1px solid var(--vz-border-color, #e9ebec);
+            border-radius: .5rem;
+            padding: 1rem;
+        }
+
+        .subgrupos-lista {
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        }
+
+        .subgrupo-opcion {
+            align-items: flex-start;
+            background: var(--vz-card-bg, #fff);
+            border: 1px solid var(--vz-border-color, #e9ebec);
+            border-radius: .45rem;
+            display: flex;
+            gap: .65rem;
+            padding: .75rem;
+        }
+
+        .subgrupo-opcion:has(.form-check-input:checked) {
+            background: rgba(var(--vz-primary-rgb), .06);
+            border-color: rgba(var(--vz-primary-rgb), .45);
+        }
+
+        .subgrupo-opcion .form-check-input {
+            flex: 0 0 auto;
+            margin-top: .2rem;
+        }
     </style>
 
     <div class="main-content">
@@ -89,15 +122,11 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-sm-4 col-lg-2">
+                            <div class="col-sm-6 col-lg-3">
                                 <label for="mapeoIdGrupo" class="form-label">ID Ruta empresa</label>
                                 <input type="text" inputmode="numeric" id="mapeoIdGrupo" class="form-control" placeholder="Ej. 61" required>
                             </div>
-                            <div class="col-sm-4 col-lg-2">
-                                <label for="mapeoIdSubGrupo" class="form-label">ID Socio</label>
-                                <input type="text" inputmode="numeric" id="mapeoIdSubGrupo" class="form-control" placeholder="Ej. 45" required>
-                            </div>
-                            <div class="col-sm-4 col-lg-2">
+                            <div class="col-sm-6 col-lg-3">
                                 <label for="mapeoCompanyId" class="form-label">Empresa</label>
                                 <select id="mapeoCompanyId" class="form-select" required>
                                     <option value="">Seleccione...</option>
@@ -106,9 +135,24 @@
                                 </select>
                             </div>
                             <div class="col-lg-2 d-grid">
-                                <button type="submit" class="btn btn-primary" id="btnGuardarMapeo">
-                                    <i class="ri-add-line me-1"></i>Agregar socio
+                                <button type="submit" class="btn btn-primary" id="btnGuardarMapeo" disabled>
+                                    <i class="ri-add-line me-1"></i>Aplicar selección
                                 </button>
+                            </div>
+                            <div class="col-12">
+                                <div class="subgrupos-selector">
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                                        <div>
+                                            <h6 class="mb-1">Socios disponibles para la ruta</h6>
+                                            <p class="text-muted mb-0" id="subgruposMensaje">Indique el ID Ruta empresa y la empresa para buscar sus socios automáticamente.</p>
+                                        </div>
+                                        <div class="form-check d-none" id="seleccionarTodosSubgruposContenedor">
+                                            <input class="form-check-input" type="checkbox" id="seleccionarTodosSubgrupos">
+                                            <label class="form-check-label fw-semibold" for="seleccionarTodosSubgrupos">Seleccionar todos</label>
+                                        </div>
+                                    </div>
+                                    <div class="subgrupos-lista" id="listaSubgrupos"></div>
+                                </div>
                             </div>
                         </form>
 
@@ -268,8 +312,11 @@
         const dataUrlDistribucion = @json(route('operaciones.distribucion-gastos-ruta.data'));
         const pdfUrlDistribucion = @json(route('operaciones.distribucion-gastos-ruta.pdf'));
         const storeMapeoUrl = @json(route('operaciones.distribucion-gastos-ruta.mapeos.store'));
+        const subgruposMapeoUrl = @json(route('operaciones.distribucion-gastos-ruta.subgrupos'));
         const destroyMapeoUrl = @json(route('operaciones.distribucion-gastos-ruta.mapeos.destroy', ['mapeo' => '__ID__']));
         const tablasDistribucion = {};
+        let temporizadorBusquedaSubgrupos = null;
+        let solicitudSubgrupos = null;
 
         document.addEventListener('DOMContentLoaded', function () {
             const hoy = new Date();
@@ -281,6 +328,16 @@
             document.getElementById('formDistribucion').addEventListener('submit', generarDistribucion);
             document.getElementById('btnPdf').addEventListener('click', generarPdfDistribucion);
             document.getElementById('formMapeoRuta').addEventListener('submit', guardarMapeoRuta);
+            document.getElementById('mapeoIdGrupo').addEventListener('input', programarBusquedaSubgrupos);
+            document.getElementById('mapeoCompanyId').addEventListener('change', cargarSubgruposRuta);
+            document.getElementById('mapeoRutaKey').addEventListener('change', actualizarEstadoSeleccionSubgrupos);
+            document.getElementById('listaSubgrupos').addEventListener('change', actualizarEstadoSeleccionSubgrupos);
+            document.getElementById('seleccionarTodosSubgrupos').addEventListener('change', function (event) {
+                document.querySelectorAll('.subgrupo-checkbox').forEach((checkbox) => {
+                    checkbox.checked = event.currentTarget.checked;
+                });
+                actualizarEstadoSeleccionSubgrupos();
+            });
             document.querySelectorAll('.btn-eliminar-mapeo').forEach((boton) => boton.addEventListener('click', eliminarMapeoRuta));
             document.getElementById('btnExcel').addEventListener('click', function () {
                 tablasDistribucion.socios?.button('.buttons-excel').trigger();
@@ -323,9 +380,97 @@
             window.open(`${pdfUrlDistribucion}?${params.toString()}`, '_blank');
         }
 
+        function programarBusquedaSubgrupos() {
+            clearTimeout(temporizadorBusquedaSubgrupos);
+            temporizadorBusquedaSubgrupos = setTimeout(cargarSubgruposRuta, 350);
+        }
+
+        async function cargarSubgruposRuta() {
+            const idGrupo = document.getElementById('mapeoIdGrupo').value.trim();
+            const companyId = document.getElementById('mapeoCompanyId').value;
+            const mensaje = document.getElementById('subgruposMensaje');
+            const lista = document.getElementById('listaSubgrupos');
+            const seleccionarTodosContenedor = document.getElementById('seleccionarTodosSubgruposContenedor');
+
+            solicitudSubgrupos?.abort();
+            lista.replaceChildren();
+            seleccionarTodosContenedor.classList.add('d-none');
+            document.getElementById('seleccionarTodosSubgrupos').checked = false;
+            actualizarEstadoSeleccionSubgrupos();
+
+            if (!idGrupo || !companyId) {
+                mensaje.textContent = 'Indique el ID Ruta empresa y la empresa para buscar sus socios automáticamente.';
+                return;
+            }
+
+            mensaje.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando socios relacionados...';
+            solicitudSubgrupos = new AbortController();
+
+            try {
+                const params = new URLSearchParams({ id_grupo: idGrupo, company_id: companyId });
+                const response = await fetch(`${subgruposMapeoUrl}?${params.toString()}`, {
+                    headers: { Accept: 'application/json' },
+                    signal: solicitudSubgrupos.signal,
+                });
+                const payload = await parsearJsonDistribucion(response);
+                const subgrupos = Array.isArray(payload.subgrupos) ? payload.subgrupos : [];
+
+                if (subgrupos.length === 0) {
+                    mensaje.textContent = 'No se encontraron socios activos para esa ruta y empresa.';
+                    return;
+                }
+
+                const fragmento = document.createDocumentFragment();
+                subgrupos.forEach((subgrupo) => {
+                    const contenedor = document.createElement('label');
+                    contenedor.className = 'subgrupo-opcion';
+                    contenedor.htmlFor = `subgrupo-${subgrupo.id}`;
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'form-check-input subgrupo-checkbox';
+                    checkbox.id = `subgrupo-${subgrupo.id}`;
+                    checkbox.value = subgrupo.id;
+
+                    const detalle = document.createElement('span');
+                    detalle.innerHTML = `<strong></strong><small class="d-block text-muted mt-1"></small>`;
+                    detalle.querySelector('strong').textContent = `${subgrupo.id} - ${subgrupo.nombre}`;
+                    detalle.querySelector('small').textContent = `${subgrupo.terminales} terminal(es) activa(s)`;
+
+                    contenedor.append(checkbox, detalle);
+                    fragmento.appendChild(contenedor);
+                });
+
+                lista.appendChild(fragmento);
+                mensaje.textContent = `${subgrupos.length} socio(s) encontrado(s). Seleccione los que desea aplicar.`;
+                seleccionarTodosContenedor.classList.remove('d-none');
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    mensaje.textContent = error.message;
+                }
+            }
+        }
+
+        function actualizarEstadoSeleccionSubgrupos() {
+            const checkboxes = [...document.querySelectorAll('.subgrupo-checkbox')];
+            const seleccionados = checkboxes.filter((checkbox) => checkbox.checked);
+            const seleccionarTodos = document.getElementById('seleccionarTodosSubgrupos');
+            seleccionarTodos.checked = checkboxes.length > 0 && seleccionados.length === checkboxes.length;
+            seleccionarTodos.indeterminate = seleccionados.length > 0 && seleccionados.length < checkboxes.length;
+            document.getElementById('btnGuardarMapeo').disabled = !document.getElementById('mapeoRutaKey').value || seleccionados.length === 0;
+        }
+
         async function guardarMapeoRuta(event) {
             event.preventDefault();
             const boton = document.getElementById('btnGuardarMapeo');
+            const idSubGrupos = [...document.querySelectorAll('.subgrupo-checkbox:checked')]
+                .map((checkbox) => checkbox.value);
+
+            if (idSubGrupos.length === 0) {
+                if (typeof Swal !== 'undefined') Swal.fire({ title: 'Seleccione los socios', text: 'Marque al menos un ID de subgrupo para aplicar.', icon: 'warning' });
+                return;
+            }
+
             boton.disabled = true;
 
             try {
@@ -335,12 +480,12 @@
                     body: JSON.stringify({
                         ruta_key: document.getElementById('mapeoRutaKey').value,
                         id_grupo: document.getElementById('mapeoIdGrupo').value,
-                        id_sub_grupo: document.getElementById('mapeoIdSubGrupo').value,
+                        id_sub_grupos: idSubGrupos,
                         company_id: document.getElementById('mapeoCompanyId').value,
                     }),
                 });
                 const payload = await parsearJsonDistribucion(response);
-                await Swal.fire({ title: 'Relación guardada', text: `${payload.terminales} terminal(es) serán incluidas.`, icon: 'success' });
+                await Swal.fire({ title: 'Relaciones guardadas', text: `${payload.mapeos.length} socio(s) y ${payload.terminales} terminal(es) serán incluidos.`, icon: 'success' });
                 window.location.reload();
             } catch (error) {
                 if (typeof Swal !== 'undefined') Swal.fire({ title: 'No se pudo guardar', text: error.message, icon: 'error' });
