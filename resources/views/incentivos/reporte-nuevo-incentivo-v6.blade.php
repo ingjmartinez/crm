@@ -77,6 +77,115 @@
             transform: translateY(-1px);
         }
 
+        .ni-summary-card {
+            background: var(--vz-card-bg);
+            border: 1px solid #e2e8f0;
+            border-radius: .85rem;
+            box-shadow: 0 6px 20px rgba(15, 23, 42, .06);
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .ni-summary-card-body {
+            height: 100%;
+            padding: 1.25rem;
+        }
+
+        .ni-summary-label {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .ni-summary-value {
+            color: #172033;
+            font-size: 1.7rem;
+            font-weight: 700;
+            letter-spacing: -.02em;
+            line-height: 1.15;
+        }
+
+        .ni-summary-icon {
+            align-items: center;
+            background: #eef2ff;
+            border-radius: .75rem;
+            color: #405189;
+            display: inline-flex;
+            font-size: 1.35rem;
+            height: 3rem;
+            justify-content: center;
+            width: 3rem;
+        }
+
+        .ni-summary-icon-success {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .ni-final-payment {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: .65rem;
+            color: #166534;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-top: 1rem;
+            padding: .7rem .8rem;
+        }
+
+        .ni-status-grid {
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 1rem;
+        }
+
+        .ni-status-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: .65rem;
+            padding: .7rem .8rem;
+        }
+
+        .ni-status-item span {
+            color: #64748b;
+            display: block;
+            font-size: .72rem;
+            line-height: 1.2;
+        }
+
+        .ni-status-item strong {
+            display: block;
+            font-size: 1.35rem;
+            line-height: 1.2;
+            margin-top: .35rem;
+        }
+
+        .ni-financial-detail {
+            border-top: 3px solid #405189;
+        }
+
+        .ni-financial-breakdown {
+            color: #475569;
+            font-size: .78rem;
+            line-height: 1.65;
+        }
+
+        @media (min-width: 1200px) {
+            .ni-financial-composition {
+                border-left: 1px solid #e2e8f0;
+                padding-left: 1.5rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .ni-status-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .calendar-payment-grid {
             contain: layout paint;
             max-height: 68vh;
@@ -159,6 +268,131 @@
             max-height: 220px;
             overflow-y: auto;
         }
+
+        .ni-workspace-card {
+            border: 0;
+            box-shadow: 0 8px 28px rgba(15, 23, 42, .08);
+            overflow: hidden;
+        }
+
+        .ni-workspace-header {
+            background: linear-gradient(135deg, #f8fafc 0%, #eef4ff 100%);
+            border-bottom: 1px solid #e2e8f0;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .ni-workspace-kicker {
+            color: #405189;
+            font-size: .72rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .ni-version-badge {
+            background: #e0e7ff;
+            border: 1px solid #c7d2fe;
+            border-radius: 999px;
+            color: #3730a3;
+            font-size: .72rem;
+            font-weight: 700;
+            padding: .35rem .65rem;
+        }
+
+        .ni-control-panel {
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 1.5rem;
+        }
+
+        .ni-panel-section {
+            background: var(--vz-card-bg);
+            border: 1px solid #e2e8f0;
+            border-radius: .75rem;
+            padding: 1rem;
+        }
+
+        .ni-panel-heading {
+            align-items: center;
+            display: flex;
+            gap: .65rem;
+            margin-bottom: 1rem;
+        }
+
+        .ni-panel-heading-icon {
+            align-items: center;
+            background: #eef2ff;
+            border-radius: .55rem;
+            color: #405189;
+            display: inline-flex;
+            font-size: 1.1rem;
+            height: 2.25rem;
+            justify-content: center;
+            width: 2.25rem;
+        }
+
+        .ni-panel-heading h6 {
+            color: #1e293b;
+            font-size: .9rem;
+            margin: 0;
+        }
+
+        .ni-panel-heading p {
+            color: #8492a6;
+            font-size: .75rem;
+            margin: .12rem 0 0;
+        }
+
+        .ni-field-label {
+            color: #475569;
+            font-size: .75rem;
+            font-weight: 600;
+            margin-bottom: .35rem;
+        }
+
+        .ni-control-panel .form-control,
+        .ni-control-panel .form-select {
+            border-color: #d7deea;
+            min-height: 40px;
+        }
+
+        .ni-action-grid {
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .ni-action-grid .btn {
+            align-items: center;
+            display: flex;
+            font-size: .78rem;
+            font-weight: 600;
+            justify-content: flex-start;
+            min-height: 42px;
+            padding: .55rem .75rem;
+            text-align: left;
+            white-space: normal;
+        }
+
+        .ni-action-grid .btn i {
+            flex: 0 0 auto;
+            font-size: 1rem;
+        }
+
+        .ni-action-primary {
+            grid-column: 1 / -1;
+            justify-content: center !important;
+        }
+
+        @media (max-width: 575.98px) {
+            .ni-action-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .ni-action-primary {
+                grid-column: auto;
+            }
+        }
     </style>
 
     <div class="main-content">
@@ -179,180 +413,260 @@
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-lg-4 col-md-6">
-                        <div class="card card-animate">
-                            <div class="card-body">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Total Vendido Bruto</p>
-                                <h4 class="mb-0" id="ni_total_vendido">0</h4>
+                <div class="row g-3 mb-4">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="ni-summary-card card-animate">
+                            <div class="ni-summary-card-body d-flex flex-column justify-content-between">
+                                <div class="d-flex align-items-start justify-content-between gap-3">
+                                    <div>
+                                        <div class="ni-summary-label mb-2">Volumen del período</div>
+                                        <div class="ni-summary-value" id="ni_total_vendido">0</div>
+                                    </div>
+                                    <span class="ni-summary-icon"><i class="ri-line-chart-line"></i></span>
+                                </div>
+                                <p class="text-muted small mb-0 mt-3">Total vendido bruto dentro del rango seleccionado.</p>
                             </div>
                         </div>
-                        <div class="card card-animate mt-3">
-                            <div class="card-body d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                                <div>
-                                    <p class="text-uppercase fw-medium text-muted mb-1">Usuarios que Cumplieron</p>
-                                    <h4 class="mb-0 text-success" id="ni_count_cumplen">0</h4>
+                    </div>
+
+                    <div class="col-xl-4 col-md-6">
+                        <div class="ni-summary-card card-animate">
+                            <div class="ni-summary-card-body">
+                                <div class="d-flex align-items-start justify-content-between gap-3">
+                                    <div>
+                                        <div class="ni-summary-label mb-2">Resultado financiero</div>
+                                        <div class="ni-summary-value" id="ni_total_incentivo">0</div>
+                                        <div class="text-muted small mt-1">Incentivo bruto calculado</div>
+                                    </div>
+                                    <span class="ni-summary-icon ni-summary-icon-success"><i class="ri-hand-coin-line"></i></span>
                                 </div>
-                                <div>
-                                    <p class="text-uppercase fw-medium text-muted mb-1">Usuarios que No Cumplieron</p>
-                                    <h4 class="mb-0 text-danger" id="ni_count_no_cumplen">0</h4>
+                                <div class="ni-final-payment" id="ni_total_con_admin">Total a Pagar Final: 0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-5 col-12">
+                        <div class="ni-summary-card card-animate">
+                            <div class="ni-summary-card-body">
+                                <div class="d-flex align-items-center justify-content-between gap-3">
+                                    <div>
+                                        <div class="ni-summary-label">Estado del proceso</div>
+                                        <div class="text-muted small mt-1">Cumplimiento e incidencias detectadas</div>
+                                    </div>
+                                    <span class="badge bg-light text-muted border">En tiempo real</span>
                                 </div>
-                                <div>
-                                    <p class="text-uppercase fw-medium text-muted mb-1">Usuarios por Actualizar</p>
-                                    <h4 class="mb-0 text-warning ni-count-action" id="ni_count_por_actualizar" title="Ver cedulas por actualizar">0</h4>
-                                </div>
-                                <div>
-                                    <p class="text-uppercase fw-medium text-muted mb-1">Agencias sin Empresa</p>
-                                    <h4 class="mb-0 text-info ni-count-action" id="ni_count_agencias_sin_empresa" title="Ver terminales pendientes de empresa">0</h4>
+                                <div class="ni-status-grid">
+                                    <div class="ni-status-item">
+                                        <span>Cumplieron</span>
+                                        <strong class="text-success" id="ni_count_cumplen">0</strong>
+                                    </div>
+                                    <div class="ni-status-item">
+                                        <span>No cumplieron</span>
+                                        <strong class="text-danger" id="ni_count_no_cumplen">0</strong>
+                                    </div>
+                                    <div class="ni-status-item">
+                                        <span>Por actualizar</span>
+                                        <strong class="text-warning ni-count-action" id="ni_count_por_actualizar" title="Ver cédulas por actualizar">0</strong>
+                                    </div>
+                                    <div class="ni-status-item">
+                                        <span>Agencias sin empresa</span>
+                                        <strong class="text-info ni-count-action" id="ni_count_agencias_sin_empresa" title="Ver terminales pendientes de empresa">0</strong>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="col-lg-4 col-md-6">
-                        <div class="card card-animate">
-                            <div class="card-body text-start" style="min-height: 178px;">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Desglose de porcentajes</p>
-                                <div class="table-responsive mt-2">
-                                    <table class="table table-sm table-bordered mb-0 align-middle">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th>Categoria</th>
-                                                <th class="text-end">% Configurado</th>
-                                                <th class="text-end">Monto</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="ni_pct_puesto_resumen">
-                                            <tr>
-                                                <td>1 Gtes. y Encarg.</td>
-                                                <td class="text-end">0.00%</td>
-                                                <td class="text-end">0</td>
-                                            </tr>
-                                            <tr>
-                                                <td>2 Monitoreo</td>
-                                                <td class="text-end">0.00%</td>
-                                                <td class="text-end">0</td>
-                                            </tr>
-                                            <tr>
-                                                <td>4 Operadores + 5 Servs. Tecnicos + 6 Seguridad</td>
-                                                <td class="text-end">0.00%</td>
-                                                <td class="text-end">0</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                    <div class="col-12">
+                        <div class="ni-summary-card ni-financial-detail">
+                            <div class="ni-summary-card-body">
+                                <div class="row g-4 align-items-start">
+                                    <div class="col-xl-7">
+                                        <div class="ni-summary-label mb-2">Distribución por categoría</div>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-borderless table-striped mb-0 align-middle">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Categoría</th>
+                                                        <th class="text-end">% configurado</th>
+                                                        <th class="text-end">Monto</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="ni_pct_puesto_resumen">
+                                                    <tr>
+                                                        <td>1 Gtes. y Encarg.</td>
+                                                        <td class="text-end">0.00%</td>
+                                                        <td class="text-end">0</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>2 Monitoreo</td>
+                                                        <td class="text-end">0.00%</td>
+                                                        <td class="text-end">0</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>4 Operadores + 5 Servs. Técnicos + 6 Seguridad</td>
+                                                        <td class="text-end">0.00%</td>
+                                                        <td class="text-end">0</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="col-xl-5 ni-financial-composition">
+                                        <div class="ni-summary-label mb-2">Composición del incentivo</div>
+                                        <div class="ni-financial-breakdown" id="ni_admin_resumen">
+                                            <div>Porcentaje (10%): 0</div>
+                                            <div>Administrativo: 0</div>
+                                            <div>Coordinador: 0</div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6">
-                        <div class="card card-animate">
-                            <div class="card-body text-start" style="min-height: 178px;">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Total Incentivo Bruto</p>
-                                <h4 class="mb-0" id="ni_total_incentivo">0</h4>
-                                <div class="d-block mt-1 fw-semibold fs-5 text-primary text-start" id="ni_admin_resumen">
-                                    <div>Porcentaje (10%): 0</div>
-                                    <div>Administrativo: 0</div>
-                                    <div>Coordinador: 0</div>
-                                </div>
-                                <div class="mt-2 fw-bold fs-4 text-success text-start" id="ni_total_con_admin">Total a Pagar Final: 0</div>
                             </div>
                         </div>
                     </div>
 
                     <div class="col-lg-12">
-                        <div class="card">
-                            <div class="card-header d-flex align-items-center justify-content-between">
+                        <div class="card ni-workspace-card">
+                            <div class="ni-workspace-header d-flex align-items-center justify-content-between gap-3 flex-wrap">
                                 <div>
-                                    <h5 class="card-title mb-0">Calculo por sistema y tipo de pago (V6 - Pruebas)</h5>
-                                    <small class="text-muted">Configura tramos de venta mensual por pago a 60, 70 u 80.</small>
+                                    <div class="ni-workspace-kicker mb-1">Panel administrativo</div>
+                                    <h5 class="card-title mb-1">Cálculo de incentivos</h5>
+                                    <p class="text-muted mb-0">Define el período, revisa las reglas y genera los entregables del proceso.</p>
                                 </div>
-                                <div class="d-flex gap-3 align-items-end flex-wrap">
-                                    <div>
-                                        <label class="mb-0" for="ni_sistema">Sistema</label>
+                                <span class="ni-version-badge">V6 · Pruebas</span>
+                            </div>
+                            <div class="card-body ni-control-panel">
+                                <section class="ni-panel-section mb-3" aria-labelledby="niParametrosTitulo">
+                                    <div class="ni-panel-heading">
+                                        <span class="ni-panel-heading-icon"><i class="ri-equalizer-2-line"></i></span>
+                                        <div>
+                                            <h6 id="niParametrosTitulo">Parámetros de cálculo</h6>
+                                            <p>Selecciona el alcance y período que deseas evaluar.</p>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3 align-items-end">
+                                    <div class="col-sm-6 col-xl-2">
+                                        <label class="ni-field-label" for="ni_sistema">Sistema</label>
                                         <select id="ni_sistema" class="form-select">
                                             <option value="Todos">Todos</option>
                                             <option value="Lotobet">Lotobet</option>
                                             <option value="Lotonet">Lotonet</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label class="mb-0" for="ni_filtro_cumplimiento">Cumplimiento</label>
+                                    <div class="col-sm-6 col-xl-2">
+                                        <label class="ni-field-label" for="ni_filtro_cumplimiento">Cumplimiento</label>
                                         <select id="ni_filtro_cumplimiento" class="form-select">
                                             <option value="todos">Todos</option>
                                             <option value="cumplidos">Cumplidos</option>
                                             <option value="no_cumplidos">No cumplidos</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label class="mb-0" for="ni_filtro_empresa">Empresa</label>
+                                    <div class="col-sm-6 col-xl-2">
+                                        <label class="ni-field-label" for="ni_filtro_empresa">Empresa</label>
                                         <select id="ni_filtro_empresa" class="form-select">
                                             <option value="todos">Todas</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label class="mb-0" for="ni_modo_calculo">Modo de calculo</label>
+                                    <div class="col-sm-6 col-xl-3">
+                                        <label class="ni-field-label" for="ni_modo_calculo">Modo de cálculo</label>
                                         <select id="ni_modo_calculo" class="form-select">
                                             <option value="general">General consolidado</option>
                                             <option value="separado_empresa">Separado por empresa</option>
                                         </select>
                                     </div>
-                                    <button type="button" class="btn btn-info" id="btnFiltrarCumplimiento">Filtrar</button>
-                                    <div>
-                                        <label class="mb-0" for="ni_fecha_ini">Fecha inicio</label>
+                                    <div class="col-sm-6 col-xl-3">
+                                        <label class="ni-field-label" for="ni_fecha_ini">Fecha de inicio</label>
                                         <input type="date" id="ni_fecha_ini" class="form-control">
                                     </div>
-                                    <div>
-                                        <label class="mb-0" for="ni_fecha_fin">Fecha fin</label>
+                                    <div class="col-sm-6 col-xl-3">
+                                        <label class="ni-field-label" for="ni_fecha_fin">Fecha de fin</label>
                                         <input type="date" id="ni_fecha_fin" class="form-control">
                                     </div>
-                                    <div>
-                                        <label class="mb-0" for="ni_min_dias">Min. dias venta</label>
+                                    <div class="col-sm-6 col-xl-3">
+                                        <label class="ni-field-label" for="ni_min_dias">Mínimo de días con venta</label>
                                         <input type="number" id="ni_min_dias" class="form-control" value="1" min="1" step="1">
                                     </div>
-                                    <div>
-                                        <label class="mb-0" for="ni_tipo_pago">Tipo de pago</label>
+                                    <div class="col-sm-6 col-xl-3">
+                                        <label class="ni-field-label" for="ni_tipo_pago">Tipo de pago</label>
                                         <select id="ni_tipo_pago" class="form-select">
                                             <option value="tramos_60">Pagos a 60</option>
                                             <option value="tramos_70">Pagos a 70</option>
                                             <option value="tramos_80">Pagos a 80</option>
                                         </select>
                                     </div>
-                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigPct">Configurar Tipo de Pago</button>
-                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigPuestoPct">Configurar % de puesto</button>
+                                    <div class="col-sm-6 col-xl-3 d-grid">
+                                        <button type="button" class="btn btn-primary" id="btnFiltrarCumplimiento"><i class="ri-filter-3-line me-1"></i>Aplicar filtros</button>
+                                    </div>
+                                    </div>
+                                </section>
+
+                                <div class="row g-3">
+                                    <div class="col-xl-6">
+                                        <section class="ni-panel-section h-100" aria-labelledby="niConfiguracionTitulo">
+                                            <div class="ni-panel-heading">
+                                                <span class="ni-panel-heading-icon"><i class="ri-settings-3-line"></i></span>
+                                                <div><h6 id="niConfiguracionTitulo">Configuración del incentivo</h6><p>Reglas, porcentajes y participantes.</p></div>
+                                            </div>
+                                            <div class="ni-action-grid">
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigPct"><i class="ri-money-dollar-circle-line me-2"></i>Tipos de pago</button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigPuestoPct"><i class="ri-pie-chart-line me-2"></i>% por puesto</button>
                                     <button
                                         type="button"
                                         class="btn btn-soft-secondary"
                                         id="btnConfigAdminPct"
                                         @if(!$canConfigAdminPct) disabled title="Solo superadmin puede modificar este porcentaje" @endif>
-                                        Porcentaje
+                                        <i class="ri-percent-line me-2"></i>Porcentaje base
                                     </button>
-                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos">Administrativo</button>
-                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores">Coordinador</button>
-                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigHorasTotal">Configurar Horas</button>
-                                    <button type="button" class="btn btn-soft-primary" id="btnCalendarioTiposPago">
-                                        <i class="ri-calendar-check-line me-1"></i>Calendario de pagos
-                                    </button>
-                                    <button type="button" class="btn btn-soft-secondary" id="btnExcluirTerminales">
-                                        Excluir Terminales <span class="badge bg-danger ms-1" id="terminalesExcluidasCount">0</span>
-                                    </button>
-                                    <button type="button" class="btn btn-primary" id="btnGenerarNuevoIncentivo">Generar Reporte</button>
-                                    <button type="button" class="btn btn-success" id="btnGuardarPeriodoIncentivo" disabled>
-                                        <i class="ri-save-3-line me-1"></i>Guardar período
-                                    </button>
-                                    <button type="button" class="btn btn-dark" id="btnGenerarExcelPago">Generar Excel de pago</button>
-                                    <button type="button" class="btn btn-danger" id="btnPreNomina">
-                                        <i class="ri-file-pdf-2-line me-1"></i>Pre nómina
-                                    </button>
-                                    <button type="button" class="btn btn-info" id="btnValidacionGerencial">Validacion Gerencial</button>
-                                    <button type="button" class="btn btn-info" id="btnInformeGerencialProceso">Informe Gerencial PDF</button>
-                                    <button type="button" class="btn btn-info" id="btnDetalleCalendarioPdf">Detalle Calendario PDF</button>
-                                    <button type="button" class="btn btn-warning" id="btnConsultarFaltantes">
-                                        Faltantes <span class="badge bg-secondary ms-1" id="estadoFaltantesPeriodo">Pendiente</span>
-                                    </button>
-                                    <button type="button" class="btn btn-success" id="btnConsultarDesvinculados">
-                                        Usu. Desvinculados <span class="badge bg-secondary ms-1" id="estadoDesvinculadosPeriodo">Pendiente</span>
-                                    </button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigAdministrativos"><i class="ri-briefcase-4-line me-2"></i>Administrativos</button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigCoordinadores"><i class="ri-team-line me-2"></i>Coordinadores</button>
+                                    <button type="button" class="btn btn-soft-secondary" id="btnConfigHorasTotal"><i class="ri-time-line me-2"></i>Horas requeridas</button>
+                                            </div>
+                                        </section>
+                                    </div>
+
+                                    <div class="col-xl-6">
+                                        <section class="ni-panel-section h-100" aria-labelledby="niEjecucionTitulo">
+                                            <div class="ni-panel-heading">
+                                                <span class="ni-panel-heading-icon"><i class="ri-play-list-check-line"></i></span>
+                                                <div><h6 id="niEjecucionTitulo">Ejecución y control</h6><p>Prepara, genera y valida el período.</p></div>
+                                            </div>
+                                            <div class="ni-action-grid">
+                                                <button type="button" class="btn btn-soft-primary" id="btnCalendarioTiposPago"><i class="ri-calendar-check-line me-2"></i>Calendario de pagos</button>
+                                                <button type="button" class="btn btn-soft-secondary" id="btnExcluirTerminales"><i class="ri-forbid-2-line me-2"></i>Excluir terminales <span class="badge bg-danger ms-auto" id="terminalesExcluidasCount">0</span></button>
+                                                <button type="button" class="btn btn-primary ni-action-primary" id="btnGenerarNuevoIncentivo"><i class="ri-calculator-line me-2"></i>Generar reporte</button>
+                                                <button type="button" class="btn btn-success ni-action-primary" id="btnGuardarPeriodoIncentivo" disabled><i class="ri-save-3-line me-2"></i>Guardar período</button>
+                                            </div>
+                                        </section>
+                                    </div>
+
+                                    <div class="col-xl-8">
+                                        <section class="ni-panel-section h-100" aria-labelledby="niReportesTitulo">
+                                            <div class="ni-panel-heading">
+                                                <span class="ni-panel-heading-icon"><i class="ri-file-chart-line"></i></span>
+                                                <div><h6 id="niReportesTitulo">Reportes y salidas</h6><p>Exportables para nómina y gerencia.</p></div>
+                                            </div>
+                                            <div class="ni-action-grid">
+                                                <button type="button" class="btn btn-outline-success" id="btnGenerarExcelPago"><i class="ri-file-excel-2-line me-2"></i>Excel de pago</button>
+                                                <button type="button" class="btn btn-outline-danger" id="btnPreNomina"><i class="ri-file-pdf-2-line me-2"></i>Pre nómina</button>
+                                                <button type="button" class="btn btn-outline-primary" id="btnValidacionGerencial"><i class="ri-shield-check-line me-2"></i>Validación gerencial</button>
+                                                <button type="button" class="btn btn-outline-primary" id="btnInformeGerencialProceso"><i class="ri-file-chart-line me-2"></i>Informe gerencial PDF</button>
+                                                <button type="button" class="btn btn-outline-secondary ni-action-primary" id="btnDetalleCalendarioPdf"><i class="ri-calendar-todo-line me-2"></i>Detalle del calendario PDF</button>
+                                            </div>
+                                        </section>
+                                    </div>
+
+                                    <div class="col-xl-4">
+                                        <section class="ni-panel-section h-100" aria-labelledby="niRevisionTitulo">
+                                            <div class="ni-panel-heading">
+                                                <span class="ni-panel-heading-icon"><i class="ri-user-search-line"></i></span>
+                                                <div><h6 id="niRevisionTitulo">Revisión de novedades</h6><p>Valida incidencias antes del cierre.</p></div>
+                                            </div>
+                                            <div class="ni-action-grid">
+                                                <button type="button" class="btn btn-soft-warning ni-action-primary" id="btnConsultarFaltantes"><i class="ri-user-search-line me-2"></i>Faltantes <span class="badge bg-secondary ms-auto" id="estadoFaltantesPeriodo">Pendiente</span></button>
+                                                <button type="button" class="btn btn-soft-success ni-action-primary" id="btnConsultarDesvinculados"><i class="ri-user-unfollow-line me-2"></i>Desvinculados <span class="badge bg-secondary ms-auto" id="estadoDesvinculadosPeriodo">Pendiente</span></button>
+                                            </div>
+                                        </section>
+                                    </div>
                                 </div>
                             </div>
                             <div class="card-body">

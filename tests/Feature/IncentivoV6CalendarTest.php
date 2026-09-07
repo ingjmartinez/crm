@@ -694,6 +694,17 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('calendarioFechaFinMasiva', $v6);
         $this->assertStringContainsString('btnDetalleCalendarioPdf', $v6);
         $this->assertStringContainsString('generarPdfDetalleCalendario', $v6);
+        $this->assertStringContainsString('class="card ni-workspace-card"', $v6);
+        $this->assertStringContainsString('Volumen del período', $v6);
+        $this->assertStringContainsString('Resultado financiero', $v6);
+        $this->assertStringContainsString('Estado del proceso', $v6);
+        $this->assertStringContainsString('Distribución por categoría', $v6);
+        $this->assertStringContainsString('Composición del incentivo', $v6);
+        $this->assertStringContainsString('Parámetros de cálculo', $v6);
+        $this->assertStringContainsString('Configuración del incentivo', $v6);
+        $this->assertStringContainsString('Ejecución y control', $v6);
+        $this->assertStringContainsString('Reportes y salidas', $v6);
+        $this->assertStringContainsString('Revisión de novedades', $v6);
         $this->assertStringContainsString('btnInformeCoordinadoresPdf', $v6);
         $this->assertStringContainsString('generarPdfInformeCoordinadores', $v6);
         $this->assertStringContainsString('Informe de Validacion de Coordinadores', $v6);
