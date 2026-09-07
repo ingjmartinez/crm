@@ -66,6 +66,15 @@
                 </div>
 
                 @if (! empty($resumen))
+                    @if (($topAgencias ?? collect())->isNotEmpty())
+                        <div class="d-flex justify-content-end mb-3">
+                            <a href="{{ route('operaciones.agencias-sin-cuadrar.pdf') }}" target="_blank" class="btn btn-danger">
+                                <i class="ri-file-pdf-2-line align-bottom me-1"></i>
+                                Descargar PDF Top 25 retiros
+                            </a>
+                        </div>
+                    @endif
+
                     <div class="row">
                         @foreach ([
                             ['Agencias', $resumen['total_agencias'], 'text-primary'],

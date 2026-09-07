@@ -3,13 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProcesarAgenciasSinCuadrarRequest;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\Response;
 
 class OperacionesAgenciasSinCuadrarController extends Controller
 {
+    private const INFORME_PDF_SESSION_KEY = 'operaciones_agencias_sin_cuadrar_top_pdf';
+
     public function index(): View
     {
         return view('operaciones.agencias-sin-cuadrar', [
@@ -19,6 +24,7 @@ class OperacionesAgenciasSinCuadrarController extends Controller
             'nombreArchivo' => null,
             'nombreArchivoConsolidado' => null,
             'cantidadTerminalesSinCuadrar' => null,
+            'topAgencias' => collect(),
         ]);
     }
 
@@ -33,23 +39,86 @@ class OperacionesAgenciasSinCuadrarController extends Controller
             ->whereIn('terminal', $terminalesSinCuadrar)
             ->values();
         $grupos = $this->agruparPorRutaYTipo($filas);
+        $topAgencias = $this->construirTopAgencias($filas);
+        $filasRetiros = $filas->where('tipo', 'Retiro');
+        $resumen = [
+            'total_agencias' => $filas->count(),
+            'total_rutas' => $filas
+                ->map(fn (array $fila): string => implode('|', [$fila['ruta'], $fila['fecha']]))
+                ->unique()
+                ->count(),
+            'total_depositos' => $filas->where('tipo', 'Depósito')->sum('monto_asignado'),
+            'total_retiros' => $filas->where('tipo', 'Retiro')->sum('monto_asignado'),
+        ];
+
+        if ($request->hasSession()) {
+            $request->session()->put(self::INFORME_PDF_SESSION_KEY, [
+                'top_agencias' => $topAgencias->all(),
+                'resumen' => [
+                    'total_agencias' => $filasRetiros->pluck('terminal')->unique()->count(),
+                    'total_rutas' => $filasRetiros
+                        ->map(fn (array $fila): string => implode('|', [$fila['ruta'], $fila['fecha']]))
+                        ->unique()
+                        ->count(),
+                    'total_retiros' => $filasRetiros->sum('monto_asignado'),
+                ],
+                'nombre_archivo' => $archivo->getClientOriginalName(),
+                'nombre_archivo_consolidado' => $archivoConsolidado->getClientOriginalName(),
+                'generado_en' => now()->toIso8601String(),
+            ]);
+        }
 
         return view('operaciones.agencias-sin-cuadrar', [
             'filas' => $filas,
             'grupos' => $grupos,
-            'resumen' => [
-                'total_agencias' => $filas->count(),
-                'total_rutas' => $filas
-                    ->map(fn (array $fila): string => implode('|', [$fila['ruta'], $fila['fecha']]))
-                    ->unique()
-                    ->count(),
-                'total_depositos' => $filas->where('tipo', 'Depósito')->sum('monto_asignado'),
-                'total_retiros' => $filas->where('tipo', 'Retiro')->sum('monto_asignado'),
-            ],
+            'resumen' => $resumen,
             'nombreArchivo' => $archivo->getClientOriginalName(),
             'nombreArchivoConsolidado' => $archivoConsolidado->getClientOriginalName(),
             'cantidadTerminalesSinCuadrar' => $terminalesSinCuadrar->count(),
+            'topAgencias' => $topAgencias,
         ]);
+    }
+
+    public function pdf(Request $request): Response
+    {
+        $datos = $request->session()->get(self::INFORME_PDF_SESSION_KEY);
+
+        abort_unless(is_array($datos) && ! empty($datos['top_agencias']), 404, 'Primero debes procesar los archivos para generar el informe.');
+
+        $documento = Pdf::loadView('operaciones.agencias-sin-cuadrar-pdf', $datos)
+            ->setPaper('letter', 'landscape')
+            ->setOptions([
+                'defaultFont' => 'DejaVu Sans',
+                'isRemoteEnabled' => false,
+                'isHtml5ParserEnabled' => true,
+            ]);
+
+        return $documento->download('top-25-retiros-agencias-sin-cuadrar-'.now()->format('Ymd').'.pdf');
+    }
+
+    /**
+     * @param  Collection<int, array{ruta_id: string, ruta: string, fecha: string, terminal: string, agencia: string, tipo: string, monto_asignado: float}>  $filas
+     * @return Collection<int, array{terminal: string, agencia: string, rutas: string, fechas: string, total_retiros: float}>
+     */
+    private function construirTopAgencias(Collection $filas): Collection
+    {
+        return $filas
+            ->where('tipo', 'Retiro')
+            ->groupBy('terminal')
+            ->map(function (Collection $filasAgencia): array {
+                $primeraFila = $filasAgencia->first();
+
+                return [
+                    'terminal' => (string) $primeraFila['terminal'],
+                    'agencia' => (string) $primeraFila['agencia'],
+                    'rutas' => $filasAgencia->pluck('ruta')->filter()->unique()->implode(', '),
+                    'fechas' => $filasAgencia->pluck('fecha')->filter()->unique()->sort()->implode(', '),
+                    'total_retiros' => (float) $filasAgencia->sum('monto_asignado'),
+                ];
+            })
+            ->sortByDesc('total_retiros')
+            ->take(25)
+            ->values();
     }
 
     /**

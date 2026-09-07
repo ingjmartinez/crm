@@ -536,6 +536,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/operaciones/rutas-consolidadas/procesar', [OperacionesRutasConsolidadasController::class, 'procesar'])->name('operaciones.rutas-consolidadas.procesar');
     Route::get('/operaciones/agencias-sin-cuadrar', [OperacionesAgenciasSinCuadrarController::class, 'index'])->name('operaciones.agencias-sin-cuadrar');
     Route::post('/operaciones/agencias-sin-cuadrar/procesar', [OperacionesAgenciasSinCuadrarController::class, 'procesar'])->name('operaciones.agencias-sin-cuadrar.procesar');
+    Route::get('/operaciones/agencias-sin-cuadrar/pdf', [OperacionesAgenciasSinCuadrarController::class, 'pdf'])->name('operaciones.agencias-sin-cuadrar.pdf');
     Route::get('/operaciones/movimientos-rutas', [OperacionesMovimientosRutasController::class, 'index'])->name('operaciones.movimientos-rutas');
     Route::post('/operaciones/movimientos-rutas/procesar', [OperacionesMovimientosRutasController::class, 'procesar'])->name('operaciones.movimientos-rutas.procesar');
     Route::get('/operaciones/movimientos-rutas-v2', [OperacionesMovimientosRutasV2Controller::class, 'index'])->name('operaciones.movimientos-rutas-v2');

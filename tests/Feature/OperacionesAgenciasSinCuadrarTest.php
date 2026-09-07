@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\ForcePasswordChange;
+use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
@@ -224,6 +226,54 @@ class OperacionesAgenciasSinCuadrarTest extends TestCase
             ->assertViewHas('filas', fn ($filas): bool => $filas->count() === 1
                 && $filas->first()['terminal'] === '51554')
             ->assertViewHas('cantidadTerminalesSinCuadrar', 1);
+    }
+
+    public function test_genera_pdf_con_las_veinticinco_agencias_de_mayor_monto_en_retiros(): void
+    {
+        $lineas = ['Textbox11,Textbox40,Textbox19,NTerminal,IngresoProcesado'];
+        $balances = [];
+
+        foreach (range(1, 27) as $indice) {
+            $terminal = (string) (7000 + $indice);
+            $monto = $indice * 100;
+            $lineas[] = "Ruta:1700000 - RUTA CENTRAL Fecha: 2026-09-07,{$indice},AGENCIA {$indice},{$terminal},-{$monto}";
+            $balances[$terminal] = '0.00';
+        }
+
+        $lineas[] = 'Ruta:1700000 - RUTA CENTRAL Fecha: 2026-09-07,99,AGENCIA DEPOSITO,7999,999999';
+        $balances['7999'] = '0.00';
+
+        $response = $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->post(route('operaciones.agencias-sin-cuadrar.procesar'), [
+                'archivo_csv' => UploadedFile::fake()->createWithContent('rutas-top.csv', implode("\n", $lineas)),
+                'archivo_consolidado' => $this->crearArchivoConsolidado($balances),
+            ]);
+
+        $response->assertOk()
+            ->assertSee('Descargar PDF Top 25 retiros')
+            ->assertSee(route('operaciones.agencias-sin-cuadrar.pdf'))
+            ->assertViewHas('topAgencias', function ($topAgencias): bool {
+                return $topAgencias->count() === 25
+                    && $topAgencias->first()['terminal'] === '7027'
+                    && $topAgencias->first()['total_retiros'] === 2700.0
+                    && $topAgencias->last()['terminal'] === '7003'
+                    && $topAgencias->last()['total_retiros'] === 300.0
+                    && ! $topAgencias->contains('terminal', '7999');
+            });
+
+        $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->get(route('operaciones.agencias-sin-cuadrar.pdf'))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertDownload('top-25-retiros-agencias-sin-cuadrar-'.now()->format('Ymd').'.pdf');
+    }
+
+    public function test_pdf_requiere_haber_procesado_los_archivos(): void
+    {
+        $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->withSession(['operaciones_agencias_sin_cuadrar_top_pdf' => null])
+            ->get(route('operaciones.agencias-sin-cuadrar.pdf'))
+            ->assertNotFound();
     }
 
     /**
