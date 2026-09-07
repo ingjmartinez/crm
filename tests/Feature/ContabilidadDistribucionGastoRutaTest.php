@@ -336,6 +336,10 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
             ->assertSee('Ruta Nueva')
             ->assertDontSee('Ruta Sur')
             ->assertSee('Buscar ruta...')
+            ->assertSee('selector-ruta-con-busqueda')
+            ->assertSee("itemSelectText: ''", false)
+            ->assertSee('.choices__list--dropdown .choices__placeholder', false)
+            ->assertSee('padding: 10px 16px 10px 24px !important', false)
             ->assertSee("habilitarBusquedaRutas('mapeoRutaKey')", false)
             ->assertSee("habilitarBusquedaRutas('rutaPdf')", false);
 

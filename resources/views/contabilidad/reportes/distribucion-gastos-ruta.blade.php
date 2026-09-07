@@ -2,6 +2,52 @@
 
 @section('content')
     <link href="{{ asset('libs/choices.js/public/assets/styles/choices.min.css') }}" rel="stylesheet">
+    <style>
+        .selector-ruta-con-busqueda .choices {
+            margin-bottom: 0;
+        }
+
+        .selector-ruta-con-busqueda .choices__inner {
+            background-color: var(--vz-input-bg, #fff);
+            border-color: var(--vz-input-border, #ced4da);
+            border-radius: .25rem;
+            min-height: 38px;
+        }
+
+        .selector-ruta-con-busqueda .choices[data-type*='select-one'] .choices__inner {
+            padding: .47rem 2.25rem .47rem .75rem;
+        }
+
+        .selector-ruta-con-busqueda .choices__list--single {
+            padding: 0;
+        }
+
+        .selector-ruta-con-busqueda .choices__list--dropdown {
+            z-index: 1055;
+        }
+
+        .selector-ruta-con-busqueda .choices__list--dropdown .choices__list {
+            margin-left: 0 !important;
+            overflow-x: hidden;
+            padding-left: 0 !important;
+        }
+
+        .selector-ruta-con-busqueda .choices__list--dropdown .choices__item--selectable {
+            box-sizing: border-box;
+            left: 0;
+            margin-left: 0 !important;
+            padding: 10px 16px 10px 24px !important;
+            text-indent: 0 !important;
+            transform: none;
+            width: 100%;
+            white-space: normal;
+            word-break: normal;
+        }
+
+        .selector-ruta-con-busqueda .choices__list--dropdown .choices__placeholder {
+            display: none;
+        }
+    </style>
 
     <div class="main-content">
         <div class="page-content">
@@ -34,7 +80,7 @@
                     <div class="card-body">
                         <form id="formMapeoRuta" class="row g-3 align-items-end">
                             @csrf
-                            <div class="col-lg-4">
+                            <div class="col-lg-4 selector-ruta-con-busqueda">
                                 <label for="mapeoRutaKey" class="form-label">Ruta del gasto</label>
                                 <select id="mapeoRutaKey" class="form-select" required>
                                     <option value="">Seleccione...</option>
@@ -118,7 +164,7 @@
                         </form>
                         <div class="border-top mt-3 pt-3">
                             <div class="row g-3 align-items-end">
-                                <div class="col-lg-8">
+                                <div class="col-lg-8 selector-ruta-con-busqueda">
                                     <label for="rutaPdf" class="form-label">Ruta para informe PDF</label>
                                     <select id="rutaPdf" class="form-select">
                                         <option value="">Seleccione una ruta con gastos...</option>
@@ -248,7 +294,7 @@
 
             new Choices(selector, {
                 allowHTML: false,
-                itemSelectText: 'Seleccionar',
+                itemSelectText: '',
                 noChoicesText: 'No hay rutas disponibles',
                 noResultsText: 'No se encontraron rutas',
                 searchEnabled: true,
