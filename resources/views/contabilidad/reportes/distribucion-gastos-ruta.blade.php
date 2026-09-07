@@ -157,18 +157,18 @@
                         </form>
 
                         <div class="table-responsive mt-4">
-                            <table class="table table-sm table-bordered align-middle mb-0">
-                                <thead><tr><th>Ruta del gasto</th><th>Empresa</th><th>Ruta empresa</th><th>Socio</th><th class="text-center">Acción</th></tr></thead>
+                            <table class="table table-sm table-bordered align-middle mb-0" id="tablaMapeosRutas">
+                                <thead><tr><th>Ruta del gasto</th><th>Empresa</th><th class="text-center">Socios relacionados</th><th class="text-center">Terminales</th><th class="text-center">Acción</th></tr></thead>
                                 <tbody>
-                                    @forelse ($mapeos as $mapeo)
+                                    @forelse ($mapeosAgrupados as $grupoMapeo)
                                         <tr>
-                                            <td>{{ $mapeo->ruta_nombre }}</td>
-                                            <td>{{ $mapeo->company_id }}</td>
-                                            <td>{{ $mapeo->id_grupo }} - {{ $mapeo->nombre_grupo }}</td>
-                                            <td>{{ $mapeo->id_sub_grupo }} - {{ $mapeo->nombre_socio }}</td>
+                                            <td class="fw-semibold">{{ $grupoMapeo['ruta_nombre'] }}</td>
+                                            <td>{{ implode(', ', $grupoMapeo['company_ids']) }}</td>
+                                            <td class="text-center"><span class="badge bg-primary-subtle text-primary fs-6">{{ count($grupoMapeo['socios']) }}</span></td>
+                                            <td class="text-center"><span class="badge bg-info-subtle text-info fs-6">{{ $grupoMapeo['terminales'] }}</span></td>
                                             <td class="text-center">
-                                                <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-mapeo" data-id="{{ $mapeo->id }}" title="Eliminar">
-                                                    <i class="ri-delete-bin-line"></i>
+                                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalSociosRuta{{ $loop->index }}">
+                                                    <i class="ri-eye-line me-1"></i>Ver socios
                                                 </button>
                                             </td>
                                         </tr>
@@ -303,6 +303,46 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="modalesSociosRuta">
+        @foreach ($mapeosAgrupados as $grupoMapeo)
+            <div class="modal fade" id="modalSociosRuta{{ $loop->index }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title">Socios de {{ $grupoMapeo['ruta_nombre'] }}</h5>
+                                <p class="text-muted mb-0">{{ count($grupoMapeo['socios']) }} socio(s) relacionado(s)</p>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle mb-0">
+                                    <thead class="table-light"><tr><th>Empresa</th><th>Ruta empresa</th><th>Socio</th><th class="text-center">Terminales</th><th class="text-center">Acción</th></tr></thead>
+                                    <tbody>
+                                        @foreach ($grupoMapeo['socios'] as $socioMapeo)
+                                            <tr>
+                                                <td>{{ $socioMapeo['company_id'] }}</td>
+                                                <td>{{ $socioMapeo['id_grupo'] }} - {{ $socioMapeo['nombre_grupo'] }}</td>
+                                                <td>{{ $socioMapeo['id_sub_grupo'] }} - {{ $socioMapeo['nombre_socio'] }}</td>
+                                                <td class="text-center"><span class="badge bg-info-subtle text-info fs-6">{{ $socioMapeo['terminales'] }}</span></td>
+                                                <td class="text-center">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-mapeo" data-id="{{ $socioMapeo['id'] }}" title="Eliminar relación">
+                                                        <i class="ri-delete-bin-line"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endforeach
     </div>
 @endsection
 

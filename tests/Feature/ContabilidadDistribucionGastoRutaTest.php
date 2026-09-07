@@ -213,6 +213,19 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
 
         $this->assertDatabaseCount('distribucion_gasto_ruta_mapeos', 2);
 
+        $this->get(route('operaciones.distribucion-gastos-ruta'))
+            ->assertOk()
+            ->assertViewHas('mapeosAgrupados', function ($mapeosAgrupados): bool {
+                return $mapeosAgrupados->count() === 1
+                    && $mapeosAgrupados->first()['ruta_nombre'] === 'Tamayo'
+                    && count($mapeosAgrupados->first()['socios']) === 2;
+            })
+            ->assertSee('Socios relacionados')
+            ->assertSee('Ver socios')
+            ->assertSee('id="modalSociosRuta0"', false)
+            ->assertSee('45 - Socio A')
+            ->assertSee('46 - Socio B');
+
         $this->postJson(route('operaciones.distribucion-gastos-ruta.mapeos.store'), [
             'ruta_key' => 'TAMAYO', 'id_grupo' => '61', 'id_sub_grupo' => '99', 'company_id' => '168',
         ])->assertUnprocessable()->assertJsonValidationErrors('id_sub_grupo');
@@ -305,6 +318,65 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         $this->assertNull(
             collect(config('module_hubs.contabilidad.items'))->firstWhere('nombre', 'Distribucion de Gastos de Ruta')
         );
+    }
+
+    public function test_muestra_una_sola_fila_por_ruta_y_los_socios_en_un_modal(): void
+    {
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            [
+                'ruta_key' => 'RUTA HAINA', 'ruta_nombre' => 'Ruta Haina', 'company_id' => '168',
+                'id_grupo' => '84', 'nombre_grupo' => 'Ruta Haina', 'id_sub_grupo' => '64',
+                'nombre_socio' => 'Socio Uno', 'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'ruta_key' => 'RUTA HAINA', 'ruta_nombre' => 'Ruta Haina', 'company_id' => '169',
+                'id_grupo' => '84', 'nombre_grupo' => 'Ruta Haina', 'id_sub_grupo' => '65',
+                'nombre_socio' => 'Socio Dos', 'created_at' => now(), 'updated_at' => now(),
+            ],
+        ]);
+        DB::table('centros_de_costo')->insert([
+            [
+                'id_centro_costo' => 701, 'company_id' => '168-Grupo Joselito', 'id_grupo' => '84-Ruta Haina',
+                'id_sub_grupo' => '64-Socio Uno', 'id_viejo' => '7001', 'descripcion' => 'Terminal 7001',
+                'inactivo' => false, 'ocultar' => false,
+            ],
+            [
+                'id_centro_costo' => 702, 'company_id' => '168-Grupo Joselito', 'id_grupo' => '84-Ruta Haina',
+                'id_sub_grupo' => '64-Socio Uno', 'id_viejo' => '7002', 'descripcion' => 'Terminal 7002',
+                'inactivo' => false, 'ocultar' => false,
+            ],
+            [
+                'id_centro_costo' => 703, 'company_id' => '169-Negosur', 'id_grupo' => '84-Ruta Haina',
+                'id_sub_grupo' => '65-Socio Dos', 'id_viejo' => '7003', 'descripcion' => 'Terminal 7003',
+                'inactivo' => false, 'ocultar' => false,
+            ],
+        ]);
+
+        $response = $this->get(route('operaciones.distribucion-gastos-ruta'))
+            ->assertOk()
+            ->assertViewHas('mapeosAgrupados', function ($mapeosAgrupados): bool {
+                return $mapeosAgrupados->count() === 1
+                    && collect($mapeosAgrupados->first()['company_ids'])->map(fn ($id): string => (string) $id)->sort()->values()->all() === ['168', '169']
+                    && count($mapeosAgrupados->first()['socios']) === 2;
+            })
+            ->assertSee('Terminales')
+            ->assertSee('Ver socios')
+            ->assertSee('Socio Uno')
+            ->assertSee('Socio Dos');
+
+        $grupoMapeo = $response->viewData('mapeosAgrupados')->first();
+        $this->assertSame(3, $grupoMapeo['terminales']);
+        $this->assertSame([64 => 2, 65 => 1], collect($grupoMapeo['socios'])->pluck('terminales', 'id_sub_grupo')->sortKeys()->all());
+
+        $this->assertSame(1, substr_count($response->getContent(), 'data-bs-target="#modalSociosRuta'));
+        $this->assertSame(2, substr_count($response->getContent(), 'class="btn btn-sm btn-outline-danger btn-eliminar-mapeo"'));
+
+        $document = new \DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($document);
+
+        $this->assertCount(1, $xpath->query('//*[@id="modalesSociosRuta"]'));
+        $this->assertCount(0, $xpath->query('//*[@id="modalesSociosRuta"]//ancestor::*[contains(concat(" ", normalize-space(@class), " "), " main-content ")]'));
     }
 
     public function test_selector_busca_rutas_unicas_importadas_y_con_gastos_aplicados(): void

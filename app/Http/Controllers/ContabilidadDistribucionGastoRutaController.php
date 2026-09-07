@@ -10,6 +10,7 @@ use App\Models\DistribucionGastoRutaMapeo;
 use App\Services\Contabilidad\DistribucionGastoRutaService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,8 +26,35 @@ class ContabilidadDistribucionGastoRutaController extends Controller
             ->orderBy('ruta_nombre')
             ->orderBy('nombre_socio')
             ->get();
+        $terminalesPorMapeo = $this->distribucionService->terminalesPorMapeo($mapeos);
+        $mapeosAgrupados = $mapeos
+            ->groupBy(fn (DistribucionGastoRutaMapeo $mapeo): string => $mapeo->ruta_key)
+            ->map(function (Collection $relaciones) use ($terminalesPorMapeo): array {
+                /** @var DistribucionGastoRutaMapeo $primeraRelacion */
+                $primeraRelacion = $relaciones->first();
 
-        return view('contabilidad.reportes.distribucion-gastos-ruta', compact('rutasDisponibles', 'mapeos'));
+                return [
+                    'ruta_key' => $primeraRelacion->ruta_key,
+                    'ruta_nombre' => $primeraRelacion->ruta_nombre,
+                    'company_ids' => $relaciones->pluck('company_id')->unique()->values()->all(),
+                    'terminales' => $relaciones
+                        ->flatMap(fn (DistribucionGastoRutaMapeo $mapeo): array => $terminalesPorMapeo->get($mapeo->id, []))
+                        ->unique()
+                        ->count(),
+                    'socios' => $relaciones->map(fn (DistribucionGastoRutaMapeo $mapeo): array => [
+                        'id' => $mapeo->id,
+                        'company_id' => $mapeo->company_id,
+                        'id_grupo' => $mapeo->id_grupo,
+                        'nombre_grupo' => $mapeo->nombre_grupo,
+                        'id_sub_grupo' => $mapeo->id_sub_grupo,
+                        'nombre_socio' => $mapeo->nombre_socio,
+                        'terminales' => count($terminalesPorMapeo->get($mapeo->id, [])),
+                    ])->values()->all(),
+                ];
+            })
+            ->values();
+
+        return view('contabilidad.reportes.distribucion-gastos-ruta', compact('rutasDisponibles', 'mapeosAgrupados'));
     }
 
     public function data(ConsultarDistribucionGastoRutaRequest $request): JsonResponse
