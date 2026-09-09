@@ -1324,17 +1324,42 @@ class IncentivosController extends Controller
 
             return $normalized === '' ? '0' : $normalized;
         };
+        $empresaCompanyId = function ($empresa) {
+            $text = mb_strtolower(trim((string) $empresa));
+            if ($text === '') {
+                return '';
+            }
+
+            if (str_contains($text, 'joselito') || str_contains($text, 'cjoselito') || str_contains($text, 'consorcio')) {
+                return '168';
+            }
+
+            if (str_contains($text, 'negosur')) {
+                return '169';
+            }
+
+            return '';
+        };
+        $empleadoLookupKey = function ($cedula, $empresa = '') use ($cedulaLookupKey, $empresaCompanyId) {
+            $companyId = preg_replace('/\D+/', '', (string) $empresa);
+            if ($companyId === '') {
+                $companyId = $empresaCompanyId($empresa);
+            }
+
+            return $cedulaLookupKey($cedula) . '|' . $companyId;
+        };
         $empleadosPorCedula = DB::table('empleados')
             ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasNormalizadas->all())
             ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
+            ->selectRaw('TRIM(CAST(companyid AS CHAR)) AS companyid')
             ->selectRaw("MAX(TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')))) AS nombre")
             ->selectRaw('MAX(empleadoid) AS empleadoid')
             ->selectRaw("MAX(COALESCE(viapago, '')) AS viapago")
             ->selectRaw("MAX(COALESCE(ciudad, '')) AS ciudad")
-            ->groupByRaw('CAST(cedula AS UNSIGNED)')
+            ->groupByRaw('CAST(cedula AS UNSIGNED), TRIM(CAST(companyid AS CHAR))')
             ->get()
-            ->mapWithKeys(function ($row) use ($cedulaLookupKey) {
-                return [$cedulaLookupKey($row->cedula) => $row];
+            ->mapWithKeys(function ($row) use ($empleadoLookupKey) {
+                return [$empleadoLookupKey($row->cedula, $row->companyid) => $row];
             });
 
         $ultimaVentaPorCedula = [];
@@ -1403,9 +1428,12 @@ class IncentivosController extends Controller
             }
         }
 
-        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorCedula, $cedulaLookupKey) {
+        $data = $rawData->map(function ($row) use ($empleadosPorCedula, $ultimaVentaPorCedula, $cedulaLookupKey, $empleadoLookupKey) {
             $cedulaKey = $cedulaLookupKey($row['cedula'] ?? '');
-            $empleado = $empleadosPorCedula->get($cedulaKey);
+            $empleado = $empleadosPorCedula->get($empleadoLookupKey(
+                $row['cedula'] ?? '',
+                $row['empresa'] ?? ''
+            ));
             $nombre = trim((string) ($empleado->nombre ?? ''));
             $ultimaVenta = $ultimaVentaPorCedula[$cedulaKey] ?? [];
 
