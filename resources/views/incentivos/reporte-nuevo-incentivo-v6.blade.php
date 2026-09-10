@@ -1421,8 +1421,18 @@
                 <div class="modal-body">
                     <div class="row g-2 align-items-end mb-3">
                         <div class="col-md-4">
-                            <label class="form-label" for="calendarioBuscarTerminal">Buscar terminal o agencia</label>
-                            <input type="search" class="form-control" id="calendarioBuscarTerminal" placeholder="Terminal, agencia, empresa...">
+                            <label class="form-label" for="calendarioBuscarTerminal">Filtrar por código de terminal</label>
+                            <div class="input-group">
+                                <input type="search" class="form-control" id="calendarioBuscarTerminal"
+                                    placeholder="Ej.: 405012" autocomplete="off">
+                                <button type="button" class="btn btn-outline-primary" id="btnBuscarTerminalCalendario" title="Buscar terminal">
+                                    <i class="ri-search-line"></i><span class="visually-hidden">Buscar terminal</span>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="btnLimpiarBusquedaCalendario" title="Limpiar filtro">
+                                    <i class="ri-close-line"></i><span class="visually-hidden">Limpiar filtro</span>
+                                </button>
+                            </div>
+                            <div class="form-text">Busca en todas las páginas del calendario.</div>
                         </div>
                         <div class="col-md-2">
                             <button type="button" class="btn btn-outline-primary w-100" id="btnCargarCalendarioPago">
@@ -1446,6 +1456,11 @@
                         <div class="col-md-2">
                             <button type="button" class="btn btn-success w-100" id="btnGuardarCalendarioPago">
                                 <i class="ri-save-line me-1"></i>Guardar cambios
+                            </button>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-outline-success w-100" id="btnExportarCalendarioExcel">
+                                <i class="ri-file-excel-2-line me-1"></i>Exportar Excel
                             </button>
                         </div>
                     </div>
@@ -1570,6 +1585,7 @@
     const XML_DECL = '<' + '?xml version="1.0" encoding="UTF-8" standalone="yes"?' + '>';
     const CAN_CONFIG_ADMIN_PCT = @json($canConfigAdminPct);
     const CALENDARIO_V6_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario'));
+    const CALENDARIO_V6_EXPORTAR_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario.exportar'));
     const CALENDARIO_V6_GUARDAR_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario.guardar'));
     const CALENDARIO_V6_RECONOCER_TERMINALES_URL = @json(route('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer'));
 
@@ -1656,6 +1672,7 @@
     let calendarPaymentDates = [];
     let calendarPaymentRows = [];
     let calendarRecognizedTerminals = [];
+    let calendarTerminalSearchTimer = null;
     let calendarPaymentPagination = {
         pagina_actual: 1,
         ultima_pagina: 1,
@@ -1892,6 +1909,16 @@
 
             bodyFragment.appendChild(tr);
         });
+
+        if (!calendarPaymentRows.length) {
+            const emptyRow = document.createElement('tr');
+            const emptyCell = document.createElement('td');
+            emptyCell.colSpan = calendarPaymentDates.length + 1;
+            emptyCell.className = 'py-4 text-center text-muted';
+            emptyCell.textContent = 'No se encontraron terminales con ese código.';
+            emptyRow.appendChild(emptyCell);
+            bodyFragment.appendChild(emptyRow);
+        }
         tbody.replaceChildren(bodyFragment);
 
         if (table.dataset.calendarEventsBound !== '1') {
@@ -1969,6 +1996,34 @@
                 }
             })
             .catch((error) => Swal.fire({ title: 'Error', text: error.message || String(error), icon: 'error' }));
+    }
+
+    function exportCalendarPaymentExcel() {
+        const fechaInicio = document.getElementById('ni_fecha_ini').value;
+        const fechaFin = document.getElementById('ni_fecha_fin').value;
+        const sistema = document.getElementById('ni_sistema').value;
+
+        if (calendarDirtyAssignments.size) {
+            Swal.fire({
+                title: 'Cambios sin guardar',
+                text: 'Guarda los cambios pendientes antes de exportar la configuración.',
+                icon: 'warning',
+            });
+            return;
+        }
+
+        if (!fechaInicio || !fechaFin) {
+            Swal.fire({ title: 'Información', text: 'Selecciona las fechas del reporte antes de exportar.', icon: 'warning' });
+            return;
+        }
+
+        const params = new URLSearchParams({
+            fecha_ini: fechaInicio,
+            fecha_fin: fechaFin,
+            sistema,
+        });
+
+        window.location.href = `${CALENDARIO_V6_EXPORTAR_URL}?${params.toString()}`;
     }
 
     function applyBulkCalendarPaymentType() {
@@ -7820,10 +7875,29 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         loadCalendarPaymentGrid();
     });
 
+    document.querySelector('#btnBuscarTerminalCalendario').addEventListener('click', function() {
+        loadCalendarPaymentGrid(1, true, false);
+    });
+
+    document.querySelector('#btnLimpiarBusquedaCalendario').addEventListener('click', function() {
+        const searchInput = document.getElementById('calendarioBuscarTerminal');
+        searchInput.value = '';
+        searchInput.focus();
+        loadCalendarPaymentGrid(1, true, false);
+    });
+
+    document.querySelector('#calendarioBuscarTerminal').addEventListener('input', function() {
+        window.clearTimeout(calendarTerminalSearchTimer);
+        calendarTerminalSearchTimer = window.setTimeout(() => {
+            loadCalendarPaymentGrid(1, true, false);
+        }, 400);
+    });
+
     document.querySelector('#calendarioBuscarTerminal').addEventListener('keydown', function(event) {
         if (event.key === 'Enter') {
             event.preventDefault();
-            loadCalendarPaymentGrid();
+            window.clearTimeout(calendarTerminalSearchTimer);
+            loadCalendarPaymentGrid(1, true, false);
         }
     });
 
@@ -7855,6 +7929,10 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
     document.querySelector('#btnGuardarCalendarioPago').addEventListener('click', function() {
         saveCalendarPaymentChanges();
+    });
+
+    document.querySelector('#btnExportarCalendarioExcel').addEventListener('click', function() {
+        exportCalendarPaymentExcel();
     });
 
     document.querySelector('#calendarioPaginaAnterior').addEventListener('click', function() {

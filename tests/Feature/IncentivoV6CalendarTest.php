@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exports\IncentivoV6CalendarioExport;
 use App\Models\IncentivoTerminalTipoPago;
 use App\Models\User;
 use App\Services\IncentivoV6Calculator;
@@ -9,6 +10,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
 class IncentivoV6CalendarTest extends TestCase
@@ -323,6 +325,83 @@ class IncentivoV6CalendarTest extends TestCase
             ->assertJsonPath('paginacion.total', 60)
             ->assertJsonPath('paginacion.desde', 26)
             ->assertJsonPath('paginacion.hasta', 50);
+    }
+
+    public function test_calendar_filters_by_terminal_code_across_all_pages(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+        DB::table('agencias')->insert(collect(range(1, 60))->map(fn (int $number): array => [
+            'terminal' => (string) (3000 + $number),
+            'sistema' => 'LOTOBET',
+            'empresa' => 'Grupo Central',
+            'nombre_agencia' => 'Agencia '.$number,
+            'estatus' => 1,
+        ])->all());
+
+        $this->getJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario', [
+            'fecha_ini' => '2026-07-06',
+            'fecha_fin' => '2026-07-12',
+            'sistema' => 'Lotobet',
+            'buscar' => '3060',
+            'page' => 1,
+            'per_page' => 25,
+        ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'terminales')
+            ->assertJsonPath('terminales.0.terminal', '3060')
+            ->assertJsonPath('paginacion.pagina_actual', 1)
+            ->assertJsonPath('paginacion.ultima_pagina', 1)
+            ->assertJsonPath('paginacion.total', 1);
+    }
+
+    public function test_calendar_excel_exports_every_terminal_and_daily_configuration_for_the_period(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+        DB::table('agencias')->insert(collect(range(1, 60))->map(fn (int $number): array => [
+            'terminal' => (string) (3000 + $number),
+            'sistema' => 'LOTOBET',
+            'empresa' => 'Grupo Central',
+            'nombre_agencia' => 'Agencia '.$number,
+            'estatus' => 1,
+        ])->all());
+        IncentivoTerminalTipoPago::query()->create([
+            'sistema' => 'Lotobet',
+            'terminal' => '3060',
+            'fecha' => '2026-07-01',
+            'tipo_pago' => 'tramos_70',
+        ]);
+        IncentivoTerminalTipoPago::query()->create([
+            'sistema' => 'Lotobet',
+            'terminal' => '3060',
+            'fecha' => '2026-07-08',
+            'tipo_pago' => 'tramos_80',
+        ]);
+        Excel::fake();
+
+        $this->get(route('incentivos.reporte-nuevo-incentivo-v6.calendario.exportar', [
+            'fecha_ini' => '2026-07-06',
+            'fecha_fin' => '2026-07-12',
+            'sistema' => 'Lotobet',
+        ]))->assertOk();
+
+        Excel::assertDownloaded(
+            'configuracion_calendario_pago_2026-07-06_2026-07-12.xlsx',
+            function (IncentivoV6CalendarioExport $export): bool {
+                $terminal = $export->collection()->firstWhere('terminal', '3060');
+
+                return $export->collection()->count() === 60
+                    && $export->headings() === [
+                        'Sistema', 'Terminal', 'Agencia', 'Empresa',
+                        '06/07/2026', '07/07/2026', '08/07/2026', '09/07/2026',
+                        '10/07/2026', '11/07/2026', '12/07/2026',
+                    ]
+                    && $export->map($terminal) === [
+                        'Lotobet', '3060', 'Agencia 60', 'Grupo Central',
+                        'Pago 70', 'Pago 70', 'Pago 80', 'Pago 80',
+                        'Pago 80', 'Pago 80', 'Pago 80',
+                    ];
+            }
+        );
     }
 
     public function test_calendar_recognizes_manual_terminals_across_pages_and_reports_missing_ones(): void
@@ -684,6 +763,11 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('Agencias calculadas por tipo de pago', $v6);
         $this->assertStringContainsString('Informe Gerencial de Incentivos V6', $v6);
         $this->assertStringContainsString('calendarioPaginaSiguiente', $v6);
+        $this->assertStringContainsString('btnBuscarTerminalCalendario', $v6);
+        $this->assertStringContainsString('btnLimpiarBusquedaCalendario', $v6);
+        $this->assertStringContainsString('Busca en todas las páginas del calendario.', $v6);
+        $this->assertStringContainsString('btnExportarCalendarioExcel', $v6);
+        $this->assertStringContainsString('exportCalendarPaymentExcel', $v6);
         $this->assertStringContainsString('document.createDocumentFragment()', $v6);
         $this->assertStringContainsString('btnReconocerTerminalesCalendario', $v6);
         $this->assertStringContainsString('btnLimpiarTerminalesCalendario', $v6);

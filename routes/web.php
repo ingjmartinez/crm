@@ -665,6 +665,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('incentivos.reporte-nuevo-incentivo-v6.periodo.guardar');
     Route::get('/incentivos/reporte-nuevo-incentivo-v6/calendario', [IncentivoV6Controller::class, 'calendario'])
         ->name('incentivos.reporte-nuevo-incentivo-v6.calendario');
+    Route::get('/incentivos/reporte-nuevo-incentivo-v6/calendario/exportar', [IncentivoV6Controller::class, 'exportarCalendario'])
+        ->name('incentivos.reporte-nuevo-incentivo-v6.calendario.exportar');
     Route::post('/incentivos/reporte-nuevo-incentivo-v6/calendario/terminales/reconocer', [IncentivoV6Controller::class, 'reconocerTerminalesCalendario'])
         ->name('incentivos.reporte-nuevo-incentivo-v6.calendario.terminales.reconocer');
     Route::put('/incentivos/reporte-nuevo-incentivo-v6/calendario', [IncentivoV6Controller::class, 'guardarCalendario'])

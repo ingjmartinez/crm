@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\IncentivoV6CalendarioExport;
 use App\Http\Requests\ConsultarCalendarioIncentivoV6Request;
 use App\Http\Requests\GuardarCalendarioIncentivoV6Request;
 use App\Http\Requests\GuardarPeriodoIncentivoV6Request;
@@ -21,6 +22,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class IncentivoV6Controller extends Controller
 {
@@ -160,6 +162,49 @@ class IncentivoV6Controller extends Controller
                 'hasta' => min($page * $perPage, $total),
             ],
         ]);
+    }
+
+    public function exportarCalendario(ConsultarCalendarioIncentivoV6Request $request): BinaryFileResponse
+    {
+        $fechaInicio = $request->string('fecha_ini')->toString();
+        $fechaFin = $request->string('fecha_fin')->toString();
+        $sistema = $request->string('sistema', 'Todos')->toString();
+        $dates = collect(CarbonPeriod::create($fechaInicio, $fechaFin))
+            ->map(fn (Carbon $date): string => $date->toDateString())
+            ->values();
+        $assignmentHistory = IncentivoTerminalTipoPago::query()
+            ->whereDate('fecha', '<=', $fechaFin)
+            ->when($sistema !== 'Todos', fn ($query) => $query->where('sistema', $sistema))
+            ->orderBy('fecha')
+            ->orderBy('id')
+            ->get()
+            ->toBase()
+            ->groupBy(fn (IncentivoTerminalTipoPago $item): string => $this->terminalKey(
+                $item->sistema,
+                $item->terminal
+            ));
+        $rows = $this->terminalesActivas($sistema)
+            ->map(function (Agencia $agencia) use ($assignmentHistory, $dates): array {
+                $system = (string) $agencia->sistema_normalizado;
+                $terminal = trim((string) $agencia->terminal);
+                $assignments = $assignmentHistory->get($this->terminalKey($system, $terminal), collect());
+
+                return [
+                    'sistema' => $system,
+                    'terminal' => $terminal,
+                    'agencia' => trim((string) ($agencia->nombre_agencia ?? '')) ?: 'SIN AGENCIA',
+                    'empresa' => trim((string) ($agencia->empresa ?? '')) ?: 'Sin empresa',
+                    'tipos_por_fecha' => $dates->mapWithKeys(function (string $date) use ($assignments): array {
+                        return [$date => $this->effectiveCalendarAssignment($assignments, $date)?->tipo_pago];
+                    })->all(),
+                ];
+            })
+            ->values();
+
+        return Excel::download(
+            new IncentivoV6CalendarioExport($rows, $dates),
+            "configuracion_calendario_pago_{$fechaInicio}_{$fechaFin}.xlsx"
+        );
     }
 
     public function guardarCalendario(GuardarCalendarioIncentivoV6Request $request): JsonResponse
