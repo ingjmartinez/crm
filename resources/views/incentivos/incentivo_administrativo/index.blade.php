@@ -208,6 +208,11 @@
                                     <div class="d-flex align-items-center gap-2">
                                         <h5 class="card-title mb-0">Listado</h5>
                                         <a href="{{ route('incentivos.incentivo-administrativo.export', request()->only(['buscar_nombre', 'grupo_filter', 'empresa_filter', 'estatus_filter'])) }}" class="btn btn-success btn-sm">Excel</a>
+                                        @role('superadmin')
+                                            <a href="{{ route('incentivos.incentivo-administrativo.auditoria') }}" class="btn btn-dark btn-sm">
+                                                <i class="ri-history-line me-1"></i>Historial
+                                            </a>
+                                        @endrole
                                     </div>
                                     <form action="{{ route('incentivos.incentivo-administrativo.index') }}" method="GET" class="row g-2" style="max-width: 1040px; width: 100%;">
                                         <div class="col-md-3">

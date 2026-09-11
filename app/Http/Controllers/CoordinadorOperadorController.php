@@ -8,6 +8,7 @@ use App\Http\Requests\StoreCoordinadorOperadorRequest;
 use App\Http\Requests\UpdateCoordinadorOperadorRequest;
 use App\Models\Agencia;
 use App\Models\CoordinadorOperador;
+use App\Models\CoordinadorOperadorAuditoria;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -224,7 +225,10 @@ class CoordinadorOperadorController extends Controller
     {
         $payload = $this->payloadDesdeEmpleado($request->validated());
 
-        CoordinadorOperador::create($payload);
+        DB::transaction(function () use ($request, $payload): void {
+            $registro = CoordinadorOperador::create($payload);
+            $this->registrarAuditoria($request, 'registrado', $registro);
+        });
 
         return redirect()->route('coordinador-operador.index')
             ->with('success', 'Registro creado correctamente.');
@@ -240,12 +244,62 @@ class CoordinadorOperadorController extends Controller
             ->with('success', 'Registro actualizado correctamente.');
     }
 
-    public function destroy(CoordinadorOperador $coordinador_operador): RedirectResponse
+    public function destroy(Request $request, CoordinadorOperador $coordinador_operador): RedirectResponse
     {
-        $coordinador_operador->delete();
+        DB::transaction(function () use ($request, $coordinador_operador): void {
+            $this->registrarAuditoria($request, 'eliminado', $coordinador_operador);
+            $coordinador_operador->delete();
+        });
 
         return redirect()->route('coordinador-operador.index')
             ->with('success', 'Registro eliminado correctamente.');
+    }
+
+    public function auditoria(Request $request): View
+    {
+        $buscar = trim((string) $request->query('buscar', ''));
+        $accion = trim((string) $request->query('accion', ''));
+        $desde = $request->date('desde');
+        $hasta = $request->date('hasta');
+
+        $auditorias = CoordinadorOperadorAuditoria::query()
+            ->when($buscar !== '', function (EloquentBuilder $query) use ($buscar): void {
+                $termino = '%'.$buscar.'%';
+                $query->where(function (EloquentBuilder $query) use ($termino): void {
+                    $query->where('usuario_nombre', 'like', $termino)
+                        ->orWhere('usuario_email', 'like', $termino)
+                        ->orWhere('empleado_nombre', 'like', $termino)
+                        ->orWhere('cedula', 'like', $termino)
+                        ->orWhere('puesto', 'like', $termino);
+                });
+            })
+            ->when(in_array($accion, ['registrado', 'eliminado'], true), fn (EloquentBuilder $query) => $query->where('accion', $accion))
+            ->when($desde, fn (EloquentBuilder $query) => $query->whereDate('created_at', '>=', $desde))
+            ->when($hasta, fn (EloquentBuilder $query) => $query->whereDate('created_at', '<=', $hasta))
+            ->latest()
+            ->paginate(50)
+            ->withQueryString();
+
+        return view('coordinador_operador.auditoria', compact('auditorias', 'buscar', 'accion', 'desde', 'hasta'));
+    }
+
+    private function registrarAuditoria(Request $request, string $accion, CoordinadorOperador $registro): void
+    {
+        $usuario = $request->user();
+
+        CoordinadorOperadorAuditoria::create([
+            'accion' => $accion,
+            'usuario_id' => $usuario?->id,
+            'usuario_nombre' => $usuario?->name ?? 'Sistema',
+            'usuario_email' => $usuario?->email ?? 'sistema',
+            'registro_id' => $registro->id,
+            'empleado_nombre' => trim($registro->nombre.' '.$registro->apellido),
+            'cedula' => $registro->cedula,
+            'puesto' => $registro->puesto,
+            'datos' => $registro->only(['id', 'empleado_id', 'nombre', 'apellido', 'correo', 'cedula', 'telefono', 'puesto']),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
     }
 
     public function asignarAgencias(Request $request, CoordinadorOperador $coordinador_operador): RedirectResponse

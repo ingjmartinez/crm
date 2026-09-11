@@ -481,6 +481,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('coordinador-operador.empleados');
     Route::get('coordinador-operador/exportar/excel', [CoordinadorOperadorController::class, 'export'])
         ->name('coordinador-operador.export');
+    Route::get('coordinador-operador/auditoria', [CoordinadorOperadorController::class, 'auditoria'])
+        ->middleware('role:superadmin')
+        ->name('coordinador-operador.auditoria');
     Route::resource('coordinador-operador', CoordinadorOperadorController::class)->except(['show', 'edit']);
     Route::post('coordinador-operador/{coordinador_operador}/asignar-agencias', [CoordinadorOperadorController::class, 'asignarAgencias'])
         ->name('coordinador-operador.asignar-agencias');
@@ -675,6 +678,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoIndex'])->name('incentivos.incentivo-administrativo.index');
     Route::get('/incentivos/incentivo-administrativo/empleados', [IncentivoConfiguracionController::class, 'incentivoAdministrativoEmpleados'])->name('incentivos.incentivo-administrativo.empleados');
     Route::get('/incentivos/incentivo-administrativo/export', [IncentivoConfiguracionController::class, 'incentivoAdministrativoExport'])->name('incentivos.incentivo-administrativo.export');
+    Route::get('/incentivos/incentivo-administrativo/auditoria', [IncentivoConfiguracionController::class, 'incentivoAdministrativoAuditoria'])
+        ->middleware('role:superadmin')
+        ->name('incentivos.incentivo-administrativo.auditoria');
     Route::post('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoStore'])->name('incentivos.incentivo-administrativo.store');
     Route::put('/incentivos/incentivo-administrativo/{incentivoAdministrativo}', [IncentivoConfiguracionController::class, 'incentivoAdministrativoUpdate'])->name('incentivos.incentivo-administrativo.update');
     Route::delete('/incentivos/incentivo-administrativo/{incentivoAdministrativo}', [IncentivoConfiguracionController::class, 'incentivoAdministrativoDestroy'])->name('incentivos.incentivo-administrativo.destroy');

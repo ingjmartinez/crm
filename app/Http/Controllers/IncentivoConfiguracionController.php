@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\IncentivoAdministrativo;
+use App\Models\IncentivoAdministrativoAuditoria;
 use App\Models\PorcentajeIncentivo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -10,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class IncentivoConfiguracionController extends Controller
 {
@@ -145,7 +147,10 @@ class IncentivoConfiguracionController extends Controller
             'cedula.unique' => 'Este empleado ya está registrado en la empresa seleccionada. Debe actualizar el registro existente.',
         ]);
 
-        IncentivoAdministrativo::create($validated);
+        DB::transaction(function () use ($request, $validated): void {
+            $registro = IncentivoAdministrativo::create($validated);
+            $this->registrarAuditoriaAdministrativa($request, 'registrado', $registro);
+        });
 
         return redirect()
             ->route('incentivos.incentivo-administrativo.index')
@@ -239,7 +244,10 @@ class IncentivoConfiguracionController extends Controller
 
     public function incentivoAdministrativoDestroy(Request $request, IncentivoAdministrativo $incentivoAdministrativo)
     {
-        $incentivoAdministrativo->delete();
+        DB::transaction(function () use ($request, $incentivoAdministrativo): void {
+            $this->registrarAuditoriaAdministrativa($request, 'eliminado', $incentivoAdministrativo);
+            $incentivoAdministrativo->delete();
+        });
 
         if ($request->expectsJson()) {
             return response()->json(['message' => 'Registro eliminado correctamente.']);
@@ -248,6 +256,56 @@ class IncentivoConfiguracionController extends Controller
         return redirect()
             ->route('incentivos.incentivo-administrativo.index')
             ->with('success', 'Registro eliminado correctamente.');
+    }
+
+    public function incentivoAdministrativoAuditoria(Request $request): View
+    {
+        $buscar = trim((string) $request->query('buscar', ''));
+        $accion = trim((string) $request->query('accion', ''));
+        $desde = $request->date('desde');
+        $hasta = $request->date('hasta');
+
+        $auditorias = IncentivoAdministrativoAuditoria::query()
+            ->when($buscar !== '', function (Builder $query) use ($buscar): void {
+                $termino = '%'.$buscar.'%';
+                $query->where(function (Builder $query) use ($termino): void {
+                    $query->where('usuario_nombre', 'like', $termino)
+                        ->orWhere('usuario_email', 'like', $termino)
+                        ->orWhere('empleado_nombre', 'like', $termino)
+                        ->orWhere('cedula', 'like', $termino)
+                        ->orWhere('empresa', 'like', $termino);
+                });
+            })
+            ->when(in_array($accion, ['registrado', 'eliminado'], true), fn (Builder $query) => $query->where('accion', $accion))
+            ->when($desde, fn (Builder $query) => $query->whereDate('created_at', '>=', $desde))
+            ->when($hasta, fn (Builder $query) => $query->whereDate('created_at', '<=', $hasta))
+            ->latest()
+            ->paginate(50)
+            ->withQueryString();
+
+        return view('incentivos.incentivo_administrativo.auditoria', compact('auditorias', 'buscar', 'accion', 'desde', 'hasta'));
+    }
+
+    private function registrarAuditoriaAdministrativa(
+        Request $request,
+        string $accion,
+        IncentivoAdministrativo $registro
+    ): void {
+        $usuario = $request->user();
+
+        IncentivoAdministrativoAuditoria::create([
+            'accion' => $accion,
+            'usuario_id' => $usuario?->id,
+            'usuario_nombre' => $usuario?->name ?? 'Sistema',
+            'usuario_email' => $usuario?->email ?? 'sistema',
+            'registro_id' => $registro->id,
+            'empleado_nombre' => $registro->nombre,
+            'cedula' => $registro->cedula,
+            'empresa' => $registro->empresa,
+            'datos' => $registro->only(['id', 'grupo', 'nombre', 'cedula', 'empresa', 'pct_total']),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
     }
 
     private function queryIncentivosAdministrativos(Request $request, bool $withEmpleadoId = false)

@@ -6,6 +6,7 @@ use App\Exports\CoordinadorOperadorExport;
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\ForcePasswordChange;
 use App\Models\CoordinadorOperador;
+use App\Models\User;
 use App\Services\CoordinadorEmpleadoMatcher;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Database\Schema\Blueprint;
@@ -28,6 +29,7 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
         ]);
 
         Schema::dropIfExists('coordinador_operador_agencia');
+        Schema::dropIfExists('coordinador_operador_auditorias');
         Schema::dropIfExists('coordinador_operador');
         Schema::dropIfExists('empleados');
         Schema::dropIfExists('agencias');
@@ -54,6 +56,22 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             $table->string('cedula', 11)->nullable()->unique();
             $table->string('telefono', 10)->nullable();
             $table->string('puesto');
+            $table->timestamps();
+        });
+
+        Schema::create('coordinador_operador_auditorias', function (Blueprint $table): void {
+            $table->id();
+            $table->string('accion');
+            $table->unsignedBigInteger('usuario_id')->nullable();
+            $table->string('usuario_nombre');
+            $table->string('usuario_email');
+            $table->unsignedBigInteger('registro_id')->nullable();
+            $table->string('empleado_nombre');
+            $table->string('cedula')->nullable();
+            $table->string('puesto');
+            $table->json('datos');
+            $table->string('ip')->nullable();
+            $table->text('user_agent')->nullable();
             $table->timestamps();
         });
 
@@ -140,6 +158,40 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             'cedula' => '00111111111',
             'telefono' => '8095551212',
             'puesto' => 'coordinador',
+        ]);
+    }
+
+    public function test_registration_and_deletion_are_audited_with_the_responsible_user(): void
+    {
+        $employeeId = $this->insertEmployee();
+        $user = new User([
+            'name' => 'Usuario Auditor',
+            'email' => 'auditor@example.com',
+        ]);
+        $user->id = 77;
+        $this->actingAs($user);
+
+        $this->post(route('coordinador-operador.store'), [
+            'empresa' => 'Consorcio Joselito',
+            'departamento' => 'Operaciones',
+            'empleado_id' => $employeeId,
+        ])->assertRedirect(route('coordinador-operador.index'));
+
+        $registro = CoordinadorOperador::query()->firstOrFail();
+
+        $this->delete(route('coordinador-operador.destroy', $registro))
+            ->assertRedirect(route('coordinador-operador.index'));
+
+        $this->assertDatabaseHas('coordinador_operador_auditorias', [
+            'accion' => 'registrado',
+            'usuario_id' => 77,
+            'usuario_nombre' => 'Usuario Auditor',
+            'empleado_nombre' => 'Ana Pérez',
+        ]);
+        $this->assertDatabaseHas('coordinador_operador_auditorias', [
+            'accion' => 'eliminado',
+            'usuario_email' => 'auditor@example.com',
+            'cedula' => '00111111111',
         ]);
     }
 
