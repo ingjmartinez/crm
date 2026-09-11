@@ -13,7 +13,8 @@ class FavoritoCatalogoService
     /** @return Collection<int, array<string, mixed>> */
     public function catalogo(?User $usuario): Collection
     {
-        $modulos = collect(config('module_hubs', []))
+        $modulos = collect(app(AccesoVistaService::class)->modules())
+            ->except(['reportes', 'recursos_humanos'])
             ->flatMap(function (mixed $hub, string $modulo) use ($usuario): Collection {
                 if (! is_array($hub)) {
                     return collect();
@@ -76,6 +77,7 @@ class FavoritoCatalogoService
         return $modulos
             ->concat($reportes)
             ->concat($recursosHumanos)
+            ->filter(fn (array $item): bool => app(AccesoVistaService::class)->canView($usuario, $item['path']))
             ->unique('key')
             ->values();
     }
@@ -173,8 +175,7 @@ class FavoritoCatalogoService
         }
 
         try {
-            return $usuario->hasAnyRole(['superadmin', 'admin', 'rh'])
-                || $usuario->can('recursos_humanos.view');
+            return app(AccesoVistaService::class)->canModule($usuario, 'recursos_humanos');
         } catch (QueryException) {
             return false;
         }
