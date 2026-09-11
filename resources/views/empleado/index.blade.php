@@ -220,6 +220,7 @@
                                             <th>Apellidos</th>
                                             <th>Cedula</th>
                                             <th>Ciudad</th>
+                                            <th>Departamento</th>
                                             <th>Salario Mensual</th>
                                             <th>Fecha Ingreso</th>
                                             <th>Fecha Salida</th>
@@ -546,6 +547,7 @@
                         { data: 'apellidos', defaultContent: '-' },
                         { data: 'cedula', defaultContent: '' },
                         { data: 'ciudad', defaultContent: '' },
+                        { data: 'depto', defaultContent: '' },
                         {
                             data: 'salariomensual',
                             className: 'text-end',
