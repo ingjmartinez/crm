@@ -102,8 +102,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/password/cambiar-obligatorio', [AuthController::class, 'forcePasswordChange'])->name('password.force.update');
 });
 
-Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureViewAccess::class])->group(function () {
-    Route::get('/accesos/{module}', [ModuleHubController::class, 'extra'])->name('accesos.module');
+Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/favoritos/toggle', [UserFavoritoController::class, 'toggle'])->name('favoritos.toggle');
     Route::get('/gerencia', [ModuleHubController::class, 'gerencia'])->name('gerencia.index');
     Route::get('/gerencia/beneficio-bruto', [BeneficioBrutoController::class, 'index'])

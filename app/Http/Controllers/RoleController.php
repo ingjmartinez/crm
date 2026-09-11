@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\SaveRoleRequest;
-use App\Services\AccesoVistaService;
+use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -28,15 +27,18 @@ class RoleController extends Controller
 
     public function create()
     {
-        app(AccesoVistaService::class)->syncPermissions();
         $permissions = Permission::orderBy('name')->get();
 
         return view('roles.create', compact('permissions'));
     }
 
-    public function store(SaveRoleRequest $request)
+    public function store(Request $request)
     {
-        $validated = $request->validated();
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:roles,name',
+            'permissions' => 'nullable|array',
+            'permissions.*' => 'string|exists:permissions,name',
+        ]);
 
         $role = Role::create([
             'name' => $validated['name'],
@@ -51,16 +53,19 @@ class RoleController extends Controller
 
     public function edit(Role $role)
     {
-        app(AccesoVistaService::class)->syncPermissions();
         $permissions = Permission::orderBy('name')->get();
         $rolePermissions = $role->permissions->pluck('name')->toArray();
 
         return view('roles.edit', compact('role', 'permissions', 'rolePermissions'));
     }
 
-    public function update(SaveRoleRequest $request, Role $role)
+    public function update(Request $request, Role $role)
     {
-        $validated = $request->validated();
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:roles,name,' . $role->id,
+            'permissions' => 'nullable|array',
+            'permissions.*' => 'string|exists:permissions,name',
+        ]);
 
         $role->update([
             'name' => $validated['name'],

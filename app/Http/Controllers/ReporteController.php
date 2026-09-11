@@ -24,7 +24,6 @@ class ReporteController extends Controller
             : collect();
 
         $reportes = collect(config('reportes', []))
-            ->filter(fn (array $item): bool => app(\App\Services\AccesoVistaService::class)->canView($request->user(), $item['url']))
             ->filter(fn ($reporte) => (bool) ($reporte['activo'] ?? true))
             ->map(function ($reporte) use ($favoritos) {
                 $path = ltrim((string) parse_url((string) $reporte['url'], PHP_URL_PATH), '/');

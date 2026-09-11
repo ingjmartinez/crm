@@ -49,13 +49,6 @@ class ModuleHubController extends Controller
         return $this->show('incentivos');
     }
 
-    public function extra(string $module)
-    {
-        abort_unless(array_key_exists($module, config('view_access.extra_modules', [])), 404);
-
-        return $this->show($module);
-    }
-
     public function procesos()
     {
         return $this->show('procesos');
@@ -73,7 +66,7 @@ class ModuleHubController extends Controller
 
     public function show(string $module)
     {
-        $hub = app(\App\Services\AccesoVistaService::class)->modules()[$module] ?? null;
+        $hub = config("module_hubs.{$module}");
 
         abort_unless(is_array($hub), 404);
 
@@ -83,9 +76,6 @@ class ModuleHubController extends Controller
 
         $items = collect($hub['items'] ?? [])
             ->filter(function ($item) use ($user) {
-                if (! app(\App\Services\AccesoVistaService::class)->canView($user, $item['url'])) {
-                    return false;
-                }
                 if (! (bool) ($item['activo'] ?? true)) {
                     return false;
                 }

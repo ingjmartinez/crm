@@ -39,7 +39,21 @@
                                         @enderror
                                     </div>
 
-                                    @include('roles.permissions')
+                                    <div class="mb-3">
+                                        <label class="form-label">Permisos</label>
+                                        <div class="border rounded p-2" style="max-height: 300px; overflow-y: auto;">
+                                            @foreach($permissions as $permission)
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="permissions[]"
+                                                           value="{{ $permission->name }}" id="perm-{{ $permission->id }}"
+                                                           @checked(in_array($permission->name, old('permissions', [])))>
+                                                    <label class="form-check-label" for="perm-{{ $permission->id }}">
+                                                        {{ $permission->name }}
+                                                    </label>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
 
                                     <div class="d-flex flex-column flex-sm-row justify-content-end gap-2">
                                         <a href="{{ route('roles.index') }}" class="btn btn-secondary">

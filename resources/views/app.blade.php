@@ -830,20 +830,304 @@
                 <div class="container-fluid">
                     <div id="two-column-menu"></div>
                     @php
-                        $sidebarAccess = app(\App\Services\AccesoVistaService::class);
+                        $sidebarUser = auth()->user();
+                        $isContaRepOnlyRole = $sidebarUser
+                            && method_exists($sidebarUser, 'hasRole')
+                            && $sidebarUser->hasRole('Conta_Rep')
+                            && !$sidebarUser->hasRole('superadmin')
+                            && !$sidebarUser->hasRole('admin');
+                        $isContabilidadOnlyRole = $sidebarUser
+                            && method_exists($sidebarUser, 'hasRole')
+                            && $sidebarUser->hasRole('contabilidad')
+                            && !$sidebarUser->hasRole('superadmin');
+                        $isRecursosHumanosOnlyRole = $sidebarUser
+                            && method_exists($sidebarUser, 'hasRole')
+                            && $sidebarUser->hasRole('rh')
+                            && !$sidebarUser->hasRole('superadmin')
+                            && !$sidebarUser->hasRole('admin');
+                        $canSeeRecursosHumanos = $sidebarUser
+                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin') || $sidebarUser->hasRole('rh'))
+                                || (method_exists($sidebarUser, 'can') && $sidebarUser->can('recursos_humanos.view')));
+                        $canSeeReportes = $sidebarUser
+                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin') || $sidebarUser->hasRole('rh'))
+                                || (method_exists($sidebarUser, 'can') && $sidebarUser->can('reportes.view')));
                     @endphp
                     <ul class="navbar-nav" id="navbar-nav">
-                        <li class="menu-title"><a href="{{ route('inicio.index') }}" class="text-reset text-decoration-none">Inicio</a></li>
-                        @foreach($sidebarAccess->modules() as $moduleKey => $sidebarModule)
-                            @if($sidebarAccess->canModule(auth()->user(), $moduleKey))
-                                <li class="nav-item">
-                                    <a href="{{ url($sidebarModule['url']) }}" class="nav-link menu-link {{ request()->is(trim($sidebarModule['url'], '/').'*') ? 'active' : '' }}">
-                                        <i class="{{ $sidebarModule['items'][0]['icono'] ?? 'ri-apps-2-line' }}"></i>
-                                        <span>{{ $sidebarModule['titulo'] }}</span>
-                                    </a>
-                                </li>
-                            @endif
-                        @endforeach
+                        <li class="menu-title">
+                            <a href="{{ url('/') }}" class="text-reset text-decoration-none">
+                                <span data-key="t-menu">Inicio</span>
+                            </a>
+                        </li>
+
+                        @unless($isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('dashboard.index') }}"
+                                    class="nav-link menu-link {{ request()->routeIs('inicio.index') || request()->is('dashboard*') || request()->is('ventas-lotobet-dashboard*') || request()->is('ventas-lotonet-dashboard*') || request()->is('ventas-lotobet-flash-dashboard*') || request()->is('ventas-mar-dashboard*') || request()->is('kpi-lotobet*') ? 'active' : '' }}">
+                                    <i class="ri-apps-2-line"></i> <span data-key="t-apps">Dashboard</span>
+                                </a>
+                            </li>
+                        @endunless
+
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('procesos.index') }}"
+                                    class="nav-link menu-link {{ request()->is('procesos*') ? 'active' : '' }}">
+                                    <i class="ri-flow-chart"></i> <span data-key="t-procesos">Procesos</span>
+                                </a>
+                            </li>
+                        @endunless
+                        @if($canSeeRecursosHumanos)
+                            <li class="nav-item">
+                                <a href="{{ route('recursos-humanos.index') }}"
+                                    class="nav-link menu-link {{ request()->is('recursos-humanos*') || request()->is('empleados*') || request()->is('registro-empleados*') || request()->is('entrevistas-online*') || request()->is('ventas-sin-empleado*') ? 'active' : '' }}">
+                                    <i class="ri-team-line"></i> <span data-key="t-recursos-humanos">Recursos Humanos</span>
+                                </a>
+                            </li>
+                        @endif
+                        @unless($isRecursosHumanosOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('contabilidad.index') }}"
+                                    class="nav-link menu-link {{ request()->is('contabilidad*') ? 'active' : '' }}">
+                                    <i class="ri-dashboard-2-line"></i> <span data-key="t-contabilidad">Contabilidad</span>
+                                </a>
+                            </li>
+                        @endunless
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ url('/tareas') }}" class="nav-link menu-link">
+                                    <i class="ri-task-line"></i> <span data-key="t-tareas">Tareas</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('tareas.proyecto') }}" class="nav-link menu-link">
+                                    <i class="ri-stack-line"></i> <span data-key="t-proyecto">Proyecto</span>
+                                </a>
+                            </li>
+                        @endunless
+                        @can('servicios_generales.view')
+                            @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('servicios-generales.index') }}"
+                                    class="nav-link menu-link {{ request()->is('servicios-generales*') ? 'active' : '' }}">
+                                    <i class="ri-tools-line"></i> <span data-key="t-servicios-generales">Servicios Generales</span>
+                                </a>
+                            </li>
+                            @endunless
+                        @endcan
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('tecnologia.index') }}"
+                                    class="nav-link menu-link {{ request()->is('tecnologia*') ? 'active' : '' }}">
+                                    <i class="ri-computer-line"></i> <span data-key="t-tecnologia">Tecnologia</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('mantenimiento.index') }}"
+                                    class="nav-link menu-link {{ request()->is('mantenimiento*') || request()->is('agencias*') || request()->is('usuarios*') || request()->is('coordinador-operador*') || request()->is('roles*') || request()->is('permissions*') ? 'active' : '' }}">
+                                    <i class="ri-settings-2-line"></i> <span data-key="t-apps">Mantenimientos</span>
+                                </a>
+                            </li>
+                        @endunless
+
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
+                        <li class="nav-item">
+                            <a class="nav-link menu-link collapsed" href="#sidebarApps" data-bs-toggle="collapse"
+                                role="button" aria-expanded="true" aria-controls="sidebarApps">
+                                <i class="ri-apps-2-line"></i> <span data-key="t-apps">Apis de ventas</span>
+                            </a>
+                            <div class="collapse menu-dropdown" id="sidebarApps">
+                                <ul class="nav nav-sm flex-column">
+                                    <li class="nav-item">
+                                        <a href="{{ url('/generar-lotobet') }}" class="nav-link">
+                                            <span data-key="t-dashboards">Generar Lotobet</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{{ url('/generar-lotonet') }}" class="nav-link">
+                                            <span data-key="t-dashboards">Generar Lotonet</span>
+                                        </a>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a href="#sidebarEmail" class="nav-link collapsed" data-bs-toggle="collapse"
+                                            role="button" aria-expanded="false" aria-controls="sidebarEmail"
+                                            data-key="t-email">
+                                            Lotobet
+                                        </a>
+                                        <div class="collapse menu-dropdown" id="sidebarEmail">
+                                            <ul class="nav nav-sm flex-column">
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/ventas-por-usuario-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Ventas por usuario </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/faltantes-lotobet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Faltantes </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/ventas-por-producto-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Ventas por producto
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/recargas-lotobet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Recargas </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/premios-lotobet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Premios </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-misma-empresa-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos Misma Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-aotra-empresa-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos A Otra Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-porotra-empresa-lotobet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos Por Otra Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/asistencias-lotobet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Asistencias
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="#sidebarInvoices" class="nav-link collapsed"
+                                            data-bs-toggle="collapse" role="button" aria-expanded="false"
+                                            aria-controls="sidebarInvoices" data-key="t-invoices">
+                                            Lotonet
+                                        </a>
+                                        <div class="collapse menu-dropdown" id="sidebarInvoices">
+                                            <ul class="nav nav-sm flex-column">
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/ventas-por-usuario-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Ventas por usuario </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/faltantes-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Faltantes </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/paquetico-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Paquetico </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/recargas-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Recargas </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/ventas-por-producto-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Ventas Por Producto
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/premios-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Premios </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-misma-empresa-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos Misma Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-aotra-empresa-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos A Otra Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/pagos-porotra-empresa-lotonet') }}"
+                                                        class="nav-link" data-key="t-mailbox"> Pagos Por Otra Empresa
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/asistencias-lotonet') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Asistencias
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="#sidebarMar" class="nav-link collapsed" data-bs-toggle="collapse"
+                                            role="button" aria-expanded="false" aria-controls="sidebarMar"
+                                            data-key="t-invoices">
+                                            Mar
+                                        </a>
+                                        <div class="collapse menu-dropdown" id="sidebarMar">
+                                            <ul class="nav nav-sm flex-column">
+                                                <li class="nav-item">
+                                                    <a href="{{ url('/mar-ventas') }}" class="nav-link"
+                                                        data-key="t-mailbox"> Ventas </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </li>
+
+                                    <li class="nav-item">
+                                        <a href="{{ url('/ventas-flash-lotobet') }}" class="nav-link">
+                                            <span data-key="t-dashboards">Ventas Flash Lotobet</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item d-none">
+                                        <a href="{{ url('/ventas-flash-lotonet') }}" class="nav-link">
+                                            <span data-key="t-dashboards">Ventas Flash Lotonet</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        @endunless
+
+                        @if($canSeeReportes)
+                            <li class="nav-item">
+                                <a href="{{ route('reportes.index') }}"
+                                    class="nav-link menu-link {{ request()->is('reportes') || request()->is('reportes-*') ? 'active' : '' }}">
+                                    <i class="ri-apps-2-line"></i> <span data-key="t-apps">Reportes</span>
+                                </a>
+                            </li>
+                        @endif
+                        @unless($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole)
+                            <li class="nav-item">
+                                <a href="{{ route('incentivos.index') }}"
+                                    class="nav-link menu-link {{ request()->is('incentivos*') ? 'active' : '' }}">
+                                    <i class="ri-award-line"></i> <span data-key="t-apps">Incentivos</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('operaciones.index') }}"
+                                    class="nav-link menu-link {{ request()->is('operaciones*') ? 'active' : '' }}">
+                                    <i class="ri-settings-3-line"></i> <span data-key="t-apps">Operaciones</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('legal.index') }}"
+                                    class="nav-link menu-link {{ request()->is('legal*') ? 'active' : '' }}">
+                                    <i class="ri-scales-3-line"></i> <span data-key="t-apps">Legal</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{{ route('comercial.index') }}"
+                                    class="nav-link menu-link {{ request()->is('comercial*') ? 'active' : '' }}">
+                                    <i class="ri-line-chart-line"></i> <span data-key="t-apps">Comercial</span>
+                                </a>
+                            </li>
+
+                            <li class="nav-item">
+                                <a href="{{ route('gerencia.index') }}"
+                                    class="nav-link menu-link {{ request()->is('gerencia*') ? 'active' : '' }}">
+                                    <i class="ri-briefcase-line"></i> <span data-key="t-gerencia">Gerencia</span>
+                                </a>
+                            </li>
+                        @endunless
                     </ul>
                 </div>
                 <!-- Sidebar -->

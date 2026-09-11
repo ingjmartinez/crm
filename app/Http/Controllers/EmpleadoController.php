@@ -50,7 +50,6 @@ class EmpleadoController extends Controller
             'fechasalida',
             'cedula',
             'ciudad',
-            'depto',
             'salariomensual'
         );
 
@@ -86,10 +85,9 @@ class EmpleadoController extends Controller
             3 => 'apellidos',
             4 => 'cedula',
             5 => 'ciudad',
-            6 => 'depto',
-            7 => 'salariomensual',
-            8 => 'fechaingreso',
-            9 => 'fechasalida',
+            6 => 'salariomensual',
+            7 => 'fechaingreso',
+            8 => 'fechasalida',
         ];
         $search = trim((string) data_get($request->input('search', []), 'value', ''));
         $start = max(0, (int) $request->input('start', 0));
@@ -118,7 +116,6 @@ class EmpleadoController extends Controller
                 'fechasalida',
                 'cedula',
                 'ciudad',
-                'depto',
                 'salariomensual'
             )
             ->orderBy($orderColumn, $orderDir)
@@ -146,7 +143,6 @@ class EmpleadoController extends Controller
                 ->orWhere('apellidos', 'like', "%{$search}%")
                 ->orWhere('cedula', 'like', "%{$search}%")
                 ->orWhere('ciudad', 'like', "%{$search}%")
-                ->orWhere('depto', 'like', "%{$search}%")
                 ->orWhereRaw("CASE WHEN companyid = '168' THEN 'Grupo Joselito' ELSE 'Negosur' END LIKE ?", ["%{$search}%"]);
         });
     }

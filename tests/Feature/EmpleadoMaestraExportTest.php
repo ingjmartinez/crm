@@ -27,7 +27,6 @@ class EmpleadoMaestraExportTest extends TestCase
             $table->string('apellidos');
             $table->string('cedula')->nullable();
             $table->string('ciudad')->nullable();
-            $table->string('depto')->nullable();
             $table->decimal('salariomensual', 12, 2)->nullable();
             $table->date('fechaingreso')->nullable();
             $table->date('fechasalida')->nullable();
@@ -100,21 +99,6 @@ class EmpleadoMaestraExportTest extends TestCase
             ->assertSee('empleadosTable.search().trim()', false);
     }
 
-    public function test_employee_table_includes_department_from_the_employee_master(): void
-    {
-        $this->insertEmployee(['depto' => 'Tecnologia']);
-
-        $this->get('/empleados')
-            ->assertOk()
-            ->assertSee('<th>Departamento</th>', false)
-            ->assertSee("{ data: 'depto', defaultContent: '' }", false);
-
-        $this->getJson('/empleados/list?draw=1&start=0&length=10&search[value]=Tecnologia')
-            ->assertOk()
-            ->assertJsonPath('recordsFiltered', 1)
-            ->assertJsonPath('data.0.depto', 'Tecnologia');
-    }
-
     /** @param array<string, mixed> $overrides */
     private function insertEmployee(array $overrides = []): void
     {
@@ -125,7 +109,6 @@ class EmpleadoMaestraExportTest extends TestCase
             'apellidos' => 'Prueba',
             'cedula' => '00111111111',
             'ciudad' => 'Santo Domingo',
-            'depto' => 'Operaciones',
             'salariomensual' => 25000,
             'fechaingreso' => '2025-01-01',
             'fechasalida' => null,

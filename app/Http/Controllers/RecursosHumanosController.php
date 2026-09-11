@@ -15,7 +15,6 @@ class RecursosHumanosController extends Controller
             : collect();
 
         $modulos = collect(config('recursos_humanos', []))
-            ->filter(fn (array $item): bool => app(\App\Services\AccesoVistaService::class)->canView($request->user(), $item['url']))
             ->filter(fn ($modulo) => (bool) ($modulo['activo'] ?? true))
             ->map(function ($modulo) use ($favoritos) {
                 $path = ltrim((string) parse_url((string) $modulo['url'], PHP_URL_PATH), '/');
