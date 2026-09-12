@@ -296,6 +296,7 @@ function getDashboardData(path, fallbackValue) {
             }
         };
 
-        new ApexCharts(revenueExpensesEl, revenueExpensesOptions).render();
+        window.crmRevenueExpensesChart = new ApexCharts(revenueExpensesEl, revenueExpensesOptions);
+        window.crmRevenueExpensesChart.render();
     }
 })();

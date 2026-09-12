@@ -135,7 +135,7 @@
                             <h4 class="mb-sm-0">TABLERO DE INDICADORES CLAVES</h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
+                                    <li class="breadcrumb-item"><a href="{{ ($esTableroV2 ?? false) ? route('inicio-v2.index') : route('inicio.index') }}">Inicio</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
                                     <li class="breadcrumb-item active">Tablero</li>
                                 </ol>
@@ -167,6 +167,7 @@
                     $balancePeriodoFin = !empty($balanceMensual['periodo']['fin'])
                         ? \Carbon\Carbon::parse($balanceMensual['periodo']['fin'])->format('d/m/Y')
                         : '-';
+                    $esTableroV2 = (bool) ($esTableroV2 ?? false);
                     $crmDashboardData = [
                         'ventasProductos' => [
                             'series' => [round($ventaTradicional, 2), round($ventaNoTradicional, 2), round($ventaRecargas, 2)],
@@ -186,7 +187,7 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <form id="inicioFiltroForm" method="GET" action="{{ route('inicio.index') }}" class="row g-3 align-items-end">
+                                <form id="inicioFiltroForm" method="GET" action="{{ $esTableroV2 ? route('inicio-v2.index') : route('inicio.index') }}" class="row g-3 align-items-end">
                                     <input type="hidden" name="cargar" value="1">
                                     <div class="col-12 col-md-4 col-lg-3">
                                         <label for="fecha" class="form-label">Fecha de ventas</label>
@@ -330,8 +331,13 @@
                     <div class="col-xxl-9 col-md-6">
                         <div class="card card-height-100">
                             <div class="card-header align-items-center d-flex">
-                                <h4 class="card-title mb-0 flex-grow-1">Resumen de balance</h4>
-                                <span class="badge bg-info-subtle text-info">Periodo: {{ $balancePeriodoInicio }} - {{ $balancePeriodoFin }}</span>
+                                <h4 class="card-title mb-0 flex-grow-1">Resumen de balance{{ $esTableroV2 ? ' V2' : '' }}</h4>
+                                <div class="d-flex align-items-center gap-2">
+                                    @if ($esTableroV2)
+                                        <span id="inicioV2EstadoEnVivo" class="badge bg-warning-subtle text-warning">Conectando...</span>
+                                    @endif
+                                    <span class="badge bg-info-subtle text-info">Periodo: {{ $balancePeriodoInicio }} - {{ $balancePeriodoFin }}</span>
+                                </div>
                             </div>
                             <div class="card-body px-0">
                                 <div
@@ -346,10 +352,10 @@
 
                                 <ul class="list-inline main-chart text-center mb-0 mt-2">
                                     <li class="list-inline-item chart-border-left me-0 border-0">
-                                        <h4 class="text-primary">RD$ {{ number_format((float) $balanceIngresosTotal, 2) }} <span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-success me-1"></i>Tradicional</span></h4>
+                                        <h4 class="text-primary">RD$ <span id="inicioV2TotalTradicional">{{ number_format((float) $balanceIngresosTotal, 2) }}</span> <span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-success me-1"></i>Tradicional</span></h4>
                                     </li>
                                     <li class="list-inline-item chart-border-left me-0">
-                                        <h4>RD$ {{ number_format((float) $balanceGastosTotal, 2) }}<span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-danger me-1"></i>No Tradicional</span></h4>
+                                        <h4>RD$ <span id="inicioV2TotalNoTradicional">{{ number_format((float) $balanceGastosTotal, 2) }}</span><span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-danger me-1"></i>No Tradicional</span></h4>
                                     </li>
                                     <li class="list-inline-item chart-border-left me-0">
                                         <h4>RD$ {{ number_format((float) $balanceMargenTotal, 2) }}<span class="text-muted d-inline-block fs-13 align-middle ms-2"><i class="ri-checkbox-blank-circle-fill text-warning me-1"></i>Recargas</span></h4>
@@ -460,6 +466,7 @@
 @section('script')
     <script>
         window.crmDashboardData = @json($crmDashboardData);
+        window.crmDashboardV2 = @json($esTableroV2);
     </script>
     <script src="{{ asset('libs/apexcharts/apexcharts.min.js') }}"></script>
     <script src="{{ asset('libs/swiper/swiper-bundle.min.js') }}"></script>
@@ -467,6 +474,61 @@
     <script src="{{ asset('js/pages/dashboard-crypto.init.js') }}?v={{ @filemtime(public_path('js/pages/dashboard-crypto.init.js')) ?: time() }}"></script>
     <script>
         (function () {
+            const iniciarActualizacionVentasV2 = () => {
+                if (!window.crmDashboardV2) return;
+
+                const estado = document.getElementById('inicioV2EstadoEnVivo');
+                const formatoMonto = new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                const actualizar = async () => {
+                    const empresa = document.getElementById('empresa')?.value || 'todos';
+
+                    try {
+                        const respuesta = await fetch(`{{ route('inicio-v2.ventas-en-vivo') }}?empresa=${encodeURIComponent(empresa)}`, {
+                            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+
+                        if (!respuesta.ok) throw new Error('No se pudo consultar la venta actual');
+
+                        const punto = await respuesta.json();
+
+                        if (respuesta.status === 202 || (punto.pendiente && typeof punto.tradicional === 'undefined')) {
+                            estado.textContent = 'Actualizando ventas...';
+                            estado.className = 'badge bg-warning-subtle text-warning';
+                            return;
+                        }
+                        const datos = window.crmDashboardData?.resumenBalance;
+                        const indiceHoy = Number.parseInt(punto.fecha.slice(8, 10), 10) - 1;
+
+                        if (!datos || indiceHoy < 0 || indiceHoy >= datos.categories.length) return;
+
+                        datos.ingresos[indiceHoy] = Number(punto.tradicional || 0);
+                        datos.gastos[indiceHoy] = Number(punto.no_tradicional || 0);
+
+                        await window.crmRevenueExpensesChart?.updateSeries([
+                            { name: 'Tradicional', data: datos.ingresos },
+                            { name: 'No Tradicional', data: datos.gastos },
+                            { name: 'Recargas', data: datos.margen }
+                        ]);
+
+                        document.getElementById('inicioV2TotalTradicional').textContent = formatoMonto.format(datos.ingresos.reduce((total, valor) => total + Number(valor || 0), 0));
+                        document.getElementById('inicioV2TotalNoTradicional').textContent = formatoMonto.format(datos.gastos.reduce((total, valor) => total + Number(valor || 0), 0));
+
+                        const hora = new Date(punto.actualizado_en).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        estado.textContent = punto.desactualizado ? `Sin conexion · dato de ${hora}` : `En vivo · ${hora}`;
+                        estado.className = `badge ${punto.desactualizado ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'}`;
+                    } catch (_error) {
+                        estado.textContent = 'Sin conexion en vivo';
+                        estado.className = 'badge bg-danger-subtle text-danger';
+                    }
+                };
+
+                window.setTimeout(actualizar, 500);
+                window.setInterval(actualizar, 15000);
+            };
+
+            iniciarActualizacionVentasV2();
+
             const modalAgencyEntriesSinVentasInicio = Array.isArray(window.crmDashboardData?.agenciasSinVenta)
                 ? window.crmDashboardData.agenciasSinVenta
                 : [];

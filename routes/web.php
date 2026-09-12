@@ -26,13 +26,16 @@ use App\Http\Controllers\EntrevistaOnlineController;
 use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
 use App\Http\Controllers\Gerencia\BeneficioBrutoController;
+use App\Http\Controllers\Gerencia\PromedioHistoricoVentasOnlineController;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaController;
 use App\Http\Controllers\Gerencia\SeguimientoAgenciaController;
+use App\Http\Controllers\Gerencia\VentasEnVivoController;
 use App\Http\Controllers\GestionAgenciasReporteController;
 use App\Http\Controllers\IncentivoConfiguracionController;
 use App\Http\Controllers\IncentivosController;
 use App\Http\Controllers\IncentivoV6Controller;
 use App\Http\Controllers\InicioController;
+use App\Http\Controllers\InicioV2Controller;
 use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\LegalBitacoraAgenciaController;
 use App\Http\Controllers\MarController;
@@ -127,9 +130,15 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/gerencia/venta-gerencial/export/excel', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'exportExcel'])->name('gerencia.venta-gerencial.export.excel');
     Route::get('/gerencia/venta-comparativa', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'comparativa'])->name('gerencia.venta-comparativa');
     Route::get('/gerencia/venta-comparativa/export/excel', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'exportExcelComparativa'])->name('gerencia.venta-comparativa.export.excel');
+    Route::get('/gerencia/ventas-en-vivo', [VentasEnVivoController::class, 'index'])->name('gerencia.ventas-en-vivo');
+    Route::get('/gerencia/ventas-online', fn () => view('gerencia.ventas-online'))->name('gerencia.ventas-online');
+    Route::get('/gerencia/ventas-online/promedio-historico', [PromedioHistoricoVentasOnlineController::class, 'show'])->name('gerencia.ventas-online.promedio-historico.show');
+    Route::post('/gerencia/ventas-online/promedio-historico', [PromedioHistoricoVentasOnlineController::class, 'calcular'])->name('gerencia.ventas-online.promedio-historico.calcular');
 
     Route::get('/', [InicioController::class, 'index'])->name('inicio.index');
     Route::get('/inicio/ventas-data', [InicioController::class, 'ventasData'])->name('inicio.ventas-data');
+    Route::get('/inicio-v2', [InicioV2Controller::class, 'index'])->name('inicio-v2.index');
+    Route::get('/inicio-v2/ventas-en-vivo', [InicioV2Controller::class, 'ventasEnVivo'])->name('inicio-v2.ventas-en-vivo');
     Route::get('/dashboard', [ModuleHubController::class, 'dashboard'])->name('dashboard.index');
 
     Route::get('/procesos', [ModuleHubController::class, 'procesos'])->name('procesos.index');

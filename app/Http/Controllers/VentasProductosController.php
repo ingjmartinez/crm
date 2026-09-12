@@ -7,6 +7,7 @@ use App\Models\VtProducto;
 use App\Models\VtProductoNet;
 use App\Services\Etl\LotobetVentasProductoEtlService;
 use App\Services\Lotobet\LotobetSessionService;
+use App\Services\Ventas\ClasificadorTipoProducto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -40,7 +41,7 @@ class VentasProductosController extends Controller
         }
 
         $contenido = $ventas['Content'] ?? [];
-        if (!is_array($contenido)) {
+        if (! is_array($contenido)) {
             $contenido = [];
         }
 
@@ -51,6 +52,7 @@ class VentasProductosController extends Controller
             }
 
             $sinCeros = ltrim($raw, '0');
+
             return $sinCeros === '' ? '0' : $sinCeros;
         };
 
@@ -115,7 +117,7 @@ class VentasProductosController extends Controller
                 'estatus' => (int) ($agencia->estatus ?? 0),
             ];
 
-            if (!isset($agenciasByTerminal[$terminalNormalizada])) {
+            if (! isset($agenciasByTerminal[$terminalNormalizada])) {
                 $agenciasByTerminal[$terminalNormalizada] = $agenciaData;
             }
 
@@ -125,7 +127,7 @@ class VentasProductosController extends Controller
                 continue;
             }
 
-            if (!isset($agenciasActivasByTerminal[$terminalNormalizada])) {
+            if (! isset($agenciasActivasByTerminal[$terminalNormalizada])) {
                 $agenciasActivasByTerminal[$terminalNormalizada] = [
                     'agencia' => trim((string) ($agencia->agencia ?? '')),
                     'nombre_agencia' => trim((string) ($agencia->nombre_agencia ?? '')),
@@ -155,7 +157,7 @@ class VentasProductosController extends Controller
                 continue;
             }
 
-            if (!isset($terminalesNoRegistradasMap[$terminalNormalizada])) {
+            if (! isset($terminalesNoRegistradasMap[$terminalNormalizada])) {
                 $terminalesNoRegistradasMap[$terminalNormalizada] = $terminalRaw;
             }
         }
@@ -189,14 +191,16 @@ class VentasProductosController extends Controller
         $totalAgenciasActivas = count($agenciasActivasByTerminal);
         $agenciasActivasSinVenta = max(0, $totalAgenciasActivas - $agenciasActivasConVenta);
 
-        $ventasEnriquecidas = array_map(function ($item) use ($agenciasByTerminal, $normalizarClave) {
+        $clasificador = app(ClasificadorTipoProducto::class);
+
+        $ventasEnriquecidas = array_map(function ($item) use ($agenciasByTerminal, $normalizarClave, $clasificador) {
             $agenciaId = trim((string) ($item['agencia_id'] ?? ''));
             $agenciaNormalizada = $normalizarClave($agenciaId);
 
             $agenciaLookup = $agenciasByTerminal[$agenciaNormalizada]
                 ?? ['agencia' => null, 'nombre_agencia' => null, 'ciudad' => null, 'ruta' => null, 'operador' => null, 'coordinador' => null, 'estatus' => 0];
 
-            return array_merge($item, $agenciaLookup);
+            return array_merge($item, $agenciaLookup, ['tipo_categoria' => $clasificador->clasificar($item)]);
         }, $contenido);
 
         return response()->json([
@@ -273,7 +277,7 @@ class VentasProductosController extends Controller
 
         $curl = curl_init();
 
-        curl_setopt_array($curl, array(
+        curl_setopt_array($curl, [
             CURLOPT_URL => "http://contable.apploteka.com//api/finan/ventas_loteria/{$fecha}/5",
             CURLOPT_PROXY => '',
             CURLOPT_NOPROXY => '*',
@@ -290,12 +294,12 @@ class VentasProductosController extends Controller
                     "password": "mnXd5pSyF3HXjCC4"
                 }
             }',
-            CURLOPT_HTTPHEADER => array(
+            CURLOPT_HTTPHEADER => [
                 'token: ZFozLWdBYyqERusVdTsW',
                 'Content-Type: application/json',
-                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682'
-            ),
-        ));
+                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682',
+            ],
+        ]);
 
         $response = curl_exec($curl);
 
@@ -322,10 +326,10 @@ class VentasProductosController extends Controller
         $existe = VtProductoNet::whereDate('fecha', $fecha)->exists();
 
         if ($existe) {
-            return response()->json(['message' => 'Ya hay data guardada en la fecha: ' . $fecha]);
+            return response()->json(['message' => 'Ya hay data guardada en la fecha: '.$fecha]);
         }
 
-        curl_setopt_array($curl, array(
+        curl_setopt_array($curl, [
             CURLOPT_URL => "http://contable.apploteka.com//api/finan/ventas_loteria/{$fecha}/5",
             CURLOPT_PROXY => '',
             CURLOPT_NOPROXY => '*',
@@ -342,12 +346,12 @@ class VentasProductosController extends Controller
                     "password": "mnXd5pSyF3HXjCC4"
                 }
             }',
-            CURLOPT_HTTPHEADER => array(
+            CURLOPT_HTTPHEADER => [
                 'token: ZFozLWdBYyqERusVdTsW',
                 'Content-Type: application/json',
-                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682'
-            ),
-        ));
+                'Cookie: _orkapi_session=RkZLWFpIMnM1UTdUdjRXVzNuMFRmZFZnQ2U5N0JoV0JaSzBheUFlZ21TSVoyUEhWWFc2Y2R4Nzd2SmVhQXJKOGtsSktHWnNmelgzWGsxcmJESEVkcXRlWW5tdGpzU1ZZcXRBZFNva2lqL3pGMFppZFZnZUxPUXBscWxLYVdVcUwzdURYb1V5bGJwanZkeDdJTGUzZndkV3FxNmtiMjdvNkxpU0ZQK2RWRU1nPS0tbkVwL215TXpYTXpLS1lYYXJTR3Y2UT09--7e272c2a327d71d9feb7996870d828122936b682',
+            ],
+        ]);
 
         $response = curl_exec($curl);
 
@@ -357,15 +361,15 @@ class VentasProductosController extends Controller
 
         $data = $ventas['data']['result'] ?? [];
 
-        if (!empty($data)) {
+        if (! empty($data)) {
             foreach (array_chunk($data, 5000) as $chunk) {
                 DB::table('ventas_producto_net')->insert($chunk);
             }
         }
 
         return response()->json([
-            'message' => 'Datos guardados correctamente. Total insertados: ' . count($data),
-            'total' => count($data)
+            'message' => 'Datos guardados correctamente. Total insertados: '.count($data),
+            'total' => count($data),
         ]);
     }
 
