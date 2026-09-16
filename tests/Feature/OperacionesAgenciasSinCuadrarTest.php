@@ -228,12 +228,12 @@ class OperacionesAgenciasSinCuadrarTest extends TestCase
             ->assertViewHas('cantidadTerminalesSinCuadrar', 1);
     }
 
-    public function test_genera_pdf_con_las_veinticinco_agencias_de_mayor_monto_en_retiros(): void
+    public function test_genera_pdf_con_las_cincuenta_agencias_de_mayor_monto_en_retiros(): void
     {
         $lineas = ['Textbox11,Textbox40,Textbox19,NTerminal,IngresoProcesado'];
         $balances = [];
 
-        foreach (range(1, 27) as $indice) {
+        foreach (range(1, 52) as $indice) {
             $terminal = (string) (7000 + $indice);
             $monto = $indice * 100;
             $lineas[] = "Ruta:1700000 - RUTA CENTRAL Fecha: 2026-09-07,{$indice},AGENCIA {$indice},{$terminal},-{$monto}";
@@ -250,14 +250,15 @@ class OperacionesAgenciasSinCuadrarTest extends TestCase
             ]);
 
         $response->assertOk()
-            ->assertSee('Descargar PDF Top 25 retiros')
+            ->assertSee('Descargar PDF Top 50 retiros')
             ->assertSee(route('operaciones.agencias-sin-cuadrar.pdf'))
             ->assertViewHas('topAgencias', function ($topAgencias): bool {
-                return $topAgencias->count() === 25
-                    && $topAgencias->first()['terminal'] === '7027'
-                    && $topAgencias->first()['total_retiros'] === 2700.0
+                return $topAgencias->count() === 50
+                    && $topAgencias->first()['terminal'] === '7052'
+                    && $topAgencias->first()['total_retiros'] === 5200.0
                     && $topAgencias->last()['terminal'] === '7003'
                     && $topAgencias->last()['total_retiros'] === 300.0
+                    && ! $topAgencias->contains('terminal', '7002')
                     && ! $topAgencias->contains('terminal', '7999');
             });
 
@@ -265,7 +266,31 @@ class OperacionesAgenciasSinCuadrarTest extends TestCase
             ->get(route('operaciones.agencias-sin-cuadrar.pdf'))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf')
-            ->assertDownload('top-25-retiros-agencias-sin-cuadrar-'.now()->format('Ymd').'.pdf');
+            ->assertDownload('top-50-retiros-agencias-sin-cuadrar-'.now()->format('Ymd').'.pdf');
+    }
+
+    public function test_ordena_las_rutas_de_retiro_por_monto_descendente_en_el_data_table(): void
+    {
+        $csv = implode("\n", [
+            'Textbox11,Textbox40,Textbox19,NTerminal,IngresoProcesado',
+            'Ruta:1700000 - RUTA MENOR Fecha: 2026-09-07,1,AGENCIA A,7001,-100',
+            'Ruta:1700001 - RUTA DEPOSITO Fecha: 2026-09-07,2,AGENCIA B,7002,999',
+            'Ruta:1700002 - RUTA MAYOR Fecha: 2026-09-07,3,AGENCIA C,7003,-250',
+        ]);
+
+        $this->withoutMiddleware()->post(route('operaciones.agencias-sin-cuadrar.procesar'), [
+            'archivo_csv' => UploadedFile::fake()->createWithContent('rutas.csv', $csv),
+            'archivo_consolidado' => $this->crearArchivoConsolidado([
+                '7001' => '0.00',
+                '7002' => '0.00',
+                '7003' => '0.00',
+            ]),
+        ])->assertOk()
+            ->assertSee("order: [[3, 'asc'], [5, 'desc']]", false)
+            ->assertSee('data-order="250"', false)
+            ->assertViewHas('grupos', function ($grupos): bool {
+                return $grupos->pluck('ruta')->all() === ['RUTA MAYOR', 'RUTA MENOR', 'RUTA DEPOSITO'];
+            });
     }
 
     public function test_pdf_requiere_haber_procesado_los_archivos(): void

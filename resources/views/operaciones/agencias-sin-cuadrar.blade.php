@@ -70,7 +70,7 @@
                         <div class="d-flex justify-content-end mb-3">
                             <a href="{{ route('operaciones.agencias-sin-cuadrar.pdf') }}" target="_blank" class="btn btn-danger">
                                 <i class="ri-file-pdf-2-line align-bottom me-1"></i>
-                                Descargar PDF Top 25 retiros
+                                Descargar PDF Top 50 retiros
                             </a>
                         </div>
                     @endif
@@ -116,13 +116,13 @@
                                             <td>{{ $grupo['ruta_id'] ?: '-' }}</td>
                                             <td>{{ $grupo['ruta'] ?: '-' }}</td>
                                             <td>{{ $grupo['fecha'] ?: '-' }}</td>
-                                            <td>
+                                            <td data-order="{{ $grupo['tipo'] === 'Retiro' ? 0 : 1 }}">
                                                 <span class="badge fs-6 px-2 py-1 {{ $grupo['tipo'] === 'Retiro' ? 'bg-danger-subtle text-danger' : 'bg-success-subtle text-success' }}">
                                                     {{ $grupo['tipo'] }}
                                                 </span>
                                             </td>
                                             <td class="text-center">{{ number_format($grupo['cantidad_terminales']) }}</td>
-                                            <td class="text-end fw-semibold">{{ number_format($grupo['total_monto'], 2) }}</td>
+                                            <td class="text-end fw-semibold" data-order="{{ $grupo['total_monto'] }}">{{ number_format($grupo['total_monto'], 2) }}</td>
                                             <td class="text-center">
                                                 <button type="button" class="btn btn-sm btn-primary btn-ver-terminales" data-grupo="{{ $indice }}" data-bs-toggle="modal" data-bs-target="#modal-terminales-ruta">
                                                     <i class="ri-eye-line align-bottom me-1"></i>
@@ -349,7 +349,7 @@
             tabla.DataTable({
                 responsive: true,
                 pageLength: 25,
-                order: [[1, 'asc'], [3, 'asc']],
+                order: [[3, 'asc'], [5, 'desc']],
                 columnDefs: [{ orderable: false, searchable: false, targets: 6 }],
                 language: {
                     search: 'Buscar:',

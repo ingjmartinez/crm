@@ -93,7 +93,7 @@ class OperacionesAgenciasSinCuadrarController extends Controller
                 'isHtml5ParserEnabled' => true,
             ]);
 
-        return $documento->download('top-25-retiros-agencias-sin-cuadrar-'.now()->format('Ymd').'.pdf');
+        return $documento->download('top-50-retiros-agencias-sin-cuadrar-'.now()->format('Ymd').'.pdf');
     }
 
     /**
@@ -117,7 +117,7 @@ class OperacionesAgenciasSinCuadrarController extends Controller
                 ];
             })
             ->sortByDesc('total_retiros')
-            ->take(25)
+            ->take(50)
             ->values();
     }
 
@@ -224,6 +224,11 @@ class OperacionesAgenciasSinCuadrarController extends Controller
                     'total_monto' => (float) $terminales->sum('monto_asignado'),
                     'terminales' => $terminales->all(),
                 ];
+            })
+            ->sort(function (array $primera, array $segunda): int {
+                $ordenTipo = ($primera['tipo'] === 'Retiro' ? 0 : 1) <=> ($segunda['tipo'] === 'Retiro' ? 0 : 1);
+
+                return $ordenTipo ?: ($segunda['total_monto'] <=> $primera['total_monto']);
             })
             ->values();
     }

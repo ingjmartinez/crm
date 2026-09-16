@@ -801,6 +801,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Evaluación de Agencia',
+                'descripcion' => 'Evalúa las ventas mensuales por terminal contra un parámetro de cumplimiento.',
+                'url' => '/gerencia/evaluacion-agencia',
+                'icono' => 'ri-bar-chart-box-line',
+                'categoria' => 'Ventas',
+                'tags' => ['ventas', 'evaluación', 'agencias', 'metas', 'meses'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Rentabilidad de Agencia',
                 'descripcion' => 'Analiza ventas, premios, gastos y ganancia neta por agencia.',
                 'url' => '/gerencia/rentabilidad-agencia',

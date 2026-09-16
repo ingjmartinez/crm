@@ -45,6 +45,8 @@ class GestionAgenciasReporteController extends Controller
         $validated = $request->validate([
             'tradicional' => ['required', 'file', 'mimes:xlsx,csv,txt', 'max:51200'],
             'no_tradicional' => ['required', 'file', 'mimes:xlsx,csv,txt', 'max:51200'],
+            'destino' => ['nullable', 'in:gestion_agencias,nomina_domingo'],
+            'fecha_nomina' => ['nullable', 'date_format:Y-m-d'],
         ], [
             'tradicional.uploaded' => 'No se pudo subir el archivo Tradicional. Revisa que no supere el limite de subida configurado en PHP.',
             'no_tradicional.uploaded' => 'No se pudo subir el archivo No Tradicional. Revisa que no supere el limite de subida configurado en PHP.',
@@ -75,8 +77,11 @@ class GestionAgenciasReporteController extends Controller
             ]);
         });
 
-        return redirect()
-            ->route('reportes.gestion-agencias')
+        $destino = ($validated['destino'] ?? '') === 'nomina_domingo'
+            ? redirect()->route('recursos-humanos.nomina-domingo.index', ['fecha' => $validated['fecha_nomina'] ?? null, 'consultar' => 1])
+            : redirect()->route('reportes.gestion-agencias');
+
+        return $destino
             ->with('gestion_agencias_archivos', [
                 'tradicional' => $tradicional->getClientOriginalName(),
                 'no_tradicional' => $noTradicional->getClientOriginalName(),

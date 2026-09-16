@@ -56,6 +56,15 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Nómina Domingo',
+        'descripcion' => 'Valida horas trabajadas cruzando ponches con la última transacción de ventas.',
+        'url' => '/recursos-humanos/nomina-domingo',
+        'icono' => 'ri-calendar-check-line',
+        'categoria' => 'Control',
+        'tags' => ['nomina', 'domingo', 'ponches', 'ventas', 'horas'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Entrevista Online',
         'descripcion' => 'Registra entrevistas telefonicas u online realizadas a candidatos.',
         'url' => '/entrevistas-online',

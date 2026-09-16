@@ -58,6 +58,7 @@ use App\Http\Controllers\PremioController;
 use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\RecargasController;
 use App\Http\Controllers\RecursosHumanos\AgenciasCerradasDomingosController;
+use App\Http\Controllers\RecursosHumanos\NominaDomingoController;
 use App\Http\Controllers\RecursosHumanosController;
 use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\RendimientoCoordinadorController;
@@ -126,6 +127,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('gerencia.seguimiento-agencia.export.pdf');
     Route::get('/gerencia/gerencial', [\App\Http\Controllers\Gerencia\GerencialController::class, 'index'])->name('gerencia.gerencial');
     Route::get('/gerencia/gerencial/data', [\App\Http\Controllers\Gerencia\GerencialController::class, 'data'])->name('gerencia.gerencial.data');
+    Route::get('/gerencia/evaluacion-agencia', [\App\Http\Controllers\Gerencia\EvaluacionAgenciaController::class, 'index'])->name('gerencia.evaluacion-agencia');
+    Route::get('/gerencia/evaluacion-agencia/export/excel', [\App\Http\Controllers\Gerencia\EvaluacionAgenciaController::class, 'exportExcel'])->name('gerencia.evaluacion-agencia.export.excel');
     Route::get('/gerencia/venta-gerencial', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'index'])->name('gerencia.venta-gerencial');
     Route::get('/gerencia/venta-gerencial/export/excel', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'exportExcel'])->name('gerencia.venta-gerencial.export.excel');
     Route::get('/gerencia/venta-comparativa', [\App\Http\Controllers\Gerencia\VentaGerencialController::class, 'comparativa'])->name('gerencia.venta-comparativa');
@@ -358,6 +361,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('recursos-humanos.agencias-cerradas-domingos.index');
         Route::get('/recursos-humanos/agencias-cerradas-domingos/exportar', [AgenciasCerradasDomingosController::class, 'exportar'])
             ->name('recursos-humanos.agencias-cerradas-domingos.exportar');
+        Route::get('/recursos-humanos/nomina-domingo', [NominaDomingoController::class, 'index'])
+            ->name('recursos-humanos.nomina-domingo.index');
+        Route::post('/recursos-humanos/nomina-domingo/configuracion', [NominaDomingoController::class, 'actualizarConfiguracion'])
+            ->name('recursos-humanos.nomina-domingo.configuracion');
         Route::get('/empleados', [EmpleadoController::class, 'index']);
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
         Route::get('/empleados/exportar', [EmpleadoController::class, 'export'])->name('empleados.export');

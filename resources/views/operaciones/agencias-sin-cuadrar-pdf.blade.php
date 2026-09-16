@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>Top 25 retiros de agencias sin cuadrar</title>
+    <title>Top 50 retiros de agencias sin cuadrar</title>
     <style>
         @page { margin: 24px; }
         body { color: #1f2937; font-family: DejaVu Sans, sans-serif; font-size: 10px; }
@@ -25,7 +25,7 @@
 </head>
 <body>
     <div class="header">
-        <h1 class="title">Top 25 agencias con mayor monto de retiros sin cuadrar</h1>
+        <h1 class="title">Top 50 agencias con mayor monto de retiros sin cuadrar</h1>
         <p class="meta">Generado: {{ \Carbon\Carbon::parse($generado_en)->format('d-m-Y h:i:s A') }}</p>
         <p class="meta">Reporte de rutas: {{ $nombre_archivo }} | Consolidado: {{ $nombre_archivo_consolidado }}</p>
     </div>
