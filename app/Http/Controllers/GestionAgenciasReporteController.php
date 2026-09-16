@@ -161,19 +161,29 @@ class GestionAgenciasReporteController extends Controller
                 'estatus' => $row->estatus_analisis,
             ]);
 
-        return response()->json([
+        $payload = [
             'draw' => $draw,
             'recordsTotal' => $recordsTotal,
             'recordsFiltered' => $recordsFiltered,
-            'resumen' => $this->resumenDesdeTabla(null, null, null, $filtrosAgencia),
-            'estatusResumen' => $this->conteoEstatusTerminales($umbrales, $momentoCalculo, $filtrosAgencia),
-            'estatusDetalle' => $this->detalleEstatusTerminales($umbrales, $momentoCalculo, $filtrosAgencia),
-            'agenciasSinVentas' => $this->agenciasSinVentasDesdeTabla($filtrosAgencia),
-            'ventasPorAgencia' => $this->ventasPorAgenciaDesdeTabla($filtrosAgencia),
-            'tendenciaVentasHora' => $this->tendenciaVentasPorHoraDesdeTabla($filtrosAgencia),
             'horaServidor' => $momentoCalculo->toIso8601String(),
             'data' => $data,
-        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            'contextIncluded' => false,
+        ];
+
+        if ($request->boolean('include_context')) {
+            $payload = array_merge($payload, [
+                'resumen' => $this->resumenDesdeTabla(null, null, null, $filtrosAgencia),
+                'estatusResumen' => $this->conteoEstatusTerminales($umbrales, $momentoCalculo, $filtrosAgencia),
+                'estatusDetalle' => $this->detalleEstatusTerminales($umbrales, $momentoCalculo, $filtrosAgencia),
+                'agenciasSinVentas' => $this->agenciasSinVentasDesdeTabla($filtrosAgencia),
+                'ventasPorAgencia' => $this->ventasPorAgenciaDesdeTabla($filtrosAgencia),
+                'tendenciaVentasHora' => $this->tendenciaVentasPorHoraDesdeTabla($filtrosAgencia),
+                'contextIncluded' => true,
+            ]);
+        }
+
+        return response()->json($payload)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('Expires', '0');
     }

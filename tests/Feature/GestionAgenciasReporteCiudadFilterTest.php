@@ -81,6 +81,19 @@ class GestionAgenciasReporteCiudadFilterTest extends TestCase
         $this->assertStringContainsString("Ciudad: {{ \$filtrosActivos['ciudad'] ?? 'Todas' }}", $pdf);
     }
 
+    public function test_data_table_is_built_after_clearing_status_rows_and_loads_context_only_when_requested(): void
+    {
+        $view = file_get_contents(resource_path('views/reportes/gestion-agencias.blade.php'));
+        $controller = file_get_contents(app_path('Http/Controllers/GestionAgenciasReporteController.php'));
+
+        $this->assertStringContainsString("table.find('tbody').empty();", $view);
+        $this->assertStringNotContainsString("!table.find('tbody tr td[colspan]').length", $view);
+        $this->assertStringContainsString('data.include_context = cargarContextoEnSiguienteSolicitud ? 1 : 0;', $view);
+        $this->assertStringContainsString("if (\$request->boolean('include_context'))", $controller);
+        $this->assertStringContainsString("'contextIncluded' => false", $controller);
+        $this->assertStringContainsString("'contextIncluded' => true", $controller);
+    }
+
     public function test_detailed_pdf_summary_groups_card_metrics_without_repeating_agencies(): void
     {
         $controller = app(GestionAgenciasReporteController::class);

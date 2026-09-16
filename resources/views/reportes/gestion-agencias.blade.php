@@ -617,6 +617,7 @@
             let dtModalAgenciasSinVentaGestion = null;
             let dtModalEstatusTerminalesGestion = null;
             let cargaFiltrosActiva = null;
+            let cargarContextoEnSiguienteSolicitud = false;
             let chartTendenciaVentasHora = null;
             let modalAgenciasSinVentaFiltros = {
                 ruta: '',
@@ -1158,8 +1159,9 @@
                     });
 
                     if (dtGestionAgencias) {
+                        cargarContextoEnSiguienteSolicitud = true;
                         dtGestionAgencias.ajax.reload(null, true);
-                }
+                    }
             };
 
             const prepararEnvioReporte = (event) => {
@@ -1314,6 +1316,7 @@
                 }
 
                 if (dtGestionAgencias) {
+                    cargarContextoEnSiguienteSolicitud = options.refreshContext === true;
                     dtGestionAgencias.ajax.reload(null, true);
                 }
             };
@@ -1328,7 +1331,8 @@
 
             let dataTableReady = Promise.resolve();
 
-            if (window.gestionAgenciasData?.tieneResultado && table.length && !table.find('tbody tr td[colspan]').length) {
+            if (window.gestionAgenciasData?.tieneResultado && table.length && typeof $ === 'function' && $.fn?.DataTable) {
+                table.find('tbody').empty();
                 dataTableReady = new Promise((resolve) => {
                     let resolved = false;
                     const resolveOnce = () => {
@@ -1356,15 +1360,19 @@
                                 data.umbral_aviso = umbrales.aviso;
                                 data.umbral_alerta = umbrales.alerta;
                                 data.umbral_llamada = umbrales.llamada;
+                                data.include_context = cargarContextoEnSiguienteSolicitud ? 1 : 0;
+                                cargarContextoEnSiguienteSolicitud = false;
                                 data._ts = Date.now();
                             },
                             dataSrc: function (json) {
-                                actualizarResumenGeneral(json?.resumen);
-                                actualizarTarjetasEstatus(json?.estatusResumen);
-                                actualizarDetalleEstatus(json?.estatusDetalle);
-                                actualizarDatasetsGestion(json);
-                                renderTendenciaVentasHora();
-                                bootConsultaAgencia();
+                                if (json?.contextIncluded) {
+                                    actualizarResumenGeneral(json.resumen);
+                                    actualizarTarjetasEstatus(json.estatusResumen);
+                                    actualizarDetalleEstatus(json.estatusDetalle);
+                                    actualizarDatasetsGestion(json);
+                                    renderTendenciaVentasHora();
+                                    bootConsultaAgencia();
+                                }
                                 if (json?.horaServidor) {
                                     window.gestionAgenciasData.horaServidor = json.horaServidor;
                                     sincronizarHoraServidor(json.horaServidor);
@@ -1442,7 +1450,9 @@
             }
 
             if (filtroEstatusVentas) {
-                filtroEstatusVentas.addEventListener('change', recargarGestionAgencias);
+                filtroEstatusVentas.addEventListener('change', () => {
+                    recargarGestionAgencias({ refreshContext: true });
+                });
             }
 
             [filtroEmpresaGestion, filtroCiudadGestion, filtroRutaGestion, filtroCoordinadorGestion].forEach((select) => {
@@ -1458,7 +1468,7 @@
                                     ? 'coordinador'
                                     : null;
 
-                    recargarGestionAgencias({ loader });
+                    recargarGestionAgencias({ loader, refreshContext: true });
                 });
             });
 
@@ -1468,7 +1478,7 @@
                     if (filtroCiudadGestion) filtroCiudadGestion.value = '';
                     if (filtroRutaGestion) filtroRutaGestion.value = '';
                     if (filtroCoordinadorGestion) filtroCoordinadorGestion.value = '';
-                    recargarGestionAgencias();
+                    recargarGestionAgencias({ refreshContext: true });
                 });
             }
 
