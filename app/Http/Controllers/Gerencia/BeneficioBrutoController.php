@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Gerencia;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Gerencia\EnviarReporteTelegramRequest;
 use App\Http\Requests\Gerencia\ProcesarBeneficioBrutoRequest;
+use App\Services\TelegramService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -77,6 +80,64 @@ class BeneficioBrutoController extends Controller
             ->all();
 
         return $this->vista($filas, $nombresArchivos, $resumenPorGrupo);
+    }
+
+    public function enviarTelegram(EnviarReporteTelegramRequest $request, TelegramService $telegram): JsonResponse
+    {
+        $destinatarios = collect(preg_split('/[\r\n,]+/', (string) $request->validated('destinatarios')))
+            ->map(fn (?string $valor): string => trim((string) $valor))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($destinatarios->isEmpty()) {
+            return response()->json([
+                'message' => 'No se encontraron destinatarios válidos.',
+            ], 422);
+        }
+
+        $mensaje = trim((string) $request->validated('mensaje'));
+        $archivos = collect($request->validated('archivos') ?? []);
+
+        if ($mensaje === '' && $archivos->isEmpty()) {
+            return response()->json([
+                'message' => 'Ingresa un mensaje o selecciona al menos un PDF para enviar.',
+            ], 422);
+        }
+
+        $resultados = $destinatarios
+            ->map(fn (string $destinatario): array => $this->enviarReporteADestinatario($telegram, $destinatario, $mensaje, $archivos));
+
+        return response()->json([
+            'resultados' => $resultados->all(),
+            'enviados' => $resultados->where('enviado', true)->count(),
+            'fallidos' => $resultados->where('enviado', false)->count(),
+        ]);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $archivos
+     * @return array{destinatario: string, enviado: bool}
+     */
+    private function enviarReporteADestinatario(TelegramService $telegram, string $destinatario, string $mensaje, Collection $archivos): array
+    {
+        $envios = collect();
+
+        if ($mensaje !== '') {
+            $envios->push($telegram->sendMessage($destinatario, $mensaje));
+        }
+
+        foreach ($archivos as $archivo) {
+            $contenido = base64_decode((string) ($archivo['contenido_base64'] ?? ''), true);
+            $envios->push($contenido !== false
+                ? $telegram->sendDocument($destinatario, $contenido, (string) ($archivo['nombre'] ?? 'reporte.pdf'))
+                : false);
+        }
+
+        return [
+            'destinatario' => $destinatario,
+            'enviado' => $envios->isNotEmpty() && $envios->every(fn (bool $enviado): bool => $enviado),
+        ];
     }
 
     /**

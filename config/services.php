@@ -65,6 +65,11 @@ return [
         'verify_ssl' => env('OPENAI_API_VERIFY_SSL', true),
     ],
 
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'verify_ssl' => env('TELEGRAM_API_VERIFY_SSL', true),
+    ],
+
     'lotonet' => [
         'session_url' => env('LOTONET_SESSION_URL', 'http://contable.apploteka.com/api/finan/sessions'),
         'attendance_url' => env('LOTONET_ATTENDANCE_URL', 'http://contable.apploteka.com/api/finan/asistencia_usuarios'),

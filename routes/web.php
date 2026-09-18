@@ -113,6 +113,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('gerencia.beneficio-bruto');
     Route::post('/gerencia/beneficio-bruto', [BeneficioBrutoController::class, 'procesar'])
         ->name('gerencia.beneficio-bruto.procesar');
+    Route::post('/gerencia/beneficio-bruto/enviar-telegram', [BeneficioBrutoController::class, 'enviarTelegram'])
+        ->name('gerencia.beneficio-bruto.enviar-telegram');
     Route::get('/gerencia/rentabilidad-agencia', [RentabilidadAgenciaController::class, 'index'])
         ->name('gerencia.rentabilidad-agencia');
     Route::get('/gerencia/rentabilidad-agencia/buscar', [RentabilidadAgenciaController::class, 'buscar'])

@@ -119,6 +119,10 @@
                             <i class="ri-file-chart-line align-bottom me-1"></i>
                             PDF estado de resultado
                         </button>
+                        <button type="button" class="btn btn-info text-white" id="btn-enviar-telegram" data-bs-toggle="modal" data-bs-target="#modal-enviar-telegram">
+                            <i class="ri-telegram-line align-bottom me-1"></i>
+                            Enviar por Telegram
+                        </button>
                     </div>
                     <div class="row g-3 mb-4">
                         <div class="col-xl-6 d-flex">
@@ -392,6 +396,48 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="modal-enviar-telegram" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Enviar reporte por Telegram</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form id="form-enviar-telegram">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="telegram-destinatarios" class="form-label">Números o usernames de Telegram</label>
+                            <textarea class="form-control" id="telegram-destinatarios" name="destinatarios" rows="4" placeholder="Ej: 123456789&#10;@usuario1&#10;@usuario2" required></textarea>
+                            <div class="form-text">Ingresa un número (chat ID) o username por línea, o separados por coma. El bot solo puede escribirle a quienes ya iniciaron una conversación con él.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label d-block">Adjuntar PDF</label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="telegram-adjuntar-tarjetas" checked>
+                                <label class="form-check-label" for="telegram-adjuntar-tarjetas">PDF de tarjetas</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="telegram-adjuntar-estado" checked>
+                                <label class="form-check-label" for="telegram-adjuntar-estado">PDF estado de resultado</label>
+                            </div>
+                        </div>
+                        <div class="mb-0">
+                            <label for="telegram-mensaje" class="form-label">Mensaje (opcional)</label>
+                            <textarea class="form-control" id="telegram-mensaje" name="mensaje" rows="8"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-info text-white" id="btn-confirmar-envio-telegram">
+                            <i class="ri-send-plane-line align-bottom me-1"></i>
+                            Enviar reporte
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -404,6 +450,12 @@
             const fileInputs = form ? Array.from(form.querySelectorAll('input[type="file"]')) : [];
             const pdfButton = document.getElementById('btn-pdf-tarjetas');
             const estadoResultadosPdfButton = document.getElementById('btn-pdf-estado-resultados');
+            const telegramButton = document.getElementById('btn-enviar-telegram');
+            const telegramModalEl = document.getElementById('modal-enviar-telegram');
+            const telegramForm = document.getElementById('form-enviar-telegram');
+            const telegramMensajeInput = document.getElementById('telegram-mensaje');
+            const telegramEnviarUrl = @json(route('gerencia.beneficio-bruto.enviar-telegram'));
+            const csrfToken = @json(csrf_token());
             const resumenPdf = @json($resumen);
             const resumenPorGrupoPdf = @json($resumenPorGrupo);
             const informePdf = @json($informeGerencial);
@@ -440,15 +492,9 @@
                 });
             }
 
-            function generarPdfTarjetas() {
+            function construirPdfTarjetas() {
                 if (!window.jspdf || !window.jspdf.jsPDF) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'No se pudo generar el PDF',
-                        text: 'La librería de PDF no está disponible. Intenta nuevamente.',
-                    });
-
-                    return;
+                    return null;
                 }
 
                 const doc = new window.jspdf.jsPDF({
@@ -622,11 +668,13 @@
                     margin + 14,
                     resumenY + 68
                 );
-                doc.save('informe_gerencial_beneficio_bruto.pdf');
+                return doc;
             }
 
-            function generarPdfEstadoResultados() {
-                if (!window.jspdf || !window.jspdf.jsPDF) {
+            function generarPdfTarjetas() {
+                const doc = construirPdfTarjetas();
+
+                if (!doc) {
                     Swal.fire({
                         icon: 'error',
                         title: 'No se pudo generar el PDF',
@@ -634,6 +682,14 @@
                     });
 
                     return;
+                }
+
+                doc.save('informe_gerencial_beneficio_bruto.pdf');
+            }
+
+            function construirPdfEstadoResultados() {
+                if (!window.jspdf || !window.jspdf.jsPDF) {
+                    return null;
                 }
 
                 const doc = new window.jspdf.jsPDF({
@@ -851,6 +907,22 @@
                     doc.lastAutoTable.finalY + 22
                 );
 
+                return doc;
+            }
+
+            function generarPdfEstadoResultados() {
+                const doc = construirPdfEstadoResultados();
+
+                if (!doc) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'No se pudo generar el PDF',
+                        text: 'La librería de PDF no está disponible. Intenta nuevamente.',
+                    });
+
+                    return;
+                }
+
                 const fechaGeneracion = new Date();
                 const fechaArchivo = [
                     fechaGeneracion.getFullYear(),
@@ -866,6 +938,182 @@
 
             if (estadoResultadosPdfButton) {
                 estadoResultadosPdfButton.addEventListener('click', generarPdfEstadoResultados);
+            }
+
+            function generarMensajeTelegram() {
+                const lineas = [
+                    '<b>Informe Gerencial - Beneficio Bruto</b>',
+                    'Generado: ' + new Date().toLocaleString('es-DO'),
+                    '',
+                    '<b>Tradicional</b>',
+                    'Total vendido: ' + formatoMontoPdf(resumenPdf.tradicional.total_vendido),
+                    'Premios sacados: ' + formatoMontoPdf(resumenPdf.tradicional.premios_sacados),
+                    'Premios pagados: ' + formatoMontoPdf(resumenPdf.tradicional.premios_pagados),
+                    'Balance general: ' + formatoMontoPdf(resumenPdf.tradicional.balance_general),
+                    '',
+                    '<b>No Tradicional</b>',
+                    'Total vendido: ' + formatoMontoPdf(resumenPdf.no_tradicional.total_vendido),
+                    'Premios sacados: ' + formatoMontoPdf(resumenPdf.no_tradicional.premios_sacados),
+                    'Premios pagados: ' + formatoMontoPdf(resumenPdf.no_tradicional.premios_pagados),
+                    'Balance general: ' + formatoMontoPdf(resumenPdf.no_tradicional.balance_general),
+                    '',
+                    '<b>Recargas y Paqueticos</b>',
+                    'Total vendido: ' + formatoMontoPdf(resumenPdf.recargas.total_vendido),
+                    '',
+                    '<b>Ventas externas</b>',
+                    'Total vendido: ' + formatoMontoPdf(resumenPdf.ventas_externas.total_vendido),
+                    '',
+                    '<b>Balance general neto</b>: ' + formatoMontoPdf(informePdf.balance_general_neto),
+                ];
+
+                return lineas.join('\n');
+            }
+
+            if (telegramButton && telegramModalEl) {
+                telegramModalEl.addEventListener('show.bs.modal', function () {
+                    telegramMensajeInput.value = generarMensajeTelegram();
+                });
+            }
+
+            function extraerBase64Pdf(doc) {
+                const datauri = doc.output('datauristring');
+                const partes = datauri.split(',');
+
+                return partes[partes.length - 1];
+            }
+
+            function nombreArchivoEstadoResultadosTelegram() {
+                const fecha = new Date();
+                const fechaArchivo = [
+                    fecha.getFullYear(),
+                    String(fecha.getMonth() + 1).padStart(2, '0'),
+                    String(fecha.getDate()).padStart(2, '0'),
+                ].join('-');
+
+                return `Beneficio Bruto ${fechaArchivo}.pdf`;
+            }
+
+            if (telegramForm) {
+                telegramForm.addEventListener('submit', async function (event) {
+                    event.preventDefault();
+
+                    const destinatarios = document.getElementById('telegram-destinatarios').value.trim();
+
+                    if (!destinatarios) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Ingresa al menos un destinatario',
+                        });
+
+                        return;
+                    }
+
+                    const archivos = [];
+
+                    if (document.getElementById('telegram-adjuntar-tarjetas').checked) {
+                        const docTarjetas = construirPdfTarjetas();
+
+                        if (!docTarjetas) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'No se pudo generar el PDF de tarjetas',
+                                text: 'La librería de PDF no está disponible. Intenta nuevamente.',
+                            });
+
+                            return;
+                        }
+
+                        archivos.push({
+                            nombre: 'informe_gerencial_beneficio_bruto.pdf',
+                            contenido_base64: extraerBase64Pdf(docTarjetas),
+                        });
+                    }
+
+                    if (document.getElementById('telegram-adjuntar-estado').checked) {
+                        const docEstado = construirPdfEstadoResultados();
+
+                        if (!docEstado) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'No se pudo generar el PDF de estado de resultado',
+                                text: 'La librería de PDF no está disponible. Intenta nuevamente.',
+                            });
+
+                            return;
+                        }
+
+                        archivos.push({
+                            nombre: nombreArchivoEstadoResultadosTelegram(),
+                            contenido_base64: extraerBase64Pdf(docEstado),
+                        });
+                    }
+
+                    if (!telegramMensajeInput.value.trim() && archivos.length === 0) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Nada para enviar',
+                            text: 'Escribe un mensaje o selecciona al menos un PDF para adjuntar.',
+                        });
+
+                        return;
+                    }
+
+                    const confirmarBoton = document.getElementById('btn-confirmar-envio-telegram');
+                    confirmarBoton.disabled = true;
+                    Swal.fire({
+                        title: 'Enviando reporte...',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        didOpen: () => Swal.showLoading(),
+                    });
+
+                    try {
+                        const response = await fetch(telegramEnviarUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': csrfToken,
+                            },
+                            body: JSON.stringify({
+                                destinatarios: destinatarios,
+                                mensaje: telegramMensajeInput.value,
+                                archivos: archivos,
+                            }),
+                        });
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || 'No se pudo enviar el reporte.');
+                        }
+
+                        const modalInstance = bootstrap.Modal.getOrCreateInstance(telegramModalEl);
+                        modalInstance.hide();
+
+                        if (data.fallidos > 0) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Envío parcial',
+                                text: `Se envió a ${data.enviados} de ${data.enviados + data.fallidos} destinatarios. Revisa que los demás ya hayan iniciado una conversación con el bot.`,
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Reporte enviado',
+                                text: `Se envió correctamente a ${data.enviados} destinatario(s).`,
+                            });
+                        }
+                    } catch (error) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error al enviar',
+                            text: error.message,
+                        });
+                    } finally {
+                        confirmarBoton.disabled = false;
+                    }
+                });
             }
 
             const table = $('#tabla-beneficio-bruto');

@@ -8,6 +8,7 @@ use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -300,6 +301,94 @@ class BeneficioBrutoTest extends TestCase
         $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
             ->post(route('gerencia.beneficio-bruto.procesar'))
             ->assertInvalid(['archivo_joselito', 'archivo_negosur', 'archivo_higuey']);
+    }
+
+    public function test_report_can_be_sent_to_multiple_telegram_recipients(): void
+    {
+        config()->set('services.telegram.bot_token', 'test-token');
+        Http::fake([
+            'https://api.telegram.org/bottest-token/sendMessage' => Http::response(['ok' => true], 200),
+        ]);
+
+        $response = $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('gerencia.beneficio-bruto.enviar-telegram'), [
+                'destinatarios' => "123456789\n@usuario1, @usuario1",
+                'mensaje' => 'Reporte de prueba',
+            ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'enviados' => 2,
+                'fallidos' => 0,
+            ]);
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request): bool => $request['chat_id'] === '123456789' && $request['text'] === 'Reporte de prueba');
+        Http::assertSent(fn ($request): bool => $request['chat_id'] === '@usuario1');
+    }
+
+    public function test_telegram_send_reports_failures_per_recipient(): void
+    {
+        config()->set('services.telegram.bot_token', 'test-token');
+        Http::fake([
+            'https://api.telegram.org/bottest-token/sendMessage' => Http::response(['ok' => false], 400),
+        ]);
+
+        $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('gerencia.beneficio-bruto.enviar-telegram'), [
+                'destinatarios' => '123456789',
+                'mensaje' => 'Reporte de prueba',
+            ])
+            ->assertOk()
+            ->assertJson([
+                'enviados' => 0,
+                'fallidos' => 1,
+            ]);
+    }
+
+    public function test_telegram_send_requires_recipients(): void
+    {
+        $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('gerencia.beneficio-bruto.enviar-telegram'), [])
+            ->assertInvalid(['destinatarios']);
+    }
+
+    public function test_telegram_send_requires_a_message_or_an_attachment(): void
+    {
+        $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('gerencia.beneficio-bruto.enviar-telegram'), [
+                'destinatarios' => '123456789',
+            ])
+            ->assertStatus(422)
+            ->assertJson([
+                'message' => 'Ingresa un mensaje o selecciona al menos un PDF para enviar.',
+            ]);
+    }
+
+    public function test_report_pdf_attachments_can_be_sent_to_telegram(): void
+    {
+        config()->set('services.telegram.bot_token', 'test-token');
+        Http::fake([
+            'https://api.telegram.org/bottest-token/sendDocument' => Http::response(['ok' => true], 200),
+        ]);
+
+        $response = $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('gerencia.beneficio-bruto.enviar-telegram'), [
+                'destinatarios' => '123456789',
+                'mensaje' => '',
+                'archivos' => [
+                    ['nombre' => 'tarjetas.pdf', 'contenido_base64' => base64_encode('contenido-tarjetas')],
+                    ['nombre' => 'estado.pdf', 'contenido_base64' => base64_encode('contenido-estado')],
+                ],
+            ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'enviados' => 1,
+                'fallidos' => 0,
+            ]);
+
+        Http::assertSentCount(2);
     }
 
     /** @return array<string, UploadedFile> */
