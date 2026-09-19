@@ -61,6 +61,7 @@ class OperacionesAgenciasSinCuadrarController extends Controller
                         ->unique()
                         ->count(),
                     'total_retiros' => $filasRetiros->sum('monto_asignado'),
+                    'total_top_50' => $topAgencias->sum('total_retiros'),
                 ],
                 'nombre_archivo' => $archivo->getClientOriginalName(),
                 'nombre_archivo_consolidado' => $archivoConsolidado->getClientOriginalName(),

@@ -32,9 +32,10 @@
 
     <table class="summary">
         <tr>
-            <td width="33%"><div class="label">Agencias con retiros</div><div class="value">{{ number_format($resumen['total_agencias']) }}</div></td>
-            <td width="33%"><div class="label">Rutas analizadas</div><div class="value">{{ number_format($resumen['total_rutas']) }}</div></td>
-            <td width="34%"><div class="label">Total de retiros sin cuadrar</div><div class="value">RD$ {{ number_format($resumen['total_retiros'], 2) }}</div></td>
+            <td width="20%"><div class="label">Agencias con retiros</div><div class="value">{{ number_format($resumen['total_agencias']) }}</div></td>
+            <td width="20%"><div class="label">Rutas analizadas</div><div class="value">{{ number_format($resumen['total_rutas']) }}</div></td>
+            <td width="30%"><div class="label">Total de retiros sin cuadrar</div><div class="value">RD$ {{ number_format($resumen['total_retiros'], 2) }}</div></td>
+            <td width="30%"><div class="label">Valor del Top 50 de agencias</div><div class="value">RD$ {{ number_format($resumen['total_top_50'], 2) }}</div></td>
         </tr>
     </table>
 

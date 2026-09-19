@@ -262,6 +262,11 @@ class OperacionesAgenciasSinCuadrarTest extends TestCase
                     && ! $topAgencias->contains('terminal', '7999');
             });
 
+        $this->assertSame(137500.0, (float) session('operaciones_agencias_sin_cuadrar_top_pdf.resumen.total_top_50'));
+        $this->assertSame(137800.0, (float) session('operaciones_agencias_sin_cuadrar_top_pdf.resumen.total_retiros'));
+        $this->assertStringContainsString('Valor del Top 50 de agencias', view('operaciones.agencias-sin-cuadrar-pdf', session('operaciones_agencias_sin_cuadrar_top_pdf'))->render());
+        $this->assertStringContainsString('RD$ 137,500.00', view('operaciones.agencias-sin-cuadrar-pdf', session('operaciones_agencias_sin_cuadrar_top_pdf'))->render());
+
         $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
             ->get(route('operaciones.agencias-sin-cuadrar.pdf'))
             ->assertOk()
