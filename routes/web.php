@@ -367,6 +367,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('recursos-humanos.nomina-domingo.index');
         Route::post('/recursos-humanos/nomina-domingo/configuracion', [NominaDomingoController::class, 'actualizarConfiguracion'])
             ->name('recursos-humanos.nomina-domingo.configuracion');
+        Route::post('/recursos-humanos/nomina-domingo/enviar-telegram', [NominaDomingoController::class, 'enviarTelegram'])
+            ->name('recursos-humanos.nomina-domingo.enviar-telegram');
         Route::get('/empleados', [EmpleadoController::class, 'index']);
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
         Route::get('/empleados/exportar', [EmpleadoController::class, 'export'])->name('empleados.export');

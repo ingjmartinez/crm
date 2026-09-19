@@ -40,9 +40,14 @@
                             <h5 class="card-title mb-1">Cargar documentos de ventas</h5>
                             <p class="text-muted mb-0">Carga los archivos Tradicional y No Tradicional para obtener la última transacción real.</p>
                         </div>
-                        <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalConfiguracion">
-                            <i class="ri-settings-3-line me-1"></i> Configurar nómina
-                        </button>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#modalCoordinadores">
+                                <i class="ri-team-line me-1"></i> Coordinador
+                            </button>
+                            <button class="btn btn-info" type="button" data-bs-toggle="modal" data-bs-target="#modalConfiguracion">
+                                <i class="ri-settings-3-line me-1"></i> Configurar nómina
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <form method="POST" action="{{ route('reportes.gestion-agencias.procesar') }}" enctype="multipart/form-data" class="row g-3 align-items-end" id="formCargarNominaDomingo">
@@ -72,8 +77,33 @@
                     </div>
                 </div>
 
+                @if ($conciliacionVentas !== null)
+                    <div class="row g-3 mb-3">
+                        @foreach (['tradicional' => 'Tradicional', 'no_tradicional' => 'No Tradicional'] as $tipo => $etiqueta)
+                            @php($conciliacion = $conciliacionVentas[$tipo])
+                            <div class="col-md-6">
+                                <div class="card h-100 mb-0 border {{ abs($conciliacion['diferencia']) < 0.01 ? 'border-success' : 'border-warning' }}">
+                                    <div class="card-body py-3">
+                                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                            <h6 class="mb-0">Conciliación {{ $etiqueta }}</h6>
+                                            <span class="badge {{ abs($conciliacion['diferencia']) < 0.01 ? 'bg-success' : 'bg-warning text-dark' }}">
+                                                {{ abs($conciliacion['diferencia']) < 0.01 ? 'Cuadrado' : 'Diferencia' }}
+                                            </span>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-4">
+                                            <div><small class="text-muted d-block">Archivo</small><strong>RD$ {{ number_format($conciliacion['archivo'], 2) }}</strong></div>
+                                            <div><small class="text-muted d-block">API</small><strong>RD$ {{ number_format($conciliacion['api'], 2) }}</strong></div>
+                                            <div><small class="text-muted d-block">Archivo - API</small><strong>RD$ {{ number_format($conciliacion['diferencia'], 2) }}</strong></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
                 <div class="row">
-                    <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Horas requeridas</span><h4>{{ number_format($configuracion['horas_requeridas'], 2) }}</h4></div></div></div>
+                    <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Horas requeridas</span><h4>{{ (int) floor($configuracion['horas_requeridas']) }} h {{ str_pad((string) round(($configuracion['horas_requeridas'] - floor($configuracion['horas_requeridas'])) * 60), 2, '0', STR_PAD_LEFT) }} min</h4></div></div></div>
                     <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Monto fijo</span><h4>RD$ {{ number_format($configuracion['monto_fijo'], 2) }}</h4></div></div></div>
                     <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Total a pagar</span><h4>RD$ {{ number_format($filas->sum('monto_pagar'), 2) }}</h4></div></div></div>
                 </div>
@@ -102,6 +132,15 @@
                             <input type="hidden" name="fecha" value="{{ $fecha }}">
                             <input type="hidden" name="consultar" value="1">
                             <div>
+                                <label for="empresa" class="form-label mb-1">Empresa</label>
+                                <select class="form-select" id="empresa" name="empresa">
+                                    <option value="">Todas</option>
+                                    @foreach ($empresas as $empresaOpcion)
+                                        <option value="{{ $empresaOpcion }}" @selected($empresa === $empresaOpcion)>{{ $empresaOpcion }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
                                 <label for="estatus" class="form-label mb-1">Cumplimiento</label>
                                 <select class="form-select" id="estatus" name="estatus">
                                     <option value="todos" @selected($estatus === 'todos')>Todos</option>
@@ -115,11 +154,11 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped align-middle w-100" id="tablaNominaDomingo">
-                                <thead><tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Horas trabajadas</th><th>Estatus</th><th>Monto a pagar</th></tr></thead>
+                                <thead><tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Coordinador</th><th>Horas trabajadas</th><th>Estatus</th><th>Monto a pagar</th></tr></thead>
                                 <tbody>
                                     @foreach ($filas as $fila)
                                         <tr title="Entrada: {{ $fila['entrada'] ?? 'Sin entrada' }} | Salida ponche: {{ $fila['salida_ponche'] ?? 'Sin salida' }} | Última transacción: {{ $fila['ultima_transaccion'] ?? 'Sin transacción' }} | Fuente: {{ $fila['fuente_salida'] }}">
-                                            <td>{{ $fila['terminal'] }}</td><td>{{ $fila['cedula'] }}</td><td>{{ $fila['empleado'] }}</td>
+                                            <td>{{ $fila['terminal'] }}</td><td>{{ $fila['cedula'] }}</td><td>{{ $fila['empleado'] }}</td><td>{{ $fila['coordinador'] }}</td>
                                             <td data-order="{{ $fila['horas_trabajadas'] }}">{{ number_format($fila['horas_trabajadas'], 2) }} horas<br><small class="text-muted">Primer login: {{ $fila['entrada'] ? \Carbon\Carbon::parse($fila['entrada'])->format('h:i A') : 'No disponible' }} | Salida: {{ $fila['salida_efectiva'] ? \Carbon\Carbon::parse($fila['salida_efectiva'])->format('h:i A') : 'No disponible' }}</small></td>
                                             <td><span class="badge {{ $fila['estatus'] === 'Cumple' ? 'bg-success' : 'bg-danger' }}">{{ $fila['estatus'] }}</span></td>
                                             <td data-order="{{ $fila['monto_pagar'] }}">RD$ {{ number_format($fila['monto_pagar'], 2) }}</td>
@@ -140,12 +179,136 @@
                 @csrf
                 <div class="modal-header"><h5 class="modal-title">Configurar Nómina Domingo</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
-                    <div class="mb-3"><label class="form-label" for="horas_requeridas">Horas requeridas</label><input type="number" step="0.01" min="0.01" max="24" class="form-control" id="horas_requeridas" name="horas_requeridas" value="{{ $configuracion['horas_requeridas'] }}" required></div>
+                    <div class="mb-3">
+                        <label class="form-label">Tiempo requerido</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="input-group"><input type="number" min="0" max="24" step="1" class="form-control" id="horas_requeridas_horas" name="horas_requeridas_horas" value="{{ old('horas_requeridas_horas', (int) floor($configuracion['horas_requeridas'])) }}" required><span class="input-group-text">horas</span></div>
+                            </div>
+                            <div class="col-6">
+                                <div class="input-group"><input type="number" min="0" max="59" step="1" class="form-control" id="horas_requeridas_minutos" name="horas_requeridas_minutos" value="{{ old('horas_requeridas_minutos', (int) round(($configuracion['horas_requeridas'] - floor($configuracion['horas_requeridas'])) * 60)) }}" required><span class="input-group-text">minutos</span></div>
+                            </div>
+                        </div>
+                        <small class="text-muted">Los minutos deben estar entre 0 y 59.</small>
+                    </div>
                     <div><label class="form-label" for="monto_fijo">Monto fijo</label><div class="input-group"><span class="input-group-text">RD$</span><input type="number" step="0.01" min="0" class="form-control" id="monto_fijo" name="monto_fijo" value="{{ $configuracion['monto_fijo'] }}" required></div></div>
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" type="submit">Guardar configuración</button></div>
             </form>
         </div></div>
+    </div>
+
+    <div class="modal fade" id="modalCoordinadores" tabindex="-1" aria-labelledby="modalCoordinadoresLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="modalCoordinadoresLabel">Resumen por coordinador</h5>
+                        <p class="text-muted mb-0">Una agencia cumple cuando al menos uno de sus empleados cumple la jornada.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table id="tablaCoordinadoresNomina" class="table table-bordered table-striped align-middle w-100">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Coordinador</th>
+                                    <th class="text-center">Agencias evaluadas</th>
+                                    <th class="text-center">Agencias cumplieron</th>
+                                    <th class="text-center">Agencias no cumplieron</th>
+                                    <th class="text-center">Empleados cumplieron</th>
+                                    <th class="text-center">Empleados no cumplieron</th>
+                                    <th class="text-center">Telegram</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($resumenCoordinadores as $indice => $coordinador)
+                                    <tr>
+                                        <td class="fw-semibold">{{ $coordinador['coordinador'] }}</td>
+                                        <td class="text-center">{{ number_format($coordinador['agencias_asignadas']) }}</td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-link text-success fw-semibold p-0 coordinador-detalle-trigger" data-indice="{{ $indice }}" data-tipo="cumplieron">
+                                                {{ number_format($coordinador['agencias_cumplieron']) }}
+                                            </button>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-link text-danger fw-semibold p-0 coordinador-detalle-trigger" data-indice="{{ $indice }}" data-tipo="no_cumplieron">
+                                                {{ number_format($coordinador['agencias_no_cumplieron']) }}
+                                            </button>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-link text-success fw-semibold p-0 coordinador-detalle-trigger" data-indice="{{ $indice }}" data-tipo="empleados_cumplieron">
+                                                {{ number_format($coordinador['empleados_cumplieron']) }}
+                                            </button>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-link text-danger fw-semibold p-0 coordinador-detalle-trigger" data-indice="{{ $indice }}" data-tipo="empleados_no_cumplieron">
+                                                {{ number_format($coordinador['empleados_no_cumplieron']) }}
+                                            </button>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-info text-white telegram-coordinador-trigger" data-indice="{{ $indice }}">
+                                                <i class="ri-telegram-line me-1"></i> Enviar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalleCoordinadorNomina" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div><h5 class="modal-title" id="tituloDetalleCoordinadorNomina">Detalle de agencias</h5><small class="text-muted" id="subtituloDetalleCoordinadorNomina"></small></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table id="tablaDetalleCoordinadorNomina" class="table table-bordered table-striped align-middle w-100">
+                            <thead class="table-light" id="encabezadoDetalleCoordinadorNomina"></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalTelegramCoordinador" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <form id="formTelegramCoordinador">
+                    <div class="modal-header">
+                        <div><h5 class="modal-title">Enviar nómina por Telegram</h5><small class="text-muted" id="telegramCoordinadorNombre"></small></div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="telegramCoordinadorChatId">Chat ID o username</label>
+                            <input type="text" class="form-control" id="telegramCoordinadorChatId" placeholder="Ej: 123456789 o @usuario" maxlength="255" required>
+                            <small class="text-muted">El coordinador debe haber iniciado una conversación con el bot.</small>
+                        </div>
+                        <div>
+                            <label class="form-label" for="telegramCoordinadorVistaPrevia">Archivos a enviar</label>
+                            <textarea class="form-control" id="telegramCoordinadorVistaPrevia" rows="6" readonly></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-info text-white" id="btnEnviarTelegramCoordinador"><i class="ri-telegram-line me-1"></i> Enviar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <div class="modal fade" id="modalSinPrimerLogin" tabindex="-1" aria-labelledby="modalSinPrimerLoginLabel" aria-hidden="true">
@@ -162,7 +325,7 @@
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped align-middle w-100" id="tablaSinPrimerLogin">
                             <thead>
-                                <tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Última transacción</th><th>Salida calculada</th></tr>
+                                <tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Primera transacción</th><th>Última transacción</th><th>Salida calculada</th></tr>
                             </thead>
                             <tbody>
                                 @foreach ($filasSinEntrada as $fila)
@@ -170,6 +333,7 @@
                                         <td>{{ $fila['terminal'] }}</td>
                                         <td>{{ $fila['cedula'] }}</td>
                                         <td>{{ $fila['empleado'] }}</td>
+                                        <td>{{ $fila['primera_transaccion'] ? \Carbon\Carbon::parse($fila['primera_transaccion'])->format('d/m/Y h:i A') : 'Sin transacción' }}</td>
                                         <td>{{ $fila['ultima_transaccion'] ? \Carbon\Carbon::parse($fila['ultima_transaccion'])->format('d/m/Y h:i A') : 'Sin transacción' }}</td>
                                         <td>{{ $fila['salida_efectiva'] ? \Carbon\Carbon::parse($fila['salida_efectiva'])->format('d/m/Y h:i A') : 'Sin salida disponible' }}</td>
                                     </tr>
@@ -210,9 +374,134 @@
             }
 
             if (window.jQuery && $.fn.DataTable) {
+                const resumenCoordinadores = @json($resumenCoordinadores);
+                const telegramEnviarUrl = @json(route('recursos-humanos.nomina-domingo.enviar-telegram'));
+                let tablaCoordinadores = null;
+                let tablaDetalleCoordinador = null;
+                let coordinadorTelegramSeleccionado = null;
+                const escaparHtml = (valor) => String(valor ?? '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+
+                document.getElementById('modalCoordinadores')?.addEventListener('shown.bs.modal', function () {
+                    if (! tablaCoordinadores) {
+                        tablaCoordinadores = $('#tablaCoordinadoresNomina').DataTable({
+                            pageLength: 25,
+                            order: [[1, 'desc']],
+                            dom: 'Bfrtip',
+                            buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+                            language: { url: '{{ asset('assets/json/es-ES.json') }}' },
+                        });
+                    } else {
+                        tablaCoordinadores.columns.adjust();
+                    }
+                });
+
+                document.addEventListener('click', function (event) {
+                    const telegramTrigger = event.target.closest('.telegram-coordinador-trigger');
+                    if (telegramTrigger) {
+                        coordinadorTelegramSeleccionado = resumenCoordinadores[Number(telegramTrigger.dataset.indice)];
+                        const lineas = [
+                            `Coordinador: ${coordinadorTelegramSeleccionado.coordinador}`,
+                            `Fecha: {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}`,
+                            '',
+                            `📄 PDF 1: Empleados que cumplieron (${coordinadorTelegramSeleccionado.empleados_cumplieron})`,
+                            `📄 PDF 2: Empleados que no cumplieron (${coordinadorTelegramSeleccionado.empleados_no_cumplieron})`,
+                        ];
+                        document.getElementById('telegramCoordinadorNombre').textContent = coordinadorTelegramSeleccionado.coordinador;
+                        document.getElementById('telegramCoordinadorVistaPrevia').value = lineas.join('\n');
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCoordinadores')).hide();
+                        setTimeout(() => bootstrap.Modal.getOrCreateInstance(document.getElementById('modalTelegramCoordinador')).show(), 200);
+
+                        return;
+                    }
+
+                    const trigger = event.target.closest('.coordinador-detalle-trigger');
+                    if (! trigger) {
+                        return;
+                    }
+
+                    const coordinador = resumenCoordinadores[Number(trigger.dataset.indice)];
+                    const tipo = trigger.dataset.tipo;
+                    const esEmpleado = tipo.startsWith('empleados_');
+                    const cumple = tipo.endsWith('cumplieron') && ! tipo.endsWith('no_cumplieron');
+                    const filas = coordinador[`detalle_${tipo === 'cumplieron' || tipo === 'no_cumplieron' ? `agencias_${tipo}` : tipo}`];
+                    const encabezado = document.getElementById('encabezadoDetalleCoordinadorNomina');
+                    const tbody = document.querySelector('#tablaDetalleCoordinadorNomina tbody');
+
+                    if (tablaDetalleCoordinador) {
+                        tablaDetalleCoordinador.destroy();
+                        tablaDetalleCoordinador = null;
+                    }
+
+                    document.getElementById('tituloDetalleCoordinadorNomina').textContent = esEmpleado
+                        ? (cumple ? 'Empleados que cumplieron' : 'Empleados que no cumplieron')
+                        : (cumple ? 'Agencias que cumplieron' : 'Agencias que no cumplieron');
+                    document.getElementById('subtituloDetalleCoordinadorNomina').textContent = coordinador.coordinador;
+                    encabezado.innerHTML = esEmpleado
+                        ? '<tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th class="text-end">Horas trabajadas</th><th>Estado</th></tr>'
+                        : '<tr><th>Terminal</th><th>Empresa</th><th class="text-center">Empleados evaluados</th></tr>';
+                    tbody.innerHTML = esEmpleado
+                        ? filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.cedula)}</td><td>${escaparHtml(fila.empleado)}</td><td class="text-end" data-order="${Number(fila.horas_trabajadas)}">${Number(fila.horas_trabajadas).toFixed(2)}</td><td><span class="badge ${cumple ? 'bg-success' : 'bg-danger'}">${escaparHtml(fila.estatus)}</span></td></tr>`).join('')
+                        : filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.empresa)}</td><td class="text-center">${Number(fila.empleados)}</td></tr>`).join('');
+
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetalleCoordinadorNomina')).show();
+                    setTimeout(() => {
+                        tablaDetalleCoordinador = $('#tablaDetalleCoordinadorNomina').DataTable({
+                            pageLength: 25,
+                            order: [[0, 'asc']],
+                            dom: 'Bfrtip',
+                            buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+                            language: { url: '{{ asset('assets/json/es-ES.json') }}' },
+                        });
+                    }, 180);
+                });
+
+                document.getElementById('formTelegramCoordinador')?.addEventListener('submit', async function (event) {
+                    event.preventDefault();
+                    if (! coordinadorTelegramSeleccionado) {
+                        return;
+                    }
+
+                    const boton = document.getElementById('btnEnviarTelegramCoordinador');
+                    boton.disabled = true;
+                    Swal.fire({ title: 'Enviando reporte...', allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+
+                    try {
+                        const response = await fetch(telegramEnviarUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            },
+                            body: JSON.stringify({
+                                chat_id: document.getElementById('telegramCoordinadorChatId').value.trim(),
+                                coordinador: coordinadorTelegramSeleccionado.coordinador,
+                                fecha: @json($fecha),
+                                empresa: @json($empresa),
+                            }),
+                        });
+                        const data = await response.json();
+                        if (! response.ok) {
+                            throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || 'No se pudo enviar el reporte.');
+                        }
+
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalTelegramCoordinador')).hide();
+                        Swal.fire({ icon: 'success', title: 'Reporte enviado', text: data.message });
+                    } catch (error) {
+                        Swal.fire({ icon: 'error', title: 'Error al enviar', text: error.message });
+                    } finally {
+                        boton.disabled = false;
+                    }
+                });
+
                 $('#tablaNominaDomingo').DataTable({
                     pageLength: 25,
-                    order: [[3, 'desc']],
+                    order: [[4, 'desc']],
                     dom: 'Bfrtip',
                     buttons: [
                         {
@@ -221,7 +510,7 @@
                             className: 'btn btn-success mb-3',
                             title: 'Nomina_Domingo_{{ $fecha }}',
                             exportOptions: {
-                                columns: [0, 1, 2, 3, 4, 5],
+                                columns: [0, 1, 2, 3, 4, 5, 6],
                                 modifier: { search: 'applied' },
                             },
                         },
