@@ -3,6 +3,7 @@
 namespace App\Services\RecursosHumanos;
 
 use App\Models\Agencia;
+use App\Models\CoordinadorOperador;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -65,7 +66,7 @@ class NominaDomingoService
                 'terminal' => $terminal, 'cedula' => $this->cedulaParaMostrar($cedula),
                 'empleado' => $empleados->get($cedula) ?: ($ponche['empleado'] ?? 'No identificado'),
                 'empresa' => trim((string) ($agencia?->empresa ?? '')) ?: 'Sin empresa',
-                'coordinador' => trim((string) ($agencia?->coordinador ?? '')) ?: 'Sin coordinador',
+                'coordinador' => trim((string) ($agencia?->coordinador_nombre ?? '')) ?: 'Sin coordinador',
                 'entrada' => $entrada?->toDateTimeString(), 'salida_ponche' => $salidaPonche?->toDateTimeString(),
                 'primera_transaccion' => $primeraTransaccion?->toDateTimeString(), 'ultima_transaccion' => $ultimaTransaccion?->toDateTimeString(),
                 'salida_efectiva' => $salidaEfectiva?->toDateTimeString(),
@@ -230,7 +231,26 @@ class NominaDomingoService
             return collect();
         }
 
-        return Agencia::query()->whereNotNull('terminal')->get(['terminal', 'empresa', 'coordinador'])
+        $agencias = Agencia::query()->whereNotNull('terminal')->get(['id', 'terminal', 'empresa']);
+
+        if (Schema::hasTable('coordinador_operador') && Schema::hasTable('coordinador_operador_agencia')) {
+            $coordinadores = CoordinadorOperador::query()
+                ->where('puesto', 'coordinador')
+                ->with('agencias:id')
+                ->get(['id', 'nombre', 'apellido'])
+                ->flatMap(fn (CoordinadorOperador $coordinador): Collection => $coordinador->agencias->map(
+                    fn (Agencia $agencia): array => [
+                        'agencia_id' => $agencia->id,
+                        'nombre' => trim($coordinador->nombre.' '.$coordinador->apellido),
+                    ]
+                ))->keyBy('agencia_id');
+
+            $agencias->each(function (Agencia $agencia) use ($coordinadores): void {
+                $agencia->setAttribute('coordinador_nombre', $coordinadores->get($agencia->id)['nombre'] ?? null);
+            });
+        }
+
+        return $agencias
             ->keyBy(fn (Agencia $agencia): string => $this->normalizar($agencia->terminal));
     }
 

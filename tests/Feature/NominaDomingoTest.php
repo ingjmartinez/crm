@@ -73,11 +73,24 @@ class NominaDomingoTest extends TestCase
             $table->string('coordinador')->nullable();
             $table->timestamps();
         });
+        Schema::create('coordinador_operador', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nombre');
+            $table->string('apellido');
+            $table->string('puesto');
+            $table->timestamps();
+        });
+        Schema::create('coordinador_operador_agencia', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('coordinador_operador_id');
+            $table->foreignId('agencia_id');
+            $table->timestamps();
+        });
     }
 
     protected function tearDown(): void
     {
-        foreach (['agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_configuraciones'] as $tabla) {
+        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_configuraciones'] as $tabla) {
             Schema::dropIfExists($tabla);
         }
         parent::tearDown();
@@ -225,8 +238,16 @@ class NominaDomingoTest extends TestCase
     public function test_report_shows_coordinator_and_filters_by_company(): void
     {
         DB::table('agencias')->insert([
-            ['terminal' => '5', 'empresa' => 'Empresa Norte', 'coordinador' => 'Coordinadora Uno'],
-            ['terminal' => '6', 'empresa' => 'Empresa Sur', 'coordinador' => 'Coordinador Dos'],
+            ['id' => 1, 'terminal' => '5', 'empresa' => 'Empresa Norte', 'coordinador' => 'Nombre anterior'],
+            ['id' => 2, 'terminal' => '6', 'empresa' => 'Empresa Sur', 'coordinador' => 'Nombre anterior'],
+        ]);
+        DB::table('coordinador_operador')->insert([
+            ['id' => 1, 'nombre' => 'Coordinadora', 'apellido' => 'Uno', 'puesto' => 'coordinador'],
+            ['id' => 2, 'nombre' => 'Coordinador', 'apellido' => 'Dos', 'puesto' => 'coordinador'],
+        ]);
+        DB::table('coordinador_operador_agencia')->insert([
+            ['coordinador_operador_id' => 1, 'agencia_id' => 1],
+            ['coordinador_operador_id' => 2, 'agencia_id' => 2],
         ]);
         DB::table('asistencias_bet')->insert([
             ['fecha' => '2026-09-13', 'agencia_id' => '5', 'cedula' => '00100000001', 'usuario' => 'Empleado Norte', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 16:00:00'],
@@ -246,8 +267,13 @@ class NominaDomingoTest extends TestCase
     public function test_coordinator_modal_summarizes_each_agency_once(): void
     {
         DB::table('agencias')->insert([
-            ['terminal' => '5', 'empresa' => 'Empresa Norte', 'coordinador' => 'Coordinadora Uno'],
-            ['terminal' => '6', 'empresa' => 'Empresa Norte', 'coordinador' => 'Coordinadora Uno'],
+            ['id' => 1, 'terminal' => '5', 'empresa' => 'Empresa Norte', 'coordinador' => 'Nombre anterior'],
+            ['id' => 2, 'terminal' => '6', 'empresa' => 'Empresa Norte', 'coordinador' => 'Nombre anterior'],
+        ]);
+        DB::table('coordinador_operador')->insert(['id' => 1, 'nombre' => 'Coordinadora', 'apellido' => 'Uno', 'puesto' => 'coordinador']);
+        DB::table('coordinador_operador_agencia')->insert([
+            ['coordinador_operador_id' => 1, 'agencia_id' => 1],
+            ['coordinador_operador_id' => 1, 'agencia_id' => 2],
         ]);
         DB::table('asistencias_bet')->insert([
             ['fecha' => '2026-09-13', 'agencia_id' => '5', 'cedula' => '00100000001', 'usuario' => 'Cumple Uno', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 16:00:00'],
@@ -276,13 +302,30 @@ class NominaDomingoTest extends TestCase
             });
     }
 
+    public function test_report_ignores_operator_assignments_and_legacy_coordinator_name(): void
+    {
+        DB::table('agencias')->insert(['id' => 1, 'terminal' => '5', 'empresa' => 'Empresa Norte', 'coordinador' => 'Coordinador Antiguo']);
+        DB::table('coordinador_operador')->insert(['id' => 1, 'nombre' => 'Operador', 'apellido' => 'Uno', 'puesto' => 'operador']);
+        DB::table('coordinador_operador_agencia')->insert(['coordinador_operador_id' => 1, 'agencia_id' => 1]);
+        DB::table('asistencias_bet')->insert([
+            'fecha' => '2026-09-13', 'agencia_id' => '5', 'cedula' => '00100000001', 'usuario' => 'Empleado Norte',
+            'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 16:00:00',
+        ]);
+
+        $fila = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'))->first();
+
+        $this->assertSame('Sin coordinador', $fila['coordinador']);
+    }
+
     public function test_coordinator_report_can_be_sent_by_telegram(): void
     {
         config()->set('services.telegram.bot_token', 'test-token');
         Http::fake([
             'https://api.telegram.org/bottest-token/sendDocument' => Http::response(['ok' => true], 200),
         ]);
-        DB::table('agencias')->insert(['terminal' => '5', 'empresa' => 'Empresa Norte', 'coordinador' => 'Coordinadora Uno']);
+        DB::table('agencias')->insert(['id' => 1, 'terminal' => '5', 'empresa' => 'Empresa Norte', 'coordinador' => 'Nombre anterior']);
+        DB::table('coordinador_operador')->insert(['id' => 1, 'nombre' => 'Coordinadora', 'apellido' => 'Uno', 'puesto' => 'coordinador']);
+        DB::table('coordinador_operador_agencia')->insert(['coordinador_operador_id' => 1, 'agencia_id' => 1]);
         DB::table('asistencias_bet')->insert([
             ['fecha' => '2026-09-13', 'agencia_id' => '5', 'cedula' => '00100000001', 'usuario' => 'Empleado Cumple', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 16:00:00'],
             ['fecha' => '2026-09-13', 'agencia_id' => '5', 'cedula' => '00100000002', 'usuario' => 'Empleado No Cumple', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 12:00:00'],
