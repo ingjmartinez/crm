@@ -155,7 +155,13 @@
                             <div class="border rounded p-3 mb-3">
                                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                                     <strong>{{ $resumenEmpresa['empresa'] }}</strong>
-                                    <span class="text-muted">{{ number_format($resumenEmpresa['total']) }} colaboradoras evaluadas</span>
+                                    @if ($resumenEmpresa['empresa'] === 'Sin empresa')
+                                        <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modalNominaSinEmpresa">
+                                            <i class="ri-eye-line me-1"></i>{{ number_format($resumenEmpresa['total']) }} colaboradoras evaluadas
+                                        </button>
+                                    @else
+                                        <span class="text-muted">{{ number_format($resumenEmpresa['total']) }} colaboradoras evaluadas</span>
+                                    @endif
                                 </div>
                                 <div class="progress mb-3" style="height: 18px" role="progressbar" aria-label="Cumplimiento de {{ $resumenEmpresa['empresa'] }}" aria-valuenow="{{ $resumenEmpresa['porcentaje_cumplimiento'] }}" aria-valuemin="0" aria-valuemax="100">
                                     <div class="progress-bar bg-success" style="width: {{ $resumenEmpresa['porcentaje_cumplimiento'] }}%">{{ number_format($resumenEmpresa['porcentaje_cumplimiento'], 1) }}%</div>
@@ -236,6 +242,41 @@
                     </div>
                 </div>
                 @endif
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalNominaSinEmpresa" tabindex="-1" aria-labelledby="modalNominaSinEmpresaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="modalNominaSinEmpresaLabel">Terminales y colaboradoras sin empresa</h5>
+                        <p class="text-muted mb-0">Estas terminales no tienen una empresa asociada en la maestra de agencias.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped align-middle w-100" id="tablaNominaSinEmpresa">
+                            <thead><tr><th>Terminal</th><th>Cédula</th><th>Usuario de venta</th><th>Colaboradora</th><th>Estado</th></tr></thead>
+                            <tbody>
+                                @forelse ($filasSinEmpresa as $filaSinEmpresa)
+                                    <tr>
+                                        <td>{{ $filaSinEmpresa['terminal'] }}</td>
+                                        <td>{{ $filaSinEmpresa['cedula'] }}</td>
+                                        <td>{{ $filaSinEmpresa['usuario_venta'] ?: 'Sin usuario de venta' }}</td>
+                                        <td>{{ $filaSinEmpresa['empleado'] }}</td>
+                                        <td><span class="badge {{ $filaSinEmpresa['estatus'] === 'Cumple' ? 'bg-success' : ($filaSinEmpresa['estatus'] === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger') }}">{{ $filaSinEmpresa['estatus'] }}</span></td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="5" class="text-center text-muted">No hay registros sin empresa.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>
             </div>
         </div>
     </div>
@@ -703,6 +744,17 @@
                     });
                     document.getElementById('modalSinPrimerLogin')?.addEventListener('shown.bs.modal', function () {
                         tablaSinPrimerLogin.columns.adjust();
+                    });
+                }
+
+                if (document.getElementById('tablaNominaSinEmpresa') && @json($filasSinEmpresa->isNotEmpty())) {
+                    const tablaNominaSinEmpresa = $('#tablaNominaSinEmpresa').DataTable({
+                        pageLength: 25,
+                        order: [[0, 'asc']],
+                        language: { url: '{{ asset('assets/json/es-ES.json') }}' },
+                    });
+                    document.getElementById('modalNominaSinEmpresa')?.addEventListener('shown.bs.modal', function () {
+                        tablaNominaSinEmpresa.columns.adjust();
                     });
                 }
             }

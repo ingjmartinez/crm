@@ -189,6 +189,8 @@ class NominaDomingoTest extends TestCase
         $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13', 'consultar' => 1]))
             ->assertOk()
             ->assertSee('8 h 35 min')
+            ->assertSee('Terminales y colaboradoras sin empresa')
+            ->assertSee('data-bs-target="#modalNominaSinEmpresa"', false)
             ->assertSee('Última venta + 5 minutos: 04:35 PM');
     }
 
