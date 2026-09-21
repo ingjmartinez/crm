@@ -145,6 +145,33 @@
                     <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Total a pagar</span><h4>RD$ {{ number_format($filas->sum('monto_pagar'), 2) }}</h4></div></div></div>
                 </div>
 
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-1">Cumplimiento por empresa</h5>
+                        <p class="text-muted mb-0">Los registros en revisión se incluyen dentro del porcentaje de incumplimiento.</p>
+                    </div>
+                    <div class="card-body">
+                        @forelse ($resumenCumplimientoEmpresas as $resumenEmpresa)
+                            <div class="border rounded p-3 mb-3">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                    <strong>{{ $resumenEmpresa['empresa'] }}</strong>
+                                    <span class="text-muted">{{ number_format($resumenEmpresa['total']) }} colaboradoras evaluadas</span>
+                                </div>
+                                <div class="progress mb-3" style="height: 18px" role="progressbar" aria-label="Cumplimiento de {{ $resumenEmpresa['empresa'] }}" aria-valuenow="{{ $resumenEmpresa['porcentaje_cumplimiento'] }}" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-bar bg-success" style="width: {{ $resumenEmpresa['porcentaje_cumplimiento'] }}%">{{ number_format($resumenEmpresa['porcentaje_cumplimiento'], 1) }}%</div>
+                                    <div class="progress-bar bg-danger" style="width: {{ $resumenEmpresa['porcentaje_incumplimiento'] }}%">{{ number_format($resumenEmpresa['porcentaje_incumplimiento'], 1) }}%</div>
+                                </div>
+                                <div class="row text-center">
+                                    <div class="col-6"><span class="text-success d-block">Cumplimiento</span><strong>{{ number_format($resumenEmpresa['porcentaje_cumplimiento'], 1) }}%</strong> <small class="text-muted">({{ $resumenEmpresa['cumplen'] }})</small></div>
+                                    <div class="col-6"><span class="text-danger d-block">Incumplimiento</span><strong>{{ number_format($resumenEmpresa['porcentaje_incumplimiento'], 1) }}%</strong> <small class="text-muted">({{ $resumenEmpresa['incumplen'] }})</small></div>
+                                </div>
+                            </div>
+                        @empty
+                            <p class="text-muted mb-0">No hay datos para calcular el cumplimiento por empresa.</p>
+                        @endforelse
+                    </div>
+                </div>
+
                 @if ($filas->isNotEmpty() && $totalConEntrada === 0)
                     <div class="alert alert-warning">
                         <strong>No se encontraron ponches para el {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}.</strong>

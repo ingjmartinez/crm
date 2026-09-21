@@ -199,6 +199,28 @@ class NominaDomingoService
         })->sortBy('coordinador')->values();
     }
 
+    /**
+     * @param  Collection<int, array<string, mixed>>  $filas
+     * @return Collection<int, array{empresa: string, total: int, cumplen: int, incumplen: int, porcentaje_cumplimiento: float, porcentaje_incumplimiento: float}>
+     */
+    public function resumenCumplimientoPorEmpresa(Collection $filas): Collection
+    {
+        return $filas->groupBy('empresa')->map(function (Collection $filasEmpresa, string $empresa): array {
+            $total = $filasEmpresa->count();
+            $cumplen = $filasEmpresa->where('estatus', 'Cumple')->count();
+            $incumplen = $total - $cumplen;
+
+            return [
+                'empresa' => $empresa,
+                'total' => $total,
+                'cumplen' => $cumplen,
+                'incumplen' => $incumplen,
+                'porcentaje_cumplimiento' => $total > 0 ? round(($cumplen / $total) * 100, 1) : 0.0,
+                'porcentaje_incumplimiento' => $total > 0 ? round(($incumplen / $total) * 100, 1) : 0.0,
+            ];
+        })->sortBy('empresa')->values();
+    }
+
     /** @return Collection<string, array<string, float|int|string>> */
     private function ventas(Carbon $fecha): Collection
     {

@@ -223,6 +223,28 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(0.0, $filas['13']['monto_pagar']);
     }
 
+    public function test_calculates_compliance_and_noncompliance_percentages_by_company(): void
+    {
+        $resumen = app(NominaDomingoService::class)->resumenCumplimientoPorEmpresa(collect([
+            ['empresa' => 'Empresa A', 'estatus' => 'Cumple'],
+            ['empresa' => 'Empresa A', 'estatus' => 'Cumple'],
+            ['empresa' => 'Empresa A', 'estatus' => 'No cumple'],
+            ['empresa' => 'Empresa A', 'estatus' => 'Revisar'],
+            ['empresa' => 'Empresa B', 'estatus' => 'Cumple'],
+        ]));
+
+        $this->assertSame([
+            'empresa' => 'Empresa A',
+            'total' => 4,
+            'cumplen' => 2,
+            'incumplen' => 2,
+            'porcentaje_cumplimiento' => 50.0,
+            'porcentaje_incumplimiento' => 50.0,
+        ], $resumen->firstWhere('empresa', 'Empresa A'));
+        $this->assertSame(100.0, $resumen->firstWhere('empresa', 'Empresa B')['porcentaje_cumplimiento']);
+        $this->assertSame(0.0, $resumen->firstWhere('empresa', 'Empresa B')['porcentaje_incumplimiento']);
+    }
+
     public function test_sales_user_matches_punch_user_and_uses_the_punch_identity(): void
     {
         DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);

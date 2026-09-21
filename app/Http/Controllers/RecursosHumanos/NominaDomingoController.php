@@ -47,6 +47,7 @@ class NominaDomingoController extends Controller
         $consultar = $request->boolean('consultar');
         $filas = $consultar ? $this->service->generar($fecha) : collect();
         $conciliacionVentas = $consultar ? $this->service->conciliacionVentas($fecha) : null;
+        $resumenCumplimientoEmpresas = $this->service->resumenCumplimientoPorEmpresa($filas);
         $empresa = trim((string) ($validated['empresa'] ?? ''));
 
         if ($empresa !== '') {
@@ -78,6 +79,7 @@ class NominaDomingoController extends Controller
             'conciliacionVentas' => $conciliacionVentas,
             'consultar' => $consultar,
             'resumenCoordinadores' => $resumenCoordinadores,
+            'resumenCumplimientoEmpresas' => $resumenCumplimientoEmpresas,
             'totalConEntrada' => $totalConEntrada,
             'totalSinEntrada' => $totalSinEntrada,
             'totalIncidencias' => $totalIncidencias,
