@@ -40,6 +40,13 @@ class NominaDomingoTest extends TestCase
             $table->string('estatus')->nullable();
             $table->timestamps();
         });
+        Schema::create('nomina_domingo_terminales_excluidas', function (Blueprint $table): void {
+            $table->id();
+            $table->string('terminal')->unique();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->timestamps();
+        });
         Schema::create('gestion_agencias_ventas', function (Blueprint $table): void {
             $table->id();
             $table->string('terminal')->nullable();
@@ -104,10 +111,58 @@ class NominaDomingoTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones'] as $tabla) {
+        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_excluidas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones'] as $tabla) {
             Schema::dropIfExists($tabla);
         }
         parent::tearDown();
+    }
+
+    public function test_excluded_terminal_is_omitted_from_sunday_payroll(): void
+    {
+        DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '0012', 'cedula' => '00100000001', 'usuario' => 'Excluido', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 17:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '0013', 'cedula' => '00100000002', 'usuario' => 'Incluido', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 17:00:00'],
+        ]);
+        DB::table('nomina_domingo_terminales_excluidas')->insert(['terminal' => '0012']);
+
+        $filas = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'));
+
+        $this->assertCount(1, $filas);
+        $this->assertSame('13', $filas->first()['terminal']);
+        $this->assertSame(1500.0, $filas->sum('monto_pagar'));
+    }
+
+    public function test_terminal_exclusions_can_be_recognized_saved_listed_and_removed(): void
+    {
+        DB::table('agencias')->insert([
+            ['terminal' => '12', 'empresa' => 'A'],
+            ['terminal' => '13', 'empresa' => 'A'],
+        ]);
+
+        $this->postJson(route('recursos-humanos.nomina-domingo.terminales-excluidas.reconocer'), [
+            'terminales_manual' => "12\n999",
+        ])->assertOk()->assertJson([
+            'terminales_encontradas' => ['12'],
+            'terminales_no_encontradas' => ['999'],
+        ]);
+
+        $this->postJson(route('recursos-humanos.nomina-domingo.terminales-excluidas.store'), [
+            'terminales' => ['12', '13'],
+        ])->assertOk()->assertJson(['count' => 2]);
+        $this->getJson(route('recursos-humanos.nomina-domingo.terminales-excluidas.index'))
+            ->assertOk()->assertJson(['terminales' => ['12', '13'], 'count' => 2]);
+
+        $this->postJson(route('recursos-humanos.nomina-domingo.terminales-excluidas.store'), [
+            'terminales' => ['13'],
+        ])->assertOk()->assertJson(['terminales' => ['13'], 'count' => 1]);
+        $this->assertDatabaseMissing('nomina_domingo_terminales_excluidas', ['terminal' => '12']);
+    }
+
+    public function test_terminal_recognition_requires_a_file_or_manual_values(): void
+    {
+        $this->postJson(route('recursos-humanos.nomina-domingo.terminales-excluidas.reconocer'), [])
+            ->assertUnprocessable()->assertJsonValidationErrors(['file', 'terminales_manual']);
     }
 
     public function test_sale_after_last_login_extends_only_the_exit_by_five_minutes(): void

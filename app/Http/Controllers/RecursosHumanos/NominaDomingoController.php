@@ -7,6 +7,9 @@ use App\Http\Requests\RecursosHumanos\ActualizarNominaDomingoConfiguracionReques
 use App\Http\Requests\RecursosHumanos\CargarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\ConsultarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\EnviarNominaDomingoTelegramRequest;
+use App\Http\Requests\RecursosHumanos\GuardarNominaDomingoTerminalesExcluidasRequest;
+use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesExcluidasRequest;
+use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Services\RecursosHumanos\NominaDomingoService;
 use App\Services\RecursosHumanos\NominaDomingoVentasImportService;
 use App\Services\TelegramService;
@@ -14,8 +17,13 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class NominaDomingoController extends Controller
 {
@@ -144,6 +152,107 @@ class NominaDomingoController extends Controller
             'documentos' => $documentos->count(),
             'message' => $enviado ? 'Reporte enviado correctamente.' : 'No se pudo completar el envío por Telegram.',
         ], $enviado ? 200 : 502);
+    }
+
+    public function reconocerTerminalesExcluidas(ReconocerNominaDomingoTerminalesExcluidasRequest $request): JsonResponse
+    {
+        $terminales = collect();
+        $totalFilas = 0;
+
+        if ($request->hasFile('file')) {
+            $import = new AgenciasActualizacionMasivaImport;
+            Excel::import($import, $request->file('file'));
+            $rows = $import->rows ?? collect();
+            $totalFilas = $rows->count();
+            $terminales = $terminales->merge($rows->map(
+                fn (mixed $row): mixed => collect($row)->first(fn (mixed $value, mixed $key): bool => strtolower(trim((string) $key)) === 'terminal')
+            ));
+        }
+
+        $terminales = $terminales->merge($this->extraerTerminales((string) $request->input('terminales_manual', '')))
+            ->map(fn (mixed $terminal): string => trim((string) $terminal))->filter()->unique()->values();
+
+        if ($terminales->isEmpty()) {
+            throw ValidationException::withMessages(['terminales_manual' => 'No se encontraron terminales. La plantilla debe tener una columna llamada Terminal.']);
+        }
+
+        $encontradas = DB::table('agencias')->whereIn(DB::raw('TRIM(CAST(terminal AS CHAR))'), $terminales->all())
+            ->selectRaw('TRIM(CAST(terminal AS CHAR)) AS terminal')->pluck('terminal')
+            ->map(fn (mixed $terminal): string => trim((string) $terminal))->filter()->unique()->values();
+        $noEncontradas = $terminales->diff($encontradas)->values();
+
+        return response()->json([
+            'ok' => true,
+            'total_filas' => $totalFilas,
+            'terminales_leidas' => $terminales->count(),
+            'encontradas' => $encontradas->count(),
+            'no_encontradas' => $noEncontradas->count(),
+            'terminales_encontradas' => $encontradas->all(),
+            'terminales_no_encontradas' => $noEncontradas->all(),
+        ]);
+    }
+
+    public function listarTerminalesExcluidas(): JsonResponse
+    {
+        $terminales = $this->terminalesExcluidasGuardadas();
+
+        return response()->json(['ok' => true, 'terminales' => $terminales->all(), 'count' => $terminales->count()]);
+    }
+
+    public function guardarTerminalesExcluidas(GuardarNominaDomingoTerminalesExcluidasRequest $request): JsonResponse
+    {
+        if (! Schema::hasTable('nomina_domingo_terminales_excluidas')) {
+            return response()->json(['ok' => false, 'message' => 'Ejecuta las migraciones pendientes para guardar las terminales excluidas.'], 500);
+        }
+
+        $terminales = collect($request->validated('terminales'))->map(fn (mixed $terminal): string => trim((string) $terminal))
+            ->filter()->unique()->values();
+        $userId = auth()->id();
+
+        DB::transaction(function () use ($terminales, $userId): void {
+            DB::table('nomina_domingo_terminales_excluidas')
+                ->when($terminales->isNotEmpty(), fn ($query) => $query->whereNotIn('terminal', $terminales->all()))->delete();
+            foreach ($terminales as $terminal) {
+                DB::table('nomina_domingo_terminales_excluidas')->updateOrInsert(
+                    ['terminal' => $terminal],
+                    ['created_by' => $userId, 'updated_by' => $userId, 'created_at' => now(), 'updated_at' => now()]
+                );
+            }
+        });
+
+        $guardadas = $this->terminalesExcluidasGuardadas();
+
+        return response()->json(['ok' => true, 'message' => 'Terminales excluidas guardadas correctamente.', 'terminales' => $guardadas->all(), 'count' => $guardadas->count()]);
+    }
+
+    public function plantillaTerminalesExcluidas(): BinaryFileResponse
+    {
+        return Excel::download(new class implements \Maatwebsite\Excel\Concerns\FromArray, \Maatwebsite\Excel\Concerns\ShouldAutoSize, \Maatwebsite\Excel\Concerns\WithStyles
+        {
+            public function array(): array
+            {
+                return [['Terminal']];
+            }
+
+            public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): array
+            {
+                return [1 => ['font' => ['bold' => true]]];
+            }
+        }, 'plantilla_terminales_excluidas_nomina_domingo.xlsx');
+    }
+
+    /** @return Collection<int, string> */
+    private function extraerTerminales(string $texto): Collection
+    {
+        return collect(preg_split('/[\s,;]+/', $texto) ?: []);
+    }
+
+    /** @return Collection<int, string> */
+    private function terminalesExcluidasGuardadas(): Collection
+    {
+        return Schema::hasTable('nomina_domingo_terminales_excluidas')
+            ? DB::table('nomina_domingo_terminales_excluidas')->orderBy('terminal')->pluck('terminal')
+            : collect();
     }
 
     /**

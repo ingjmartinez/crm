@@ -57,6 +57,9 @@
                             <button class="btn btn-info" type="button" data-bs-toggle="modal" data-bs-target="#modalConfiguracion">
                                 <i class="ri-settings-3-line me-1"></i> Configurar nómina
                             </button>
+                            <button class="btn btn-warning" type="button" id="btnAbrirTerminalesExcluidas" data-bs-toggle="modal" data-bs-target="#modalTerminalesExcluidas">
+                                <i class="ri-forbid-line me-1"></i> Terminales excluidas <span class="badge bg-dark ms-1" id="cantidadTerminalesExcluidas">0</span>
+                            </button>
                         </div>
                     </div>
                     <div class="card-body">
@@ -208,6 +211,23 @@
                 @endif
             </div>
         </div>
+    </div>
+
+    <div class="modal fade" id="modalTerminalesExcluidas" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+            <div class="modal-header"><div><h5 class="modal-title">Terminales excluidas</h5><small class="text-muted">Estas terminales no se incluirán en el cálculo, totales ni reportes de Nómina Domingo.</small></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="archivoTerminalesExcluidas">Archivo Excel o CSV</label><input class="form-control" id="archivoTerminalesExcluidas" type="file" accept=".xlsx,.xls,.csv"><a class="small d-inline-block mt-2" href="{{ route('recursos-humanos.nomina-domingo.terminales-excluidas.plantilla') }}"><i class="ri-download-line"></i> Descargar plantilla</a></div>
+                    <div class="col-md-6"><label class="form-label" for="textoTerminalesExcluidas">Agregar manualmente</label><textarea class="form-control" id="textoTerminalesExcluidas" rows="4" placeholder="Una terminal por línea o separadas por coma"></textarea></div>
+                </div>
+                <div class="d-flex gap-2 mt-3"><button class="btn btn-primary" type="button" id="btnReconocerTerminales"><i class="ri-search-line me-1"></i> Reconocer terminales</button><button class="btn btn-outline-danger" type="button" id="btnLimpiarTerminales"><i class="ri-delete-bin-line me-1"></i> Quitar todas</button></div>
+                <div class="alert alert-info mt-3 mb-2">Marca las terminales que deseas excluir. Puedes desmarcar cualquiera para volver a incluirla.</div>
+                <div id="resultadoTerminalesExcluidas" class="border rounded p-3"><span class="text-muted">Cargando terminales guardadas...</span></div>
+                <div id="terminalesNoEncontradas" class="mt-3"></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-warning" id="btnGuardarTerminalesExcluidas">Aplicar exclusiones</button></div>
+        </div></div>
     </div>
 
     <div class="modal fade" id="modalConfiguracion" tabindex="-1" aria-hidden="true">
@@ -392,6 +412,58 @@
             const formCargar = document.getElementById('formCargarNominaDomingo');
             const formGenerar = document.getElementById('formGenerarNominaDomingo');
             const formFiltrar = document.getElementById('formFiltrarNominaDomingo');
+            const urlsTerminales = {
+                listar: @json(route('recursos-humanos.nomina-domingo.terminales-excluidas.index')),
+                reconocer: @json(route('recursos-humanos.nomina-domingo.terminales-excluidas.reconocer')),
+                guardar: @json(route('recursos-humanos.nomina-domingo.terminales-excluidas.store')),
+            };
+            let terminalesSeleccionadas = new Set();
+            const contenedorTerminales = document.getElementById('resultadoTerminalesExcluidas');
+            const tokenCsrf = document.querySelector('meta[name="csrf-token"]').content;
+            const escaparTerminal = (valor) => String(valor ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+            const renderTerminales = () => {
+                const terminales = [...terminalesSeleccionadas].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                document.getElementById('cantidadTerminalesExcluidas').textContent = terminales.length;
+                contenedorTerminales.innerHTML = terminales.length
+                    ? `<div class="row g-2">${terminales.map((terminal) => `<div class="col-sm-6 col-md-4"><label class="form-check border rounded p-2 w-100"><input class="form-check-input ms-0 me-2 terminal-excluida-check" type="checkbox" value="${escaparTerminal(terminal)}" checked><span>${escaparTerminal(terminal)}</span></label></div>`).join('')}</div>`
+                    : '<span class="text-muted">No hay terminales excluidas.</span>';
+            };
+            const cargarTerminales = async () => {
+                const response = await fetch(urlsTerminales.listar, { headers: { Accept: 'application/json' } });
+                const data = await response.json();
+                terminalesSeleccionadas = new Set(data.terminales || []);
+                renderTerminales();
+            };
+            const guardarTerminales = async () => {
+                const response = await fetch(urlsTerminales.guardar, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': tokenCsrf }, body: JSON.stringify({ terminales: [...terminalesSeleccionadas] }) });
+                const data = await response.json();
+                if (! response.ok) throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || 'No se pudieron guardar las terminales.');
+                return data;
+            };
+
+            cargarTerminales().catch(() => { contenedorTerminales.innerHTML = '<span class="text-danger">No se pudieron cargar las terminales.</span>'; });
+            contenedorTerminales?.addEventListener('change', (event) => { if (event.target.matches('.terminal-excluida-check') && ! event.target.checked) { terminalesSeleccionadas.delete(event.target.value); renderTerminales(); } });
+            document.getElementById('btnReconocerTerminales')?.addEventListener('click', async function () {
+                const formData = new FormData();
+                const archivo = document.getElementById('archivoTerminalesExcluidas').files[0];
+                if (archivo) formData.append('file', archivo);
+                formData.append('terminales_manual', document.getElementById('textoTerminalesExcluidas').value);
+                this.disabled = true;
+                try {
+                    const response = await fetch(urlsTerminales.reconocer, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': tokenCsrf }, body: formData });
+                    const data = await response.json();
+                    if (! response.ok) throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || 'No se pudieron reconocer las terminales.');
+                    (data.terminales_encontradas || []).forEach((terminal) => terminalesSeleccionadas.add(terminal));
+                    renderTerminales();
+                    document.getElementById('terminalesNoEncontradas').innerHTML = data.terminales_no_encontradas?.length ? `<div class="alert alert-warning mb-0"><strong>No encontradas:</strong> ${data.terminales_no_encontradas.map(escaparTerminal).join(', ')}</div>` : '<div class="alert alert-success mb-0">Todas las terminales fueron reconocidas.</div>';
+                } catch (error) { Swal.fire({ icon: 'error', title: 'No se pudo reconocer', text: error.message }); } finally { this.disabled = false; }
+            });
+            document.getElementById('btnLimpiarTerminales')?.addEventListener('click', () => { terminalesSeleccionadas.clear(); renderTerminales(); });
+            document.getElementById('btnGuardarTerminalesExcluidas')?.addEventListener('click', async function () {
+                this.disabled = true;
+                try { const data = await guardarTerminales(); await Swal.fire({ icon: 'success', title: 'Exclusiones actualizadas', text: data.message }); window.location.reload(); }
+                catch (error) { Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: error.message }); } finally { this.disabled = false; }
+            });
 
             formFiltrar?.addEventListener('submit', function () {
                 document.getElementById('btnFiltrarNominaDomingo').disabled = true;

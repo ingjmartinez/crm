@@ -371,6 +371,14 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('recursos-humanos.nomina-domingo.configuracion');
         Route::post('/recursos-humanos/nomina-domingo/enviar-telegram', [NominaDomingoController::class, 'enviarTelegram'])
             ->name('recursos-humanos.nomina-domingo.enviar-telegram');
+        Route::post('/recursos-humanos/nomina-domingo/terminales-excluidas/reconocer', [NominaDomingoController::class, 'reconocerTerminalesExcluidas'])
+            ->name('recursos-humanos.nomina-domingo.terminales-excluidas.reconocer');
+        Route::get('/recursos-humanos/nomina-domingo/terminales-excluidas', [NominaDomingoController::class, 'listarTerminalesExcluidas'])
+            ->name('recursos-humanos.nomina-domingo.terminales-excluidas.index');
+        Route::post('/recursos-humanos/nomina-domingo/terminales-excluidas', [NominaDomingoController::class, 'guardarTerminalesExcluidas'])
+            ->name('recursos-humanos.nomina-domingo.terminales-excluidas.store');
+        Route::get('/recursos-humanos/nomina-domingo/terminales-excluidas/plantilla', [NominaDomingoController::class, 'plantillaTerminalesExcluidas'])
+            ->name('recursos-humanos.nomina-domingo.terminales-excluidas.plantilla');
         Route::get('/empleados', [EmpleadoController::class, 'index']);
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
         Route::get('/empleados/exportar', [EmpleadoController::class, 'export'])->name('empleados.export');

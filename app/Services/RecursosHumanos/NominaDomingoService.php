@@ -67,7 +67,14 @@ class NominaDomingoService
             ]);
         }
 
-        $claves = $ventasAsociadas->keys()->merge($ponches->keys())->unique();
+        $terminalesExcluidas = $this->terminalesExcluidas();
+        $claves = $ventasAsociadas->keys()->merge($ponches->keys())->unique()
+            ->reject(function (string $clave) use ($terminalesExcluidas): bool {
+                $claveSinPrefijo = str_starts_with($clave, 'venta:') ? substr($clave, 6) : $clave;
+                [$terminal] = explode('|', $claveSinPrefijo, 2);
+
+                return $terminalesExcluidas->contains($terminal);
+            });
         $cedulas = $claves->map(fn (string $clave): string => explode('|', $clave, 2)[1])->all();
         $empleados = $this->empleados($cedulas);
         $agencias = $this->agencias();
@@ -336,6 +343,18 @@ class NominaDomingoService
         $normalizado = ltrim($digitos, '0');
 
         return $normalizado === '' ? '0' : $normalizado;
+    }
+
+    /** @return Collection<int, string> */
+    private function terminalesExcluidas(): Collection
+    {
+        if (! Schema::hasTable('nomina_domingo_terminales_excluidas')) {
+            return collect();
+        }
+
+        return DB::table('nomina_domingo_terminales_excluidas')->pluck('terminal')
+            ->map(fn (mixed $terminal): string => $this->normalizar($terminal))
+            ->filter()->unique()->values();
     }
 
     private function cedulaParaMostrar(string $cedula): string
