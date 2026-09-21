@@ -4,9 +4,11 @@ namespace App\Http\Controllers\RecursosHumanos;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RecursosHumanos\ActualizarNominaDomingoConfiguracionRequest;
+use App\Http\Requests\RecursosHumanos\CargarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\ConsultarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\EnviarNominaDomingoTelegramRequest;
 use App\Services\RecursosHumanos\NominaDomingoService;
+use App\Services\RecursosHumanos\NominaDomingoVentasImportService;
 use App\Services\TelegramService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -17,7 +19,10 @@ use Illuminate\View\View;
 
 class NominaDomingoController extends Controller
 {
-    public function __construct(private readonly NominaDomingoService $service) {}
+    public function __construct(
+        private readonly NominaDomingoService $service,
+        private readonly NominaDomingoVentasImportService $ventasImportService,
+    ) {}
 
     public function index(ConsultarNominaDomingoRequest $request): View
     {
@@ -44,25 +49,30 @@ class NominaDomingoController extends Controller
         $filasSinEntrada = $filas->whereNull('entrada')->values();
         $totalSinEntrada = $filasSinEntrada->count();
         $totalConEntrada = $filas->count() - $totalSinEntrada;
+        $totalIncidencias = $filas->where('estatus', 'Revisar')->count();
 
         if ($estatus === 'cumple') {
             $filas = $filas->where('estatus', 'Cumple')->values();
         } elseif ($estatus === 'no_cumple') {
             $filas = $filas->where('estatus', 'No cumple')->values();
+        } elseif ($estatus === 'revisar') {
+            $filas = $filas->where('estatus', 'Revisar')->values();
         }
 
         return view('recursos_humanos.nomina-domingo', [
             'fecha' => $fecha->toDateString(),
             'filas' => $filas,
             'configuracion' => $this->service->configuracion(),
-            'archivos' => session('gestion_agencias_archivos', []),
+            'archivos' => session('nomina_domingo_archivos', []),
             'estatus' => $estatus,
             'empresa' => $empresa,
             'empresas' => $this->service->empresas(),
             'conciliacionVentas' => $conciliacionVentas,
+            'consultar' => $consultar,
             'resumenCoordinadores' => $resumenCoordinadores,
             'totalConEntrada' => $totalConEntrada,
             'totalSinEntrada' => $totalSinEntrada,
+            'totalIncidencias' => $totalIncidencias,
             'filasSinEntrada' => $filasSinEntrada,
         ]);
     }
@@ -74,6 +84,25 @@ class NominaDomingoController extends Controller
         $this->service->guardarConfiguracion($datos);
 
         return back()->with('success', 'Configuración de Nómina Domingo actualizada.');
+    }
+
+    public function cargarVentas(CargarNominaDomingoRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+        $fecha = Carbon::createFromFormat('Y-m-d', $validated['fecha_nomina'])->startOfDay();
+
+        if (! $fecha->isSunday()) {
+            throw ValidationException::withMessages(['fecha_nomina' => 'La fecha seleccionada para la nómina debe ser domingo.']);
+        }
+
+        $this->ventasImportService->importar($validated['tradicional'], $validated['no_tradicional'], $fecha);
+
+        return redirect()->route('recursos-humanos.nomina-domingo.index', [
+            'fecha' => $fecha->toDateString(),
+        ])->with('nomina_domingo_archivos', [
+            'tradicional' => $validated['tradicional']->getClientOriginalName(),
+            'no_tradicional' => $validated['no_tradicional']->getClientOriginalName(),
+        ])->with('success', 'Ventas guardadas para el domingo '.$fecha->format('d/m/Y').'. Pulsa Generar reporte cuando quieras consultarlo.');
     }
 
     public function enviarTelegram(EnviarNominaDomingoTelegramRequest $request, TelegramService $telegram): JsonResponse
@@ -123,7 +152,7 @@ class NominaDomingoController extends Controller
      */
     private function documentoTelegram(array $coordinador, Carbon $fecha, bool $cumplieron): array
     {
-        $estado = $cumplieron ? 'Cumplieron' : 'No cumplieron';
+        $estado = $cumplieron ? 'Cumplieron' : 'No cumplieron o requieren revisión';
         $clave = $cumplieron ? 'detalle_empleados_cumplieron' : 'detalle_empleados_no_cumplieron';
         $nombreCoordinador = preg_replace('/[^A-Za-z0-9_-]+/', '_', (string) $coordinador['coordinador']) ?: 'coordinador';
         $contenido = Pdf::loadView('recursos_humanos.nomina-domingo-telegram-pdf', [

@@ -171,6 +171,60 @@ class EmpleadoController extends Controller
         }));
     }
 
+    public function ventasBetSinMaestra()
+    {
+        return view('empleado.ventas-bet-sin-maestra');
+    }
+
+    public function listVentasBetSinMaestra(Request $request)
+    {
+        $cacheKey = 'empleados.ventas_bet_sin_empleado';
+
+        if ($request->boolean('refresh')) {
+            Cache::forget($cacheKey);
+        }
+
+        return response()->json(Cache::remember($cacheKey, now()->addMinutes(5), function (): array {
+            $fechaVentas = DB::table('vt_usuarios_bet')->max('fecha');
+            $cedulasEmpleados = Empleado::query()
+                ->whereNotNull('cedula')
+                ->pluck('cedula')
+                ->map(fn ($cedula): string => $this->normalizarCedula($cedula))
+                ->filter()
+                ->flip();
+
+            $ventasPorCedula = DB::table('vt_usuarios_bet')
+                ->when($fechaVentas, fn ($query) => $query->where('fecha', $fechaVentas))
+                ->when(! $fechaVentas, fn ($query) => $query->whereRaw('1 = 0'))
+                ->whereNotNull('cedula')
+                ->select('cedula')
+                ->groupBy('cedula')
+                ->get();
+
+            $faltantes = $ventasPorCedula
+                ->map(function (object $venta): array {
+                    return [
+                        'cedula' => $this->normalizarCedula($venta->cedula),
+                    ];
+                })
+                ->filter(fn (array $venta): bool => strlen($venta['cedula']) === 11
+                    && ! $cedulasEmpleados->has($venta['cedula']))
+                ->groupBy('cedula')
+                ->map(fn ($ventas, string $cedula): array => ['cedula' => $cedula])
+                ->sortBy('cedula')
+                ->values();
+
+            return [
+                'total' => $faltantes->count(),
+                'data' => $faltantes,
+                'meta' => [
+                    'fecha_ventas' => $fechaVentas,
+                    'cached_until' => now()->addMinutes(5)->toDateTimeString(),
+                ],
+            ];
+        }));
+    }
+
     private function buildDashboardEmpleados(string $empresa): array
     {
         $activeSql = "fechasalida IS NULL OR TRIM(CAST(fechasalida AS CHAR)) = ''";
@@ -268,9 +322,20 @@ class EmpleadoController extends Controller
         ini_set('max_execution_time', 600);
         ini_set('memory_limit', '512M');
         $empresa = trim((string) $request->query('empresa', ''));
+        $cedula = preg_replace('/\D+/', '', (string) $request->query('cedula', ''));
 
         if (! in_array($empresa, ['168', '169'], true)) {
             return response()->json(['error' => 'Empresa invalida. Debe ser 168 o 169.'], 422);
+        }
+
+        if ($request->filled('cedula') && strlen($cedula) !== 11) {
+            return response()->json(['error' => 'La cedula debe contener 11 digitos.'], 422);
+        }
+
+        $filtros = [['CompanyId', $empresa]];
+
+        if ($cedula !== '') {
+            $filtros[] = ['Cedula', $cedula];
         }
 
         try {
@@ -281,7 +346,7 @@ class EmpleadoController extends Controller
                 ->get('https://apisj.azurewebsites.net/ApiSJ/RRHH/Empleados/Listar', [
                     'strToken' => '87eb2d56-25f3-4d46-9cb0-73c07a550bd2',
                     'intIdEmpresa' => $empresa,
-                    'strFiltros' => json_encode([['CompanyId', $empresa]]),
+                    'strFiltros' => json_encode($filtros),
                 ]);
         } catch (\Throwable $e) {
             Log::error('Error consultando API de empleados', [
@@ -365,19 +430,29 @@ class EmpleadoController extends Controller
         $this->clearDashboardEmpleadosCache();
 
         return response()->json([
-            'message' => 'Datos sincronizados correctamente',
+            'message' => $cedula !== ''
+                ? 'Empleado sincronizado correctamente'
+                : 'Datos sincronizados correctamente',
             'total' => count($empleados),
             'procesados' => $procesados,
             'omitidos' => $omitidos,
             'coordinadores_vinculados' => $coordinadoresVinculados,
+            'cedula' => $cedula !== '' ? $cedula : null,
         ]);
     }
 
     private function clearDashboardEmpleadosCache(): void
     {
+        Cache::forget('empleados.ventas_bet_sin_empleado');
+
         foreach (['todas', '168', '169'] as $empresa) {
             Cache::forget('empleados.dashboard.'.$empresa);
         }
+    }
+
+    private function normalizarCedula(mixed $cedula): string
+    {
+        return preg_replace('/\D+/', '', (string) $cedula);
     }
 
     private function mapearEmpleadoApi(array $e, string $empresa): array

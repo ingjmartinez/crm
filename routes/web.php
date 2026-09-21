@@ -365,6 +365,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('recursos-humanos.agencias-cerradas-domingos.exportar');
         Route::get('/recursos-humanos/nomina-domingo', [NominaDomingoController::class, 'index'])
             ->name('recursos-humanos.nomina-domingo.index');
+        Route::post('/recursos-humanos/nomina-domingo/cargar-ventas', [NominaDomingoController::class, 'cargarVentas'])
+            ->name('recursos-humanos.nomina-domingo.cargar-ventas');
         Route::post('/recursos-humanos/nomina-domingo/configuracion', [NominaDomingoController::class, 'actualizarConfiguracion'])
             ->name('recursos-humanos.nomina-domingo.configuracion');
         Route::post('/recursos-humanos/nomina-domingo/enviar-telegram', [NominaDomingoController::class, 'enviarTelegram'])
@@ -373,6 +375,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
         Route::get('/empleados/exportar', [EmpleadoController::class, 'export'])->name('empleados.export');
         Route::get('/empleados/dashboard', [EmpleadoController::class, 'dashboard']);
+        Route::get('/empleados/ventas-bet-sin-maestra', [EmpleadoController::class, 'ventasBetSinMaestra'])
+            ->name('empleados.ventas-bet-sin-maestra');
+        Route::get('/empleados/ventas-bet-sin-maestra/list', [EmpleadoController::class, 'listVentasBetSinMaestra'])
+            ->name('empleados.ventas-bet-sin-maestra.list');
         Route::get('/empleados/show/{id}', [EmpleadoController::class, 'show']);
         Route::post('/empleados/store', [EmpleadoController::class, 'store']);
         Route::get('/empleados/destroy/{id}', [EmpleadoController::class, 'destroy']);

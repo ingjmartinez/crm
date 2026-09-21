@@ -36,42 +36,85 @@ class NominaDomingoService
         $configuracion = $this->configuracion();
         $ventas = $this->ventas($fecha);
         $ponches = $this->ponches($fecha);
-        $claves = $ventas->keys()->merge($ponches->keys())->unique();
+        $clavesPorUsuario = [];
+        foreach ($ponches as $clave => $ponche) {
+            [$terminal] = explode('|', $clave, 2);
+            foreach ($ponche['usuarios'] as $usuario) {
+                $claveUsuario = $terminal.'|'.$usuario;
+                if (array_key_exists($claveUsuario, $clavesPorUsuario) && $clavesPorUsuario[$claveUsuario] !== $clave) {
+                    $clavesPorUsuario[$claveUsuario] = null;
+                } else {
+                    $clavesPorUsuario[$claveUsuario] = $clave;
+                }
+            }
+        }
+
+        $ventasAsociadas = collect();
+        foreach ($ventas as $claveVenta => $venta) {
+            $clavePonche = array_key_exists($claveVenta, $clavesPorUsuario)
+                ? $clavesPorUsuario[$claveVenta]
+                : ($ponches->has($claveVenta) ? $claveVenta : null);
+            $claveResultado = $clavePonche ?? 'venta:'.$claveVenta;
+            $anterior = $ventasAsociadas->get($claveResultado);
+            $ventasAsociadas->put($claveResultado, $anterior === null ? $venta : [
+                'primera_transaccion' => min($anterior['primera_transaccion'], $venta['primera_transaccion']),
+                'ultima_transaccion' => max($anterior['ultima_transaccion'], $venta['ultima_transaccion']),
+                'usuario_venta' => $anterior['usuario_venta'].', '.$venta['usuario_venta'],
+                'tradicional_cantidad' => $anterior['tradicional_cantidad'] + $venta['tradicional_cantidad'],
+                'tradicional_monto' => $anterior['tradicional_monto'] + $venta['tradicional_monto'],
+                'no_tradicional_cantidad' => $anterior['no_tradicional_cantidad'] + $venta['no_tradicional_cantidad'],
+                'no_tradicional_monto' => $anterior['no_tradicional_monto'] + $venta['no_tradicional_monto'],
+            ]);
+        }
+
+        $claves = $ventasAsociadas->keys()->merge($ponches->keys())->unique();
         $cedulas = $claves->map(fn (string $clave): string => explode('|', $clave, 2)[1])->all();
         $empleados = $this->empleados($cedulas);
         $agencias = $this->agencias();
 
-        return $claves->map(function (string $clave) use ($ventas, $ponches, $empleados, $agencias, $configuracion): array {
-            [$terminal, $cedula] = explode('|', $clave, 2);
-            $venta = $ventas->get($clave);
-            $ponche = $ponches->get($clave);
+        return $claves->map(function (string $clave) use ($ventasAsociadas, $ponches, $empleados, $agencias, $configuracion): array {
+            $ventaSinPonche = str_starts_with($clave, 'venta:');
+            [$terminal, $cedula] = explode('|', $ventaSinPonche ? substr($clave, 6) : $clave, 2);
+            $venta = $ventasAsociadas->get($clave);
+            $ponche = $ventaSinPonche ? null : $ponches->get($clave);
             $entrada = $this->instante($ponche['entrada'] ?? null);
             $salidaPonche = $this->instante($ponche['salida'] ?? null);
             $ultimaTransaccion = $this->instante($venta['ultima_transaccion'] ?? null);
             $primeraTransaccion = $this->instante($venta['primera_transaccion'] ?? null);
-            $salidaSegunTransaccion = $salidaPonche === null && $ultimaTransaccion !== null
-                ? $ultimaTransaccion->copy()->addMinutes(5)
-                : $ultimaTransaccion;
-            $salidaEfectiva = collect([$salidaPonche, $salidaSegunTransaccion])
-                ->filter()
-                ->sortByDesc(fn (Carbon $instante): int => $instante->getTimestamp())
-                ->first();
+            $salidaAjustada = $salidaPonche !== null && $ultimaTransaccion !== null && $ultimaTransaccion->greaterThan($salidaPonche);
+            $salidaEfectiva = $salidaAjustada ? $ultimaTransaccion->copy()->addMinutes(5) : $salidaPonche;
+            $incidencia = match (true) {
+                $entrada === null => 'Sin primer login',
+                $salidaPonche === null => 'Sin último login',
+                $salidaPonche->lessThan($entrada) => 'Último login anterior al primero',
+                $primeraTransaccion !== null && $primeraTransaccion->lessThan($entrada) => 'Venta antes del primer login',
+                default => null,
+            };
             $horas = $entrada && $salidaEfectiva
                 ? max(0, $entrada->diffInSeconds($salidaEfectiva, false) / 3600)
                 : 0;
-            $cumple = $entrada !== null && $salidaEfectiva !== null && $horas >= $configuracion['horas_requeridas'];
+            $cumple = $incidencia === null && $horas >= $configuracion['horas_requeridas'];
             $agencia = $agencias->get($terminal);
+            $nombreMaestra = $empleados->get($cedula);
 
             return [
                 'terminal' => $terminal, 'cedula' => $this->cedulaParaMostrar($cedula),
-                'empleado' => $empleados->get($cedula) ?: ($ponche['empleado'] ?? 'No identificado'),
+                'empleado' => $nombreMaestra ?: ($ponche['empleado'] ?? 'No identificado'),
+                'coincide_maestra' => $nombreMaestra !== null && $nombreMaestra !== '',
+                'origen_identidad' => $ponche !== null ? 'Ponche' : ($nombreMaestra ? 'Maestra de empleados' : 'Usuario de venta sin verificar'),
                 'empresa' => trim((string) ($agencia?->empresa ?? '')) ?: 'Sin empresa',
                 'coordinador' => trim((string) ($agencia?->coordinador_nombre ?? '')) ?: 'Sin coordinador',
                 'entrada' => $entrada?->toDateTimeString(), 'salida_ponche' => $salidaPonche?->toDateTimeString(),
                 'primera_transaccion' => $primeraTransaccion?->toDateTimeString(), 'ultima_transaccion' => $ultimaTransaccion?->toDateTimeString(),
                 'salida_efectiva' => $salidaEfectiva?->toDateTimeString(),
-                'fuente_salida' => $this->fuenteSalida($salidaPonche, $ultimaTransaccion),
-                'horas_trabajadas' => round($horas, 2), 'estatus' => $cumple ? 'Cumple' : 'No cumple',
+                'fuente_salida' => $salidaPonche === null ? 'Sin último login' : ($salidaAjustada ? 'Última venta + 5 minutos' : 'Último login'),
+                'usuario_venta' => $venta['usuario_venta'] ?? null,
+                'tradicional_cantidad' => $venta['tradicional_cantidad'] ?? 0,
+                'tradicional_monto' => $venta['tradicional_monto'] ?? 0.0,
+                'no_tradicional_cantidad' => $venta['no_tradicional_cantidad'] ?? 0,
+                'no_tradicional_monto' => $venta['no_tradicional_monto'] ?? 0.0,
+                'incidencia' => $incidencia,
+                'horas_trabajadas' => round($horas, 2), 'estatus' => $incidencia !== null ? 'Revisar' : ($cumple ? 'Cumple' : 'No cumple'),
                 'monto_pagar' => $cumple ? $configuracion['monto_fijo'] : 0.0,
             ];
         })->sortBy(['empleado', 'terminal'])->values();
@@ -117,7 +160,7 @@ class NominaDomingoService
             $cumplieron = $agencias->where('cumple', true)->values();
             $noCumplieron = $agencias->where('cumple', false)->values();
             $empleadosCumplieron = $filasCoordinador->where('estatus', 'Cumple')->values();
-            $empleadosNoCumplieron = $filasCoordinador->where('estatus', 'No cumple')->values();
+            $empleadosNoCumplieron = $filasCoordinador->where('estatus', '!=', 'Cumple')->values();
 
             return [
                 'coordinador' => $coordinador,
@@ -134,19 +177,25 @@ class NominaDomingoService
         })->sortBy('coordinador')->values();
     }
 
-    /** @return Collection<string, array{primera_transaccion: string, ultima_transaccion: string}> */
+    /** @return Collection<string, array<string, float|int|string>> */
     private function ventas(Carbon $fecha): Collection
     {
-        if (! Schema::hasTable('gestion_agencias_ventas')) {
+        if (! Schema::hasTable('nomina_domingo_ventas')) {
             return collect();
         }
 
-        return DB::table('gestion_agencias_ventas')->whereDate('fecha_transaccion', $fecha->toDateString())
-            ->whereNotNull('usuario_venta')->where('usuario_venta', '<>', '')->get(['terminal', 'usuario_venta', 'fecha_transaccion'])
+        return DB::table('nomina_domingo_ventas')->whereDate('fecha_transaccion', $fecha->toDateString())
+            ->whereNotNull('usuario_venta')->where('usuario_venta', '<>', '')
+            ->get(['terminal', 'usuario_venta', 'fecha_transaccion', 'tipo', 'total_apostado'])
             ->groupBy(fn (object $fila): string => $this->clave($fila->terminal, $fila->usuario_venta))
             ->map(fn (Collection $filas): array => [
                 'primera_transaccion' => (string) $filas->min('fecha_transaccion'),
                 'ultima_transaccion' => (string) $filas->max('fecha_transaccion'),
+                'usuario_venta' => (string) $filas->first()->usuario_venta,
+                'tradicional_cantidad' => $filas->where('tipo', 'Tradicional')->count(),
+                'tradicional_monto' => (float) $filas->where('tipo', 'Tradicional')->sum('total_apostado'),
+                'no_tradicional_cantidad' => $filas->where('tipo', 'No Tradicional')->count(),
+                'no_tradicional_monto' => (float) $filas->where('tipo', 'No Tradicional')->sum('total_apostado'),
             ]);
     }
 
@@ -159,8 +208,8 @@ class NominaDomingoService
     public function conciliacionVentas(Carbon $fecha): array
     {
         $archivo = collect();
-        if (Schema::hasTable('gestion_agencias_ventas')) {
-            $archivo = DB::table('gestion_agencias_ventas')
+        if (Schema::hasTable('nomina_domingo_ventas')) {
+            $archivo = DB::table('nomina_domingo_ventas')
                 ->whereDate('fecha_transaccion', $fecha->toDateString())
                 ->selectRaw('LOWER(TRIM(tipo)) as tipo_normalizado, SUM(COALESCE(total_apostado, 0)) as monto')
                 ->groupByRaw('LOWER(TRIM(tipo))')
@@ -194,22 +243,27 @@ class NominaDomingoService
         ])->all();
     }
 
-    /** @return Collection<string, array{entrada: ?string, salida: ?string, empleado: string}> */
+    /** @return Collection<string, array{entrada: ?string, salida: ?string, empleado: string, usuarios: array<int, string>}> */
     private function ponches(Carbon $fecha): Collection
     {
         $filas = collect();
         if (Schema::hasTable('asistencias_bet')) {
             $filas = $filas->merge(DB::table('asistencias_bet')->whereDate('fecha', $fecha->toDateString())
-                ->get(['agencia_id as terminal', 'cedula', 'usuario as empleado', 'primer_login as entrada', 'ultimo_login as salida']));
+                ->get(['agencia_id as terminal', 'cedula', 'usuario', 'usuario as empleado', 'primer_login as entrada', 'ultimo_login as salida']));
         }
         if (Schema::hasTable('asistencias_net')) {
             $filas = $filas->merge(DB::table('asistencias_net')->whereDate('entrada', $fecha->toDateString())
-                ->get(['terminal', 'identificacion as cedula', 'username as empleado', 'entrada', 'salida']));
+                ->get(['terminal', 'identificacion as cedula', 'usuario', 'username as empleado', 'entrada', 'salida']));
         }
 
-        return $filas->filter(fn (object $fila): bool => $this->normalizar($fila->cedula) !== '')
-            ->groupBy(fn (object $fila): string => $this->clave($fila->terminal, $fila->cedula))
-            ->map(fn (Collection $grupo): array => ['entrada' => $grupo->pluck('entrada')->filter()->min(), 'salida' => $grupo->pluck('salida')->filter()->max(), 'empleado' => (string) ($grupo->pluck('empleado')->filter()->first() ?? 'No identificado')]);
+        return $filas->filter(fn (object $fila): bool => $this->normalizar($fila->cedula) !== '' || $this->normalizar($fila->usuario) !== '')
+            ->groupBy(fn (object $fila): string => $this->clave($fila->terminal, $this->normalizar($fila->cedula) !== '' ? $fila->cedula : $fila->usuario))
+            ->map(fn (Collection $grupo): array => [
+                'entrada' => $grupo->pluck('entrada')->filter()->min(),
+                'salida' => $grupo->pluck('salida')->filter()->max(),
+                'empleado' => (string) ($grupo->pluck('empleado')->filter()->first() ?? 'No identificado'),
+                'usuarios' => $grupo->pluck('usuario')->map(fn (mixed $usuario): string => $this->normalizar($usuario))->filter()->unique()->values()->all(),
+            ]);
     }
 
     /** @param array<int, string> $cedulas */
@@ -285,22 +339,5 @@ class NominaDomingoService
         }
 
         return Carbon::parse($valor);
-    }
-
-    private function fuenteSalida(?Carbon $salidaPonche, ?Carbon $ultimaTransaccion): string
-    {
-        if ($salidaPonche === null && $ultimaTransaccion === null) {
-            return 'Sin salida';
-        }
-
-        if ($salidaPonche === null) {
-            return 'Última transacción + 5 minutos';
-        }
-
-        if ($ultimaTransaccion !== null && ($salidaPonche === null || $ultimaTransaccion->greaterThan($salidaPonche))) {
-            return 'Última transacción';
-        }
-
-        return 'Ponche';
     }
 }

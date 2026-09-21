@@ -41,7 +41,12 @@
                                                     <option value="169">169 = Negosur</option>
                                                 </select>
                                             </div>
-                                            <div class="col-sm-6 d-flex align-items-end">
+                                            <div class="col-sm-6">
+                                                <label class="form-label text-white text-opacity-75">Cédula específica</label>
+                                                <input type="text" id="cedulaSincronizar" class="form-control border-0 shadow-sm"
+                                                       inputmode="numeric" maxlength="13" placeholder="Opcional: 11 dígitos">
+                                            </div>
+                                            <div class="col-12 d-flex align-items-end">
                                                 <div class="d-grid gap-2 w-100">
                                                     <button type="button" class="btn btn-light text-primary fw-semibold" id="btnRefrescarDashboard">
                                                         Actualizar dashboard
@@ -49,6 +54,9 @@
                                                     <button type="button" class="btn btn-outline-light fw-semibold" id="btnSincronizar">
                                                         Sincronizar empleados
                                                     </button>
+                                                    <a href="{{ route('empleados.ventas-bet-sin-maestra') }}" class="btn btn-outline-light fw-semibold">
+                                                        Revisar cédulas de ventas
+                                                    </a>
                                                 </div>
                                             </div>
                                         </div>
@@ -579,11 +587,22 @@
         document.querySelector("#btnSincronizar").addEventListener("click", function () {
             const btnSincronizar = this;
             const empresa = document.getElementById('empresa').value;
+            const cedula = document.getElementById('cedulaSincronizar').value.replace(/\D/g, '');
 
             if (!empresa) {
                 Swal.fire({
                     title: 'Empresa requerida',
                     text: 'Debe seleccionar una empresa antes de sincronizar empleados.',
+                    icon: 'warning',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+
+            if (cedula && cedula.length !== 11) {
+                Swal.fire({
+                    title: 'Cédula inválida',
+                    text: 'La cédula debe contener 11 dígitos.',
                     icon: 'warning',
                     confirmButtonText: 'OK'
                 });
@@ -612,7 +631,12 @@
                 }
             }, 1000);
 
-            fetch('/empleados/sincronizar?empresa=' + empresa, {
+            const params = new URLSearchParams({ empresa });
+            if (cedula) {
+                params.set('cedula', cedula);
+            }
+
+            fetch('/empleados/sincronizar?' + params.toString(), {
                 headers: {
                     'Accept': 'application/json',
                 },

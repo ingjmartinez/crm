@@ -16,7 +16,7 @@ class ConsultarNominaDomingoRequest extends FormRequest
         return [
             'fecha' => ['nullable', 'date_format:Y-m-d'],
             'consultar' => ['nullable', 'boolean'],
-            'estatus' => ['nullable', 'in:todos,cumple,no_cumple'],
+            'estatus' => ['nullable', 'in:todos,cumple,no_cumple,revisar'],
             'empresa' => ['nullable', 'string', 'max:255'],
         ];
     }

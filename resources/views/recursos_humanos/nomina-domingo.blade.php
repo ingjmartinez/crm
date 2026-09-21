@@ -2,17 +2,25 @@
 
 @section('content')
     <style>
-        #tablaNominaDomingo_wrapper .buttons-excel {
+        #tablaNominaDomingo_wrapper .buttons-excel,
+        #tablaSinPrimerLogin_wrapper .buttons-excel {
             background: #198754 !important;
             border-color: #198754 !important;
             color: #fff !important;
         }
 
         #tablaNominaDomingo_wrapper .buttons-excel:hover,
-        #tablaNominaDomingo_wrapper .buttons-excel:focus {
+        #tablaNominaDomingo_wrapper .buttons-excel:focus,
+        #tablaSinPrimerLogin_wrapper .buttons-excel:hover,
+        #tablaSinPrimerLogin_wrapper .buttons-excel:focus {
             background: #157347 !important;
             border-color: #146c43 !important;
             color: #fff !important;
+        }
+
+        #tablaNominaDomingo .empleado-sin-maestra {
+            --bs-table-accent-bg: #fff3cd;
+            background-color: #fff3cd !important;
         }
     </style>
 
@@ -41,18 +49,19 @@
                             <p class="text-muted mb-0">Carga los archivos Tradicional y No Tradicional para obtener la última transacción real.</p>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
+                            @if ($consultar)
                             <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#modalCoordinadores">
                                 <i class="ri-team-line me-1"></i> Coordinador
                             </button>
+                            @endif
                             <button class="btn btn-info" type="button" data-bs-toggle="modal" data-bs-target="#modalConfiguracion">
                                 <i class="ri-settings-3-line me-1"></i> Configurar nómina
                             </button>
                         </div>
                     </div>
                     <div class="card-body">
-                        <form method="POST" action="{{ route('reportes.gestion-agencias.procesar') }}" enctype="multipart/form-data" class="row g-3 align-items-end" id="formCargarNominaDomingo">
+                        <form method="POST" action="{{ route('recursos-humanos.nomina-domingo.cargar-ventas') }}" enctype="multipart/form-data" class="row g-3 align-items-end" id="formCargarNominaDomingo">
                             @csrf
-                            <input type="hidden" name="destino" value="nomina_domingo">
                             <div class="col-lg-2">
                                 <label for="fecha_nomina" class="form-label">Domingo</label>
                                 <input type="date" class="form-control" id="fecha_nomina" name="fecha_nomina" value="{{ $fecha }}" required>
@@ -77,6 +86,31 @@
                     </div>
                 </div>
 
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-1">Generar reporte</h5>
+                        <p class="text-muted mb-0">Selecciona el domingo que deseas consultar. La carga de archivos solo guarda las ventas.</p>
+                    </div>
+                    <div class="card-body">
+                        <form method="GET" action="{{ route('recursos-humanos.nomina-domingo.index') }}" class="row g-3 align-items-end" id="formGenerarNominaDomingo">
+                            <input type="hidden" name="consultar" value="1">
+                            <div class="col-md-3">
+                                <label for="fecha_reporte" class="form-label">Domingo del reporte</label>
+                                <input type="date" class="form-control" id="fecha_reporte" name="fecha" value="{{ $fecha }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-primary w-100" type="submit" id="btnGenerarNominaDomingo">Generar reporte</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                @if ($consultar)
+                @if ($totalIncidencias > 0)
+                    <div class="alert alert-warning">
+                        {{ number_format($totalIncidencias) }} registro(s) requieren revisión por login faltante, secuencia inválida o venta anterior al primer login. No se incluyen en el pago automático.
+                    </div>
+                @endif
                 @if ($conciliacionVentas !== null)
                     <div class="row g-3 mb-3">
                         @foreach (['tradicional' => 'Tradicional', 'no_tradicional' => 'No Tradicional'] as $tipo => $etiqueta)
@@ -111,14 +145,14 @@
                 @if ($filas->isNotEmpty() && $totalConEntrada === 0)
                     <div class="alert alert-warning">
                         <strong>No se encontraron ponches para el {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}.</strong>
-                        Las ventas fueron cargadas, pero sin un primer login en <code>asistencias_bet</code> o <code>asistencias_net</code> no es posible calcular las horas trabajadas.
+                        Las ventas fueron cargadas, pero sin un primer login asociado no es posible calcular las horas trabajadas.
                         <button type="button" class="btn btn-sm btn-warning ms-2" data-bs-toggle="modal" data-bs-target="#modalSinPrimerLogin">
                             Ver registros
                         </button>
                     </div>
                 @elseif ($totalSinEntrada > 0)
                     <div class="alert alert-warning">
-                        {{ number_format($totalSinEntrada) }} registro(s) no tienen un primer login coincidente por fecha, terminal y cédula; sus horas se muestran en cero.
+                        {{ number_format($totalSinEntrada) }} registro(s) no tienen un primer login asociado por fecha, terminal y usuario de venta; sus horas se muestran en cero.
                         <button type="button" class="btn btn-sm btn-warning ms-2" data-bs-toggle="modal" data-bs-target="#modalSinPrimerLogin">
                             Ver registros
                         </button>
@@ -127,8 +161,8 @@
 
                 <div class="card">
                     <div class="card-header d-flex flex-wrap align-items-end justify-content-between gap-3">
-                        <div><h5 class="card-title mb-1">Datos limpios</h5><p class="text-muted mb-0">La hora de salida se corrige con la última transacción cuando esta es posterior al ponche.</p></div>
-                        <form method="GET" action="{{ route('recursos-humanos.nomina-domingo.index') }}" class="d-flex flex-wrap align-items-end gap-2">
+                        <div><h5 class="card-title mb-1">Datos limpios</h5><p class="text-muted mb-0">Las horas parten del primer login. Si la última venta supera la salida registrada, se usa esa venta más 5 minutos como salida calculada.</p></div>
+                        <form method="GET" action="{{ route('recursos-humanos.nomina-domingo.index') }}" class="d-flex flex-wrap align-items-end gap-2" id="formFiltrarNominaDomingo">
                             <input type="hidden" name="fecha" value="{{ $fecha }}">
                             <input type="hidden" name="consultar" value="1">
                             <div>
@@ -146,21 +180,23 @@
                                     <option value="todos" @selected($estatus === 'todos')>Todos</option>
                                     <option value="cumple" @selected($estatus === 'cumple')>Cumplen</option>
                                     <option value="no_cumple" @selected($estatus === 'no_cumple')>No cumplen</option>
+                                    <option value="revisar" @selected($estatus === 'revisar')>Revisar</option>
                                 </select>
                             </div>
-                            <button class="btn btn-primary" type="submit"><i class="ri-filter-3-line me-1"></i> Filtrar</button>
+                            <button class="btn btn-primary" type="submit" id="btnFiltrarNominaDomingo"><i class="ri-filter-3-line me-1"></i> Filtrar</button>
                         </form>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped align-middle w-100" id="tablaNominaDomingo">
-                                <thead><tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Coordinador</th><th>Horas trabajadas</th><th>Estatus</th><th>Monto a pagar</th></tr></thead>
+                                <thead><tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th><th>Horas trabajadas</th><th>Estatus</th><th>Monto a pagar</th></tr></thead>
                                 <tbody>
                                     @foreach ($filas as $fila)
                                         <tr title="Entrada: {{ $fila['entrada'] ?? 'Sin entrada' }} | Salida ponche: {{ $fila['salida_ponche'] ?? 'Sin salida' }} | Última transacción: {{ $fila['ultima_transaccion'] ?? 'Sin transacción' }} | Fuente: {{ $fila['fuente_salida'] }}">
-                                            <td>{{ $fila['terminal'] }}</td><td>{{ $fila['cedula'] }}</td><td>{{ $fila['empleado'] }}</td><td>{{ $fila['coordinador'] }}</td>
-                                            <td data-order="{{ $fila['horas_trabajadas'] }}">{{ number_format($fila['horas_trabajadas'], 2) }} horas<br><small class="text-muted">Primer login: {{ $fila['entrada'] ? \Carbon\Carbon::parse($fila['entrada'])->format('h:i A') : 'No disponible' }} | Salida: {{ $fila['salida_efectiva'] ? \Carbon\Carbon::parse($fila['salida_efectiva'])->format('h:i A') : 'No disponible' }}</small></td>
-                                            <td><span class="badge {{ $fila['estatus'] === 'Cumple' ? 'bg-success' : 'bg-danger' }}">{{ $fila['estatus'] }}</span></td>
+                                            <td>{{ $fila['terminal'] }}</td><td>{{ $fila['cedula'] }}</td><td @class(['empleado-sin-maestra' => ! $fila['coincide_maestra']])>{{ $fila['empleado'] }}@if (! $fila['coincide_maestra'])<br><small>Validar usuario con la maestra de empleados</small>@endif</td><td>{{ $fila['empresa'] }}</td><td>{{ $fila['coordinador'] }}</td>
+                                            <td>{{ $fila['entrada'] ? 'Primer login: '.\Carbon\Carbon::parse($fila['entrada'])->format('h:i A') : 'Sin primer login' }} | {{ $fila['salida_efectiva'] ? $fila['fuente_salida'].': '.\Carbon\Carbon::parse($fila['salida_efectiva'])->format('h:i A') : 'Sin último login' }}</td>
+                                            <td data-order="{{ $fila['horas_trabajadas'] }}">{{ number_format($fila['horas_trabajadas'], 2) }} horas</td>
+                                            <td><span class="badge {{ $fila['estatus'] === 'Cumple' ? 'bg-success' : ($fila['estatus'] === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger') }}">{{ $fila['estatus'] }}</span>@if ($fila['incidencia'])<br><small class="text-muted">{{ $fila['incidencia'] }}</small>@endif</td>
                                             <td data-order="{{ $fila['monto_pagar'] }}">RD$ {{ number_format($fila['monto_pagar'], 2) }}</td>
                                         </tr>
                                     @endforeach
@@ -169,6 +205,7 @@
                         </div>
                     </div>
                 </div>
+                @endif
             </div>
         </div>
     </div>
@@ -218,7 +255,7 @@
                                     <th class="text-center">Agencias cumplieron</th>
                                     <th class="text-center">Agencias no cumplieron</th>
                                     <th class="text-center">Empleados cumplieron</th>
-                                    <th class="text-center">Empleados no cumplieron</th>
+                                    <th class="text-center">No cumplen o revisar</th>
                                     <th class="text-center">Telegram</th>
                                 </tr>
                             </thead>
@@ -317,7 +354,7 @@
                 <div class="modal-header">
                     <div>
                         <h5 class="modal-title" id="modalSinPrimerLoginLabel">Registros sin primer login</h5>
-                        <p class="text-muted mb-0">No se encontró un ponche de entrada coincidente para la fecha, terminal y cédula.</p>
+                        <p class="text-muted mb-0">No se encontró un primer login asociado al usuario de venta en esa terminal y fecha.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
@@ -325,17 +362,18 @@
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped align-middle w-100" id="tablaSinPrimerLogin">
                             <thead>
-                                <tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Primera transacción</th><th>Última transacción</th><th>Salida calculada</th></tr>
+                                <tr><th>Terminal</th><th>Cédula</th><th>ID</th><th>Empleado</th><th>Ventas</th><th>Primera venta</th><th>Última venta</th></tr>
                             </thead>
                             <tbody>
                                 @foreach ($filasSinEntrada as $fila)
                                     <tr>
                                         <td>{{ $fila['terminal'] }}</td>
-                                        <td>{{ $fila['cedula'] }}</td>
+                                        <td>{{ $fila['origen_identidad'] === 'Usuario de venta sin verificar' ? '' : $fila['cedula'] }}</td>
+                                        <td>{{ $fila['usuario_venta'] ?? '-' }}</td>
                                         <td>{{ $fila['empleado'] }}</td>
+                                        <td>{{ number_format($fila['tradicional_cantidad'] + $fila['no_tradicional_cantidad']) }} ventas<br><small>RD$ {{ number_format($fila['tradicional_monto'] + $fila['no_tradicional_monto'], 2) }}</small></td>
                                         <td>{{ $fila['primera_transaccion'] ? \Carbon\Carbon::parse($fila['primera_transaccion'])->format('d/m/Y h:i A') : 'Sin transacción' }}</td>
                                         <td>{{ $fila['ultima_transaccion'] ? \Carbon\Carbon::parse($fila['ultima_transaccion'])->format('d/m/Y h:i A') : 'Sin transacción' }}</td>
-                                        <td>{{ $fila['salida_efectiva'] ? \Carbon\Carbon::parse($fila['salida_efectiva'])->format('d/m/Y h:i A') : 'Sin salida disponible' }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -352,6 +390,33 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const formCargar = document.getElementById('formCargarNominaDomingo');
+            const formGenerar = document.getElementById('formGenerarNominaDomingo');
+            const formFiltrar = document.getElementById('formFiltrarNominaDomingo');
+
+            formFiltrar?.addEventListener('submit', function () {
+                document.getElementById('btnFiltrarNominaDomingo').disabled = true;
+                Swal.fire({
+                    title: 'Aplicando el filtro...',
+                    icon: 'info',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading(),
+                });
+            });
+
+            formGenerar?.addEventListener('submit', function () {
+                document.getElementById('btnGenerarNominaDomingo').disabled = true;
+                Swal.fire({
+                    title: 'Generando reporte...',
+                    text: 'Estamos calculando la nómina del domingo seleccionado.',
+                    icon: 'info',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading(),
+                });
+            });
 
             if (formCargar) {
                 formCargar.addEventListener('submit', function () {
@@ -362,7 +427,7 @@
                     }
 
                     Swal.fire({
-                        title: 'Generando data...',
+                        title: 'Guardando ventas...',
                         text: 'Estamos procesando los archivos. Este proceso puede tardar unos minutos.',
                         icon: 'info',
                         allowOutsideClick: false,
@@ -409,7 +474,7 @@
                             `Fecha: {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}`,
                             '',
                             `📄 PDF 1: Empleados que cumplieron (${coordinadorTelegramSeleccionado.empleados_cumplieron})`,
-                            `📄 PDF 2: Empleados que no cumplieron (${coordinadorTelegramSeleccionado.empleados_no_cumplieron})`,
+                            `📄 PDF 2: No cumplen o requieren revisión (${coordinadorTelegramSeleccionado.empleados_no_cumplieron})`,
                         ];
                         document.getElementById('telegramCoordinadorNombre').textContent = coordinadorTelegramSeleccionado.coordinador;
                         document.getElementById('telegramCoordinadorVistaPrevia').value = lineas.join('\n');
@@ -438,14 +503,14 @@
                     }
 
                     document.getElementById('tituloDetalleCoordinadorNomina').textContent = esEmpleado
-                        ? (cumple ? 'Empleados que cumplieron' : 'Empleados que no cumplieron')
+                        ? (cumple ? 'Empleados que cumplieron' : 'No cumplen o requieren revisión')
                         : (cumple ? 'Agencias que cumplieron' : 'Agencias que no cumplieron');
                     document.getElementById('subtituloDetalleCoordinadorNomina').textContent = coordinador.coordinador;
                     encabezado.innerHTML = esEmpleado
                         ? '<tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th class="text-end">Horas trabajadas</th><th>Estado</th></tr>'
                         : '<tr><th>Terminal</th><th>Empresa</th><th class="text-center">Empleados evaluados</th></tr>';
                     tbody.innerHTML = esEmpleado
-                        ? filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.cedula)}</td><td>${escaparHtml(fila.empleado)}</td><td class="text-end" data-order="${Number(fila.horas_trabajadas)}">${Number(fila.horas_trabajadas).toFixed(2)}</td><td><span class="badge ${cumple ? 'bg-success' : 'bg-danger'}">${escaparHtml(fila.estatus)}</span></td></tr>`).join('')
+                        ? filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.cedula)}</td><td>${escaparHtml(fila.empleado)}</td><td class="text-end" data-order="${Number(fila.horas_trabajadas)}">${Number(fila.horas_trabajadas).toFixed(2)}</td><td><span class="badge ${fila.estatus === 'Cumple' ? 'bg-success' : (fila.estatus === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger')}">${escaparHtml(fila.estatus)}</span></td></tr>`).join('')
                         : filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.empresa)}</td><td class="text-center">${Number(fila.empleados)}</td></tr>`).join('');
 
                     bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetalleCoordinadorNomina')).show();
@@ -499,27 +564,47 @@
                     }
                 });
 
-                $('#tablaNominaDomingo').DataTable({
-                    pageLength: 25,
-                    order: [[4, 'desc']],
-                    dom: 'Bfrtip',
-                    buttons: [
-                        {
+                if (document.getElementById('tablaNominaDomingo')) {
+                    $('#tablaNominaDomingo').DataTable({
+                        pageLength: 25,
+                        order: [[6, 'desc']],
+                        dom: 'Bfrtip',
+                        buttons: [
+                            {
+                                extend: 'excelHtml5',
+                                text: '<i class="ri-file-excel-2-line me-1"></i> Descargar Excel',
+                                className: 'btn btn-success mb-3',
+                                title: 'Nomina_Domingo_{{ $fecha }}',
+                                exportOptions: {
+                                    columns: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                    modifier: { search: 'applied', order: 'applied', page: 'all' },
+                                },
+                            },
+                        ],
+                        language: { url: '{{ asset('assets/json/es-ES.json') }}' },
+                    });
+                }
+
+                if (document.getElementById('tablaSinPrimerLogin')) {
+                    const tablaSinPrimerLogin = $('#tablaSinPrimerLogin').DataTable({
+                        pageLength: 25,
+                        order: [[0, 'asc']],
+                        dom: 'Bfrtip',
+                        buttons: [{
                             extend: 'excelHtml5',
                             text: '<i class="ri-file-excel-2-line me-1"></i> Descargar Excel',
                             className: 'btn btn-success mb-3',
-                            title: 'Nomina_Domingo_{{ $fecha }}',
+                            title: 'Nomina_Domingo_Sin_Primer_Login_{{ $fecha }}',
                             exportOptions: {
                                 columns: [0, 1, 2, 3, 4, 5, 6],
-                                modifier: { search: 'applied' },
+                                modifier: { search: 'applied', order: 'applied', page: 'all' },
                             },
-                        },
-                    ],
-                    language: { url: '{{ asset('assets/json/es-ES.json') }}' },
-                });
-
-                if (document.getElementById('tablaSinPrimerLogin')) {
-                    $('#tablaSinPrimerLogin').DataTable({ pageLength: 25, order: [[0, 'asc']], language: { url: '{{ asset('assets/json/es-ES.json') }}' } });
+                        }],
+                        language: { url: '{{ asset('assets/json/es-ES.json') }}' },
+                    });
+                    document.getElementById('modalSinPrimerLogin')?.addEventListener('shown.bs.modal', function () {
+                        tablaSinPrimerLogin.columns.adjust();
+                    });
                 }
             }
         });
