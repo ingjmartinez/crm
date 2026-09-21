@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\EmpleadoMaestraExport;
 use App\Http\Requests\ExportarMaestraEmpleadoRequest;
 use App\Http\Requests\SincronizarEmpleadosPorCedulasRequest;
+use App\Http\Requests\SincronizarEmpleadosRequest;
 use App\Models\Empleado;
 use App\Models\VwUsuariosUnion;
 use App\Services\CoordinadorEmpleadoMatcher;
@@ -320,12 +321,13 @@ class EmpleadoController extends Controller
         ];
     }
 
-    public function sincronizar(Request $request)
+    public function sincronizar(SincronizarEmpleadosRequest $request)
     {
         ini_set('max_execution_time', 600);
         ini_set('memory_limit', '512M');
         $empresa = trim((string) $request->query('empresa', ''));
         $cedula = preg_replace('/\D+/', '', (string) $request->query('cedula', ''));
+        $limite = $request->integer('limite');
 
         if (! in_array($empresa, ['168', '169'], true)) {
             return response()->json(['error' => 'Empresa invalida. Debe ser 168 o 169.'], 422);
@@ -350,6 +352,7 @@ class EmpleadoController extends Controller
                     'strToken' => '87eb2d56-25f3-4d46-9cb0-73c07a550bd2',
                     'intIdEmpresa' => $empresa,
                     'strFiltros' => json_encode($filtros),
+                    'intLimite' => $limite,
                 ]);
         } catch (\Throwable $e) {
             Log::error('Error consultando API de empleados', [
@@ -441,6 +444,7 @@ class EmpleadoController extends Controller
             'omitidos' => $omitidos,
             'coordinadores_vinculados' => $coordinadoresVinculados,
             'cedula' => $cedula !== '' ? $cedula : null,
+            'limite_solicitado' => $limite,
         ]);
     }
 

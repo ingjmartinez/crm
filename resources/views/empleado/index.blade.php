@@ -584,7 +584,7 @@
             });
         }
 
-        document.querySelector("#btnSincronizar").addEventListener("click", function () {
+        document.querySelector("#btnSincronizar").addEventListener("click", async function () {
             const btnSincronizar = this;
             const empresa = document.getElementById('empresa').value;
             const cedula = document.getElementById('cedulaSincronizar').value.replace(/\D/g, '');
@@ -609,6 +609,29 @@
                 return;
             }
 
+            const seleccionLimite = await Swal.fire({
+                title: 'Cantidad de registros',
+                text: '¿Cuántos empleados deseas solicitar al proveedor?',
+                input: 'number',
+                inputValue: cedula ? 1 : 10000,
+                inputAttributes: { min: 1, max: 10000, step: 1 },
+                showCancelButton: true,
+                confirmButtonText: 'Sincronizar',
+                cancelButtonText: 'Cancelar',
+                inputValidator: (valor) => {
+                    const limite = Number(valor);
+                    if (!Number.isInteger(limite) || limite < 1 || limite > 10000) {
+                        return 'Escribe un número entero entre 1 y 10,000.';
+                    }
+                }
+            });
+
+            if (!seleccionLimite.isConfirmed) {
+                return;
+            }
+
+            const limite = Number(seleccionLimite.value);
+
             btnSincronizar.disabled = true;
 
             Swal.fire({
@@ -631,7 +654,7 @@
                 }
             }, 1000);
 
-            const params = new URLSearchParams({ empresa });
+            const params = new URLSearchParams({ empresa, limite: String(limite) });
             if (cedula) {
                 params.set('cedula', cedula);
             }

@@ -3,12 +3,13 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\EmpleadoController;
+use App\Http\Requests\SincronizarEmpleadosRequest;
 use App\Models\Empleado;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request as ClientRequest;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Tests\TestCase;
 
 class EmpleadoSynchronizationTest extends TestCase
@@ -41,8 +42,9 @@ class EmpleadoSynchronizationTest extends TestCase
         });
 
         foreach (['168', '169'] as $empresa) {
-            $request = Request::create('/empleados/sincronizar', 'GET', [
+            $request = SincronizarEmpleadosRequest::create('/empleados/sincronizar', 'GET', [
                 'empresa' => $empresa,
+                'limite' => 5000,
             ]);
 
             $response = app(EmpleadoController::class)->sincronizar($request);
@@ -62,11 +64,22 @@ class EmpleadoSynchronizationTest extends TestCase
 
             $this->assertSame('GET', $sentRequest->method());
             $this->assertSame($empresa, $query['intIdEmpresa']);
+            $this->assertSame('5000', $query['intLimite']);
             $this->assertSame(
                 json_encode([['CompanyId', $empresa]]),
                 $query['strFiltros']
             );
         }
+    }
+
+    public function test_employee_synchronization_limit_must_be_between_one_and_ten_thousand(): void
+    {
+        $request = new SincronizarEmpleadosRequest;
+
+        $this->assertTrue(Validator::make(['empresa' => '168', 'limite' => 1], $request->rules())->passes());
+        $this->assertTrue(Validator::make(['empresa' => '168', 'limite' => 10000], $request->rules())->passes());
+        $this->assertFalse(Validator::make(['empresa' => '168', 'limite' => 0], $request->rules())->passes());
+        $this->assertFalse(Validator::make(['empresa' => '168', 'limite' => 10001], $request->rules())->passes());
     }
 
     public function test_employee_can_be_synchronized_directly_by_cedula(): void
@@ -87,10 +100,10 @@ class EmpleadoSynchronizationTest extends TestCase
             ]]);
         });
 
-        $response = app(EmpleadoController::class)->sincronizar(Request::create(
+        $response = app(EmpleadoController::class)->sincronizar(SincronizarEmpleadosRequest::create(
             '/empleados/sincronizar',
             'GET',
-            ['empresa' => '168', 'cedula' => '402-2696451-4']
+            ['empresa' => '168', 'cedula' => '402-2696451-4', 'limite' => 1]
         ));
 
         $this->assertSame(200, $response->getStatusCode());
@@ -102,10 +115,10 @@ class EmpleadoSynchronizationTest extends TestCase
             'cedula' => '40226964514',
         ]);
 
-        app(EmpleadoController::class)->sincronizar(Request::create(
+        app(EmpleadoController::class)->sincronizar(SincronizarEmpleadosRequest::create(
             '/empleados/sincronizar',
             'GET',
-            ['empresa' => '168', 'cedula' => '40226964514']
+            ['empresa' => '168', 'cedula' => '40226964514', 'limite' => 1]
         ));
 
         $this->assertDatabaseHas('empleados', [
@@ -129,10 +142,10 @@ class EmpleadoSynchronizationTest extends TestCase
     {
         Http::preventStrayRequests();
 
-        $response = app(EmpleadoController::class)->sincronizar(Request::create(
+        $response = app(EmpleadoController::class)->sincronizar(SincronizarEmpleadosRequest::create(
             '/empleados/sincronizar',
             'GET',
-            ['empresa' => '168', 'cedula' => '123']
+            ['empresa' => '168', 'cedula' => '123', 'limite' => 1]
         ));
 
         $this->assertSame(422, $response->getStatusCode());
