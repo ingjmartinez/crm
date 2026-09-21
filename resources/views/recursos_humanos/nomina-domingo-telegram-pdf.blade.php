@@ -26,7 +26,7 @@
 
     <table>
         <thead>
-            <tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Empresa</th><th class="numero">Horas trabajadas</th><th>Estado</th></tr>
+            <tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Empresa</th><th class="numero">Horas (h/min)</th><th>Estado</th></tr>
         </thead>
         <tbody>
             @forelse ($empleados as $empleado)
@@ -35,7 +35,7 @@
                     <td>{{ $empleado['cedula'] }}</td>
                     <td>{{ $empleado['empleado'] }}</td>
                     <td>{{ $empleado['empresa'] }}</td>
-                    <td class="numero">{{ number_format((float) $empleado['horas_trabajadas'], 2) }}</td>
+                    <td class="numero">{{ $empleado['horas_trabajadas_formato'] }}</td>
                     <td>{{ $empleado['estatus'] }}</td>
                 </tr>
             @empty

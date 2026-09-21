@@ -126,12 +126,14 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('2026-09-13 14:00:00', $fila['salida_ponche']);
         $this->assertSame('2026-09-13 16:35:00', $fila['salida_efectiva']);
         $this->assertSame(8.58, $fila['horas_trabajadas']);
+        $this->assertSame('8 h 35 min', $fila['horas_trabajadas_formato']);
         $this->assertNull($fila['incidencia']);
         $this->assertSame('Cumple', $fila['estatus']);
         $this->assertSame(1500.0, $fila['monto_pagar']);
 
         $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13', 'consultar' => 1]))
             ->assertOk()
+            ->assertSee('8 h 35 min')
             ->assertSee('Última venta + 5 minutos: 04:35 PM');
     }
 
@@ -216,6 +218,7 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('2026-09-13 09:00:00', $fila['entrada']);
         $this->assertSame('2026-09-13 19:05:00', $fila['salida_efectiva']);
         $this->assertSame(10.08, $fila['horas_trabajadas']);
+        $this->assertSame('10 h 5 min', $fila['horas_trabajadas_formato']);
         $this->assertSame(0.0, $fila['monto_pagar']);
     }
 
@@ -383,6 +386,7 @@ class NominaDomingoTest extends TestCase
 
         $this->assertSame('Último login', $fila['fuente_salida']);
         $this->assertSame(8.5, $fila['horas_trabajadas']);
+        $this->assertSame('8 h 30 min', $fila['horas_trabajadas_formato']);
         $this->assertSame('Cumple', $fila['estatus']);
     }
 
@@ -408,6 +412,7 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('Último login', $fila['fuente_salida']);
         $this->assertSame('2026-09-13 17:00:00', $fila['salida_efectiva']);
         $this->assertSame(10.0, $fila['horas_trabajadas']);
+        $this->assertSame('10 h', $fila['horas_trabajadas_formato']);
     }
 
     public function test_missing_last_login_requires_review_and_does_not_use_last_sale_for_hours(): void

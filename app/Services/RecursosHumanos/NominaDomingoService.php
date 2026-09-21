@@ -93,6 +93,7 @@ class NominaDomingoService
             $horas = $entrada && $salidaEfectiva
                 ? max(0, $entrada->diffInSeconds($salidaEfectiva, false) / 3600)
                 : 0;
+            $minutosTrabajados = (int) round($horas * 60);
             $cumple = $incidencia === null && $horas >= $configuracion['horas_requeridas'];
             $agencia = $agencias->get($terminal);
             $nombreMaestra = $empleados->get($cedula);
@@ -114,10 +115,22 @@ class NominaDomingoService
                 'no_tradicional_cantidad' => $venta['no_tradicional_cantidad'] ?? 0,
                 'no_tradicional_monto' => $venta['no_tradicional_monto'] ?? 0.0,
                 'incidencia' => $incidencia,
-                'horas_trabajadas' => round($horas, 2), 'estatus' => $incidencia !== null ? 'Revisar' : ($cumple ? 'Cumple' : 'No cumple'),
+                'horas_trabajadas' => round($horas, 2),
+                'horas_trabajadas_formato' => $this->formatearMinutosTrabajados($minutosTrabajados),
+                'estatus' => $incidencia !== null ? 'Revisar' : ($cumple ? 'Cumple' : 'No cumple'),
                 'monto_pagar' => $cumple ? $configuracion['monto_fijo'] : 0.0,
             ];
         })->sortBy(['empleado', 'terminal'])->values();
+    }
+
+    private function formatearMinutosTrabajados(int $minutos): string
+    {
+        $horas = intdiv($minutos, 60);
+        $minutosRestantes = $minutos % 60;
+
+        return $minutosRestantes === 0
+            ? "{$horas} h"
+            : "{$horas} h {$minutosRestantes} min";
     }
 
     /** @return Collection<int, string> */
