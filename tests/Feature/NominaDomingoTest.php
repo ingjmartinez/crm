@@ -203,6 +203,26 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(0.0, $fila['monto_pagar']);
     }
 
+    public function test_displayed_integer_minutes_are_used_to_decide_compliance(): void
+    {
+        DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 7.75, 'monto_fijo' => 1500]);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Cumple', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 15:44:31'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '13', 'cedula' => '00100000002', 'usuario' => 'No cumple', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 15:44:29'],
+        ]);
+
+        $filas = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'))->keyBy('terminal');
+
+        $this->assertSame(465, $filas['12']['minutos_trabajados']);
+        $this->assertSame('7 h 45 min', $filas['12']['horas_trabajadas_formato']);
+        $this->assertSame('Cumple', $filas['12']['estatus']);
+        $this->assertSame(1500.0, $filas['12']['monto_pagar']);
+        $this->assertSame(464, $filas['13']['minutos_trabajados']);
+        $this->assertSame('7 h 44 min', $filas['13']['horas_trabajadas_formato']);
+        $this->assertSame('No cumple', $filas['13']['estatus']);
+        $this->assertSame(0.0, $filas['13']['monto_pagar']);
+    }
+
     public function test_sales_user_matches_punch_user_and_uses_the_punch_identity(): void
     {
         DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);

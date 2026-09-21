@@ -198,7 +198,7 @@
                                         <tr title="Entrada: {{ $fila['entrada'] ?? 'Sin entrada' }} | Salida ponche: {{ $fila['salida_ponche'] ?? 'Sin salida' }} | Última transacción: {{ $fila['ultima_transaccion'] ?? 'Sin transacción' }} | Fuente: {{ $fila['fuente_salida'] }}">
                                             <td>{{ $fila['terminal'] }}</td><td>{{ $fila['cedula'] }}</td><td @class(['empleado-sin-maestra' => ! $fila['coincide_maestra']])>{{ $fila['empleado'] }}@if (! $fila['coincide_maestra'])<br><small>Validar usuario con la maestra de empleados</small>@endif</td><td>{{ $fila['empresa'] }}</td><td>{{ $fila['coordinador'] }}</td>
                                             <td>{{ $fila['entrada'] ? 'Primer login: '.\Carbon\Carbon::parse($fila['entrada'])->format('h:i A') : 'Sin primer login' }} | {{ $fila['salida_efectiva'] ? $fila['fuente_salida'].': '.\Carbon\Carbon::parse($fila['salida_efectiva'])->format('h:i A') : 'Sin último login' }}</td>
-                                            <td data-order="{{ $fila['horas_trabajadas'] }}">{{ $fila['horas_trabajadas_formato'] }}</td>
+                                            <td data-order="{{ $fila['minutos_trabajados'] }}">{{ $fila['horas_trabajadas_formato'] }}</td>
                                             <td><span class="badge {{ $fila['estatus'] === 'Cumple' ? 'bg-success' : ($fila['estatus'] === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger') }}">{{ $fila['estatus'] }}</span>@if ($fila['incidencia'])<br><small class="text-muted">{{ $fila['incidencia'] }}</small>@endif</td>
                                             <td data-order="{{ $fila['monto_pagar'] }}">RD$ {{ number_format($fila['monto_pagar'], 2) }}</td>
                                         </tr>
@@ -582,7 +582,7 @@
                         ? '<tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th class="text-end">Horas trabajadas (h/min)</th><th>Estado</th></tr>'
                         : '<tr><th>Terminal</th><th>Empresa</th><th class="text-center">Empleados evaluados</th></tr>';
                     tbody.innerHTML = esEmpleado
-                        ? filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.cedula)}</td><td>${escaparHtml(fila.empleado)}</td><td class="text-end" data-order="${Number(fila.horas_trabajadas)}">${escaparHtml(fila.horas_trabajadas_formato)}</td><td><span class="badge ${fila.estatus === 'Cumple' ? 'bg-success' : (fila.estatus === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger')}">${escaparHtml(fila.estatus)}</span></td></tr>`).join('')
+                        ? filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.cedula)}</td><td>${escaparHtml(fila.empleado)}</td><td class="text-end" data-order="${Number(fila.minutos_trabajados)}">${escaparHtml(fila.horas_trabajadas_formato)}</td><td><span class="badge ${fila.estatus === 'Cumple' ? 'bg-success' : (fila.estatus === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger')}">${escaparHtml(fila.estatus)}</span></td></tr>`).join('')
                         : filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.empresa)}</td><td class="text-center">${Number(fila.empleados)}</td></tr>`).join('');
 
                     bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetalleCoordinadorNomina')).show();
