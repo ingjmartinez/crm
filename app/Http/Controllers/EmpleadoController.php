@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Exports\EmpleadoMaestraExport;
 use App\Http\Requests\ExportarMaestraEmpleadoRequest;
+use App\Http\Requests\SincronizarEmpleadosPorCedulasRequest;
 use App\Models\Empleado;
 use App\Models\VwUsuariosUnion;
 use App\Services\CoordinadorEmpleadoMatcher;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -438,6 +441,115 @@ class EmpleadoController extends Controller
             'omitidos' => $omitidos,
             'coordinadores_vinculados' => $coordinadoresVinculados,
             'cedula' => $cedula !== '' ? $cedula : null,
+        ]);
+    }
+
+    public function sincronizarLote(SincronizarEmpleadosPorCedulasRequest $request)
+    {
+        $cedulas = $request->validated('cedulas');
+        $empresas = ['168', '169'];
+        $url = 'https://apisj.azurewebsites.net/ApiSJ/RRHH/Empleados/Listar';
+        $token = '87eb2d56-25f3-4d46-9cb0-73c07a550bd2';
+
+        $responses = [];
+
+        foreach (array_chunk($cedulas, 10) as $bloqueCedulas) {
+            $responses = array_merge($responses, Http::pool(function (Pool $pool) use ($bloqueCedulas, $empresas, $url, $token): array {
+                $requests = [];
+
+                foreach ($bloqueCedulas as $cedula) {
+                    foreach ($empresas as $empresa) {
+                        $requests[] = $pool
+                            ->as($cedula.'_'.$empresa)
+                            ->withoutVerifying()
+                            ->connectTimeout(20)
+                            ->timeout(180)
+                            ->acceptJson()
+                            ->get($url, [
+                                'strToken' => $token,
+                                'intIdEmpresa' => $empresa,
+                                'strFiltros' => json_encode([
+                                    ['CompanyId', $empresa],
+                                    ['Cedula', $cedula],
+                                ]),
+                            ]);
+                    }
+                }
+
+                return $requests;
+            }));
+        }
+
+        $columnasActualizables = array_values(array_filter(
+            (new Empleado)->getFillable(),
+            fn (string $columna): bool => $columna !== 'empleadoid'
+        ));
+        $resultados = [];
+        $sincronizados = 0;
+
+        foreach ($cedulas as $cedula) {
+            $encontrado = false;
+            $consultasFallidas = 0;
+
+            foreach ($empresas as $empresa) {
+                $response = $responses[$cedula.'_'.$empresa] ?? null;
+
+                if (! $response instanceof Response || $response->failed()) {
+                    $consultasFallidas++;
+
+                    continue;
+                }
+
+                $empleados = $response->json();
+                if (! is_array($empleados) || $empleados === []) {
+                    continue;
+                }
+
+                foreach ($empleados as $empleadoApi) {
+                    $empleadoApi = array_change_key_case((array) $empleadoApi, CASE_UPPER);
+                    if (empty($empleadoApi['EMPLEADOID'])) {
+                        continue;
+                    }
+
+                    Empleado::upsert(
+                        [$this->mapearEmpleadoApi($empleadoApi, $empresa)],
+                        ['companyid', 'empleadoid'],
+                        $columnasActualizables
+                    );
+                    $encontrado = true;
+                    $sincronizados++;
+                }
+
+                if ($encontrado) {
+                    $resultados[] = [
+                        'cedula' => $cedula,
+                        'estado' => 'sincronizado',
+                        'empresa' => $empresa,
+                    ];
+
+                    break;
+                }
+            }
+
+            if (! $encontrado) {
+                $resultados[] = [
+                    'cedula' => $cedula,
+                    'estado' => $consultasFallidas === count($empresas) ? 'error' : 'no_encontrado',
+                    'empresa' => null,
+                ];
+            }
+        }
+
+        if ($sincronizados > 0) {
+            $this->coordinadorEmpleadoMatcher->vincularPendientesPorCedula();
+            $this->clearDashboardEmpleadosCache();
+        }
+
+        return response()->json([
+            'message' => 'Consulta por lote completada.',
+            'consultados' => count($cedulas),
+            'sincronizados' => $sincronizados,
+            'resultados' => $resultados,
         ]);
     }
 

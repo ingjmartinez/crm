@@ -72,6 +72,7 @@ class EmpleadoVentasBetSinMaestraTest extends TestCase
             ->assertSee('Cédulas de ventas fuera de la maestra')
             ->assertSee('tablaPendientes', false)
             ->assertSee('Consultar API')
-            ->assertSee("for (const empresa of ['168', '169'])", false);
+            ->assertSee('Seleccionar 50')
+            ->assertSee('Consultar seleccionadas (0/50)');
     }
 }

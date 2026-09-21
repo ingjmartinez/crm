@@ -139,4 +139,82 @@ class EmpleadoSynchronizationTest extends TestCase
         $this->assertSame('La cedula debe contener 11 digitos.', $response->getData(true)['error']);
         Http::assertNothingSent();
     }
+
+    public function test_cedulas_can_be_queried_in_controlled_concurrent_blocks_and_found_employees_are_saved(): void
+    {
+        $this->withoutMiddleware();
+        Http::preventStrayRequests();
+        Http::fake(function (ClientRequest $request) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $filtros = json_decode($query['strFiltros'], true);
+            $cedula = $filtros[1][1];
+            $empresa = $query['intIdEmpresa'];
+
+            if ($cedula === '40226964514' && $empresa === '168') {
+                return Http::response([[
+                    'COMPANYID' => 168,
+                    'EMPLEADOID' => 9174,
+                    'NOMBRES' => 'Coral',
+                    'APELLIDOS' => 'Rosario Paulino',
+                    'CEDULA' => $cedula,
+                ]]);
+            }
+
+            return Http::response([]);
+        });
+
+        $response = $this->postJson(route('empleados.sincronizar-lote'), [
+            'cedulas' => ['402-2696451-4', '00100000000'],
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('consultados', 2)
+            ->assertJsonPath('sincronizados', 1)
+            ->assertJsonPath('resultados.0.estado', 'sincronizado')
+            ->assertJsonPath('resultados.0.empresa', '168')
+            ->assertJsonPath('resultados.1.estado', 'no_encontrado');
+
+        $this->assertDatabaseHas('empleados', [
+            'companyid' => 168,
+            'empleadoid' => 9174,
+            'cedula' => '40226964514',
+        ]);
+        Http::assertSentCount(4);
+    }
+
+    public function test_employee_batch_rejects_more_than_fifty_cedulas(): void
+    {
+        $this->withoutMiddleware();
+        Http::preventStrayRequests();
+
+        $this->postJson(route('empleados.sincronizar-lote'), [
+            'cedulas' => array_map(
+                fn (int $numero): string => str_pad((string) $numero, 11, '0', STR_PAD_LEFT),
+                range(1, 51)
+            ),
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('cedulas');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_more_than_ten_cedulas_are_processed_across_multiple_pool_blocks(): void
+    {
+        $this->withoutMiddleware();
+        Http::preventStrayRequests();
+        Http::fake(fn () => Http::response([]));
+        $cedulas = array_map(
+            fn (int $numero): string => str_pad((string) $numero, 11, '0', STR_PAD_LEFT),
+            range(1, 11)
+        );
+
+        $this->postJson(route('empleados.sincronizar-lote'), ['cedulas' => $cedulas])
+            ->assertOk()
+            ->assertJsonPath('consultados', 11)
+            ->assertJsonPath('sincronizados', 0)
+            ->assertJsonCount(11, 'resultados');
+
+        Http::assertSentCount(22);
+    }
 }

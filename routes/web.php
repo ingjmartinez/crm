@@ -383,6 +383,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::post('/empleados/store', [EmpleadoController::class, 'store']);
         Route::get('/empleados/destroy/{id}', [EmpleadoController::class, 'destroy']);
         Route::get('/empleados/sincronizar', [EmpleadoController::class, 'sincronizar']);
+        Route::post('/empleados/sincronizar-lote', [EmpleadoController::class, 'sincronizarLote'])
+            ->name('empleados.sincronizar-lote');
         Route::get('/recursos-humanos/novedades-horario', [NovedadHorarioController::class, 'index'])
             ->name('recursos-humanos.novedades-horario.index');
         Route::get('/recursos-humanos/novedades-horario/list', [NovedadHorarioController::class, 'list'])
