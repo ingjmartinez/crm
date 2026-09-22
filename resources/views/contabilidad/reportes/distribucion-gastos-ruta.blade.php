@@ -170,6 +170,9 @@
                                                 <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalSociosRuta{{ $loop->index }}">
                                                     <i class="ri-eye-line me-1"></i>Ver socios
                                                 </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-ruta" data-ruta-key="{{ $grupoMapeo['ruta_key'] }}" data-ruta-nombre="{{ $grupoMapeo['ruta_nombre'] }}">
+                                                    <i class="ri-delete-bin-line me-1"></i>Eliminar ruta
+                                                </button>
                                             </td>
                                         </tr>
                                     @empty
@@ -354,6 +357,7 @@
         const storeMapeoUrl = @json(route('operaciones.distribucion-gastos-ruta.mapeos.store'));
         const subgruposMapeoUrl = @json(route('operaciones.distribucion-gastos-ruta.subgrupos'));
         const destroyMapeoUrl = @json(route('operaciones.distribucion-gastos-ruta.mapeos.destroy', ['mapeo' => '__ID__']));
+        const destroyRutaUrl = @json(route('operaciones.distribucion-gastos-ruta.rutas.destroy'));
         const tablasDistribucion = {};
         let temporizadorBusquedaSubgrupos = null;
         let solicitudSubgrupos = null;
@@ -379,6 +383,7 @@
                 actualizarEstadoSeleccionSubgrupos();
             });
             document.querySelectorAll('.btn-eliminar-mapeo').forEach((boton) => boton.addEventListener('click', eliminarMapeoRuta));
+            document.querySelectorAll('.btn-eliminar-ruta').forEach((boton) => boton.addEventListener('click', eliminarRutaCompleta));
             document.getElementById('btnExcel').addEventListener('click', function () {
                 tablasDistribucion.socios?.button('.buttons-excel').trigger();
             });
@@ -548,6 +553,37 @@
                 window.location.reload();
             } catch (error) {
                 Swal.fire({ title: 'No se pudo eliminar', text: error.message, icon: 'error' });
+            }
+        }
+
+        async function eliminarRutaCompleta(event) {
+            const boton = event.currentTarget;
+            const rutaKey = boton.dataset.rutaKey;
+            const rutaNombre = boton.dataset.rutaNombre;
+            const confirmacion = await Swal.fire({
+                title: '¿Eliminar la ruta completa?',
+                text: `Se eliminarán todas las relaciones con socios de ${rutaNombre}.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar ruta',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#dc3545',
+            });
+            if (!confirmacion.isConfirmed) return;
+
+            boton.disabled = true;
+            try {
+                const response = await fetch(destroyRutaUrl, {
+                    method: 'DELETE',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('#formMapeoRuta input[name="_token"]').value },
+                    body: JSON.stringify({ ruta_key: rutaKey }),
+                });
+                const payload = await parsearJsonDistribucion(response);
+                await Swal.fire({ title: 'Ruta eliminada', text: payload.message, icon: 'success' });
+                window.location.reload();
+            } catch (error) {
+                Swal.fire({ title: 'No se pudo eliminar la ruta', text: error.message, icon: 'error' });
+                boton.disabled = false;
             }
         }
 

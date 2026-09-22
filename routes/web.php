@@ -603,6 +603,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('operaciones.distribucion-gastos-ruta.subgrupos');
     Route::delete('/operaciones/distribucion-gastos-ruta/mapeos/{mapeo}', [ContabilidadDistribucionGastoRutaController::class, 'destroyMapeo'])
         ->name('operaciones.distribucion-gastos-ruta.mapeos.destroy');
+    Route::delete('/operaciones/distribucion-gastos-ruta/rutas', [ContabilidadDistribucionGastoRutaController::class, 'destroyRuta'])
+        ->name('operaciones.distribucion-gastos-ruta.rutas.destroy');
     Route::get('/operaciones/reportes/diario', [OperacionesReporteDiarioController::class, 'index'])->name('operaciones.reporte.diario');
     Route::get('/operaciones/reportes/diario/exportar/excel', [OperacionesReporteDiarioController::class, 'exportExcel'])->name('operaciones.reporte.diario.export.excel');
     Route::get('/operaciones/reportes/diario/exportar/pdf', [OperacionesReporteDiarioController::class, 'exportPdf'])->name('operaciones.reporte.diario.export.pdf');

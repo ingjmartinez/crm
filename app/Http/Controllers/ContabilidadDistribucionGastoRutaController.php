@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Contabilidad\ConsultarDistribucionGastoRutaRequest;
 use App\Http\Requests\Operaciones\ConsultarDistribucionGastoRutaSubgruposRequest;
+use App\Http\Requests\Operaciones\EliminarDistribucionGastoRutaRequest;
 use App\Http\Requests\Operaciones\GenerarDistribucionGastoRutaPdfRequest;
 use App\Http\Requests\Operaciones\GuardarDistribucionGastoRutaMapeoRequest;
 use App\Models\DistribucionGastoRutaMapeo;
@@ -11,6 +12,7 @@ use App\Services\Contabilidad\DistribucionGastoRutaService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
@@ -126,5 +128,18 @@ class ContabilidadDistribucionGastoRutaController extends Controller
         $mapeo->delete();
 
         return response()->json(['message' => 'Relacion eliminada correctamente.']);
+    }
+
+    public function destroyRuta(EliminarDistribucionGastoRutaRequest $request): JsonResponse
+    {
+        $rutaKey = $request->validated('ruta_key');
+        $eliminadas = DB::transaction(fn (): int => DistribucionGastoRutaMapeo::query()
+            ->where('ruta_key', $rutaKey)
+            ->delete());
+
+        return response()->json([
+            'message' => 'Ruta eliminada de la lista correctamente.',
+            'relaciones_eliminadas' => $eliminadas,
+        ]);
     }
 }

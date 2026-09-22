@@ -453,6 +453,48 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         ]);
     }
 
+    public function test_permite_eliminar_una_ruta_completa_de_la_lista(): void
+    {
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            [
+                'ruta_key' => 'RUTA NORTE', 'ruta_nombre' => 'Ruta Norte', 'company_id' => '168',
+                'id_grupo' => '61', 'nombre_grupo' => 'Ruta Norte', 'id_sub_grupo' => '45',
+                'nombre_socio' => 'Socio Uno', 'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'ruta_key' => 'RUTA NORTE', 'ruta_nombre' => 'Ruta Norte', 'company_id' => '168',
+                'id_grupo' => '61', 'nombre_grupo' => 'Ruta Norte', 'id_sub_grupo' => '46',
+                'nombre_socio' => 'Socio Dos', 'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'ruta_key' => 'RUTA SUR', 'ruta_nombre' => 'Ruta Sur', 'company_id' => '169',
+                'id_grupo' => '62', 'nombre_grupo' => 'Ruta Sur', 'id_sub_grupo' => '47',
+                'nombre_socio' => 'Socio Tres', 'created_at' => now(), 'updated_at' => now(),
+            ],
+        ]);
+
+        $this->get(route('operaciones.distribucion-gastos-ruta'))
+            ->assertOk()
+            ->assertSee('Eliminar ruta')
+            ->assertSee('data-ruta-key="RUTA NORTE"', false)
+            ->assertSee('¿Eliminar la ruta completa?');
+
+        $this->deleteJson(route('operaciones.distribucion-gastos-ruta.rutas.destroy'), [
+            'ruta_key' => 'RUTA NORTE',
+        ])->assertOk()
+            ->assertJsonPath('relaciones_eliminadas', 2);
+
+        $this->assertDatabaseMissing('distribucion_gasto_ruta_mapeos', ['ruta_key' => 'RUTA NORTE']);
+        $this->assertDatabaseHas('distribucion_gasto_ruta_mapeos', ['ruta_key' => 'RUTA SUR']);
+    }
+
+    public function test_no_permite_eliminar_una_ruta_que_no_existe_en_la_lista(): void
+    {
+        $this->deleteJson(route('operaciones.distribucion-gastos-ruta.rutas.destroy'), [
+            'ruta_key' => 'RUTA INEXISTENTE',
+        ])->assertUnprocessable()->assertJsonValidationErrors('ruta_key');
+    }
+
     private function crearEsquema(): void
     {
         Schema::create('rutas', function (Blueprint $table): void {
