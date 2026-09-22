@@ -104,11 +104,13 @@ class NominaDomingoService
             $minutosRequeridos = (int) round($configuracion['horas_requeridas'] * 60);
             $cumple = $incidencia === null && $minutosTrabajados >= $minutosRequeridos;
             $agencia = $agencias->get($terminal);
-            $nombreMaestra = $empleados->get($cedula);
+            $empleadoMaestra = $empleados->get($cedula);
+            $nombreMaestra = $empleadoMaestra['nombre'] ?? null;
 
             return [
                 'terminal' => $terminal, 'cedula' => $this->cedulaParaMostrar($cedula),
                 'empleado' => $nombreMaestra ?: ($ponche['empleado'] ?? 'No identificado'),
+                'empleado_id' => $empleadoMaestra['empleado_id'] ?? null,
                 'coincide_maestra' => $nombreMaestra !== null && $nombreMaestra !== '',
                 'origen_identidad' => $ponche !== null ? 'Ponche' : ($nombreMaestra ? 'Maestra de empleados' : 'Usuario de venta sin verificar'),
                 'empresa' => trim((string) ($agencia?->empresa ?? '')) ?: 'Sin empresa',
@@ -317,9 +319,12 @@ class NominaDomingoService
             return collect();
         }
 
-        return DB::table('empleados')->whereNull('fechasalida')->get(['cedula', 'nombres', 'apellidos'])
+        return DB::table('empleados')->whereNull('fechasalida')->get(['cedula', 'empleadoid', 'nombres', 'apellidos'])
             ->filter(fn (object $empleado): bool => in_array($this->normalizar($empleado->cedula), $cedulas, true))
-            ->mapWithKeys(fn (object $empleado): array => [$this->normalizar($empleado->cedula) => trim("{$empleado->nombres} {$empleado->apellidos}")]);
+            ->mapWithKeys(fn (object $empleado): array => [$this->normalizar($empleado->cedula) => [
+                'empleado_id' => trim((string) $empleado->empleadoid) ?: null,
+                'nombre' => trim("{$empleado->nombres} {$empleado->apellidos}"),
+            ]]);
     }
 
     /** @return Collection<string, Agencia> */

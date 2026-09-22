@@ -225,11 +225,11 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped align-middle w-100" id="tablaNominaDomingo">
-                                <thead><tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th><th>Horas trabajadas (h/min)</th><th>Estatus</th><th>Monto a pagar</th></tr></thead>
+                                <thead><tr><th>Terminal</th><th>Cédula</th><th>ID empleado</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th><th>Horas trabajadas (h/min)</th><th>Estatus</th><th>Monto a pagar</th></tr></thead>
                                 <tbody>
                                     @foreach ($filas as $fila)
                                         <tr title="Entrada: {{ $fila['entrada'] ?? 'Sin entrada' }} | Salida ponche: {{ $fila['salida_ponche'] ?? 'Sin salida' }} | Última transacción: {{ $fila['ultima_transaccion'] ?? 'Sin transacción' }} | Fuente: {{ $fila['fuente_salida'] }}">
-                                            <td>{{ $fila['terminal'] }}</td><td>{{ $fila['cedula'] }}</td><td @class(['empleado-sin-maestra' => ! $fila['coincide_maestra']])>{{ $fila['empleado'] }}@if (! $fila['coincide_maestra'])<br><small>Validar usuario con la maestra de empleados</small>@endif</td><td>{{ $fila['empresa'] }}</td><td>{{ $fila['coordinador'] }}</td>
+                                            <td>{{ $fila['terminal'] }}</td><td>{{ $fila['cedula'] }}</td><td>{{ $fila['empleado_id'] ?: 'Sin ID' }}</td><td @class(['empleado-sin-maestra' => ! $fila['coincide_maestra']])>{{ $fila['empleado'] }}@if (! $fila['coincide_maestra'])<br><small>Validar usuario con la maestra de empleados</small>@endif</td><td>{{ $fila['empresa'] }}</td><td>{{ $fila['coordinador'] }}</td>
                                             <td>{{ $fila['entrada'] ? 'Primer login: '.\Carbon\Carbon::parse($fila['entrada'])->format('h:i A') : 'Sin primer login' }} | {{ $fila['salida_efectiva'] ? $fila['fuente_salida'].': '.\Carbon\Carbon::parse($fila['salida_efectiva'])->format('h:i A') : 'Sin último login' }}</td>
                                             <td data-order="{{ $fila['minutos_trabajados'] }}">{{ $fila['horas_trabajadas_formato'] }}</td>
                                             <td><span class="badge {{ $fila['estatus'] === 'Cumple' ? 'bg-success' : ($fila['estatus'] === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger') }}">{{ $fila['estatus'] }}</span>@if ($fila['incidencia'])<br><small class="text-muted">{{ $fila['incidencia'] }}</small>@endif</td>
@@ -259,18 +259,19 @@
                 <div class="modal-body">
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped align-middle w-100" id="tablaNominaSinEmpresa">
-                            <thead><tr><th>Terminal</th><th>Cédula</th><th>Usuario de venta</th><th>Colaboradora</th><th>Estado</th></tr></thead>
+                            <thead><tr><th>Terminal</th><th>Cédula</th><th>ID empleado</th><th>Usuario de venta</th><th>Colaboradora</th><th>Estado</th></tr></thead>
                             <tbody>
                                 @forelse ($filasSinEmpresa as $filaSinEmpresa)
                                     <tr>
                                         <td>{{ $filaSinEmpresa['terminal'] }}</td>
                                         <td>{{ $filaSinEmpresa['cedula'] }}</td>
+                                        <td>{{ $filaSinEmpresa['empleado_id'] ?: 'Sin ID' }}</td>
                                         <td>{{ $filaSinEmpresa['usuario_venta'] ?: 'Sin usuario de venta' }}</td>
                                         <td>{{ $filaSinEmpresa['empleado'] }}</td>
                                         <td><span class="badge {{ $filaSinEmpresa['estatus'] === 'Cumple' ? 'bg-success' : ($filaSinEmpresa['estatus'] === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger') }}">{{ $filaSinEmpresa['estatus'] }}</span></td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="5" class="text-center text-muted">No hay registros sin empresa.</td></tr>
+                                    <tr><td colspan="6" class="text-center text-muted">No hay registros sin empresa.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -707,7 +708,7 @@
                 if (document.getElementById('tablaNominaDomingo')) {
                     $('#tablaNominaDomingo').DataTable({
                         pageLength: 25,
-                        order: [[6, 'desc']],
+                        order: [[7, 'desc']],
                         dom: 'Bfrtip',
                         buttons: [
                             {
@@ -716,7 +717,7 @@
                                 className: 'btn btn-success mb-3',
                                 title: 'Nomina_Domingo_{{ $fecha }}',
                                 exportOptions: {
-                                    columns: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                    columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
                                     modifier: { search: 'applied', order: 'applied', page: 'all' },
                                 },
                             },

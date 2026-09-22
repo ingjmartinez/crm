@@ -82,6 +82,7 @@ class NominaDomingoTest extends TestCase
         });
         Schema::create('empleados', function (Blueprint $table): void {
             $table->id();
+            $table->string('empleadoid')->nullable();
             $table->string('cedula');
             $table->string('nombres');
             $table->string('apellidos');
@@ -168,7 +169,7 @@ class NominaDomingoTest extends TestCase
     public function test_sale_after_last_login_extends_only_the_exit_by_five_minutes(): void
     {
         DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);
-        DB::table('empleados')->insert(['cedula' => '00112345678', 'nombres' => 'Ana', 'apellidos' => 'Pérez']);
+        DB::table('empleados')->insert(['empleadoid' => 'EMP-9174', 'cedula' => '00112345678', 'nombres' => 'Ana', 'apellidos' => 'Pérez']);
         DB::table('asistencias_bet')->insert(['fecha' => '2026-09-13', 'agencia_id' => '0012', 'cedula' => '00112345678', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 14:00:00']);
         DB::table('nomina_domingo_ventas')->insert(['terminal' => '12', 'usuario_venta' => '001-1234567-8', 'fecha_transaccion' => '2026-09-13 16:30:00']);
 
@@ -177,6 +178,7 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('Última venta + 5 minutos', $fila['fuente_salida']);
         $this->assertSame('00112345678', $fila['cedula']);
         $this->assertSame('Ana Pérez', $fila['empleado']);
+        $this->assertSame('EMP-9174', $fila['empleado_id']);
         $this->assertSame('2026-09-13 08:00:00', $fila['entrada']);
         $this->assertSame('2026-09-13 14:00:00', $fila['salida_ponche']);
         $this->assertSame('2026-09-13 16:35:00', $fila['salida_efectiva']);
@@ -189,6 +191,8 @@ class NominaDomingoTest extends TestCase
         $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13', 'consultar' => 1]))
             ->assertOk()
             ->assertSee('8 h 35 min')
+            ->assertSee('<th>ID empleado</th>', false)
+            ->assertSee('<td>EMP-9174</td>', false)
             ->assertSee('Terminales y colaboradoras sin empresa')
             ->assertSee('data-bs-target="#modalNominaSinEmpresa"', false)
             ->assertSee('Última venta + 5 minutos: 04:35 PM');
@@ -783,13 +787,13 @@ class NominaDomingoTest extends TestCase
             ->assertSee('id="btnFiltrarNominaDomingo"', false)
             ->assertSee('Aplicando el filtro...')
             ->assertSee('Descargar Excel')
-            ->assertSee('<th>Cédula</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th>', false)
+            ->assertSee('<th>Cédula</th><th>ID empleado</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th>', false)
             ->assertSee('<td>00112345678</td>', false)
             ->assertSee('class="empleado-sin-maestra"', false)
             ->assertSee('Validar usuario con la maestra de empleados')
             ->assertSee('<td>Empresa Norte</td>', false)
             ->assertSee('Primer login: 08:00 AM | Último login: 04:00 PM')
-            ->assertSee('columns: [0, 1, 2, 3, 4, 5, 6, 7, 8]');
+            ->assertSee('columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]');
     }
 
     public function test_configuration_can_be_updated(): void
