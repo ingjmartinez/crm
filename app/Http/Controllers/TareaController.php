@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DepartamentoCrm;
+use App\Models\Tarea;
+use App\Models\TareaComentario;
+use App\Models\User;
 use App\Notifications\TareaAsignadaNotification;
 use App\Notifications\TareaCerradaPorAdminNotification;
 use App\Notifications\TareaComentarioNotification;
 use App\Notifications\TareaProgresoActualizadoNotification;
 use App\Notifications\TareaSolicitudCierreNotification;
-use App\Models\Tarea;
-use App\Models\TareaComentario;
-use App\Models\DepartamentoCrm;
-use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -26,11 +26,11 @@ class TareaController extends Controller
         $departamentos = DepartamentoCrm::activos()->orderBy('nombre')->get();
         $usuarios = User::orderBy('name')->get();
         $rolesCierre = Role::query()
-            ->whereIn('name', ['superadmin', 'admin', 'superior'])
+            ->whereIn('name', ['superadmin', 'admin', 'admin2', 'superior'])
             ->pluck('name')
             ->all();
 
-        $esAdminSuperior = auth()->check() && !empty($rolesCierre)
+        $esAdminSuperior = auth()->check() && ! empty($rolesCierre)
             ? auth()->user()->hasAnyRole($rolesCierre)
             : false;
 
@@ -52,7 +52,7 @@ class TareaController extends Controller
     public function ganttData(Request $request)
     {
         $query = Tarea::with(['departamento', 'creador', 'asignado', 'subtareas'])
-                      ->principales();
+            ->principales();
 
         // Filtro por departamento
         if ($request->filled('departamento_id')) {
@@ -78,7 +78,7 @@ class TareaController extends Controller
         if ($request->filled('fecha_desde') && $request->filled('fecha_hasta')) {
             $query->where(function ($q) use ($request) {
                 $q->whereBetween('fecha_inicio', [$request->fecha_desde, $request->fecha_hasta])
-                  ->orWhereBetween('fecha_fin', [$request->fecha_desde, $request->fecha_hasta]);
+                    ->orWhereBetween('fecha_fin', [$request->fecha_desde, $request->fecha_hasta]);
             });
         }
 
@@ -106,7 +106,7 @@ class TareaController extends Controller
 
         $tareaId = $request->input('tarea_id');
 
-        if (!empty($tareaId) && is_numeric($tareaId)) {
+        if (! empty($tareaId) && is_numeric($tareaId)) {
             $query->where('id', (int) $tareaId);
         }
 
@@ -126,8 +126,8 @@ class TareaController extends Controller
                 }
 
                 $q->where('titulo', 'like', "%{$search}%")
-                  ->orWhereHas('departamento', fn($d) => $d->where('nombre', 'like', "%{$search}%"))
-                  ->orWhereHas('asignado', fn($u) => $u->where('name', 'like', "%{$search}%"));
+                    ->orWhereHas('departamento', fn ($d) => $d->where('nombre', 'like', "%{$search}%"))
+                    ->orWhereHas('asignado', fn ($u) => $u->where('name', 'like', "%{$search}%"));
             });
         }
 
@@ -142,28 +142,28 @@ class TareaController extends Controller
         $length = $request->input('length', 10);
 
         $tareas = $query->orderBy($orderColumn, $orderDir)
-                        ->skip($start)
-                        ->take($length)
-                        ->get()
-                        ->map(function ($tarea) {
-                            return [
-                                'id' => $tarea->id,
-                                'titulo' => $tarea->titulo,
-                                'departamento' => $tarea->departamento->nombre ?? '-',
-                                'depto_color' => $tarea->departamento->color ?? '#405189',
-                                'asignado' => $tarea->asignado->name ?? 'Sin asignar',
-                                'estado' => $tarea->estado,
-                                'badge_estado' => $tarea->badge_estado,
-                                'prioridad' => $tarea->prioridad,
-                                'progreso' => $tarea->progreso,
-                                'fecha_inicio' => $tarea->fecha_inicio->format('d/m/Y'),
-                                'fecha_fin' => $tarea->fecha_fin->format('d/m/Y'),
-                                'atrasada' => $tarea->atrasada,
-                                'dias_atraso' => $tarea->dias_atraso,
-                                'cierre_solicitado_at' => optional($tarea->cierre_solicitado_at)->format('d/m/Y H:i'),
-                                'cierre_solicitado_por' => $tarea->cierreSolicitadoPor?->name,
-                            ];
-                        });
+            ->skip($start)
+            ->take($length)
+            ->get()
+            ->map(function ($tarea) {
+                return [
+                    'id' => $tarea->id,
+                    'titulo' => $tarea->titulo,
+                    'departamento' => $tarea->departamento->nombre ?? '-',
+                    'depto_color' => $tarea->departamento->color ?? '#405189',
+                    'asignado' => $tarea->asignado->name ?? 'Sin asignar',
+                    'estado' => $tarea->estado,
+                    'badge_estado' => $tarea->badge_estado,
+                    'prioridad' => $tarea->prioridad,
+                    'progreso' => $tarea->progreso,
+                    'fecha_inicio' => $tarea->fecha_inicio->format('d/m/Y'),
+                    'fecha_fin' => $tarea->fecha_fin->format('d/m/Y'),
+                    'atrasada' => $tarea->atrasada,
+                    'dias_atraso' => $tarea->dias_atraso,
+                    'cierre_solicitado_at' => optional($tarea->cierre_solicitado_at)->format('d/m/Y H:i'),
+                    'cierre_solicitado_por' => $tarea->cierreSolicitadoPor?->name,
+                ];
+            });
 
         return response()->json([
             'draw' => intval($request->input('draw')),
@@ -210,7 +210,7 @@ class TareaController extends Controller
             'tipo' => 'cambio_estado',
         ]);
 
-        if (!empty($tarea->asignado_id) && (int) $tarea->asignado_id !== (int) auth()->id()) {
+        if (! empty($tarea->asignado_id) && (int) $tarea->asignado_id !== (int) auth()->id()) {
             $asignado = User::find($tarea->asignado_id);
             if ($asignado) {
                 $asignado->notify(new TareaAsignadaNotification($tarea, auth()->user()));
@@ -239,7 +239,7 @@ class TareaController extends Controller
         $actor = auth()->user();
 
         $puedeSolicitar = (int) $actor->id === (int) $tarea->asignado_id || (int) $actor->id === (int) $tarea->user_id;
-        if (!$puedeSolicitar) {
+        if (! $puedeSolicitar) {
             return response()->json([
                 'success' => false,
                 'message' => 'Solo el usuario asignado o creador puede solicitar el cierre.',
@@ -273,7 +273,7 @@ class TareaController extends Controller
         ]);
 
         $rolesCierre = Role::query()
-            ->whereIn('name', ['superadmin', 'admin', 'superior'])
+            ->whereIn('name', ['superadmin', 'admin', 'admin2', 'superior'])
             ->pluck('name')
             ->all();
 
@@ -298,11 +298,11 @@ class TareaController extends Controller
         $actor = auth()->user();
 
         $rolesCierre = Role::query()
-            ->whereIn('name', ['superadmin', 'admin', 'superior'])
+            ->whereIn('name', ['superadmin', 'admin', 'admin2', 'superior'])
             ->pluck('name')
             ->all();
 
-        if (!$actor || empty($rolesCierre) || !$actor->hasAnyRole($rolesCierre)) {
+        if (! $actor || empty($rolesCierre) || ! $actor->hasAnyRole($rolesCierre)) {
             return response()->json([
                 'success' => false,
                 'message' => 'No tienes permisos para finalizar tareas.',
@@ -366,7 +366,7 @@ class TareaController extends Controller
         ]);
 
         if ($request->hasFile('adjunto')) {
-            if (!empty($tarea->adjunto_path)) {
+            if (! empty($tarea->adjunto_path)) {
                 Storage::disk('public')->delete($tarea->adjunto_path);
             }
 
@@ -410,7 +410,7 @@ class TareaController extends Controller
                 'tipo' => 'cambio_progreso',
             ]);
 
-            if (!empty($tarea->user_id) && (int) $tarea->user_id !== (int) auth()->id()) {
+            if (! empty($tarea->user_id) && (int) $tarea->user_id !== (int) auth()->id()) {
                 $creador = User::find($tarea->user_id);
                 if ($creador) {
                     $creador->notify(new TareaProgresoActualizadoNotification(
@@ -424,7 +424,7 @@ class TareaController extends Controller
         }
 
         if (
-            !empty($validated['asignado_id'])
+            ! empty($validated['asignado_id'])
             && (int) $validated['asignado_id'] !== (int) $asignadoAnterior
             && (int) $validated['asignado_id'] !== (int) auth()->id()
         ) {
@@ -442,11 +442,12 @@ class TareaController extends Controller
      */
     public function destroy(Tarea $tarea)
     {
-        if (!empty($tarea->adjunto_path)) {
+        if (! empty($tarea->adjunto_path)) {
             Storage::disk('public')->delete($tarea->adjunto_path);
         }
 
         $tarea->delete();
+
         return response()->json(['success' => true, 'message' => 'Tarea eliminada exitosamente.']);
     }
 
@@ -471,7 +472,7 @@ class TareaController extends Controller
         $destinatarios = collect([$tarea->user_id, $tarea->asignado_id])
             ->filter()
             ->unique()
-            ->reject(fn($id) => (int) $id === (int) auth()->id())
+            ->reject(fn ($id) => (int) $id === (int) auth()->id())
             ->values();
 
         if ($destinatarios->isNotEmpty()) {
@@ -492,7 +493,7 @@ class TareaController extends Controller
             ->latest()
             ->take(15)
             ->get()
-            ->filter(fn($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
+            ->filter(fn ($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
             ->values()
             ->map(function ($notification) {
                 return [
@@ -509,7 +510,7 @@ class TareaController extends Controller
 
         $noLeidas = $user->unreadNotifications()
             ->get()
-            ->filter(fn($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
+            ->filter(fn ($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
             ->count();
 
         return response()->json([
@@ -538,7 +539,7 @@ class TareaController extends Controller
 
         auth()->user()
             ->unreadNotifications
-            ->filter(fn($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
+            ->filter(fn ($notification) => in_array(($notification->data['module'] ?? null), $modulosPermitidos, true))
             ->each
             ->markAsRead();
 
@@ -570,7 +571,7 @@ class TareaController extends Controller
             ->withCount('tareas')
             ->orderByDesc('tareas_count')
             ->get()
-            ->map(fn($d) => ['nombre' => $d->nombre, 'color' => $d->color, 'total' => $d->tareas_count]);
+            ->map(fn ($d) => ['nombre' => $d->nombre, 'color' => $d->color, 'total' => $d->tareas_count]);
 
         return response()->json([
             'total' => $total,
@@ -606,18 +607,20 @@ class TareaController extends Controller
         ]);
 
         $depto = DepartamentoCrm::create($validated);
+
         return response()->json(['success' => true, 'departamento' => $depto]);
     }
 
     public function updateDepartamento(Request $request, DepartamentoCrm $departamento)
     {
         $validated = $request->validate([
-            'nombre' => 'required|string|max:100|unique:departamentos_crm,nombre,' . $departamento->id,
+            'nombre' => 'required|string|max:100|unique:departamentos_crm,nombre,'.$departamento->id,
             'descripcion' => 'nullable|string|max:255',
             'color' => 'required|string|max:7',
         ]);
 
         $departamento->update($validated);
+
         return response()->json(['success' => true, 'departamento' => $departamento]);
     }
 
@@ -627,6 +630,7 @@ class TareaController extends Controller
             return response()->json(['success' => false, 'message' => 'No se puede eliminar un departamento con tareas asignadas.'], 422);
         }
         $departamento->delete();
+
         return response()->json(['success' => true, 'message' => 'Departamento eliminado.']);
     }
 

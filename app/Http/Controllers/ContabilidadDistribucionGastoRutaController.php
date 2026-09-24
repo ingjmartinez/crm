@@ -29,6 +29,10 @@ class ContabilidadDistribucionGastoRutaController extends Controller
             ->orderBy('nombre_socio')
             ->get();
         $terminalesPorMapeo = $this->distribucionService->terminalesPorMapeo($mapeos);
+        $rutasConfiguradas = $mapeos->pluck('ruta_key')->unique();
+        $rutasConfigurables = $rutasDisponibles
+            ->reject(fn (object $ruta): bool => $rutasConfiguradas->contains($ruta->ruta_key))
+            ->values();
         $mapeosAgrupados = $mapeos
             ->groupBy(fn (DistribucionGastoRutaMapeo $mapeo): string => $mapeo->ruta_key)
             ->map(function (Collection $relaciones) use ($terminalesPorMapeo): array {
@@ -56,7 +60,7 @@ class ContabilidadDistribucionGastoRutaController extends Controller
             })
             ->values();
 
-        return view('contabilidad.reportes.distribucion-gastos-ruta', compact('rutasDisponibles', 'mapeosAgrupados'));
+        return view('contabilidad.reportes.distribucion-gastos-ruta', compact('rutasDisponibles', 'rutasConfigurables', 'mapeosAgrupados'));
     }
 
     public function data(ConsultarDistribucionGastoRutaRequest $request): JsonResponse

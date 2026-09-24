@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             \App\Http\Middleware\ExpireInactiveSession::class,
+            \App\Http\Middleware\PreventDeletionForAdmin2::class,
         ]);
 
         $middleware->alias([
@@ -34,7 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'archivos' => [],
                     'agenciasSinVentas' => collect(),
                     'errores' => [
-                        'Los archivos superan el limite actual de PHP. Valores detectados: post_max_size=' . ini_get('post_max_size') . ', upload_max_filesize=' . ini_get('upload_max_filesize') . '. En el VPS ajusta post_max_size y upload_max_filesize a 64M o mas y reinicia PHP/servidor web.',
+                        'Los archivos superan el limite actual de PHP. Valores detectados: post_max_size='.ini_get('post_max_size').', upload_max_filesize='.ini_get('upload_max_filesize').'. En el VPS ajusta post_max_size y upload_max_filesize a 64M o mas y reinicia PHP/servidor web.',
                     ],
                 ], 413);
             }
@@ -48,7 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'totalCedulas' => 0,
                     'limiteVista' => 500,
                     'errores' => [
-                        'El archivo supera el limite actual de PHP. Valores detectados: post_max_size=' . ini_get('post_max_size') . ', upload_max_filesize=' . ini_get('upload_max_filesize') . '. En el VPS ajusta post_max_size y upload_max_filesize a 64M o mas y reinicia PHP/servidor web.',
+                        'El archivo supera el limite actual de PHP. Valores detectados: post_max_size='.ini_get('post_max_size').', upload_max_filesize='.ini_get('upload_max_filesize').'. En el VPS ajusta post_max_size y upload_max_filesize a 64M o mas y reinicia PHP/servidor web.',
                     ],
                 ], 413);
             }

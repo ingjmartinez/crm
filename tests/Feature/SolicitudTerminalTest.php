@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\ForcePasswordChange;
+use App\Http\Middleware\PreventDeletionForAdmin2;
 use App\Mail\SolicitudTerminalMail;
 use App\Models\SolicitudTerminal;
 use App\Models\User;
@@ -12,6 +13,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class SolicitudTerminalTest extends TestCase
@@ -22,6 +25,7 @@ class SolicitudTerminalTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutMiddleware(PreventDeletionForAdmin2::class);
 
         Schema::create('users', function (Blueprint $table): void {
             $table->id();
@@ -39,9 +43,22 @@ class SolicitudTerminalTest extends TestCase
             $table->string('terminal')->nullable();
         });
 
+        Schema::create('zonas_geograficas', function (Blueprint $table): void {
+            $table->id();
+            $table->string('region', 80);
+            $table->string('provincia', 100);
+            $table->string('municipio', 120);
+            $table->string('ciudad_seccion', 160);
+            $table->string('sector_barrio_paraje', 190);
+            $table->char('jerarquia_hash', 64)->unique();
+            $table->timestamps();
+        });
+
         foreach ([
             '2026_09_05_131517_create_solicitudes_terminales_table.php',
             '2026_09_05_131518_create_solicitud_terminal_codigos_table.php',
+            '2026_09_23_155008_add_formulario_fields_to_solicitud_terminal_codigos_table.php',
+            '2026_09_23_161838_expand_longitud_precision_on_solicitud_terminal_codigos_table.php',
         ] as $archivo) {
             $migracion = require database_path("migrations/{$archivo}");
             $migracion->up();
@@ -56,6 +73,7 @@ class SolicitudTerminalTest extends TestCase
         }
 
         Schema::dropIfExists('agencias');
+        Schema::dropIfExists('zonas_geograficas');
         Schema::dropIfExists('users');
 
         parent::tearDown();
@@ -147,6 +165,11 @@ class SolicitudTerminalTest extends TestCase
         ]);
         $this->assertSame(2, $solicitud->codigos()->where('estado', 'pendiente')->count());
 
+        $archivoParcial = storage_path('app/private/solicitudes-terminales/Solicitud de agencia loteka #1.xlsx');
+        $hojaParcial = IOFactory::load($archivoParcial)->getSheet(0);
+        $this->assertSame('Pendiente', $hojaParcial->getCell('B3')->getValue());
+        $this->assertSame('FFFCE4D6', $hojaParcial->getStyle('B3')->getFill()->getStartColor()->getARGB());
+
         $this->actingAs($user)
             ->put(route('mantenimiento.solicitudes-terminales.aprobaciones', $solicitud), [
                 'codigos_aprobados' => $solicitud->codigos()->pluck('id')->all(),
@@ -160,6 +183,23 @@ class SolicitudTerminalTest extends TestCase
             ->get(route('mantenimiento.solicitudes-terminales.pdf', $solicitud))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
+
+        $this->actingAs($user)
+            ->get(route('mantenimiento.solicitudes-terminales.excel', $solicitud))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        $archivo = storage_path('app/private/solicitudes-terminales/Solicitud de agencia loteka #1.xlsx');
+        $hoja = IOFactory::load($archivo)->getSheet(0);
+        $this->assertSame('Id', $hoja->getCell('A1')->getValue());
+        $this->assertSame('Estatus', $hoja->getCell('B1')->getValue());
+        $this->assertSame('Aprobada', $hoja->getCell('B2')->getValue());
+        $this->assertSame('FFC6EFCE', $hoja->getStyle('B2')->getFill()->getStartColor()->getARGB());
+        $this->assertFalse($hoja->getProtection()->getSheet());
+        $this->assertSame('Grupo Joselito', $hoja->getCell('C2')->getValue());
+        $this->assertSame($codigos[0], $hoja->getCell('E2')->getValue());
+        $this->assertSame($codigos[2], $hoja->getCell('E4')->getValue());
+        Storage::disk('local')->delete('solicitudes-terminales/Solicitud de agencia loteka #1.xlsx');
     }
 
     public function test_request_rejects_existing_codes_and_invalid_prefixes(): void
@@ -186,6 +226,102 @@ class SolicitudTerminalTest extends TestCase
             ->assertSessionHasErrors('codigos');
 
         $this->assertDatabaseCount('solicitudes_terminales', 0);
+    }
+
+    public function test_user_can_update_form_data_with_geographic_hierarchy(): void
+    {
+        $user = User::factory()->create();
+        $solicitud = SolicitudTerminal::query()->create([
+            'solicitado_por' => $user->id,
+            'prefijo_empresa' => '05',
+            'prefijo_seleccionado' => '33',
+            'cantidad' => 1,
+            'estado' => 'pendiente',
+        ]);
+        $codigo = $solicitud->codigos()->create([
+            'codigo' => '05331234',
+            'estado' => 'pendiente',
+        ]);
+
+        Schema::getConnection()->table('zonas_geograficas')->insert([
+            'region' => 'Ozama',
+            'provincia' => 'Distrito Nacional',
+            'municipio' => 'Santo Domingo de Guzman',
+            'ciudad_seccion' => 'Zona Urbana',
+            'sector_barrio_paraje' => 'Gazcue',
+            'jerarquia_hash' => hash('sha256', 'zona-prueba'),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('mantenimiento.solicitudes-terminales.datos.update', $solicitud), [
+                'codigos' => [[
+                    'id' => $codigo->id,
+                    'nombre_banca' => 'Agencia Principal',
+                    'region' => 'Ozama',
+                    'provincia' => 'Distrito Nacional',
+                    'municipio' => 'Santo Domingo de Guzman',
+                    'ciudad' => 'Zona Urbana',
+                    'sector' => 'Gazcue',
+                    'calle' => 'Calle Central',
+                    'direccion_local' => 'Local 1',
+                    'latitud' => '18.4763890',
+                    'longitud' => '-50.77777777',
+                    'rja' => 'RJA-100',
+                ]],
+            ])
+            ->assertRedirect(route('mantenimiento.solicitudes-terminales.index', ['page' => 1]));
+
+        $this->assertDatabaseHas('solicitud_terminal_codigos', [
+            'id' => $codigo->id,
+            'region' => 'Ozama',
+            'provincia' => 'Distrito Nacional',
+            'municipio' => 'Santo Domingo de Guzman',
+            'ciudad' => 'Zona Urbana',
+            'sector' => 'Gazcue',
+            'longitud' => '-50.77777777',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('mantenimiento.solicitudes-terminales.datos', $solicitud))
+            ->assertOk()
+            ->assertJsonPath('codigos.0.nombre_banca', 'Agencia Principal')
+            ->assertJsonPath('codigos.0.region', 'Ozama');
+
+        $archivo = storage_path('app/private/solicitudes-terminales/Solicitud de agencia loteka #'.$solicitud->id.'.xlsx');
+        $hoja = IOFactory::load($archivo)->getSheet(0);
+        $this->assertSame('Agencia Principal', $hoja->getCell('D2')->getValue());
+        $this->assertSame('Ozama', $hoja->getCell('F2')->getValue());
+        $this->assertSame('Gazcue', $hoja->getCell('J2')->getValue());
+        Storage::disk('local')->delete('solicitudes-terminales/Solicitud de agencia loteka #'.$solicitud->id.'.xlsx');
+
+        $this->actingAs($user)
+            ->from(route('mantenimiento.solicitudes-terminales.index'))
+            ->put(route('mantenimiento.solicitudes-terminales.datos.update', $solicitud), [
+                'codigos' => [[
+                    'id' => $codigo->id,
+                    'region' => 'Ozama',
+                    'provincia' => 'Provincia inexistente',
+                ]],
+            ])
+            ->assertRedirect(route('mantenimiento.solicitudes-terminales.index'))
+            ->assertSessionHasErrors('codigos.0.region');
+
+        $this->actingAs($user)
+            ->from(route('mantenimiento.solicitudes-terminales.index'))
+            ->put(route('mantenimiento.solicitudes-terminales.datos.update', $solicitud), [
+                'codigos' => [[
+                    'id' => $codigo->id,
+                    'latitud' => '184763890',
+                    'longitud' => '50.77777777',
+                ]],
+            ])
+            ->assertRedirect(route('mantenimiento.solicitudes-terminales.index'))
+            ->assertSessionHasErrors([
+                'codigos.0.latitud',
+                'codigos.0.longitud',
+            ]);
     }
 
     public function test_repeated_confirmation_does_not_duplicate_the_request_or_show_a_conflict(): void

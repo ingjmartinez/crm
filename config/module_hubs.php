@@ -446,6 +446,15 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Zonas Geográficas',
+                'descripcion' => 'Administra regiones, provincias, municipios, ciudades, secciones, sectores, barrios y parajes.',
+                'url' => '/mantenimiento/zonas-geograficas',
+                'icono' => 'ri-map-pin-2-line',
+                'categoria' => 'Catalogos',
+                'tags' => ['zonas', 'geografia', 'provincias', 'municipios', 'sectores', 'barrios'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Usuarios',
                 'descripcion' => 'Gestiona usuarios de acceso al CRM.',
                 'url' => '/usuarios',

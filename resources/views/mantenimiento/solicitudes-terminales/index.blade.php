@@ -23,6 +23,14 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
                 </div>
             @endif
+            @if (session('excelSolicitud'))
+                <div class="alert alert-info d-flex justify-content-between align-items-center" role="alert">
+                    <span>El Excel de la solicitud fue generado correctamente.</span>
+                    <a class="btn btn-sm btn-success" href="{{ session('excelSolicitud') }}">
+                        <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
+                    </a>
+                </div>
+            @endif
 
             @if ($errors->any())
                 <div class="alert alert-danger" role="alert">{{ $errors->first() }}</div>
@@ -169,6 +177,19 @@
                                                 <i class="ri-file-pdf-2-line me-1"></i>PDF
                                             </a>
                                             <button
+                                                class="btn btn-sm btn-info btn-ver-solicitud"
+                                                type="button"
+                                                data-datos-url="{{ route('mantenimiento.solicitudes-terminales.datos', $solicitud) }}"
+                                                data-actualizar-url="{{ route('mantenimiento.solicitudes-terminales.datos.update', $solicitud) }}"
+                                            >
+                                                <i class="ri-eye-line me-1"></i>Ver
+                                            </button>
+                                            @if ($solicitud->codigos_count > 0)
+                                                <a class="btn btn-sm btn-success" href="{{ route('mantenimiento.solicitudes-terminales.excel', $solicitud) }}" title="Descargar solicitud en Excel">
+                                                    <i class="ri-file-excel-2-line me-1"></i>Excel
+                                                </a>
+                                            @endif
+                                            <button
                                                 class="btn btn-sm btn-success btn-enviar-correo"
                                                 type="button"
                                                 data-solicitud-id="{{ $solicitud->id }}"
@@ -232,6 +253,62 @@
                 @endif
             </div>
 
+            <div class="modal fade" id="modal-datos-solicitud" tabindex="-1" aria-labelledby="modal-datos-solicitud-titulo" aria-hidden="true">
+                <div class="modal-dialog modal-fullscreen">
+                    <div class="modal-content">
+                        <form method="POST" id="form-datos-solicitud">
+                            @csrf
+                            @method('PUT')
+                            <input type="hidden" name="page" value="{{ $solicitudes->currentPage() }}">
+                            <div class="modal-header">
+                                <div>
+                                    <h5 class="modal-title" id="modal-datos-solicitud-titulo">Datos de la solicitud</h5>
+                                    <p class="text-muted mb-0 small">Seleccione la ubicaci&oacute;n respetando el orden territorial.</p>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="alert alert-danger d-none" id="error-datos-solicitud"></div>
+                                <div class="text-center py-5" id="cargando-datos-solicitud">
+                                    <span class="spinner-border text-primary"></span>
+                                    <p class="text-muted mt-2 mb-0">Cargando formulario...</p>
+                                </div>
+                                <div class="table-responsive d-none" id="contenedor-datos-solicitud">
+                                    <table class="table table-bordered table-sm align-middle text-nowrap mb-0">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Estatus</th>
+                                                <th>Consorcio</th>
+                                                <th>Nombre banca</th>
+                                                <th>C&oacute;digo terminal</th>
+                                                <th>Regi&oacute;n</th>
+                                                <th>Provincia</th>
+                                                <th>Municipio</th>
+                                                <th>Ciudad</th>
+                                                <th>Sector</th>
+                                                <th>Calle</th>
+                                                <th>Direcci&oacute;n local</th>
+                                                <th>Latitud</th>
+                                                <th>Longitud</th>
+                                                <th>RJA</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="filas-datos-solicitud"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                                <button type="submit" class="btn btn-primary" id="btn-guardar-datos-solicitud">
+                                    <i class="ri-save-3-line me-1"></i>Guardar formulario
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <div class="modal fade" id="modal-enviar-correo" tabindex="-1" aria-labelledby="modal-enviar-correo-titulo" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
@@ -285,12 +362,232 @@ document.addEventListener('DOMContentLoaded', function () {
     const listaSugerencias = document.getElementById('lista-sugerencias');
     const botonConfirmar = document.getElementById('btn-confirmar-solicitud');
     const modalCorreoElemento = document.getElementById('modal-enviar-correo');
+    const modalDatosElemento = document.getElementById('modal-datos-solicitud');
 
     document.body.appendChild(modalCorreoElemento);
+    document.body.appendChild(modalDatosElemento);
 
     const modalCorreo = new bootstrap.Modal(modalCorreoElemento);
+    const modalDatos = new bootstrap.Modal(modalDatosElemento);
     const formCorreo = document.getElementById('form-enviar-correo');
     const botonConfirmarCorreo = document.getElementById('btn-confirmar-correo');
+    const formDatos = document.getElementById('form-datos-solicitud');
+    const filasDatos = document.getElementById('filas-datos-solicitud');
+    const cargandoDatos = document.getElementById('cargando-datos-solicitud');
+    const contenedorDatos = document.getElementById('contenedor-datos-solicitud');
+    const errorDatos = document.getElementById('error-datos-solicitud');
+    const botonGuardarDatos = document.getElementById('btn-guardar-datos-solicitud');
+    const urlOpcionesGeograficas = @json(route('mantenimiento.zonas-geograficas.opciones'));
+    const ordenGeografico = ['region', 'provincia', 'municipio', 'ciudad', 'sector'];
+    const nivelesApi = {
+        region: 'region',
+        provincia: 'provincia',
+        municipio: 'municipio',
+        ciudad: 'ciudad_seccion',
+        sector: 'sector_barrio_paraje',
+    };
+
+    function crearInput(indice, campo, valor, ancho = '160px', tipo = 'text') {
+        const input = document.createElement('input');
+        input.type = ['coordenada', 'longitud'].includes(tipo) ? 'text' : tipo;
+        input.name = `codigos[${indice}][${campo}]`;
+        input.value = valor ?? '';
+        input.className = 'form-control form-control-sm';
+        input.style.minWidth = ancho;
+        if (tipo === 'number') input.step = 'any';
+        if (tipo === 'coordenada') {
+            input.inputMode = 'decimal';
+            input.maxLength = 11;
+            input.placeholder = '00.0000000';
+            input.pattern = '-?\\d{2}\\.\\d{1,7}';
+            input.title = 'Digite dos numeros antes del punto. Ejemplo: 18.4763890 o -69.8933330';
+            input.addEventListener('input', function () {
+                const esNegativo = input.value.trim().startsWith('-');
+                const digitos = input.value.replace(/\D/g, '').slice(0, 9);
+                const entero = digitos.slice(0, 2);
+                const decimales = digitos.slice(2);
+
+                input.value = (esNegativo ? '-' : '') + entero + (digitos.length >= 2 ? '.' + decimales : '');
+            });
+        }
+        if (tipo === 'longitud') {
+            input.inputMode = 'decimal';
+            input.maxLength = 12;
+            input.placeholder = '-00.00000000';
+            input.pattern = '-\\d{2}\\.\\d{1,8}';
+            input.title = 'La longitud debe iniciar con menos. Ejemplo: -50.77777777';
+            input.addEventListener('focus', function () {
+                if (input.value === '') input.value = '-';
+            });
+            input.addEventListener('input', function () {
+                const digitos = input.value.replace(/\D/g, '').slice(0, 10);
+                const entero = digitos.slice(0, 2);
+                const decimales = digitos.slice(2);
+
+                input.value = '-' + entero + (digitos.length >= 2 ? '.' + decimales : '');
+            });
+        }
+        return input;
+    }
+
+    function agregarOpcion(select, valor) {
+        if (! valor || Array.from(select.options).some((opcion) => opcion.value === valor)) return;
+        const opcion = document.createElement('option');
+        opcion.value = valor;
+        opcion.textContent = valor;
+        select.appendChild(opcion);
+    }
+
+    function crearSelect(indice, campo, valor, regiones) {
+        const select = document.createElement('select');
+        select.name = `codigos[${indice}][${campo}]`;
+        select.className = 'form-select form-select-sm selector-geografico';
+        select.dataset.campo = campo;
+        select.style.minWidth = '180px';
+
+        const opcionVacia = document.createElement('option');
+        opcionVacia.value = '';
+        opcionVacia.textContent = 'Seleccione...';
+        select.appendChild(opcionVacia);
+
+        if (campo === 'region') {
+            regiones.forEach((region) => agregarOpcion(select, region));
+        }
+
+        agregarOpcion(select, valor);
+        select.value = valor ?? '';
+        return select;
+    }
+
+    function celdaCon(elemento) {
+        const celda = document.createElement('td');
+        celda.appendChild(elemento);
+        return celda;
+    }
+
+    async function cargarOpcionesGeograficas(fila, campo) {
+        if (campo === 'region') return;
+
+        const indiceCampo = ordenGeografico.indexOf(campo);
+        const parametros = new URLSearchParams({ nivel: nivelesApi[campo] });
+
+        for (const anterior of ordenGeografico.slice(0, indiceCampo)) {
+            const selectAnterior = fila.querySelector(`[data-campo="${anterior}"]`);
+            if (! selectAnterior?.value) return;
+            parametros.set(nivelesApi[anterior], selectAnterior.value);
+        }
+
+        const select = fila.querySelector(`[data-campo="${campo}"]`);
+        const valorActual = select.value;
+        const respuesta = await fetch(`${urlOpcionesGeograficas}?${parametros.toString()}`, {
+            headers: { 'Accept': 'application/json' },
+        });
+
+        if (! respuesta.ok) return;
+
+        const opciones = await respuesta.json();
+        select.replaceChildren();
+        const opcionVacia = document.createElement('option');
+        opcionVacia.value = '';
+        opcionVacia.textContent = 'Seleccione...';
+        select.appendChild(opcionVacia);
+        opciones.forEach((opcion) => agregarOpcion(select, opcion));
+        agregarOpcion(select, valorActual);
+        select.value = valorActual;
+    }
+
+    function construirFila(codigo, indice, regiones) {
+        const fila = document.createElement('tr');
+        fila.dataset.indice = indice;
+
+        const celdaId = document.createElement('td');
+        celdaId.textContent = indice + 1;
+        const id = document.createElement('input');
+        id.type = 'hidden';
+        id.name = `codigos[${indice}][id]`;
+        id.value = codigo.id;
+        celdaId.appendChild(id);
+        fila.appendChild(celdaId);
+
+        const estado = document.createElement('span');
+        estado.className = codigo.estado === 'aprobado'
+            ? 'badge bg-success-subtle text-success'
+            : 'badge bg-warning-subtle text-warning';
+        estado.textContent = codigo.estado === 'aprobado' ? 'Aprobada' : 'Pendiente';
+        fila.appendChild(celdaCon(estado));
+
+        const consorcio = document.createElement('span');
+        consorcio.textContent = 'Grupo Joselito';
+        fila.appendChild(celdaCon(consorcio));
+        fila.appendChild(celdaCon(crearInput(indice, 'nombre_banca', codigo.nombre_banca, '190px')));
+
+        const terminal = document.createElement('code');
+        terminal.className = 'fs-6';
+        terminal.textContent = codigo.codigo;
+        fila.appendChild(celdaCon(terminal));
+
+        ordenGeografico.forEach(function (campo) {
+            fila.appendChild(celdaCon(crearSelect(indice, campo, codigo[campo], regiones)));
+        });
+
+        fila.appendChild(celdaCon(crearInput(indice, 'calle', codigo.calle, '180px')));
+        fila.appendChild(celdaCon(crearInput(indice, 'direccion_local', codigo.direccion_local, '230px')));
+        fila.appendChild(celdaCon(crearInput(indice, 'latitud', codigo.latitud, '140px', 'coordenada')));
+        fila.appendChild(celdaCon(crearInput(indice, 'longitud', codigo.longitud, '150px', 'longitud')));
+        fila.appendChild(celdaCon(crearInput(indice, 'rja', codigo.rja, '130px')));
+
+        fila.querySelectorAll('.selector-geografico').forEach(function (select) {
+            select.addEventListener('focus', function () {
+                cargarOpcionesGeograficas(fila, select.dataset.campo);
+            });
+            select.addEventListener('change', function () {
+                const posicion = ordenGeografico.indexOf(select.dataset.campo);
+                ordenGeografico.slice(posicion + 1).forEach(function (dependiente) {
+                    const siguiente = fila.querySelector(`[data-campo="${dependiente}"]`);
+                    siguiente.replaceChildren(new Option('Seleccione...', ''));
+                });
+
+                const siguienteCampo = ordenGeografico[posicion + 1];
+                if (siguienteCampo) cargarOpcionesGeograficas(fila, siguienteCampo);
+            });
+        });
+
+        return fila;
+    }
+
+    document.querySelectorAll('.btn-ver-solicitud').forEach(function (boton) {
+        boton.addEventListener('click', async function () {
+            formDatos.action = boton.dataset.actualizarUrl;
+            filasDatos.replaceChildren();
+            errorDatos.classList.add('d-none');
+            contenedorDatos.classList.add('d-none');
+            cargandoDatos.classList.remove('d-none');
+            modalDatos.show();
+
+            try {
+                const respuesta = await fetch(boton.dataset.datosUrl, {
+                    headers: { 'Accept': 'application/json' },
+                });
+                const datos = await respuesta.json();
+
+                if (! respuesta.ok) throw new Error(datos.message || 'No fue posible cargar el formulario.');
+
+                document.getElementById('modal-datos-solicitud-titulo').textContent = `Formulario ${datos.numero}`;
+                filasDatos.replaceChildren(...datos.codigos.map((codigo, indice) => construirFila(codigo, indice, datos.regiones)));
+                contenedorDatos.classList.remove('d-none');
+            } catch (error) {
+                errorDatos.textContent = error.message;
+                errorDatos.classList.remove('d-none');
+            } finally {
+                cargandoDatos.classList.add('d-none');
+            }
+        });
+    });
+
+    formDatos.addEventListener('submit', function () {
+        botonGuardarDatos.disabled = true;
+        botonGuardarDatos.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
+    });
 
     function configurarModalCorreo(boton) {
         formCorreo.action = boton.dataset.url;

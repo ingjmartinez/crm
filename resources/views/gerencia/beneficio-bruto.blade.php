@@ -713,6 +713,21 @@
 
                     return [concepto, clasificacion, ...valores.map(formatear), formatear(total)];
                 };
+                const filaPorcentaje = (concepto, clasificacion, calcularNumerador, calcularDenominador) => {
+                    const numeradores = gruposEstado.map((grupo) => Number(calcularNumerador(resumenPorGrupoPdf[grupo.clave]) || 0));
+                    const denominadores = gruposEstado.map((grupo) => Number(calcularDenominador(resumenPorGrupoPdf[grupo.clave]) || 0));
+                    const porcentajes = numeradores.map((numerador, indice) => denominadores[indice] !== 0
+                        ? (numerador / denominadores[indice]) * 100
+                        : 0);
+                    const numeradorConsolidado = numeradores.reduce((acumulado, valor) => acumulado + valor, 0);
+                    const denominadorConsolidado = denominadores.reduce((acumulado, valor) => acumulado + valor, 0);
+                    const porcentajeConsolidado = denominadorConsolidado !== 0
+                        ? (numeradorConsolidado / denominadorConsolidado) * 100
+                        : 0;
+                    const formatear = (valor) => Number(valor).toFixed(2) + '%';
+
+                    return [concepto, clasificacion, ...porcentajes.map(formatear), formatear(porcentajeConsolidado)];
+                };
                 const seccion = (titulo) => [titulo, ...Array(cantidadColumnasEstado - 1).fill('')];
                 const ventasLoterias = (grupo) => Number(grupo.tradicional.total_vendido || 0)
                     + Number(grupo.no_tradicional.total_vendido || 0);
@@ -723,6 +738,9 @@
                 const balanceLoterias = (grupo) => Number(grupo.tradicional.balance_general || 0)
                     + Number(grupo.no_tradicional.balance_general || 0);
                 const balanceGeneralNeto = (grupo) => balanceLoterias(grupo)
+                    + Number(grupo.recargas.total_vendido || 0)
+                    + Number(grupo.ventas_externas.total_vendido || 0);
+                const ventasTotales = (grupo) => ventasLoterias(grupo)
                     + Number(grupo.recargas.total_vendido || 0)
                     + Number(grupo.ventas_externas.total_vendido || 0);
 
@@ -745,6 +763,7 @@
                     filaMonto('Premios sacados Tradicional', 'Informativo', (grupo) => grupo.tradicional.premios_sacados),
                     filaMonto('Premios sacados No Tradicional', 'Informativo', (grupo) => grupo.no_tradicional.premios_sacados),
                     filaMonto('Total premios sacados', 'No afecta el balance', premiosSacados),
+                    filaPorcentaje('PREMIOS SACADOS %', 'Premios sacados / ventas de loterías', premiosSacados, ventasLoterias),
                     filaMonto('Premios pagados Tradicional', 'Deducción', (grupo) => grupo.tradicional.premios_pagados, true),
                     filaMonto('Premios pagados No Tradicional', 'Deducción', (grupo) => grupo.no_tradicional.premios_pagados, true),
                     filaMonto('Total premios pagados', 'Deducción aplicada', premiosPagados, true),
@@ -760,6 +779,7 @@
                     filaMonto('Boletos', '', (grupo) => grupo.ventas_externas.boletos),
                     filaMonto('Total ventas externas', '', (grupo) => grupo.ventas_externas.total_vendido),
                     filaMonto('BALANCE GENERAL NETO', 'Loterías + Recargas + Externas', balanceGeneralNeto),
+                    filaPorcentaje('RESULTADO BRUTO %', 'Balance neto / ventas totales', balanceGeneralNeto, ventasTotales),
                 ];
                 const secciones = [
                     'INGRESOS DE LOTERÍAS',
@@ -828,12 +848,33 @@
                             data.cell.styles.fillColor = [248, 249, 250];
                         }
 
+                        if (concepto === 'PREMIOS SACADOS %') {
+                            data.cell.styles.fontStyle = 'bold';
+                            data.cell.styles.fillColor = [255, 247, 224];
+                            data.cell.styles.textColor = [117, 84, 20];
+
+                            if (data.column.index >= 2) {
+                                data.cell.styles.fontSize = 11;
+                            }
+                        }
+
                         if (concepto === 'BALANCE GENERAL NETO') {
                             data.cell.styles.fillColor = [59, 81, 72];
                             data.cell.styles.textColor = [255, 255, 255];
                             data.cell.styles.fontStyle = 'bold';
                             data.cell.styles.fontSize = 10;
                             data.cell.styles.lineWidth = 0;
+                        }
+
+                        if (concepto === 'RESULTADO BRUTO %') {
+                            data.cell.styles.fillColor = [224, 235, 230];
+                            data.cell.styles.textColor = [42, 74, 61];
+                            data.cell.styles.fontStyle = 'bold';
+                            data.cell.styles.lineWidth = 0;
+
+                            if (data.column.index >= 2) {
+                                data.cell.styles.fontSize = 11;
+                            }
                         }
                     },
                 });

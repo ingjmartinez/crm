@@ -173,7 +173,7 @@ class FavoritoCatalogoService
         }
 
         try {
-            return $usuario->hasAnyRole(['superadmin', 'admin', 'rh'])
+            return $usuario->hasAnyRole(['superadmin', 'admin', 'admin2', 'rh'])
                 || $usuario->can('recursos_humanos.view');
         } catch (QueryException) {
             return false;

@@ -10,8 +10,8 @@ use App\Notifications\TecnologiaSolicitudCierreSolicitadoNotification;
 use App\Notifications\TecnologiaSolicitudFinalizadaNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class TecnologiaSolicitudController extends Controller
@@ -28,7 +28,7 @@ class TecnologiaSolicitudController extends Controller
         'sistemas',
     ];
 
-    private const ADMIN_ROLE_NAMES = ['superadmin', 'admin', 'superior'];
+    private const ADMIN_ROLE_NAMES = ['superadmin', 'admin', 'admin2', 'superior'];
 
     public function index()
     {
@@ -36,14 +36,14 @@ class TecnologiaSolicitudController extends Controller
             'asignables' => $this->tecnologiaStaffUsers(),
             'stats' => $this->statsFor(auth()->user()),
             'puedeVerTodo' => $this->puedeVerTodo(auth()->user()),
-            'setupPending' => !$this->solicitudesTableExists(),
+            'setupPending' => ! $this->solicitudesTableExists(),
             'puedeFinalizarGlobal' => $this->esAdmin(auth()->user()),
         ]);
     }
 
     public function list(Request $request): JsonResponse
     {
-        if (!$this->solicitudesTableExists()) {
+        if (! $this->solicitudesTableExists()) {
             return response()->json([
                 'data' => [],
                 'stats' => $this->emptyStats(),
@@ -94,17 +94,17 @@ class TecnologiaSolicitudController extends Controller
                     $subQuery->orWhere('id', (int) $search);
                 }
 
-                $subQuery->orWhere('titulo', 'like', '%' . $search . '%')
-                    ->orWhere('descripcion', 'like', '%' . $search . '%')
-                    ->orWhereHas('creador', fn($userQuery) => $userQuery->where('name', 'like', '%' . $search . '%'))
-                    ->orWhereHas('asignado', fn($userQuery) => $userQuery->where('name', 'like', '%' . $search . '%'));
+                $subQuery->orWhere('titulo', 'like', '%'.$search.'%')
+                    ->orWhere('descripcion', 'like', '%'.$search.'%')
+                    ->orWhereHas('creador', fn ($userQuery) => $userQuery->where('name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('asignado', fn ($userQuery) => $userQuery->where('name', 'like', '%'.$search.'%'));
             });
         }
 
         $solicitudes = $query
             ->orderByDesc('created_at')
             ->get()
-            ->map(fn(TecnologiaSolicitud $solicitud) => $this->serializeSolicitud($solicitud));
+            ->map(fn (TecnologiaSolicitud $solicitud) => $this->serializeSolicitud($solicitud));
 
         return response()->json([
             'data' => $solicitudes,
@@ -114,7 +114,7 @@ class TecnologiaSolicitudController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if (!$this->solicitudesTableExists()) {
+        if (! $this->solicitudesTableExists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'La tabla de solicitudes de Tecnologia aun no existe. Ejecuta la migracion pendiente.',
@@ -169,7 +169,7 @@ class TecnologiaSolicitudController extends Controller
 
     public function solicitarCierre(TecnologiaSolicitud $solicitud): JsonResponse
     {
-        if (!$this->solicitudesTableExists()) {
+        if (! $this->solicitudesTableExists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'La tabla de solicitudes de Tecnologia aun no existe. Ejecuta la migracion pendiente.',
@@ -220,7 +220,7 @@ class TecnologiaSolicitudController extends Controller
 
     public function finalizar(TecnologiaSolicitud $solicitud): JsonResponse
     {
-        if (!$this->solicitudesTableExists()) {
+        if (! $this->solicitudesTableExists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'La tabla de solicitudes de Tecnologia aun no existe. Ejecuta la migracion pendiente.',
@@ -229,7 +229,7 @@ class TecnologiaSolicitudController extends Controller
 
         abort_unless($this->puedeFinalizarSolicitud(auth()->user(), $solicitud), 403);
 
-        if ($solicitud->estado !== 'solicitud_cierre' && !$this->esAdmin(auth()->user())) {
+        if ($solicitud->estado !== 'solicitud_cierre' && ! $this->esAdmin(auth()->user())) {
             return response()->json([
                 'success' => false,
                 'message' => 'El ticket debe estar en solicitud de cierre antes de finalizarse.',
@@ -252,7 +252,7 @@ class TecnologiaSolicitudController extends Controller
             $solicitud->asignado,
         ])->filter()
             ->unique('id')
-            ->reject(fn(User $user) => (int) $user->id === (int) auth()->id());
+            ->reject(fn (User $user) => (int) $user->id === (int) auth()->id());
 
         $destinatarios->each(function (User $user) use ($solicitud) {
             $user->notify(new TecnologiaSolicitudFinalizadaNotification($solicitud, auth()->user()));
@@ -267,7 +267,7 @@ class TecnologiaSolicitudController extends Controller
 
     public function update(Request $request, TecnologiaSolicitud $solicitud): JsonResponse
     {
-        if (!$this->solicitudesTableExists()) {
+        if (! $this->solicitudesTableExists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'La tabla de solicitudes de Tecnologia aun no existe. Ejecuta la migracion pendiente.',
@@ -293,14 +293,14 @@ class TecnologiaSolicitudController extends Controller
             $validated['progreso'] = 0;
         }
 
-        if (!$this->puedeGestionarProgreso(auth()->user(), $solicitud) && (int) $validated['progreso'] !== (int) $solicitud->progreso) {
+        if (! $this->puedeGestionarProgreso(auth()->user(), $solicitud) && (int) $validated['progreso'] !== (int) $solicitud->progreso) {
             return response()->json([
                 'success' => false,
                 'message' => 'Solo el usuario asignado o un administrador puede actualizar el progreso.',
             ], 403);
         }
 
-        if ($validated['estado'] === 'solicitud_cierre' && !$this->puedeSolicitarCierre(auth()->user(), $solicitud)) {
+        if ($validated['estado'] === 'solicitud_cierre' && ! $this->puedeSolicitarCierre(auth()->user(), $solicitud)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Solo el responsable puede solicitar el cierre del ticket.',
@@ -358,7 +358,7 @@ class TecnologiaSolicitudController extends Controller
             $solicitud->asignado,
         ])->filter()
             ->unique('id')
-            ->reject(fn(User $user) => (int) $user->id === (int) auth()->id());
+            ->reject(fn (User $user) => (int) $user->id === (int) auth()->id());
 
         if ($destinatarios->isNotEmpty() && ($estadoCambio || $asignadoCambio || $detalleCambio)) {
             $cambios = [
@@ -438,7 +438,7 @@ class TecnologiaSolicitudController extends Controller
 
     private function statsFor(User $user): array
     {
-        if (!$this->solicitudesTableExists()) {
+        if (! $this->solicitudesTableExists()) {
             return $this->emptyStats();
         }
 
@@ -474,7 +474,7 @@ class TecnologiaSolicitudController extends Controller
                 $roleQuery->where(function ($nestedQuery) {
                     foreach (self::STAFF_ROLE_KEYWORDS as $index => $keyword) {
                         $method = $index === 0 ? 'where' : 'orWhere';
-                        $nestedQuery->{$method}('name', 'like', '%' . $keyword . '%');
+                        $nestedQuery->{$method}('name', 'like', '%'.$keyword.'%');
                     }
                 });
             })

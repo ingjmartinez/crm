@@ -30,6 +30,7 @@ class ServiciosGeneralesRolePermissionSeeder extends Seeder
             ],
             'superadmin' => $permissions,
             'admin' => $permissions,
+            'admin2' => $permissions,
         ];
 
         foreach ($rolesPermisos as $roleName => $rolePermissions) {

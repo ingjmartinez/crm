@@ -6,9 +6,12 @@ use App\Http\Requests\EnviarSolicitudTerminalCorreoRequest;
 use App\Http\Requests\PreviewSolicitudTerminalRequest;
 use App\Http\Requests\StoreSolicitudTerminalRequest;
 use App\Http\Requests\UpdateSolicitudTerminalAprobacionesRequest;
+use App\Http\Requests\UpdateSolicitudTerminalDatosRequest;
 use App\Mail\SolicitudTerminalMail;
 use App\Models\Agencia;
 use App\Models\SolicitudTerminal;
+use App\Models\ZonaGeografica;
+use App\Services\Mantenimiento\SolicitudTerminalExcelService;
 use App\Services\Mantenimiento\SolicitudTerminalService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\QueryException;
@@ -18,13 +21,18 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class SolicitudTerminalController extends Controller
 {
-    public function __construct(private readonly SolicitudTerminalService $service) {}
+    public function __construct(
+        private readonly SolicitudTerminalService $service,
+        private readonly SolicitudTerminalExcelService $excelService,
+    ) {}
 
     public function index(): View
     {
@@ -184,9 +192,85 @@ class SolicitudTerminalController extends Controller
             $solicitudTerminal->update(['estado' => $estado]);
         }, attempts: 3);
 
+        $this->excelService->generar($solicitudTerminal->fresh());
+
         return redirect()
             ->route('mantenimiento.solicitudes-terminales.index', ['page' => $request->integer('page', 1)])
-            ->with('success', "Las aprobaciones de {$solicitudTerminal->numero} fueron actualizadas.");
+            ->with('success', "Las aprobaciones de {$solicitudTerminal->numero} fueron actualizadas y el Excel fue generado.")
+            ->with('excelSolicitud', route('mantenimiento.solicitudes-terminales.excel', $solicitudTerminal));
+    }
+
+    public function excel(SolicitudTerminal $solicitudTerminal): StreamedResponse
+    {
+        $ruta = 'solicitudes-terminales/Solicitud de agencia loteka #'.$solicitudTerminal->id.'.xlsx';
+
+        if (! Storage::disk('local')->exists($ruta)) {
+            $this->excelService->generar($solicitudTerminal);
+        }
+
+        return Storage::disk('local')->download($ruta, 'Solicitud de agencia loteka #'.$solicitudTerminal->id.'.xlsx');
+    }
+
+    public function datos(SolicitudTerminal $solicitudTerminal): JsonResponse
+    {
+        $solicitudTerminal->load(['codigos' => fn ($query) => $query->orderBy('codigo')]);
+
+        return response()->json([
+            'numero' => $solicitudTerminal->numero,
+            'regiones' => ZonaGeografica::query()->distinct()->orderBy('region')->pluck('region'),
+            'codigos' => $solicitudTerminal->codigos->map(fn ($codigo): array => [
+                'id' => $codigo->id,
+                'codigo' => $codigo->codigo,
+                'estado' => $codigo->estado,
+                'nombre_banca' => $codigo->nombre_banca,
+                'region' => $codigo->region,
+                'provincia' => $codigo->provincia,
+                'municipio' => $codigo->municipio,
+                'ciudad' => $codigo->ciudad,
+                'sector' => $codigo->sector,
+                'calle' => $codigo->calle,
+                'direccion_local' => $codigo->direccion_local,
+                'latitud' => $codigo->latitud,
+                'longitud' => $codigo->longitud,
+                'rja' => $codigo->rja,
+            ]),
+        ]);
+    }
+
+    public function updateDatos(
+        UpdateSolicitudTerminalDatosRequest $request,
+        SolicitudTerminal $solicitudTerminal
+    ): RedirectResponse {
+        $datos = collect($request->validated('codigos'))->keyBy('id');
+
+        DB::transaction(function () use ($solicitudTerminal, $datos): void {
+            $codigos = $solicitudTerminal->codigos()->lockForUpdate()->get();
+
+            if ($datos->keys()->diff($codigos->pluck('id'))->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'codigos' => 'Solo puedes actualizar terminales pertenecientes a esta solicitud.',
+                ]);
+            }
+
+            foreach ($codigos as $codigo) {
+                $fila = $datos->get($codigo->id);
+
+                if ($fila === null) {
+                    continue;
+                }
+
+                $codigo->update(collect($fila)
+                    ->except('id')
+                    ->map(fn (mixed $valor): mixed => $valor === '' ? null : $valor)
+                    ->all());
+            }
+        }, attempts: 3);
+
+        $this->excelService->generar($solicitudTerminal->fresh());
+
+        return redirect()
+            ->route('mantenimiento.solicitudes-terminales.index', ['page' => $request->integer('page', 1)])
+            ->with('success', "Los datos de {$solicitudTerminal->numero} fueron actualizados correctamente.");
     }
 
     public function pdf(SolicitudTerminal $solicitudTerminal): Response

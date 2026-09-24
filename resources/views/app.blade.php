@@ -831,11 +831,15 @@
                     <div id="two-column-menu"></div>
                     @php
                         $sidebarUser = auth()->user();
+                        $isAdmin2 = $sidebarUser
+                            && method_exists($sidebarUser, 'hasRole')
+                            && $sidebarUser->hasRole('admin2');
                         $isContaRepOnlyRole = $sidebarUser
                             && method_exists($sidebarUser, 'hasRole')
                             && $sidebarUser->hasRole('Conta_Rep')
                             && !$sidebarUser->hasRole('superadmin')
-                            && !$sidebarUser->hasRole('admin');
+                            && !$sidebarUser->hasRole('admin')
+                            && !$isAdmin2;
                         $isContabilidadOnlyRole = $sidebarUser
                             && method_exists($sidebarUser, 'hasRole')
                             && $sidebarUser->hasRole('contabilidad')
@@ -844,12 +848,13 @@
                             && method_exists($sidebarUser, 'hasRole')
                             && $sidebarUser->hasRole('rh')
                             && !$sidebarUser->hasRole('superadmin')
-                            && !$sidebarUser->hasRole('admin');
+                            && !$sidebarUser->hasRole('admin')
+                            && !$isAdmin2;
                         $canSeeRecursosHumanos = $sidebarUser
-                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin') || $sidebarUser->hasRole('rh'))
+                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin') || $isAdmin2 || $sidebarUser->hasRole('rh'))
                                 || (method_exists($sidebarUser, 'can') && $sidebarUser->can('recursos_humanos.view')));
                         $canSeeReportes = $sidebarUser
-                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin') || $sidebarUser->hasRole('rh'))
+                            && (method_exists($sidebarUser, 'hasRole') && ($sidebarUser->hasRole('superadmin') || $sidebarUser->hasRole('admin') || $isAdmin2 || $sidebarUser->hasRole('rh'))
                                 || (method_exists($sidebarUser, 'can') && $sidebarUser->can('reportes.view')));
                     @endphp
                     <ul class="navbar-nav" id="navbar-nav">
@@ -2059,6 +2064,45 @@
             toggleFavorite(button);
         });
     </script>
+
+    @if(auth()->user()?->hasRole('admin2'))
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const patronEliminar = /(eliminar|borrar|delete|destroy)/i;
+
+                const ocultarControlesEliminar = () => {
+                    document.querySelectorAll('form').forEach((formulario) => {
+                        const metodoForzado = formulario.querySelector('input[name="_method"]')?.value?.toUpperCase();
+                        if (metodoForzado === 'DELETE') {
+                            formulario.classList.add('d-none');
+                        }
+                    });
+
+                    document.querySelectorAll('button, a, input[type="button"], input[type="submit"]').forEach((control) => {
+                        const atributos = [
+                            control.textContent,
+                            control.value,
+                            control.title,
+                            control.id,
+                            control.className,
+                            control.getAttribute('href'),
+                            control.getAttribute('action'),
+                            control.getAttribute('onclick'),
+                            control.getAttribute('data-url'),
+                            control.getAttribute('data-action'),
+                        ].filter(Boolean).join(' ');
+
+                        if (patronEliminar.test(atributos)) {
+                            control.classList.add('d-none');
+                        }
+                    });
+                };
+
+                ocultarControlesEliminar();
+                new MutationObserver(ocultarControlesEliminar).observe(document.body, { childList: true, subtree: true });
+            });
+        </script>
+    @endif
 
     @yield('script')
 </body>

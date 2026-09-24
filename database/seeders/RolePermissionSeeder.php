@@ -120,6 +120,12 @@ class RolePermissionSeeder extends Seeder
         $roles = [
             'superadmin' => $permissions,
             'admin' => $permissions,
+            'admin2' => Permission::query()
+                ->where('guard_name', 'web')
+                ->pluck('name')
+                ->reject(fn (string $permission): bool => str_ends_with($permission, '.delete'))
+                ->values()
+                ->all(),
             'contabilidad' => ['usuarios.view', 'usuarios.list'],
             'rh' => ['recursos_humanos.view', 'reportes.view'],
             'comercial' => ['usuarios.view', 'usuarios.list'],

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Operaciones;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class GuardarDistribucionGastoRutaMapeoRequest extends FormRequest
 {
@@ -15,7 +16,7 @@ class GuardarDistribucionGastoRutaMapeoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'ruta_key' => ['required', 'string', 'max:150'],
+            'ruta_key' => ['required', 'string', 'max:150', Rule::unique('distribucion_gasto_ruta_mapeos', 'ruta_key')],
             'id_grupo' => ['required', 'string', 'max:20', 'regex:/^\d+$/'],
             'id_sub_grupo' => ['required_without:id_sub_grupos', 'string', 'max:20', 'regex:/^\d+$/'],
             'id_sub_grupos' => ['required_without:id_sub_grupo', 'array', 'min:1'],
@@ -29,6 +30,7 @@ class GuardarDistribucionGastoRutaMapeoRequest extends FormRequest
     {
         return [
             'ruta_key.required' => 'Seleccione la ruta del gasto.',
+            'ruta_key.unique' => 'Esta ruta ya fue agregada. Elimine su configuración actual antes de volver a registrarla.',
             'id_grupo.required' => 'Digite el ID de Ruta empresa.',
             'id_grupo.regex' => 'El ID de Ruta empresa debe contener solo numeros.',
             'id_sub_grupo.required' => 'Digite el ID del socio.',

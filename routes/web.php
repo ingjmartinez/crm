@@ -81,6 +81,7 @@ use App\Http\Controllers\ValidadorIncentivoController;
 use App\Http\Controllers\VentaFlashController;
 use App\Http\Controllers\VentasController;
 use App\Http\Controllers\VentasProductosController;
+use App\Http\Controllers\ZonaGeograficaController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -511,14 +512,14 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('usuarios/{usuario}/reset-password', [UserController::class, 'resetPassword'])->name('usuarios.reset-password');
     Route::get('usuarios-list', [UserController::class, 'list'])->name('usuarios.list');
     Route::get('/superadmin/sesiones', [SuperAdminSesionController::class, 'index'])
-        ->middleware('role:superadmin')
+        ->middleware('role:superadmin|admin2')
         ->name('superadmin.sesiones.index');
     Route::get('coordinador-operador/empleados', [CoordinadorOperadorController::class, 'empleados'])
         ->name('coordinador-operador.empleados');
     Route::get('coordinador-operador/exportar/excel', [CoordinadorOperadorController::class, 'export'])
         ->name('coordinador-operador.export');
     Route::get('coordinador-operador/auditoria', [CoordinadorOperadorController::class, 'auditoria'])
-        ->middleware('role:superadmin')
+        ->middleware('role:superadmin|admin2')
         ->name('coordinador-operador.auditoria');
     Route::resource('coordinador-operador', CoordinadorOperadorController::class)->except(['show', 'edit']);
     Route::post('coordinador-operador/{coordinador_operador}/asignar-agencias', [CoordinadorOperadorController::class, 'asignarAgencias'])
@@ -533,6 +534,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::post('/solicitudes-terminales/sugerir', [SolicitudTerminalController::class, 'preview'])->name('solicitudes-terminales.preview');
         Route::post('/solicitudes-terminales', [SolicitudTerminalController::class, 'store'])->name('solicitudes-terminales.store');
         Route::put('/solicitudes-terminales/{solicitudTerminal}/aprobaciones', [SolicitudTerminalController::class, 'updateAprobaciones'])->name('solicitudes-terminales.aprobaciones');
+        Route::get('/solicitudes-terminales/{solicitudTerminal}/datos', [SolicitudTerminalController::class, 'datos'])->name('solicitudes-terminales.datos');
+        Route::put('/solicitudes-terminales/{solicitudTerminal}/datos', [SolicitudTerminalController::class, 'updateDatos'])->name('solicitudes-terminales.datos.update');
+        Route::get('/solicitudes-terminales/{solicitudTerminal}/excel', [SolicitudTerminalController::class, 'excel'])->name('solicitudes-terminales.excel');
         Route::get('/solicitudes-terminales/{solicitudTerminal}/pdf', [SolicitudTerminalController::class, 'pdf'])->name('solicitudes-terminales.pdf');
         Route::post('/solicitudes-terminales/{solicitudTerminal}/correo', [SolicitudTerminalController::class, 'enviarCorreo'])->name('solicitudes-terminales.correo');
         Route::get('/catalogo-juegos', [CatalogoJuegoController::class, 'index'])->name('catalogo-juegos.index');
@@ -542,6 +546,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         Route::post('/catalogo-juegos', [CatalogoJuegoController::class, 'store'])->name('catalogo-juegos.store');
         Route::put('/catalogo-juegos/{catalogoJuego}', [CatalogoJuegoController::class, 'update'])->name('catalogo-juegos.update');
         Route::delete('/catalogo-juegos/{catalogoJuego}', [CatalogoJuegoController::class, 'destroy'])->name('catalogo-juegos.destroy');
+        Route::get('/zonas-geograficas/opciones', [ZonaGeograficaController::class, 'opciones'])->name('zonas-geograficas.opciones');
+        Route::resource('/zonas-geograficas', ZonaGeograficaController::class)
+            ->parameters(['zonas-geograficas' => 'zonaGeografica'])
+            ->except(['create', 'show', 'edit']);
     });
 
     Route::get('/reportes-bi/resumen-ventas', fn () => view('reportes-bi.resumen-ventas'));
@@ -717,7 +725,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/incentivos/incentivo-administrativo/empleados', [IncentivoConfiguracionController::class, 'incentivoAdministrativoEmpleados'])->name('incentivos.incentivo-administrativo.empleados');
     Route::get('/incentivos/incentivo-administrativo/export', [IncentivoConfiguracionController::class, 'incentivoAdministrativoExport'])->name('incentivos.incentivo-administrativo.export');
     Route::get('/incentivos/incentivo-administrativo/auditoria', [IncentivoConfiguracionController::class, 'incentivoAdministrativoAuditoria'])
-        ->middleware('role:superadmin')
+        ->middleware('role:superadmin|admin2')
         ->name('incentivos.incentivo-administrativo.auditoria');
     Route::post('/incentivos/incentivo-administrativo', [IncentivoConfiguracionController::class, 'incentivoAdministrativoStore'])->name('incentivos.incentivo-administrativo.store');
     Route::put('/incentivos/incentivo-administrativo/{incentivoAdministrativo}', [IncentivoConfiguracionController::class, 'incentivoAdministrativoUpdate'])->name('incentivos.incentivo-administrativo.update');

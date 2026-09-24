@@ -222,13 +222,18 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
             })
             ->assertSee('Socios relacionados')
             ->assertSee('Ver socios')
+            ->assertSee('Buscar ruta agregada')
+            ->assertSee('id="buscarRutaAgregada"', false)
+            ->assertSee('function filtrarRutasAgregadas(event)', false)
             ->assertSee('id="modalSociosRuta0"', false)
             ->assertSee('45 - Socio A')
             ->assertSee('46 - Socio B');
 
         $this->postJson(route('operaciones.distribucion-gastos-ruta.mapeos.store'), [
-            'ruta_key' => 'TAMAYO', 'id_grupo' => '61', 'id_sub_grupo' => '99', 'company_id' => '168',
-        ])->assertUnprocessable()->assertJsonValidationErrors('id_sub_grupo');
+            'ruta_key' => 'TAMAYO', 'id_grupo' => '61', 'id_sub_grupo' => '45', 'company_id' => '168',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('ruta_key')
+            ->assertJsonPath('errors.ruta_key.0', 'Esta ruta ya fue agregada. Elimine su configuración actual antes de volver a registrarla.');
 
         $payload = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
             'fecha_ini' => '2026-08-01', 'fecha_fin' => '2026-08-31',

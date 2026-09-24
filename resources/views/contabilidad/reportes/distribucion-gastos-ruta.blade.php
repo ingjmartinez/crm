@@ -117,7 +117,7 @@
                                 <label for="mapeoRutaKey" class="form-label">Ruta del gasto</label>
                                 <select id="mapeoRutaKey" class="form-select" required>
                                     <option value="">Seleccione...</option>
-                                    @foreach ($rutasDisponibles as $rutaDisponible)
+                                    @foreach ($rutasConfigurables as $rutaDisponible)
                                         <option value="{{ $rutaDisponible->ruta_key }}">{{ $rutaDisponible->ruta }}</option>
                                     @endforeach
                                 </select>
@@ -156,12 +156,21 @@
                             </div>
                         </form>
 
-                        <div class="table-responsive mt-4">
+                        <div class="row mt-4 mb-3">
+                            <div class="col-lg-5">
+                                <label for="buscarRutaAgregada" class="form-label">Buscar ruta agregada</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="ri-search-line"></i></span>
+                                    <input type="search" id="buscarRutaAgregada" class="form-control" placeholder="Escriba el nombre de la ruta..." autocomplete="off">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
                             <table class="table table-sm table-bordered align-middle mb-0" id="tablaMapeosRutas">
                                 <thead><tr><th>Ruta del gasto</th><th>Empresa</th><th class="text-center">Socios relacionados</th><th class="text-center">Terminales</th><th class="text-center">Acción</th></tr></thead>
                                 <tbody>
                                     @forelse ($mapeosAgrupados as $grupoMapeo)
-                                        <tr>
+                                        <tr class="fila-ruta-agregada" data-ruta-nombre="{{ mb_strtolower($grupoMapeo['ruta_nombre'], 'UTF-8') }}">
                                             <td class="fw-semibold">{{ $grupoMapeo['ruta_nombre'] }}</td>
                                             <td>{{ implode(', ', $grupoMapeo['company_ids']) }}</td>
                                             <td class="text-center"><span class="badge bg-primary-subtle text-primary fs-6">{{ count($grupoMapeo['socios']) }}</span></td>
@@ -180,6 +189,7 @@
                                     @endforelse
                                 </tbody>
                             </table>
+                            <p class="text-center text-muted py-3 mb-0 d-none" id="mensajeRutaNoEncontrada">No se encontró una ruta agregada con ese nombre.</p>
                         </div>
                     </div>
                 </div>
@@ -384,6 +394,7 @@
             });
             document.querySelectorAll('.btn-eliminar-mapeo').forEach((boton) => boton.addEventListener('click', eliminarMapeoRuta));
             document.querySelectorAll('.btn-eliminar-ruta').forEach((boton) => boton.addEventListener('click', eliminarRutaCompleta));
+            document.getElementById('buscarRutaAgregada').addEventListener('input', filtrarRutasAgregadas);
             document.getElementById('btnExcel').addEventListener('click', function () {
                 tablasDistribucion.socios?.button('.buttons-excel').trigger();
             });
@@ -404,6 +415,20 @@
                 searchPlaceholderValue: 'Buscar ruta...',
                 shouldSort: false,
             });
+        }
+
+        function filtrarRutasAgregadas(event) {
+            const busqueda = event.currentTarget.value.trim().toLocaleLowerCase('es');
+            const filas = [...document.querySelectorAll('.fila-ruta-agregada')];
+            let visibles = 0;
+
+            filas.forEach((fila) => {
+                const coincide = fila.dataset.rutaNombre.includes(busqueda);
+                fila.classList.toggle('d-none', !coincide);
+                if (coincide) visibles++;
+            });
+
+            document.getElementById('mensajeRutaNoEncontrada').classList.toggle('d-none', visibles > 0 || busqueda === '');
         }
 
         function generarPdfDistribucion() {

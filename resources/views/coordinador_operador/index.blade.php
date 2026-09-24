@@ -212,11 +212,11 @@
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5 class="card-title mb-0">Listado</h5>
                                 <div class="d-flex gap-2">
-                                    @role('superadmin')
+                                    @hasanyrole('superadmin|admin2')
                                         <a href="{{ route('coordinador-operador.auditoria') }}" class="btn btn-dark">
                                             <i class="ri-history-line me-1"></i>Historial
                                         </a>
-                                    @endrole
+                                    @endhasanyrole
                                     <a
                                         href="{{ route('coordinador-operador.export', ['buscar' => $buscar ?? '']) }}"
                                         class="btn btn-success">

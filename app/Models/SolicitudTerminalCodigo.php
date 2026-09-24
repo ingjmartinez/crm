@@ -16,6 +16,17 @@ class SolicitudTerminalCodigo extends Model
     protected $fillable = [
         'codigo',
         'estado',
+        'nombre_banca',
+        'region',
+        'provincia',
+        'municipio',
+        'ciudad',
+        'sector',
+        'calle',
+        'direccion_local',
+        'latitud',
+        'longitud',
+        'rja',
         'aprobado_por',
         'aprobado_at',
     ];
