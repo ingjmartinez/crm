@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\RecursosHumanos\ActualizarNominaDomingoConfiguracionRequest;
 use App\Http\Requests\RecursosHumanos\CargarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\ConsultarNominaDomingoRequest;
+use App\Http\Requests\RecursosHumanos\DescargarInformeEjecutivoNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\EnviarNominaDomingoTelegramRequest;
 use App\Http\Requests\RecursosHumanos\GuardarNominaDomingoTerminalesExcluidasRequest;
 use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesExcluidasRequest;
@@ -17,9 +18,11 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
@@ -60,6 +63,9 @@ class NominaDomingoController extends Controller
         $totalSinEntrada = $filasSinEntrada->count();
         $totalConEntrada = $filas->count() - $totalSinEntrada;
         $totalIncidencias = $filas->where('estatus', 'Revisar')->count();
+        $tendenciaMensual = $consultar
+            ? $this->service->tendenciaMensual($fecha, $empresa, $filas)
+            : null;
 
         if ($estatus === 'cumple') {
             $filas = $filas->where('estatus', 'Cumple')->values();
@@ -86,6 +92,7 @@ class NominaDomingoController extends Controller
             'totalSinEntrada' => $totalSinEntrada,
             'totalIncidencias' => $totalIncidencias,
             'filasSinEntrada' => $filasSinEntrada,
+            'tendenciaMensual' => $tendenciaMensual,
         ]);
     }
 
@@ -96,6 +103,23 @@ class NominaDomingoController extends Controller
         $this->service->guardarConfiguracion($datos);
 
         return back()->with('success', 'Configuración de Nómina Domingo actualizada.');
+    }
+
+    public function informeEjecutivo(DescargarInformeEjecutivoNominaDomingoRequest $request): Response
+    {
+        $validated = $request->validated();
+        $fecha = Carbon::createFromFormat('Y-m-d', $validated['fecha'])->startOfDay();
+
+        if (! $fecha->isSunday()) {
+            throw ValidationException::withMessages(['fecha' => 'La fecha de cierre debe ser domingo.']);
+        }
+
+        $informe = $this->service->informeEjecutivoEmpresa($fecha, trim($validated['empresa']));
+        $nombre = 'informe_ejecutivo_nomina_domingo_'.Str::slug($validated['empresa'], '_').'_'.$fecha->format('Ymd').'.pdf';
+
+        return Pdf::loadView('recursos_humanos.nomina-domingo-informe-ejecutivo-pdf', compact('informe'))
+            ->setPaper('letter', 'landscape')
+            ->download($nombre);
     }
 
     public function cargarVentas(CargarNominaDomingoRequest $request): RedirectResponse

@@ -223,6 +223,207 @@ class NominaDomingoService
         })->sortBy('empresa')->values();
     }
 
+    /**
+     * @param  Collection<int, array<string, mixed>>|null  $filasFechaSeleccionada
+     * @return array{
+     *     mes: string,
+     *     labels: array<int, string>,
+     *     tradicional: array<int, float|null>,
+     *     no_tradicional: array<int, float|null>,
+     *     cumplimiento: array<int, float|null>,
+     *     total_actual: float|null,
+     *     variacion_ventas: float|null,
+     *     tradicional_actual: float|null,
+     *     no_tradicional_actual: float|null,
+     *     variacion_tradicional: float|null,
+     *     variacion_no_tradicional: float|null,
+     *     tradicional_mes: float,
+     *     no_tradicional_mes: float,
+     *     cumplimiento_mensual: float|null,
+     *     cumplimiento_actual: float|null,
+     *     variacion_cumplimiento: float|null
+     * }
+     */
+    public function tendenciaMensual(Carbon $fecha, string $empresa = '', ?Collection $filasFechaSeleccionada = null): array
+    {
+        $inicioMes = $fecha->copy()->startOfMonth();
+        $finMes = $fecha->copy()->endOfMonth();
+        $domingos = collect();
+        $domingo = $inicioMes->copy();
+
+        if (! $domingo->isSunday()) {
+            $domingo->next(Carbon::SUNDAY);
+        }
+
+        while ($domingo->lte($finMes)) {
+            $domingos->push($domingo->copy());
+            $domingo->addWeek();
+        }
+
+        $fechasConVentas = Schema::hasTable('nomina_domingo_ventas')
+            ? DB::table('nomina_domingo_ventas')
+                ->whereBetween('fecha_transaccion', [$inicioMes->toDateTimeString(), $finMes->copy()->endOfDay()->toDateTimeString()])
+                ->selectRaw('DATE(fecha_transaccion) as fecha')
+                ->distinct()
+                ->pluck('fecha')
+                ->mapWithKeys(fn (string $fechaVenta): array => [$fechaVenta => true])
+            : collect();
+
+        $puntos = $domingos->map(function (Carbon $domingo) use ($fecha, $empresa, $filasFechaSeleccionada, $fechasConVentas): array {
+            $fechaDomingo = $domingo->toDateString();
+
+            if (! $fechasConVentas->has($fechaDomingo)) {
+                return ['fecha' => $fechaDomingo, 'tradicional' => null, 'no_tradicional' => null, 'cumplimiento' => null, 'evaluados' => 0, 'cumplen' => 0];
+            }
+
+            $filas = $filasFechaSeleccionada !== null && $fecha->isSameDay($domingo)
+                ? $filasFechaSeleccionada
+                : $this->generar($domingo);
+
+            if ($empresa !== '') {
+                $filas = $filas->where('empresa', $empresa)->values();
+            }
+
+            $totalEvaluado = $filas->count();
+            $totalCumplen = $filas->where('estatus', 'Cumple')->count();
+
+            return [
+                'fecha' => $fechaDomingo,
+                'tradicional' => round((float) $filas->sum('tradicional_monto'), 2),
+                'no_tradicional' => round((float) $filas->sum('no_tradicional_monto'), 2),
+                'cumplimiento' => $totalEvaluado > 0 ? round(($totalCumplen / $totalEvaluado) * 100, 1) : null,
+                'evaluados' => $totalEvaluado,
+                'cumplen' => $totalCumplen,
+            ];
+        });
+
+        $puntosConDatos = $puntos->filter(fn (array $punto): bool => $punto['tradicional'] !== null || $punto['no_tradicional'] !== null)->values();
+        $actual = $puntosConDatos->last();
+        $primero = $puntosConDatos->count() > 1 ? $puntosConDatos->first() : null;
+        $puntosPosteriores = $puntosConDatos->slice(1)->values();
+        $totalActual = $actual !== null ? (float) $actual['tradicional'] + (float) $actual['no_tradicional'] : null;
+        $totalPrimero = $primero !== null ? (float) $primero['tradicional'] + (float) $primero['no_tradicional'] : null;
+        $totalEvaluadosMes = (int) $puntos->sum('evaluados');
+        $totalCumplenMes = (int) $puntos->sum('cumplen');
+        $evaluadosPosteriores = (int) $puntosPosteriores->sum('evaluados');
+        $cumplenPosteriores = (int) $puntosPosteriores->sum('cumplen');
+        $cumplimientoPosterior = $evaluadosPosteriores > 0 ? ($cumplenPosteriores / $evaluadosPosteriores) * 100 : null;
+        $promedioTradicionalPosterior = $puntosPosteriores->isNotEmpty() ? (float) $puntosPosteriores->avg('tradicional') : null;
+        $promedioNoTradicionalPosterior = $puntosPosteriores->isNotEmpty() ? (float) $puntosPosteriores->avg('no_tradicional') : null;
+
+        return [
+            'mes' => $fecha->locale('es')->translatedFormat('F Y'),
+            'labels' => $puntos->map(fn (array $punto): string => Carbon::parse($punto['fecha'])->format('d/m'))->all(),
+            'tradicional' => $puntos->pluck('tradicional')->all(),
+            'no_tradicional' => $puntos->pluck('no_tradicional')->all(),
+            'cumplimiento' => $puntos->pluck('cumplimiento')->all(),
+            'total_actual' => $totalActual,
+            'variacion_ventas' => $totalActual !== null && $totalPrimero !== null && $totalPrimero != 0.0
+                ? round((($totalActual - $totalPrimero) / $totalPrimero) * 100, 1)
+                : null,
+            'tradicional_actual' => $actual !== null ? (float) $actual['tradicional'] : null,
+            'no_tradicional_actual' => $actual !== null ? (float) $actual['no_tradicional'] : null,
+            'variacion_tradicional' => $primero !== null && $promedioTradicionalPosterior !== null && (float) $primero['tradicional'] != 0.0
+                ? round((($promedioTradicionalPosterior - (float) $primero['tradicional']) / (float) $primero['tradicional']) * 100, 1)
+                : null,
+            'variacion_no_tradicional' => $primero !== null && $promedioNoTradicionalPosterior !== null && (float) $primero['no_tradicional'] != 0.0
+                ? round((($promedioNoTradicionalPosterior - (float) $primero['no_tradicional']) / (float) $primero['no_tradicional']) * 100, 1)
+                : null,
+            'tradicional_mes' => round((float) $puntosConDatos->sum('tradicional'), 2),
+            'no_tradicional_mes' => round((float) $puntosConDatos->sum('no_tradicional'), 2),
+            'cumplimiento_mensual' => $totalEvaluadosMes > 0 ? round(($totalCumplenMes / $totalEvaluadosMes) * 100, 1) : null,
+            'cumplimiento_actual' => $actual['cumplimiento'] ?? null,
+            'variacion_cumplimiento' => $primero !== null && $cumplimientoPosterior !== null && $primero['cumplimiento'] !== null
+                ? round($cumplimientoPosterior - (float) $primero['cumplimiento'], 1)
+                : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function informeEjecutivoEmpresa(Carbon $fecha, string $empresa): array
+    {
+        $domingos = collect(range(0, 3))
+            ->map(fn (int $semanas): Carbon => $fecha->copy()->subWeeks($semanas))
+            ->reverse()
+            ->values();
+        $inicio = $domingos->first()->copy()->startOfDay();
+        $fin = $domingos->last()->copy()->endOfDay();
+        $fechasConVentas = Schema::hasTable('nomina_domingo_ventas')
+            ? DB::table('nomina_domingo_ventas')
+                ->whereBetween('fecha_transaccion', [$inicio->toDateTimeString(), $fin->toDateTimeString()])
+                ->selectRaw('DATE(fecha_transaccion) as fecha')
+                ->distinct()
+                ->pluck('fecha')
+                ->mapWithKeys(fn (string $fechaVenta): array => [$fechaVenta => true])
+            : collect();
+
+        $ventaSemanaAnterior = null;
+        $semanas = $domingos->map(function (Carbon $domingo) use ($empresa, $fechasConVentas, &$ventaSemanaAnterior): array {
+            $fechaDomingo = $domingo->toDateString();
+            $cargado = $fechasConVentas->has($fechaDomingo);
+            $filas = $cargado
+                ? $this->generar($domingo)->where('empresa', $empresa)->values()
+                : collect();
+            $tradicional = round((float) $filas->sum('tradicional_monto'), 2);
+            $noTradicional = round((float) $filas->sum('no_tradicional_monto'), 2);
+            $evaluados = $filas->count();
+            $cumplen = $filas->where('estatus', 'Cumple')->count();
+            $ventasTotal = round($tradicional + $noTradicional, 2);
+            $variacionVentas = $cargado && $ventaSemanaAnterior !== null && $ventaSemanaAnterior > 0
+                ? round((($ventasTotal - $ventaSemanaAnterior) / $ventaSemanaAnterior) * 100, 1)
+                : null;
+
+            if ($cargado) {
+                $ventaSemanaAnterior = $ventasTotal;
+            }
+
+            return [
+                'fecha' => $fechaDomingo,
+                'fecha_formateada' => $domingo->locale('es')->translatedFormat('d M Y'),
+                'cargado' => $cargado,
+                'tradicional' => $tradicional,
+                'no_tradicional' => $noTradicional,
+                'ventas_total' => $ventasTotal,
+                'variacion_ventas' => $variacionVentas,
+                'evaluados' => $evaluados,
+                'cumplen' => $cumplen,
+                'no_cumplen' => $evaluados - $cumplen,
+                'porcentaje_cumplimiento' => $evaluados > 0 ? round(($cumplen / $evaluados) * 100, 1) : null,
+            ];
+        });
+
+        $semanasConDatos = $semanas->where('cargado', true)->values();
+        $primera = $semanasConDatos->first();
+        $ultima = $semanasConDatos->last();
+        $evaluados = (int) $semanas->sum('evaluados');
+        $cumplen = (int) $semanas->sum('cumplen');
+        $ventaInicial = (float) ($primera['ventas_total'] ?? 0);
+
+        return [
+            'empresa' => $empresa,
+            'fecha_corte' => $fecha->toDateString(),
+            'periodo' => $inicio->format('d/m/Y').' - '.$fin->format('d/m/Y'),
+            'semanas' => $semanas->all(),
+            'ventas_tradicionales' => round((float) $semanas->sum('tradicional'), 2),
+            'ventas_no_tradicionales' => round((float) $semanas->sum('no_tradicional'), 2),
+            'ventas_total' => round((float) $semanas->sum('ventas_total'), 2),
+            'venta_maxima' => max(1, (float) $semanas->max('ventas_total')),
+            'evaluados' => $evaluados,
+            'cumplen' => $cumplen,
+            'no_cumplen' => $evaluados - $cumplen,
+            'porcentaje_cumplimiento' => $evaluados > 0 ? round(($cumplen / $evaluados) * 100, 1) : null,
+            'variacion_ventas' => $primera !== null && $ultima !== null && $ventaInicial > 0
+                ? round((((float) $ultima['ventas_total'] - $ventaInicial) / $ventaInicial) * 100, 1)
+                : null,
+            'variacion_cumplimiento' => $primera !== null && $ultima !== null
+                && $primera['porcentaje_cumplimiento'] !== null && $ultima['porcentaje_cumplimiento'] !== null
+                ? round((float) $ultima['porcentaje_cumplimiento'] - (float) $primera['porcentaje_cumplimiento'], 1)
+                : null,
+        ];
+    }
+
     /** @return Collection<string, array<string, float|int|string>> */
     private function ventas(Carbon $fecha): Collection
     {

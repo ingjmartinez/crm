@@ -251,6 +251,131 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(0.0, $resumen->firstWhere('empresa', 'Empresa B')['porcentaje_incumplimiento']);
     }
 
+    public function test_monthly_management_trend_compares_sunday_sales_and_schedule_compliance(): void
+    {
+        DB::table('agencias')->insert(['terminal' => '12', 'empresa' => 'Empresa A']);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-06', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Empleado 1', 'primer_login' => '2026-09-06 08:00:00', 'ultimo_login' => '2026-09-06 16:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Empleado 1', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 16:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '12', 'cedula' => '00100000002', 'usuario' => 'Empleado 2', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 12:00:00'],
+            ['fecha' => '2026-09-20', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Empleado 1', 'primer_login' => '2026-09-20 08:00:00', 'ultimo_login' => '2026-09-20 16:00:00'],
+        ]);
+        DB::table('nomina_domingo_ventas')->insert([
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-06 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 100],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-06 13:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 50],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-13 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 120],
+            ['terminal' => '12', 'usuario_venta' => '00100000002', 'fecha_transaccion' => '2026-09-13 12:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 80],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-20 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 80],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-20 13:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 70],
+        ]);
+
+        $tendencia = app(NominaDomingoService::class)->tendenciaMensual(Carbon::parse('2026-09-13'));
+
+        $this->assertSame(['06/09', '13/09', '20/09', '27/09'], $tendencia['labels']);
+        $this->assertSame([100.0, 120.0, 80.0, null], $tendencia['tradicional']);
+        $this->assertSame([50.0, 80.0, 70.0, null], $tendencia['no_tradicional']);
+        $this->assertSame([100.0, 50.0, 100.0, null], $tendencia['cumplimiento']);
+        $this->assertSame(150.0, $tendencia['total_actual']);
+        $this->assertSame(0.0, $tendencia['variacion_ventas']);
+        $this->assertSame(0.0, $tendencia['variacion_tradicional']);
+        $this->assertSame(50.0, $tendencia['variacion_no_tradicional']);
+        $this->assertSame(300.0, $tendencia['tradicional_mes']);
+        $this->assertSame(200.0, $tendencia['no_tradicional_mes']);
+        $this->assertSame(75.0, $tendencia['cumplimiento_mensual']);
+        $this->assertSame(-33.3, $tendencia['variacion_cumplimiento']);
+
+        $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13', 'consultar' => 1]))
+            ->assertOk()
+            ->assertSee('Tendencia gerencial del mes')
+            ->assertSee('id="chartTendenciaNominaDomingo"', false)
+            ->assertSee('Ventas Tradicional')
+            ->assertSee('Evoluci&oacute;n mensual Tradicional', false)
+            ->assertSee('Evoluci&oacute;n mensual No Tradicional', false)
+            ->assertSee('Cumplimiento mensual ponderado')
+            ->assertSee('Cumplimiento horario')
+            ->assertSee("type: 'column'", false)
+            ->assertSee("type: 'line'", false)
+            ->assertSee('max: maximoEscalaVentas', false)
+            ->assertDontSee("seriesName: ['Ventas Tradicional', 'Ventas No Tradicional']", false);
+    }
+
+    public function test_executive_report_summarizes_four_weeks_for_one_company(): void
+    {
+        DB::table('agencias')->insert([
+            ['terminal' => '12', 'empresa' => 'Empresa Norte'],
+            ['terminal' => '99', 'empresa' => 'Otra Empresa'],
+        ]);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-06', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Empleado 1', 'primer_login' => '2026-09-06 08:00:00', 'ultimo_login' => '2026-09-06 16:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Empleado 1', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 12:00:00'],
+            ['fecha' => '2026-09-20', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Empleado 1', 'primer_login' => '2026-09-20 08:00:00', 'ultimo_login' => '2026-09-20 16:00:00'],
+            ['fecha' => '2026-09-27', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Empleado 1', 'primer_login' => '2026-09-27 08:00:00', 'ultimo_login' => '2026-09-27 16:00:00'],
+        ]);
+        DB::table('nomina_domingo_ventas')->insert([
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-06 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 100],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-13 12:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 200],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-20 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 300],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-27 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 300],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-27 13:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 100],
+            ['terminal' => '99', 'usuario_venta' => '00900000001', 'fecha_transaccion' => '2026-09-27 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 9999],
+        ]);
+
+        $informe = app(NominaDomingoService::class)->informeEjecutivoEmpresa(Carbon::parse('2026-09-27'), 'Empresa Norte');
+
+        $this->assertCount(4, $informe['semanas']);
+        $this->assertSame('06/09/2026 - 27/09/2026', $informe['periodo']);
+        $this->assertSame(700.0, $informe['ventas_tradicionales']);
+        $this->assertSame(300.0, $informe['ventas_no_tradicionales']);
+        $this->assertSame(1000.0, $informe['ventas_total']);
+        $this->assertSame(4, $informe['evaluados']);
+        $this->assertSame(3, $informe['cumplen']);
+        $this->assertSame(1, $informe['no_cumplen']);
+        $this->assertSame(75.0, $informe['porcentaje_cumplimiento']);
+        $this->assertSame(300.0, $informe['variacion_ventas']);
+        $this->assertSame(0.0, $informe['variacion_cumplimiento']);
+        $this->assertSame([null, 100.0, 50.0, 33.3], array_column($informe['semanas'], 'variacion_ventas'));
+
+        $vista = view('recursos_humanos.nomina-domingo-informe-ejecutivo-pdf', compact('informe'))->render();
+
+        $this->assertStringContainsString('sales-bar bar-traditional', $vista);
+        $this->assertStringContainsString('sales-bar bar-nontraditional', $vista);
+        $this->assertStringContainsString('100.0%', $vista);
+        $this->assertStringContainsString('% cumple', $vista);
+        $this->assertStringContainsString('% no cumple', $vista);
+        $this->assertStringNotContainsString('class="bar-track"', $vista);
+    }
+
+    public function test_company_filter_exposes_and_downloads_the_executive_pdf(): void
+    {
+        DB::table('agencias')->insert(['terminal' => '12', 'empresa' => 'Empresa Norte']);
+        DB::table('nomina_domingo_ventas')->insert([
+            'terminal' => '12',
+            'usuario_venta' => '00100000001',
+            'fecha_transaccion' => '2026-09-27 12:00:00',
+            'tipo' => 'Tradicional',
+            'total_apostado' => 100,
+        ]);
+
+        $this->get(route('recursos-humanos.nomina-domingo.index', [
+            'fecha' => '2026-09-27',
+            'consultar' => 1,
+        ]))->assertOk()
+            ->assertSee('Informe ejecutivo PDF')
+            ->assertSee('id="btnInformeEjecutivoPdf"', false)
+            ->assertSee('id="empresaInformeEjecutivo"', false)
+            ->assertSee('Seleccionar empresa')
+            ->assertSee('form="formFiltrarNominaDomingo"', false)
+            ->assertSeeInOrder(['Coordinador', 'btnFiltrarNominaDomingo', 'btnInformeEjecutivoPdf', 'Configurar nómina'])
+            ->assertSee('action="'.route('recursos-humanos.nomina-domingo.informe-ejecutivo').'"', false);
+
+        $this->get(route('recursos-humanos.nomina-domingo.informe-ejecutivo', [
+            'fecha' => '2026-09-27',
+            'empresa' => 'Empresa Norte',
+        ]))->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertDownload('informe_ejecutivo_nomina_domingo_empresa_norte_20260927.pdf');
+    }
+
     public function test_sales_user_matches_punch_user_and_uses_the_punch_identity(): void
     {
         DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);
@@ -378,6 +503,18 @@ class NominaDomingoTest extends TestCase
         $conciliacion = app(NominaDomingoService::class)->conciliacionVentas(Carbon::parse('2026-09-13'));
         $this->assertSame(1000.0, $conciliacion['tradicional']['archivo']);
         $this->assertSame(400.0, $conciliacion['no_tradicional']['archivo']);
+    }
+
+    public function test_successful_upload_confirmation_is_displayed_as_a_modal(): void
+    {
+        $mensaje = 'Ventas guardadas para el domingo 13/09/2026.';
+
+        $this->withSession(['success' => $mensaje])
+            ->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13']))
+            ->assertOk()
+            ->assertSee('Datos guardados correctamente')
+            ->assertSee($mensaje)
+            ->assertSee("icon: 'success'", false);
     }
 
     public function test_reupload_replaces_only_the_selected_sunday(): void
@@ -760,6 +897,19 @@ class NominaDomingoTest extends TestCase
             ->assertViewHas('consultar', true)
             ->assertSee('Datos limpios')
             ->assertSee('RD$ 1,000.00');
+    }
+
+    public function test_date_controls_only_offer_sundays_for_the_selected_month(): void
+    {
+        $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13']))
+            ->assertOk()
+            ->assertSee('type="hidden" id="fecha_nomina" name="fecha_nomina" value="2026-09-13"', false)
+            ->assertSee('type="hidden" id="fecha_reporte" name="fecha" value="2026-09-13"', false)
+            ->assertSee('data-selector-domingo', false)
+            ->assertSee('data-mes-domingo', false)
+            ->assertSee('data-fecha-domingo', false)
+            ->assertSee('const domingosDelMes = (mes)', false)
+            ->assertDontSee('type="date"', false);
     }
 
     public function test_report_screen_contains_requested_datatable_and_configuration(): void

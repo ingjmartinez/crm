@@ -22,6 +22,18 @@
             --bs-table-accent-bg: #fff3cd;
             background-color: #fff3cd !important;
         }
+
+        .selector-domingo {
+            display: grid;
+            gap: .5rem;
+            grid-template-columns: minmax(135px, .8fr) minmax(210px, 1.2fr);
+        }
+
+        @media (max-width: 575.98px) {
+            .selector-domingo {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 
     <div class="main-content">
@@ -29,10 +41,12 @@
             <div class="container-fluid">
                 <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                     <h4 class="mb-sm-0">Nómina Domingo</h4>
-                    <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="{{ route('recursos-humanos.index') }}">Recursos Humanos</a></li>
-                        <li class="breadcrumb-item active">Nómina Domingo</li>
-                    </ol>
+                    <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{{ route('recursos-humanos.index') }}">Recursos Humanos</a></li>
+                            <li class="breadcrumb-item active">Nómina Domingo</li>
+                        </ol>
+                    </div>
                 </div>
 
                 @if ($errors->any())
@@ -53,6 +67,21 @@
                             <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#modalCoordinadores">
                                 <i class="ri-team-line me-1"></i> Coordinador
                             </button>
+                            <button class="btn btn-primary" id="btnFiltrarNominaDomingo" type="submit" form="formFiltrarNominaDomingo">
+                                <i class="ri-filter-3-line me-1"></i> Filtrar
+                            </button>
+                            <form class="d-flex align-items-center gap-2" method="GET" action="{{ route('recursos-humanos.nomina-domingo.informe-ejecutivo') }}" target="_blank">
+                                <input type="hidden" name="fecha" value="{{ $fecha }}">
+                                <select class="form-select" id="empresaInformeEjecutivo" name="empresa" aria-label="Empresa del informe ejecutivo PDF" required>
+                                    <option value="">Seleccionar empresa</option>
+                                    @foreach ($empresas as $empresaOpcion)
+                                        <option value="{{ $empresaOpcion }}" @selected($empresa === $empresaOpcion)>{{ $empresaOpcion }}</option>
+                                    @endforeach
+                                </select>
+                                <button class="btn btn-outline-danger text-nowrap" id="btnInformeEjecutivoPdf" type="submit">
+                                    <i class="ri-file-pdf-2-line me-1"></i> Informe ejecutivo PDF
+                                </button>
+                            </form>
                             @endif
                             <button class="btn btn-info" type="button" data-bs-toggle="modal" data-bs-target="#modalConfiguracion">
                                 <i class="ri-settings-3-line me-1"></i> Configurar nómina
@@ -65,11 +94,15 @@
                     <div class="card-body">
                         <form method="POST" action="{{ route('recursos-humanos.nomina-domingo.cargar-ventas') }}" enctype="multipart/form-data" class="row g-3 align-items-end" id="formCargarNominaDomingo">
                             @csrf
-                            <div class="col-lg-2">
+                            <div class="col-lg-3">
                                 <label for="fecha_nomina" class="form-label">Domingo</label>
-                                <input type="date" class="form-control" id="fecha_nomina" name="fecha_nomina" value="{{ $fecha }}" required>
+                                <input type="hidden" id="fecha_nomina" name="fecha_nomina" value="{{ $fecha }}">
+                                <div class="selector-domingo" data-selector-domingo data-input="fecha_nomina">
+                                    <input type="month" class="form-control" value="{{ substr($fecha, 0, 7) }}" aria-label="Mes de la n&oacute;mina" data-mes-domingo>
+                                    <select class="form-select" aria-label="Domingo de la n&oacute;mina" data-fecha-domingo required></select>
+                                </div>
                             </div>
-                            <div class="col-lg-4">
+                            <div class="col-lg-3">
                                 <label for="tradicional" class="form-label">Tradicional</label>
                                 <input type="file" class="form-control" id="tradicional" name="tradicional" accept=".xlsx,.csv,.txt" required>
                             </div>
@@ -99,7 +132,11 @@
                             <input type="hidden" name="consultar" value="1">
                             <div class="col-md-3">
                                 <label for="fecha_reporte" class="form-label">Domingo del reporte</label>
-                                <input type="date" class="form-control" id="fecha_reporte" name="fecha" value="{{ $fecha }}" required>
+                                <input type="hidden" id="fecha_reporte" name="fecha" value="{{ $fecha }}">
+                                <div class="selector-domingo" data-selector-domingo data-input="fecha_reporte">
+                                    <input type="month" class="form-control" value="{{ substr($fecha, 0, 7) }}" aria-label="Mes del reporte" data-mes-domingo>
+                                    <select class="form-select" aria-label="Domingo del reporte" data-fecha-domingo required></select>
+                                </div>
                             </div>
                             <div class="col-md-3">
                                 <button class="btn btn-primary w-100" type="submit" id="btnGenerarNominaDomingo">Generar reporte</button>
@@ -143,6 +180,61 @@
                     <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Horas requeridas</span><h4>{{ (int) floor($configuracion['horas_requeridas']) }} h {{ str_pad((string) round(($configuracion['horas_requeridas'] - floor($configuracion['horas_requeridas'])) * 60), 2, '0', STR_PAD_LEFT) }} min</h4></div></div></div>
                     <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Monto fijo</span><h4>RD$ {{ number_format($configuracion['monto_fijo'], 2) }}</h4></div></div></div>
                     <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Total a pagar</span><h4>RD$ {{ number_format($filas->sum('monto_pagar'), 2) }}</h4></div></div></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div>
+                            <h5 class="card-title mb-1">Tendencia gerencial del mes</h5>
+                            <p class="text-muted mb-0">Ventas por tipo y cumplimiento de horario para cada domingo de {{ $tendenciaMensual['mes'] }}.</p>
+                        </div>
+                        <span class="badge bg-primary-subtle text-primary">{{ $empresa !== '' ? $empresa : 'Todas las empresas' }}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 h-100">
+                                    <small class="text-muted d-block">Evoluci&oacute;n mensual Tradicional</small>
+                                    @if ($tendenciaMensual['variacion_tradicional'] !== null)
+                                        <strong class="fs-5 {{ $tendenciaMensual['variacion_tradicional'] >= 0 ? 'text-success' : 'text-danger' }}">
+                                            {{ $tendenciaMensual['variacion_tradicional'] >= 0 ? '+' : '' }}{{ number_format($tendenciaMensual['variacion_tradicional'], 1) }}%
+                                        </strong>
+                                        <small class="text-muted">Promedio de domingos siguientes vs. domingo inicial</small>
+                                    @else
+                                        <strong class="fs-5 text-muted">Sin comparativo</strong>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 h-100">
+                                    <small class="text-muted d-block">Evoluci&oacute;n mensual No Tradicional</small>
+                                    @if ($tendenciaMensual['variacion_no_tradicional'] !== null)
+                                        <strong class="fs-5 {{ $tendenciaMensual['variacion_no_tradicional'] >= 0 ? 'text-success' : 'text-danger' }}">
+                                            {{ $tendenciaMensual['variacion_no_tradicional'] >= 0 ? '+' : '' }}{{ number_format($tendenciaMensual['variacion_no_tradicional'], 1) }}%
+                                        </strong>
+                                        <small class="text-muted">Promedio de domingos siguientes vs. domingo inicial</small>
+                                    @else
+                                        <strong class="fs-5 text-muted">Sin comparativo</strong>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 h-100">
+                                    <small class="text-muted d-block">Cumplimiento mensual ponderado</small>
+                                    @if ($tendenciaMensual['cumplimiento_mensual'] !== null)
+                                        <strong class="fs-5">{{ number_format($tendenciaMensual['cumplimiento_mensual'], 1) }}%</strong>
+                                        <span class="ms-2 {{ ($tendenciaMensual['variacion_cumplimiento'] ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">
+                                            {{ ($tendenciaMensual['variacion_cumplimiento'] ?? 0) >= 0 ? '+' : '' }}{{ number_format($tendenciaMensual['variacion_cumplimiento'] ?? 0, 1) }} pp
+                                        </span>
+                                        <small class="text-muted d-block">Domingos siguientes vs. domingo inicial</small>
+                                    @else
+                                        <strong class="fs-5 text-muted">Sin datos</strong>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                        <div id="chartTendenciaNominaDomingo" style="height: 310px;"></div>
+                    </div>
                 </div>
 
                 <div class="card">
@@ -219,7 +311,6 @@
                                     <option value="revisar" @selected($estatus === 'revisar')>Revisar</option>
                                 </select>
                             </div>
-                            <button class="btn btn-primary" type="submit" id="btnFiltrarNominaDomingo"><i class="ri-filter-3-line me-1"></i> Filtrar</button>
                         </form>
                     </div>
                     <div class="card-body">
@@ -476,11 +567,133 @@
 @endsection
 
 @section('script')
+    <script src="{{ asset('libs/apexcharts/apexcharts.min.js') }}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const formCargar = document.getElementById('formCargarNominaDomingo');
             const formGenerar = document.getElementById('formGenerarNominaDomingo');
             const formFiltrar = document.getElementById('formFiltrarNominaDomingo');
+            const mensajeExito = @json(session('success'));
+
+            if (mensajeExito && typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Datos guardados correctamente',
+                    text: mensajeExito,
+                    confirmButtonText: 'Entendido',
+                });
+            }
+            const formateadorDomingo = new Intl.DateTimeFormat('es-DO', {
+                weekday: 'long',
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric',
+                timeZone: 'UTC',
+            });
+            const domingosDelMes = (mes) => {
+                const [anio, numeroMes] = mes.split('-').map(Number);
+                const fecha = new Date(Date.UTC(anio, numeroMes - 1, 1));
+                fecha.setUTCDate(1 + ((7 - fecha.getUTCDay()) % 7));
+                const domingos = [];
+
+                while (fecha.getUTCMonth() === numeroMes - 1) {
+                    domingos.push(new Date(fecha));
+                    fecha.setUTCDate(fecha.getUTCDate() + 7);
+                }
+
+                return domingos;
+            };
+            const fechaIso = (fecha) => fecha.toISOString().slice(0, 10);
+
+            document.querySelectorAll('[data-selector-domingo]').forEach((selector) => {
+                const input = document.getElementById(selector.dataset.input);
+                const mes = selector.querySelector('[data-mes-domingo]');
+                const domingo = selector.querySelector('[data-fecha-domingo]');
+                const renderizarDomingos = () => {
+                    const valorAnterior = input.value;
+                    const opciones = domingosDelMes(mes.value);
+                    domingo.innerHTML = opciones.map((fecha) => {
+                        const valor = fechaIso(fecha);
+                        const seleccionado = valor === valorAnterior ? ' selected' : '';
+
+                        return `<option value="${valor}"${seleccionado}>${formateadorDomingo.format(fecha)}</option>`;
+                    }).join('');
+                    input.value = domingo.value;
+                };
+
+                mes.addEventListener('change', renderizarDomingos);
+                domingo.addEventListener('change', () => { input.value = domingo.value; });
+                renderizarDomingos();
+            });
+            const tendenciaMensual = @json($tendenciaMensual);
+            const contenedorTendencia = document.querySelector('#chartTendenciaNominaDomingo');
+
+            if (tendenciaMensual && contenedorTendencia && typeof ApexCharts !== 'undefined') {
+                const maximoVentas = Math.max(
+                    0,
+                    ...tendenciaMensual.tradicional.filter((valor) => valor !== null).map(Number),
+                    ...tendenciaMensual.no_tradicional.filter((valor) => valor !== null).map(Number),
+                );
+                const maximoEscalaVentas = maximoVentas > 0 ? Math.ceil(maximoVentas * 1.15) : 1;
+
+                new ApexCharts(contenedorTendencia, {
+                    series: [
+                        { name: 'Ventas Tradicional', type: 'column', data: tendenciaMensual.tradicional },
+                        { name: 'Ventas No Tradicional', type: 'column', data: tendenciaMensual.no_tradicional },
+                        { name: 'Cumplimiento horario', type: 'line', data: tendenciaMensual.cumplimiento },
+                    ],
+                    chart: { type: 'line', height: 310, toolbar: { show: false }, zoom: { enabled: false } },
+                    colors: ['#0ab39c', '#299cdb', '#22c55e'],
+                    stroke: { curve: 'smooth', width: [0, 0, 4], dashArray: [0, 0, 0] },
+                    fill: { opacity: [0.9, 0.9, 1] },
+                    plotOptions: {
+                        bar: {
+                            borderRadius: 5,
+                            borderRadiusApplication: 'end',
+                            columnWidth: '48%',
+                        },
+                    },
+                    dataLabels: { enabled: false },
+                    markers: { size: [0, 0, 5], strokeWidth: 3, hover: { size: 7 } },
+                    xaxis: { categories: tendenciaMensual.labels, labels: { style: { colors: '#64748b' } } },
+                    yaxis: [
+                        {
+                            seriesName: 'Ventas Tradicional',
+                            min: 0,
+                            max: maximoEscalaVentas,
+                            title: { text: 'Ventas (RD$)' },
+                            labels: { formatter: (valor) => `RD$ ${Number(valor || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
+                        },
+                        {
+                            seriesName: 'Ventas No Tradicional',
+                            min: 0,
+                            max: maximoEscalaVentas,
+                            show: false,
+                        },
+                        {
+                            seriesName: 'Cumplimiento horario',
+                            opposite: true,
+                            min: 0,
+                            max: 100,
+                            tickAmount: 5,
+                            title: { text: 'Cumplimiento (%)' },
+                            labels: { formatter: (valor) => `${Number(valor || 0).toFixed(0)}%` },
+                        },
+                    ],
+                    grid: { borderColor: '#e2e8f0', strokeDashArray: 4 },
+                    legend: { position: 'top', horizontalAlign: 'left' },
+                    tooltip: {
+                        shared: true,
+                        intersect: false,
+                        y: [
+                            { formatter: (valor) => valor === null ? 'Sin datos' : `RD$ ${Number(valor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                            { formatter: (valor) => valor === null ? 'Sin datos' : `RD$ ${Number(valor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                            { formatter: (valor) => valor === null ? 'Sin datos' : `${Number(valor).toFixed(1)}%` },
+                        ],
+                    },
+                    noData: { text: 'No hay domingos cargados para este mes.' },
+                }).render();
+            }
             const urlsTerminales = {
                 listar: @json(route('recursos-humanos.nomina-domingo.terminales-excluidas.index')),
                 reconocer: @json(route('recursos-humanos.nomina-domingo.terminales-excluidas.reconocer')),

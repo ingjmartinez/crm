@@ -366,6 +366,8 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('recursos-humanos.agencias-cerradas-domingos.exportar');
         Route::get('/recursos-humanos/nomina-domingo', [NominaDomingoController::class, 'index'])
             ->name('recursos-humanos.nomina-domingo.index');
+        Route::get('/recursos-humanos/nomina-domingo/informe-ejecutivo', [NominaDomingoController::class, 'informeEjecutivo'])
+            ->name('recursos-humanos.nomina-domingo.informe-ejecutivo');
         Route::post('/recursos-humanos/nomina-domingo/cargar-ventas', [NominaDomingoController::class, 'cargarVentas'])
             ->name('recursos-humanos.nomina-domingo.cargar-ventas');
         Route::post('/recursos-humanos/nomina-domingo/configuracion', [NominaDomingoController::class, 'actualizarConfiguracion'])

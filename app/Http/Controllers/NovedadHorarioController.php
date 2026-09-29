@@ -129,7 +129,7 @@ class NovedadHorarioController extends Controller
         );
 
         return response()->streamDownload(function () use ($resumenPago) {
-            $spreadsheet = new Spreadsheet();
+            $spreadsheet = new Spreadsheet;
             $sheet = $spreadsheet->getActiveSheet();
             $headings = [
                 'Nombre',
@@ -303,7 +303,7 @@ class NovedadHorarioController extends Controller
         $bindings[] = $validated['fecha_inicio'];
         $bindings[] = $validated['fecha_fin'];
 
-        $baseSql = "
+        $baseSql = '
             SELECT
                 empresa,
                 terminal,
@@ -318,25 +318,22 @@ class NovedadHorarioController extends Controller
                 ultimo_login,
                 horas_acumuladas
             FROM (
-                " . implode(' UNION ALL ', $uniones) . "
+                '.implode(' UNION ALL ', $uniones).'
             ) novedades
-        ";
+        ';
         $search = trim((string) $request->input('search.value', ''));
         $detalle = $validated['detalle'] ?? 'todos';
         $whereConditions = [];
         $whereBindings = [];
 
         if ($search !== '') {
-            $whereConditions[] = "(terminal LIKE ?
-                OR nombre_agencia LIKE ?
-                OR ciudad LIKE ?
-                OR ruta LIKE ?
-                OR empresa LIKE ?
-                OR empleado_id LIKE ?
+            $whereConditions[] = "(empleado_id LIKE ?
                 OR nombre_empleado LIKE ?
-                OR cedula LIKE ?)";
-            $searchValue = '%' . $search . '%';
-            $whereBindings = array_fill(0, 8, $searchValue);
+                OR cedula LIKE ?
+                OR REPLACE(REPLACE(cedula, '-', ''), ' ', '') LIKE ?)";
+            $searchValue = '%'.$search.'%';
+            $normalizedSearchValue = '%'.str_replace(['-', ' '], '', $search).'%';
+            $whereBindings = [$searchValue, $searchValue, $searchValue, $normalizedSearchValue];
         }
 
         if ($validated['empresa'] === 'grupo_joselito') {
@@ -349,12 +346,12 @@ class NovedadHorarioController extends Controller
             $whereBindings[] = '%negosur%';
         }
 
-        if (!empty($validated['ciudad'])) {
+        if (! empty($validated['ciudad'])) {
             $whereConditions[] = 'COALESCE(ciudad, "") = ?';
             $whereBindings[] = $validated['ciudad'];
         }
 
-        if (!empty($validated['ruta'])) {
+        if (! empty($validated['ruta'])) {
             $whereConditions[] = 'COALESCE(ruta, "") = ?';
             $whereBindings[] = $validated['ruta'];
         }
@@ -369,7 +366,7 @@ class NovedadHorarioController extends Controller
             $whereBindings[] = (int) $validated['horas_requeridas'];
         }
 
-        $whereSql = $whereConditions ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+        $whereSql = $whereConditions ? 'WHERE '.implode(' AND ', $whereConditions) : '';
 
         return compact('baseSql', 'bindings', 'whereSql', 'whereBindings');
     }
@@ -484,11 +481,11 @@ class NovedadHorarioController extends Controller
         $partes = [];
 
         if ($horas > 0) {
-            $partes[] = $horas . ' ' . ($horas === 1 ? 'hora' : 'horas');
+            $partes[] = $horas.' '.($horas === 1 ? 'hora' : 'horas');
         }
 
         if ($minutos > 0 || $partes === []) {
-            $partes[] = $minutos . ' ' . ($minutos === 1 ? 'minuto' : 'minutos');
+            $partes[] = $minutos.' '.($minutos === 1 ? 'minuto' : 'minutos');
         }
 
         return implode(' ', $partes);
@@ -624,7 +621,7 @@ class NovedadHorarioController extends Controller
         $bindings[] = $validated['fecha_inicio'];
         $bindings[] = $validated['fecha_fin'];
 
-        $baseSql = "
+        $baseSql = '
             SELECT
                 empresa,
                 terminal,
@@ -637,9 +634,9 @@ class NovedadHorarioController extends Controller
                 ultimo_login,
                 horas_acumuladas
             FROM (
-                " . implode(' UNION ALL ', $uniones) . "
+                '.implode(' UNION ALL ', $uniones).'
             ) novedades
-        ";
+        ';
 
         $whereConditions = [
             'TRIM(CAST(cedula AS CHAR)) = ?',
@@ -650,7 +647,7 @@ class NovedadHorarioController extends Controller
             trim((string) $validated['terminal']),
         ];
 
-        if (!empty($validated['empresa'])) {
+        if (! empty($validated['empresa'])) {
             $whereConditions[] = 'empresa = ?';
             $whereBindings[] = $validated['empresa'];
         }
@@ -659,9 +656,9 @@ class NovedadHorarioController extends Controller
             "
                 SELECT *
                 FROM ({$baseSql}) base
-                WHERE " . implode(' AND ', $whereConditions) . "
+                WHERE ".implode(' AND ', $whereConditions).'
                 ORDER BY fecha ASC
-            ",
+            ',
             array_merge($bindings, $whereBindings)
         ));
 
