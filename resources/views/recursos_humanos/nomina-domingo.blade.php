@@ -145,6 +145,9 @@
                             <div class="col-md-3">
                                 <button class="btn btn-primary w-100" type="submit" id="btnGenerarNominaDomingo">Generar reporte</button>
                             </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-primary w-100" type="button" id="btnConsultarCedulaNominaDomingo" data-bs-toggle="modal" data-bs-target="#modalConsultarCedulaNominaDomingo">Consultar cédula</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -154,7 +157,7 @@
                     <div class="card border-warning">
                         <div class="card-header">
                             <h5 class="card-title mb-1">Recargas pendientes: {{ number_format($recargasPendientes['total']) }}</h5>
-                            <p class="text-muted mb-0">La cédula no tiene un terminal único en las ventas Tradicional y No Tradicional de este domingo. Estas recargas no modifican la última transacción ni el pago.</p>
+                            <p class="text-muted mb-0">No fue posible identificar un terminal único para estas recargas por su horario. Permanecen fuera del cálculo hasta que se asignen manualmente.</p>
                         </div>
                         <div class="card-body table-responsive">
                             <table class="table table-sm table-bordered align-middle mb-0">
@@ -173,6 +176,36 @@
                             </table>
                             @if ($recargasPendientes['usuarios']->count() === 100)
                                 <small class="text-muted">Se muestran los primeros 100 usuarios pendientes.</small>
+                            @endif
+                            <h6 class="mt-4">Asignar recargas pendientes</h6>
+                            <p class="text-muted">Revisa la hora de cada recarga y elige el terminal correcto. Solo se ofrecen terminales con ventas de esa cédula en este domingo.</p>
+                            <table class="table table-sm table-bordered align-middle mb-0">
+                                <thead><tr><th>Cédula</th><th>Fecha y hora</th><th>Monto</th><th>Terminal</th><th>Acción</th></tr></thead>
+                                <tbody>
+                                    @foreach ($recargasPendientes['transacciones'] as $recargaPendiente)
+                                        <tr>
+                                            <td>{{ $recargaPendiente['usuario_venta'] }}</td>
+                                            <td>{{ $recargaPendiente['fecha'] }}</td>
+                                            <td>RD$ {{ number_format($recargaPendiente['monto'], 2) }}</td>
+                                            <td>
+                                                @if ($recargaPendiente['terminales'] !== [])
+                                                    <select class="form-select form-select-sm terminal-recarga-pendiente" aria-label="Terminal para recarga de {{ $recargaPendiente['usuario_venta'] }}">
+                                                        <option value="">Seleccionar terminal</option>
+                                                        @foreach ($recargaPendiente['terminales'] as $terminalPendiente)
+                                                            <option value="{{ $terminalPendiente }}">{{ $terminalPendiente }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                @else
+                                                    <span class="text-muted">Sin terminales con ventas</span>
+                                                @endif
+                                            </td>
+                                            <td><button class="btn btn-sm btn-warning resolver-recarga-pendiente" type="button" data-venta-id="{{ $recargaPendiente['id'] }}" @disabled($recargaPendiente['terminales'] === [])>Asignar</button></td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                            @if ($recargasPendientes['total'] > $recargasPendientes['transacciones']->count())
+                                <small class="text-muted">Se muestran las primeras 100 recargas pendientes.</small>
                             @endif
                         </div>
                     </div>
@@ -417,6 +450,43 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalConsultarCedulaNominaDomingo" tabindex="-1" aria-labelledby="modalConsultarCedulaNominaDomingoLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalConsultarCedulaNominaDomingoLabel">Consultar cédula</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Ventas del domingo seleccionado en el reporte. Las recargas pendientes no se incluyen.</p>
+                    <form id="formConsultarCedulaNominaDomingo" class="row g-2 align-items-end">
+                        <div class="col-sm-8">
+                            <label class="form-label" for="cedulaConsultaNominaDomingo">Cédula</label>
+                            <input class="form-control" id="cedulaConsultaNominaDomingo" name="cedula" type="text" inputmode="numeric" maxlength="20" placeholder="000-0000000-0" required>
+                        </div>
+                        <div class="col-sm-4">
+                            <button class="btn btn-primary w-100" id="btnEjecutarConsultaCedulaNominaDomingo" type="submit">Consultar</button>
+                        </div>
+                    </form>
+                    <div id="errorConsultaCedulaNominaDomingo" class="alert alert-warning mt-3 mb-0 d-none" role="alert"></div>
+                    <div id="resultadoConsultaCedulaNominaDomingo" class="d-none mt-4" aria-live="polite">
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-7"><div class="border rounded p-3 h-100"><small class="text-muted">Empleado</small><div class="fw-semibold" id="nombreConsultaCedulaNominaDomingo"></div><small id="identificacionConsultaCedulaNominaDomingo"></small></div></div>
+                            <div class="col-sm-5"><div class="border rounded p-3 h-100"><small class="text-muted">Monto total vendido</small><div class="fs-5 fw-semibold" id="totalConsultaCedulaNominaDomingo"></div><small id="cantidadConsultaCedulaNominaDomingo"></small></div></div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle mb-0">
+                                <thead><tr><th>Fecha y hora</th><th>Tipo</th><th>Terminal</th><th class="text-end">Monto</th></tr></thead>
+                                <tbody id="transaccionesConsultaCedulaNominaDomingo"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="modalTerminalesExcluidas" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
             <div class="modal-header"><div><h5 class="modal-title">Terminales excluidas</h5><small class="text-muted">Estas terminales no se incluirán en el cálculo, totales ni reportes de Nómina Domingo.</small></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -617,7 +687,31 @@
             const formCargar = document.getElementById('formCargarNominaDomingo');
             const formGenerar = document.getElementById('formGenerarNominaDomingo');
             const formFiltrar = document.getElementById('formFiltrarNominaDomingo');
+            const formConsultarCedula = document.getElementById('formConsultarCedulaNominaDomingo');
             const mensajeExito = @json(session('success'));
+            document.querySelectorAll('.resolver-recarga-pendiente').forEach((boton) => {
+                boton.addEventListener('click', async () => {
+                    const terminal = boton.closest('tr').querySelector('.terminal-recarga-pendiente')?.value;
+                    if (! terminal) {
+                        Swal.fire({ icon: 'warning', text: 'Selecciona el terminal de esta recarga.' });
+                        return;
+                    }
+                    boton.disabled = true;
+                    try {
+                        const response = await fetch(@json(route('recursos-humanos.nomina-domingo.recargas-pendientes.resolver')), {
+                            method: 'POST',
+                            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                            body: JSON.stringify({ venta_id: Number(boton.dataset.ventaId), terminal }),
+                        });
+                        const data = await response.json();
+                        if (! response.ok) throw new Error(Object.values(data.errors || {})[0]?.[0] || data.message || 'No se pudo asignar la recarga.');
+                        window.location.reload();
+                    } catch (error) {
+                        Swal.fire({ icon: 'error', text: error.message });
+                        boton.disabled = false;
+                    }
+                });
+            });
 
             if (mensajeExito && typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -668,6 +762,60 @@
                 mes.addEventListener('change', renderizarDomingos);
                 domingo.addEventListener('change', () => { input.value = domingo.value; });
                 renderizarDomingos();
+            });
+            const modalConsultarCedula = document.getElementById('modalConsultarCedulaNominaDomingo');
+            const resultadoCedula = document.getElementById('resultadoConsultaCedulaNominaDomingo');
+            const errorCedula = document.getElementById('errorConsultaCedulaNominaDomingo');
+            const formatoMontoCedula = (monto) => `RD$ ${Number(monto).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            modalConsultarCedula?.addEventListener('shown.bs.modal', () => document.getElementById('cedulaConsultaNominaDomingo').focus());
+            modalConsultarCedula?.addEventListener('hidden.bs.modal', () => {
+                formConsultarCedula.reset();
+                resultadoCedula.classList.add('d-none');
+                errorCedula.classList.add('d-none');
+            });
+            formConsultarCedula?.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const boton = document.getElementById('btnEjecutarConsultaCedulaNominaDomingo');
+                const cedula = document.getElementById('cedulaConsultaNominaDomingo').value.trim();
+                const url = new URL(@json(route('recursos-humanos.nomina-domingo.consultar-cedula')));
+                url.searchParams.set('fecha', document.getElementById('fecha_reporte').value);
+                url.searchParams.set('cedula', cedula);
+                boton.disabled = true;
+                boton.textContent = 'Consultando...';
+                resultadoCedula.classList.add('d-none');
+                errorCedula.classList.add('d-none');
+                try {
+                    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                    const data = await response.json();
+                    if (! response.ok) throw new Error(Object.values(data.errors || {})[0]?.[0] || data.message || 'No se pudo completar la consulta.');
+                    document.getElementById('nombreConsultaCedulaNominaDomingo').textContent = data.nombre;
+                    document.getElementById('identificacionConsultaCedulaNominaDomingo').textContent = data.cedula;
+                    document.getElementById('totalConsultaCedulaNominaDomingo').textContent = formatoMontoCedula(data.monto_total);
+                    document.getElementById('cantidadConsultaCedulaNominaDomingo').textContent = `${data.cantidad} transacciones`;
+                    const cuerpo = document.getElementById('transaccionesConsultaCedulaNominaDomingo');
+                    cuerpo.replaceChildren();
+                    data.transacciones.forEach((transaccion) => {
+                        const fila = document.createElement('tr');
+                        const fecha = document.createElement('td');
+                        const tipo = document.createElement('td');
+                        const terminal = document.createElement('td');
+                        const monto = document.createElement('td');
+                        fecha.textContent = transaccion.fecha;
+                        tipo.textContent = transaccion.tipo;
+                        terminal.textContent = transaccion.terminal || '-';
+                        monto.textContent = formatoMontoCedula(transaccion.monto);
+                        monto.className = 'text-end';
+                        fila.append(fecha, tipo, terminal, monto);
+                        cuerpo.append(fila);
+                    });
+                    resultadoCedula.classList.remove('d-none');
+                } catch (error) {
+                    errorCedula.textContent = error.message;
+                    errorCedula.classList.remove('d-none');
+                } finally {
+                    boton.disabled = false;
+                    boton.textContent = 'Consultar';
+                }
             });
             const tendenciaMensual = @json($tendenciaMensual);
             const contenedorTendencia = document.querySelector('#chartTendenciaNominaDomingo');

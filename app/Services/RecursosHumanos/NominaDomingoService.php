@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class NominaDomingoService
 {
@@ -159,17 +160,29 @@ class NominaDomingoService
             ->distinct()->orderBy('empresa')->pluck('empresa');
     }
 
-    /** @return array{total: int, usuarios: Collection<int, object>} */
+    /** @return array{total: int, usuarios: Collection<int, object>, transacciones: Collection<int, array{id: int, usuario_venta: string, fecha: string, monto: float, terminales: array<int, string>}>} */
     public function recargasPendientes(Carbon $fecha): array
     {
         if (! Schema::hasTable('nomina_domingo_ventas')) {
-            return ['total' => 0, 'usuarios' => collect()];
+            return ['total' => 0, 'usuarios' => collect(), 'transacciones' => collect()];
         }
 
         $query = DB::table('nomina_domingo_ventas')
             ->whereDate('fecha_transaccion', $fecha->toDateString())
             ->where('tipo', 'Recargas')
             ->where('estatus', 'Pendiente');
+
+        $transacciones = (clone $query)->orderBy('fecha_transaccion')->limit(100)
+            ->get(['id', 'usuario_venta', 'fecha_transaccion', 'total_apostado']);
+        $cedulasPendientes = $transacciones->map(fn (object $recarga): string => $this->normalizar($recarga->usuario_venta))->unique();
+        $terminalesPorCedula = DB::table('nomina_domingo_ventas')
+            ->whereDate('fecha_transaccion', $fecha->toDateString())
+            ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
+            ->whereNotNull('terminal')
+            ->get(['usuario_venta', 'terminal'])
+            ->filter(fn (object $venta): bool => $cedulasPendientes->contains($this->normalizar($venta->usuario_venta)))
+            ->groupBy(fn (object $venta): string => $this->normalizar($venta->usuario_venta))
+            ->map(fn (Collection $ventas): array => $ventas->pluck('terminal')->unique(fn (string $terminal): string => $this->normalizar($terminal))->values()->all());
 
         return [
             'total' => (clone $query)->count(),
@@ -178,6 +191,97 @@ class NominaDomingoService
                 ->orderByDesc('cantidad')
                 ->limit(100)
                 ->get(),
+            'transacciones' => $transacciones->map(fn (object $recarga): array => [
+                'id' => (int) $recarga->id,
+                'usuario_venta' => (string) $recarga->usuario_venta,
+                'fecha' => (string) $recarga->fecha_transaccion,
+                'monto' => (float) $recarga->total_apostado,
+                'terminales' => $terminalesPorCedula->get($this->normalizar($recarga->usuario_venta), []),
+            ]),
+        ];
+    }
+
+    public function resolverRecargaPendiente(int $ventaId, string $terminalSeleccionada): void
+    {
+        DB::transaction(function () use ($ventaId, $terminalSeleccionada): void {
+            $recarga = DB::table('nomina_domingo_ventas')->where('id', $ventaId)
+                ->where('tipo', 'Recargas')->where('estatus', 'Pendiente')->lockForUpdate()->first();
+
+            if ($recarga === null) {
+                throw ValidationException::withMessages(['venta_id' => 'La recarga ya no está pendiente o no existe.']);
+            }
+
+            $cedula = $this->normalizar($recarga->usuario_venta);
+            $terminales = DB::table('nomina_domingo_ventas')
+                ->whereDate('fecha_transaccion', Carbon::parse($recarga->fecha_transaccion)->toDateString())
+                ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
+                ->whereNotNull('terminal')
+                ->get(['usuario_venta', 'terminal'])
+                ->filter(fn (object $venta): bool => $this->normalizar($venta->usuario_venta) === $cedula)
+                ->pluck('terminal');
+            $terminal = $terminales->first(fn (string $valor): bool => $this->normalizar($valor) === $this->normalizar($terminalSeleccionada));
+
+            if ($terminal === null) {
+                throw ValidationException::withMessages(['terminal' => 'El terminal debe tener ventas de esta cédula en el mismo domingo.']);
+            }
+
+            DB::table('nomina_domingo_ventas')->where('id', $ventaId)->update([
+                'terminal' => $terminal,
+                'terminal_clave' => $this->normalizar($terminal),
+                'estatus' => 'Validos',
+                'updated_at' => now(),
+            ]);
+        });
+    }
+
+    /** @return array{cedula: string, nombre: string, fecha: string, monto_total: float, cantidad: int, transacciones: array<int, array{fecha: string, tipo: string, terminal: ?string, monto: float}>}|null */
+    public function consultarCedula(Carbon $fecha, string $cedula): ?array
+    {
+        if (! Schema::hasTable('nomina_domingo_ventas')) {
+            return null;
+        }
+
+        $cedulaNormalizada = "REPLACE(REPLACE(REPLACE(usuario_venta, '-', ''), ' ', ''), '.', '')";
+        $ventas = DB::table('nomina_domingo_ventas')
+            ->whereDate('fecha_transaccion', $fecha->toDateString())
+            ->whereRaw($cedulaNormalizada.' = ?', [$cedula])
+            ->where(function ($query): void {
+                $query->whereNull('estatus')->orWhere('estatus', '<>', 'Pendiente')->orWhere('tipo', '<>', 'Recargas');
+            })
+            ->orderBy('fecha_transaccion')
+            ->orderBy('id')
+            ->get(['fecha_transaccion', 'tipo', 'terminal', 'total_apostado']);
+
+        if ($ventas->isEmpty()) {
+            return null;
+        }
+
+        $nombre = null;
+        if (Schema::hasTable('empleados')) {
+            $empleado = DB::table('empleados')->whereNull('fechasalida')
+                ->whereRaw("REPLACE(REPLACE(REPLACE(cedula, '-', ''), ' ', ''), '.', '') = ?", [$cedula])
+                ->first(['nombres', 'apellidos']);
+            $nombre = $empleado ? trim($empleado->nombres.' '.$empleado->apellidos) : null;
+        }
+
+        if (! $nombre && Schema::hasTable('asistencias_bet')) {
+            $nombre = DB::table('asistencias_bet')->whereDate('fecha', $fecha->toDateString())
+                ->whereRaw("REPLACE(REPLACE(REPLACE(cedula, '-', ''), ' ', ''), '.', '') = ?", [$cedula])
+                ->value('usuario');
+        }
+
+        return [
+            'cedula' => $cedula,
+            'nombre' => $nombre ?: 'No identificado',
+            'fecha' => $fecha->toDateString(),
+            'monto_total' => round((float) $ventas->sum('total_apostado'), 2),
+            'cantidad' => $ventas->count(),
+            'transacciones' => $ventas->map(fn (object $venta): array => [
+                'fecha' => (string) $venta->fecha_transaccion,
+                'tipo' => (string) $venta->tipo,
+                'terminal' => $venta->terminal,
+                'monto' => (float) $venta->total_apostado,
+            ])->all(),
         ];
     }
 

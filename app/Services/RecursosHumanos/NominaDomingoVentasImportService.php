@@ -5,6 +5,7 @@ namespace App\Services\RecursosHumanos;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -80,11 +81,12 @@ class NominaDomingoVentasImportService
             }
 
             $sharedStrings = $this->leerSharedStrings($zip);
-            $terminalesPorCedula = DB::table('nomina_domingo_ventas')
+            $ventasProductos = DB::table('nomina_domingo_ventas')
                 ->whereDate('fecha_transaccion', $this->fechaNomina)
                 ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
                 ->whereNotNull('terminal')
-                ->get(['usuario_venta', 'terminal'])
+                ->get(['usuario_venta', 'terminal', 'fecha_transaccion']);
+            $terminalesPorCedula = $ventasProductos
                 ->groupBy(fn (object $venta): string => $this->normalizarCedula($venta->usuario_venta))
                 ->map(fn ($ventas): array => $ventas
                     ->groupBy(fn (object $venta): string => $this->claveAgenciaReporte((string) $venta->terminal, ''))
@@ -92,6 +94,18 @@ class NominaDomingoVentasImportService
                     ->values()
                     ->all())
                 ->all();
+            $ultimasVentasPorCedulaYTerminal = [];
+            foreach ($ventasProductos as $ventaProducto) {
+                $cedulaVenta = $this->normalizarCedula($ventaProducto->usuario_venta);
+                $terminalVenta = $this->claveAgenciaReporte((string) $ventaProducto->terminal, '');
+                $fechaVenta = (string) $ventaProducto->fecha_transaccion;
+                $ultimasVentasPorCedulaYTerminal[$cedulaVenta][$terminalVenta] = max(
+                    $ultimasVentasPorCedulaYTerminal[$cedulaVenta][$terminalVenta] ?? $fechaVenta,
+                    $fechaVenta,
+                );
+            }
+            $cedulasConVariosTerminales = array_filter($terminalesPorCedula, fn (array $terminales): bool => count($terminales) > 1);
+            $periodosPorCedula = $this->periodosDeTrabajoPorCedula($cedulasConVariosTerminales, $ultimasVentasPorCedulaYTerminal);
             $columnas = null;
             $filas = [];
 
@@ -137,7 +151,9 @@ class NominaDomingoVentasImportService
 
                 $cedula = $this->normalizarCedula($usuarioVenta);
                 $terminales = $cedula !== '' ? ($terminalesPorCedula[$cedula] ?? []) : [];
-                $terminal = count($terminales) === 1 ? $terminales[0] : null;
+                $terminal = count($terminales) === 1
+                    ? $terminales[0]
+                    : $this->terminalPorHorario($periodosPorCedula[$cedula] ?? [], $fechaSql);
 
                 $this->agregarFilaProcesada([
                     'tipo' => 'Recargas',
@@ -165,6 +181,66 @@ class NominaDomingoVentasImportService
     private function normalizarCedula(mixed $cedula): string
     {
         return preg_replace('/\D+/', '', (string) $cedula) ?? '';
+    }
+
+    /**
+     * @param  array<string, array<int, string>>  $terminalesPorCedula
+     * @param  array<string, array<string, string>>  $ultimasVentasPorCedulaYTerminal
+     * @return array<string, array<int, array{terminal: string, entrada: string, salida: string}>>
+     */
+    private function periodosDeTrabajoPorCedula(array $terminalesPorCedula, array $ultimasVentasPorCedulaYTerminal): array
+    {
+        if ($terminalesPorCedula === []) {
+            return [];
+        }
+
+        $periodos = [];
+        $fuentes = [
+            ['tabla' => 'asistencias_bet', 'fecha' => 'fecha', 'terminal' => 'agencia_id', 'cedula' => 'cedula', 'entrada' => 'primer_login', 'salida' => 'ultimo_login'],
+            ['tabla' => 'asistencias_net', 'fecha' => 'entrada', 'terminal' => 'terminal', 'cedula' => 'identificacion', 'entrada' => 'entrada', 'salida' => 'salida'],
+        ];
+
+        foreach ($fuentes as $fuente) {
+            if (! Schema::hasTable($fuente['tabla'])) {
+                continue;
+            }
+
+            $ponches = DB::table($fuente['tabla'])->whereDate($fuente['fecha'], $this->fechaNomina)
+                ->get([$fuente['terminal'], $fuente['cedula'], $fuente['entrada'], $fuente['salida']]);
+
+            foreach ($ponches as $ponche) {
+                $cedula = $this->normalizarCedula($ponche->{$fuente['cedula']});
+                $terminalClave = $this->claveAgenciaReporte((string) $ponche->{$fuente['terminal']}, '');
+                $terminales = $terminalesPorCedula[$cedula] ?? [];
+                $terminal = collect($terminales)->first(fn (string $valor): bool => $this->claveAgenciaReporte($valor, '') === $terminalClave);
+                $entrada = $this->fechaSql($ponche->{$fuente['entrada']});
+                $salida = $this->fechaSql($ponche->{$fuente['salida']});
+
+                if ($terminal === null || $entrada === null || $salida === null || $salida < $entrada) {
+                    continue;
+                }
+
+                $ultimaVenta = $ultimasVentasPorCedulaYTerminal[$cedula][$terminalClave] ?? null;
+                if ($ultimaVenta !== null && $ultimaVenta >= $entrada && $ultimaVenta > $salida) {
+                    $salida = $ultimaVenta;
+                }
+
+                $periodos[$cedula][] = ['terminal' => $terminal, 'entrada' => $entrada, 'salida' => $salida];
+            }
+        }
+
+        return $periodos;
+    }
+
+    /** @param array<int, array{terminal: string, entrada: string, salida: string}> $periodos */
+    private function terminalPorHorario(array $periodos, string $fechaTransaccion): ?string
+    {
+        $terminales = collect($periodos)
+            ->filter(fn (array $periodo): bool => $fechaTransaccion >= $periodo['entrada'] && $fechaTransaccion <= $periodo['salida'])
+            ->pluck('terminal')
+            ->unique(fn (string $terminal): string => $this->claveAgenciaReporte($terminal, ''));
+
+        return $terminales->count() === 1 ? $terminales->first() : null;
     }
 
     private function verificarVentas(string $tipo): void

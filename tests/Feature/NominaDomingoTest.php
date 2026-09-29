@@ -588,6 +588,92 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(0, app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'))->sum('recargas_cantidad'));
     }
 
+    public function test_recargas_are_assigned_to_the_unique_terminal_worked_at_the_transaction_time(): void
+    {
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '051069', 'cedula' => '00112345678', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 08:08:55', 'ultimo_login' => '2026-09-13 11:44:14'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '050121', 'cedula' => '00112345678', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 13:30:01', 'ultimo_login' => '2026-09-13 18:14:21'],
+        ]);
+
+        $this->post(route('recursos-humanos.nomina-domingo.cargar-ventas'), [
+            'fecha_nomina' => '2026-09-13',
+            'tradicional' => UploadedFile::fake()->createWithContent('tradicional.csv', "Fecha,Agencia,Total Apostado,Estatus,Terminal,Usr. Venta\n2026-09-13 10:30:00,Agencia 1,1000,Validos,051069,00112345678\n"),
+            'no_tradicional' => UploadedFile::fake()->createWithContent('no_tradicional.csv', "Agencia,Estatus,Fecha,Id Terminal,Usr. Venta,Total Apostado\nAgencia 2,Validos,2026-09-13 16:00:00,050121,00112345678,400\n"),
+            'recargas' => $this->archivoRecargas('2026-09-13 10:00:00 AM', '00112345678', [
+                ['2026-09-13 10:00:00 AM', 100],
+                ['2026-09-13 12:00:00 PM', 150],
+                ['2026-09-13 04:00:00 PM', 200],
+            ]),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['tipo' => 'Recargas', 'fecha_transaccion' => '2026-09-13 10:00:00', 'terminal' => '051069', 'estatus' => 'Validos']);
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['tipo' => 'Recargas', 'fecha_transaccion' => '2026-09-13 12:00:00', 'terminal' => null, 'estatus' => 'Pendiente']);
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['tipo' => 'Recargas', 'fecha_transaccion' => '2026-09-13 16:00:00', 'terminal' => '050121', 'estatus' => 'Validos']);
+        $this->assertSame(1, app(NominaDomingoService::class)->recargasPendientes(Carbon::parse('2026-09-13'))['total']);
+    }
+
+    public function test_recargas_with_overlapping_work_periods_stay_pending(): void
+    {
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '12', 'cedula' => '00112345678', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 13:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '13', 'cedula' => '00112345678', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 12:00:00', 'ultimo_login' => '2026-09-13 18:00:00'],
+        ]);
+
+        $this->post(route('recursos-humanos.nomina-domingo.cargar-ventas'), [
+            'fecha_nomina' => '2026-09-13',
+            'tradicional' => UploadedFile::fake()->createWithContent('tradicional.csv', "Fecha,Agencia,Total Apostado,Estatus,Terminal,Usr. Venta\n2026-09-13 10:00:00,Agencia 12,1000,Validos,12,00112345678\n"),
+            'no_tradicional' => UploadedFile::fake()->createWithContent('no_tradicional.csv', "Agencia,Estatus,Fecha,Id Terminal,Usr. Venta,Total Apostado\nAgencia 13,Validos,2026-09-13 14:00:00,13,00112345678,400\n"),
+            'recargas' => $this->archivoRecargas('2026-09-13 12:30:00 PM', '00112345678', [['2026-09-13 12:30:00 PM', 100]]),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['tipo' => 'Recargas', 'fecha_transaccion' => '2026-09-13 12:30:00', 'terminal' => null, 'estatus' => 'Pendiente']);
+    }
+
+    public function test_later_product_sale_extends_terminal_period_before_next_login(): void
+    {
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '12', 'cedula' => '00112345678', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 11:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '13', 'cedula' => '00112345678', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 13:30:00', 'ultimo_login' => '2026-09-13 18:00:00'],
+        ]);
+
+        $this->post(route('recursos-humanos.nomina-domingo.cargar-ventas'), [
+            'fecha_nomina' => '2026-09-13',
+            'tradicional' => UploadedFile::fake()->createWithContent('tradicional.csv', "Fecha,Agencia,Total Apostado,Estatus,Terminal,Usr. Venta\n2026-09-13 11:30:00,Agencia 12,1000,Validos,12,00112345678\n"),
+            'no_tradicional' => UploadedFile::fake()->createWithContent('no_tradicional.csv', "Agencia,Estatus,Fecha,Id Terminal,Usr. Venta,Total Apostado\nAgencia 13,Validos,2026-09-13 15:00:00,13,00112345678,400\n"),
+            'recargas' => $this->archivoRecargas('2026-09-13 11:15:00 AM', '00112345678', [
+                ['2026-09-13 11:15:00 AM', 100],
+                ['2026-09-13 12:00:00 PM', 150],
+            ]),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['tipo' => 'Recargas', 'fecha_transaccion' => '2026-09-13 11:15:00', 'terminal' => '012', 'estatus' => 'Validos']);
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['tipo' => 'Recargas', 'fecha_transaccion' => '2026-09-13 12:00:00', 'terminal' => null, 'estatus' => 'Pendiente']);
+    }
+
+    public function test_pending_recarga_can_be_assigned_manually_only_to_a_terminal_with_sales_for_the_same_cedula_and_day(): void
+    {
+        DB::table('nomina_domingo_ventas')->insert([
+            ['tipo' => 'Tradicional', 'terminal' => '051069', 'usuario_venta' => '00112345678', 'fecha_transaccion' => '2026-09-13 10:00:00', 'total_apostado' => 100, 'estatus' => 'Validos'],
+            ['tipo' => 'No Tradicional', 'terminal' => '050121', 'usuario_venta' => '001-1234567-8', 'fecha_transaccion' => '2026-09-13 16:00:00', 'total_apostado' => 200, 'estatus' => 'Validos'],
+            ['tipo' => 'Tradicional', 'terminal' => '099999', 'usuario_venta' => '00999999999', 'fecha_transaccion' => '2026-09-13 10:00:00', 'total_apostado' => 300, 'estatus' => 'Validos'],
+            ['tipo' => 'Recargas', 'terminal' => null, 'usuario_venta' => '00112345678', 'fecha_transaccion' => '2026-09-13 12:00:00', 'total_apostado' => 50, 'estatus' => 'Pendiente'],
+        ]);
+        $recargaId = (int) DB::table('nomina_domingo_ventas')->where('tipo', 'Recargas')->value('id');
+        $ruta = route('recursos-humanos.nomina-domingo.recargas-pendientes.resolver');
+
+        $this->postJson($ruta, ['venta_id' => $recargaId, 'terminal' => '099999'])
+            ->assertUnprocessable()->assertJsonValidationErrors('terminal');
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['id' => $recargaId, 'estatus' => 'Pendiente']);
+
+        $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13', 'consultar' => 1]))
+            ->assertOk()->assertSee('Asignar recargas pendientes')->assertSee('data-venta-id="'.$recargaId.'"', false);
+
+        $this->postJson($ruta, ['venta_id' => $recargaId, 'terminal' => '050121'])->assertOk();
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['id' => $recargaId, 'terminal' => '050121', 'terminal_clave' => '50121', 'estatus' => 'Validos']);
+        $this->postJson($ruta, ['venta_id' => $recargaId, 'terminal' => '051069'])
+            ->assertUnprocessable()->assertJsonValidationErrors('venta_id');
+    }
+
     public function test_reupload_without_recargas_keeps_previous_recargas(): void
     {
         DB::table('nomina_domingo_ventas')->insert([
@@ -621,7 +707,8 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(999.0, (float) DB::table('nomina_domingo_ventas')->sum('total_apostado'));
     }
 
-    private function archivoRecargas(string $fecha, string $cedula = '00112345678'): UploadedFile
+    /** @param array<int, array{string, int|float}>|null $transacciones */
+    private function archivoRecargas(string $fecha, string $cedula = '00112345678', ?array $transacciones = null): UploadedFile
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
@@ -629,13 +716,13 @@ class NominaDomingoTest extends TestCase
         foreach (['A' => 'Agencia', 'K' => 'Fecha', 'R' => 'Monto', 'S' => 'Usr. Venta'] as $columna => $encabezado) {
             $sheet->setCellValue($columna.'13', $encabezado);
         }
-        $sheet->setCellValue('A17', '20267');
-        $sheet->setCellValue('K17', $fecha);
-        $sheet->setCellValue('R17', 100);
-        $sheet->setCellValue('S17', $cedula);
-        $sheet->setCellValue('K18', '2026-09-13 03:00:00 PM');
-        $sheet->setCellValue('R18', 150);
-        $sheet->setCellValue('S18', $cedula);
+        foreach ($transacciones ?? [[$fecha, 100], ['2026-09-13 03:00:00 PM', 150]] as $indice => [$fechaTransaccion, $monto]) {
+            $fila = $indice + 17;
+            $sheet->setCellValue('A'.$fila, '20267');
+            $sheet->setCellValue('K'.$fila, $fechaTransaccion);
+            $sheet->setCellValue('R'.$fila, $monto);
+            $sheet->setCellValue('S'.$fila, $cedula);
+        }
 
         $path = tempnam(sys_get_temp_dir(), 'recargas_');
         (new Xlsx($spreadsheet))->save($path);
@@ -1038,6 +1125,46 @@ class NominaDomingoTest extends TestCase
             ->assertViewHas('consultar', true)
             ->assertSee('Datos limpios')
             ->assertSee('RD$ 1,000.00');
+    }
+
+    public function test_consultar_cedula_shows_employee_total_and_transactions_for_selected_sunday(): void
+    {
+        DB::table('empleados')->insert(['empleadoid' => 'EMP-1', 'cedula' => '001-1234567-8', 'nombres' => 'Ana', 'apellidos' => 'Pérez']);
+        DB::table('nomina_domingo_ventas')->insert([
+            ['terminal' => '12', 'usuario_venta' => '001-1234567-8', 'fecha_transaccion' => '2026-09-13 10:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 125.50, 'estatus' => null],
+            ['terminal' => '13', 'usuario_venta' => '00112345678', 'fecha_transaccion' => '2026-09-13 11:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 74.50, 'estatus' => null],
+            ['terminal' => '13', 'usuario_venta' => '00112345678', 'fecha_transaccion' => '2026-09-13 12:00:00', 'tipo' => 'Recargas', 'total_apostado' => 50, 'estatus' => 'Pendiente'],
+            ['terminal' => '12', 'usuario_venta' => '00112345678', 'fecha_transaccion' => '2026-09-20 10:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 900, 'estatus' => null],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-13 10:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 1000, 'estatus' => null],
+        ]);
+
+        $this->getJson(route('recursos-humanos.nomina-domingo.consultar-cedula', ['fecha' => '2026-09-13', 'cedula' => '001-1234567-8']))
+            ->assertOk()
+            ->assertJsonPath('nombre', 'Ana Pérez')
+            ->assertJsonPath('cedula', '00112345678')
+            ->assertJsonPath('monto_total', 200)
+            ->assertJsonPath('cantidad', 2)
+            ->assertJsonPath('transacciones.0.tipo', 'Tradicional')
+            ->assertJsonPath('transacciones.1.terminal', '13')
+            ->assertJsonCount(2, 'transacciones');
+    }
+
+    public function test_consultar_cedula_validates_date_and_cedula_and_handles_no_sales(): void
+    {
+        $ruta = route('recursos-humanos.nomina-domingo.consultar-cedula');
+
+        $this->getJson($ruta.'?fecha=2026-09-14&cedula=00112345678')->assertUnprocessable()->assertJsonValidationErrors('fecha');
+        $this->getJson($ruta.'?fecha=2026-09-13&cedula=123')->assertUnprocessable()->assertJsonValidationErrors('cedula');
+        $this->getJson($ruta.'?fecha=2026-09-13&cedula=00112345678')->assertNotFound();
+    }
+
+    public function test_consultar_cedula_button_and_modal_are_available_before_generating_report(): void
+    {
+        $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13']))
+            ->assertOk()
+            ->assertSee('id="btnConsultarCedulaNominaDomingo"', false)
+            ->assertSee('id="modalConsultarCedulaNominaDomingo"', false)
+            ->assertSee('formConsultarCedulaNominaDomingo');
     }
 
     public function test_date_controls_only_offer_sundays_for_the_selected_month(): void

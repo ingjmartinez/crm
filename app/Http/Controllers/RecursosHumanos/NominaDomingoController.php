@@ -5,11 +5,13 @@ namespace App\Http\Controllers\RecursosHumanos;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RecursosHumanos\ActualizarNominaDomingoConfiguracionRequest;
 use App\Http\Requests\RecursosHumanos\CargarNominaDomingoRequest;
+use App\Http\Requests\RecursosHumanos\ConsultarCedulaNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\ConsultarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\DescargarInformeEjecutivoNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\EnviarNominaDomingoTelegramRequest;
 use App\Http\Requests\RecursosHumanos\GuardarNominaDomingoTerminalesExcluidasRequest;
 use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesExcluidasRequest;
+use App\Http\Requests\RecursosHumanos\ResolverRecargaPendienteNominaDomingoRequest;
 use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Services\RecursosHumanos\NominaDomingoService;
 use App\Services\RecursosHumanos\NominaDomingoVentasImportService;
@@ -50,7 +52,7 @@ class NominaDomingoController extends Controller
         $consultar = $request->boolean('consultar');
         $filas = $consultar ? $this->service->generar($fecha) : collect();
         $conciliacionVentas = $consultar ? $this->service->conciliacionVentas($fecha) : null;
-        $recargasPendientes = $consultar ? $this->service->recargasPendientes($fecha) : ['total' => 0, 'usuarios' => collect()];
+        $recargasPendientes = $consultar ? $this->service->recargasPendientes($fecha) : ['total' => 0, 'usuarios' => collect(), 'transacciones' => collect()];
         $resumenCumplimientoEmpresas = $this->service->resumenCumplimientoPorEmpresa($filas);
         $filasSinEmpresa = $filas->where('empresa', 'Sin empresa')->values();
         $empresa = trim((string) ($validated['empresa'] ?? ''));
@@ -105,6 +107,37 @@ class NominaDomingoController extends Controller
         $this->service->guardarConfiguracion($datos);
 
         return back()->with('success', 'Configuración de Nómina Domingo actualizada.');
+    }
+
+    public function consultarCedula(ConsultarCedulaNominaDomingoRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $fecha = Carbon::createFromFormat('Y-m-d', $validated['fecha'])->startOfDay();
+
+        if (! $fecha->isSunday()) {
+            throw ValidationException::withMessages(['fecha' => 'La fecha seleccionada debe ser domingo.']);
+        }
+
+        $cedula = (string) preg_replace('/\D+/', '', $validated['cedula']);
+        if (strlen($cedula) !== 11) {
+            throw ValidationException::withMessages(['cedula' => 'La cédula debe contener 11 dígitos.']);
+        }
+
+        $resultado = $this->service->consultarCedula($fecha, $cedula);
+
+        if ($resultado === null) {
+            return response()->json(['message' => 'No se encontraron ventas para esta cédula en el domingo seleccionado.'], 404);
+        }
+
+        return response()->json($resultado);
+    }
+
+    public function resolverRecargaPendiente(ResolverRecargaPendienteNominaDomingoRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $this->service->resolverRecargaPendiente((int) $validated['venta_id'], $validated['terminal']);
+
+        return response()->json(['message' => 'Recarga asignada al terminal seleccionado.']);
     }
 
     public function informeEjecutivo(DescargarInformeEjecutivoNominaDomingoRequest $request): Response
