@@ -60,7 +60,7 @@
                     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <div>
                             <h5 class="card-title mb-1">Cargar documentos de ventas</h5>
-                            <p class="text-muted mb-0">Carga los archivos Tradicional y No Tradicional para obtener la última transacción real.</p>
+                            <p class="text-muted mb-0">Carga Tradicional, No Tradicional y Recargas para obtener la última transacción real.</p>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
                             @if ($consultar)
@@ -102,13 +102,17 @@
                                     <select class="form-select" aria-label="Domingo de la n&oacute;mina" data-fecha-domingo required></select>
                                 </div>
                             </div>
-                            <div class="col-lg-3">
+                            <div class="col-lg-2">
                                 <label for="tradicional" class="form-label">Tradicional</label>
                                 <input type="file" class="form-control" id="tradicional" name="tradicional" accept=".xlsx,.csv,.txt" required>
                             </div>
-                            <div class="col-lg-4">
+                            <div class="col-lg-3">
                                 <label for="no_tradicional" class="form-label">No Tradicional</label>
                                 <input type="file" class="form-control" id="no_tradicional" name="no_tradicional" accept=".xlsx,.csv,.txt" required>
+                            </div>
+                            <div class="col-lg-2">
+                                <label for="recargas" class="form-label">Recargas</label>
+                                <input type="file" class="form-control" id="recargas" name="recargas" accept=".xlsx" required>
                             </div>
                             <div class="col-lg-2">
                                 <button class="btn btn-primary w-100" type="submit" id="btnCargarNominaDomingo"><i class="ri-filter-3-line me-1"></i> Cargar y validar</button>
@@ -116,7 +120,7 @@
                         </form>
                         @if (! empty($archivos))
                             <div class="alert alert-info mt-3 mb-0">
-                                <strong>Archivos:</strong> {{ $archivos['tradicional'] ?? '-' }} / {{ $archivos['no_tradicional'] ?? '-' }}
+                                <strong>Archivos:</strong> {{ $archivos['tradicional'] ?? '-' }} / {{ $archivos['no_tradicional'] ?? '-' }} / {{ $archivos['recargas'] ?? 'Sin recargas' }}
                             </div>
                         @endif
                     </div>
@@ -146,6 +150,33 @@
                 </div>
 
                 @if ($consultar)
+                @if ($recargasPendientes['total'] > 0)
+                    <div class="card border-warning">
+                        <div class="card-header">
+                            <h5 class="card-title mb-1">Recargas pendientes: {{ number_format($recargasPendientes['total']) }}</h5>
+                            <p class="text-muted mb-0">La cédula no tiene un terminal único en las ventas Tradicional y No Tradicional de este domingo. Estas recargas no modifican la última transacción ni el pago.</p>
+                        </div>
+                        <div class="card-body table-responsive">
+                            <table class="table table-sm table-bordered align-middle mb-0">
+                                <thead><tr><th>Usr. Venta / cédula</th><th>Recargas</th><th>Última fecha</th><th>Monto</th><th>Estado</th></tr></thead>
+                                <tbody>
+                                    @foreach ($recargasPendientes['usuarios'] as $pendiente)
+                                        <tr>
+                                            <td>{{ $pendiente->usuario_venta }}</td>
+                                            <td>{{ number_format($pendiente->cantidad) }}</td>
+                                            <td>{{ $pendiente->ultima_fecha }}</td>
+                                            <td>RD$ {{ number_format($pendiente->monto, 2) }}</td>
+                                            <td><span class="badge bg-warning text-dark">Pendiente</span></td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                            @if ($recargasPendientes['usuarios']->count() === 100)
+                                <small class="text-muted">Se muestran los primeros 100 usuarios pendientes.</small>
+                            @endif
+                        </div>
+                    </div>
+                @endif
                 @if ($totalIncidencias > 0)
                     <div class="alert alert-warning">
                         {{ number_format($totalIncidencias) }} registro(s) requieren revisión por login faltante, secuencia inválida o venta anterior al primer login. No se incluyen en el pago automático.
@@ -192,7 +223,7 @@
                     </div>
                     <div class="card-body">
                         <div class="row g-3 mb-3">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="border rounded p-3 h-100">
                                     <small class="text-muted d-block">Evoluci&oacute;n mensual Tradicional</small>
                                     @if ($tendenciaMensual['variacion_tradicional'] !== null)
@@ -205,7 +236,7 @@
                                     @endif
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="border rounded p-3 h-100">
                                     <small class="text-muted d-block">Evoluci&oacute;n mensual No Tradicional</small>
                                     @if ($tendenciaMensual['variacion_no_tradicional'] !== null)
@@ -218,7 +249,20 @@
                                     @endif
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
+                                <div class="border rounded p-3 h-100">
+                                    <small class="text-muted d-block">Evoluci&oacute;n mensual Recargas</small>
+                                    @if ($tendenciaMensual['variacion_recargas'] !== null)
+                                        <strong class="fs-5 {{ $tendenciaMensual['variacion_recargas'] >= 0 ? 'text-success' : 'text-danger' }}">
+                                            {{ $tendenciaMensual['variacion_recargas'] >= 0 ? '+' : '' }}{{ number_format($tendenciaMensual['variacion_recargas'], 1) }}%
+                                        </strong>
+                                        <small class="text-muted">Promedio de domingos siguientes vs. domingo inicial</small>
+                                    @else
+                                        <strong class="fs-5 text-muted">Sin comparativo</strong>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="col-md-3">
                                 <div class="border rounded p-3 h-100">
                                     <small class="text-muted d-block">Cumplimiento mensual ponderado</small>
                                     @if ($tendenciaMensual['cumplimiento_mensual'] !== null)
@@ -551,7 +595,7 @@
                                         <td>{{ $fila['origen_identidad'] === 'Usuario de venta sin verificar' ? '' : $fila['cedula'] }}</td>
                                         <td>{{ $fila['usuario_venta'] ?? '-' }}</td>
                                         <td>{{ $fila['empleado'] }}</td>
-                                        <td>{{ number_format($fila['tradicional_cantidad'] + $fila['no_tradicional_cantidad']) }} ventas<br><small>RD$ {{ number_format($fila['tradicional_monto'] + $fila['no_tradicional_monto'], 2) }}</small></td>
+                                        <td>{{ number_format($fila['tradicional_cantidad'] + $fila['no_tradicional_cantidad'] + $fila['recargas_cantidad']) }} ventas<br><small>RD$ {{ number_format($fila['tradicional_monto'] + $fila['no_tradicional_monto'] + $fila['recargas_monto'], 2) }}</small></td>
                                         <td>{{ $fila['primera_transaccion'] ? \Carbon\Carbon::parse($fila['primera_transaccion'])->format('d/m/Y h:i A') : 'Sin transacción' }}</td>
                                         <td>{{ $fila['ultima_transaccion'] ? \Carbon\Carbon::parse($fila['ultima_transaccion'])->format('d/m/Y h:i A') : 'Sin transacción' }}</td>
                                     </tr>
@@ -633,6 +677,7 @@
                     0,
                     ...tendenciaMensual.tradicional.filter((valor) => valor !== null).map(Number),
                     ...tendenciaMensual.no_tradicional.filter((valor) => valor !== null).map(Number),
+                    ...tendenciaMensual.recargas.filter((valor) => valor !== null).map(Number),
                 );
                 const maximoEscalaVentas = maximoVentas > 0 ? Math.ceil(maximoVentas * 1.15) : 1;
 
@@ -640,12 +685,13 @@
                     series: [
                         { name: 'Ventas Tradicional', type: 'column', data: tendenciaMensual.tradicional },
                         { name: 'Ventas No Tradicional', type: 'column', data: tendenciaMensual.no_tradicional },
+                        { name: 'Recargas', type: 'column', data: tendenciaMensual.recargas },
                         { name: 'Cumplimiento horario', type: 'line', data: tendenciaMensual.cumplimiento },
                     ],
                     chart: { type: 'line', height: 310, toolbar: { show: false }, zoom: { enabled: false } },
-                    colors: ['#0ab39c', '#299cdb', '#22c55e'],
-                    stroke: { curve: 'smooth', width: [0, 0, 4], dashArray: [0, 0, 0] },
-                    fill: { opacity: [0.9, 0.9, 1] },
+                    colors: ['#0ab39c', '#299cdb', '#f59e0b', '#22c55e'],
+                    stroke: { curve: 'smooth', width: [0, 0, 0, 4], dashArray: [0, 0, 0, 0] },
+                    fill: { opacity: [0.9, 0.9, 0.9, 1] },
                     plotOptions: {
                         bar: {
                             borderRadius: 5,
@@ -654,7 +700,7 @@
                         },
                     },
                     dataLabels: { enabled: false },
-                    markers: { size: [0, 0, 5], strokeWidth: 3, hover: { size: 7 } },
+                    markers: { size: [0, 0, 0, 5], strokeWidth: 3, hover: { size: 7 } },
                     xaxis: { categories: tendenciaMensual.labels, labels: { style: { colors: '#64748b' } } },
                     yaxis: [
                         {
@@ -666,6 +712,12 @@
                         },
                         {
                             seriesName: 'Ventas No Tradicional',
+                            min: 0,
+                            max: maximoEscalaVentas,
+                            show: false,
+                        },
+                        {
+                            seriesName: 'Recargas',
                             min: 0,
                             max: maximoEscalaVentas,
                             show: false,
@@ -686,6 +738,7 @@
                         shared: true,
                         intersect: false,
                         y: [
+                            { formatter: (valor) => valor === null ? 'Sin datos' : `RD$ ${Number(valor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
                             { formatter: (valor) => valor === null ? 'Sin datos' : `RD$ ${Number(valor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
                             { formatter: (valor) => valor === null ? 'Sin datos' : `RD$ ${Number(valor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
                             { formatter: (valor) => valor === null ? 'Sin datos' : `${Number(valor).toFixed(1)}%` },

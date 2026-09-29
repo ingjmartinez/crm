@@ -50,6 +50,7 @@ class NominaDomingoController extends Controller
         $consultar = $request->boolean('consultar');
         $filas = $consultar ? $this->service->generar($fecha) : collect();
         $conciliacionVentas = $consultar ? $this->service->conciliacionVentas($fecha) : null;
+        $recargasPendientes = $consultar ? $this->service->recargasPendientes($fecha) : ['total' => 0, 'usuarios' => collect()];
         $resumenCumplimientoEmpresas = $this->service->resumenCumplimientoPorEmpresa($filas);
         $filasSinEmpresa = $filas->where('empresa', 'Sin empresa')->values();
         $empresa = trim((string) ($validated['empresa'] ?? ''));
@@ -84,6 +85,7 @@ class NominaDomingoController extends Controller
             'empresa' => $empresa,
             'empresas' => $this->service->empresas(),
             'conciliacionVentas' => $conciliacionVentas,
+            'recargasPendientes' => $recargasPendientes,
             'consultar' => $consultar,
             'resumenCoordinadores' => $resumenCoordinadores,
             'resumenCumplimientoEmpresas' => $resumenCumplimientoEmpresas,
@@ -131,13 +133,14 @@ class NominaDomingoController extends Controller
             throw ValidationException::withMessages(['fecha_nomina' => 'La fecha seleccionada para la nómina debe ser domingo.']);
         }
 
-        $this->ventasImportService->importar($validated['tradicional'], $validated['no_tradicional'], $fecha);
+        $this->ventasImportService->importar($validated['tradicional'], $validated['no_tradicional'], $fecha, $validated['recargas'] ?? null);
 
         return redirect()->route('recursos-humanos.nomina-domingo.index', [
             'fecha' => $fecha->toDateString(),
         ])->with('nomina_domingo_archivos', [
             'tradicional' => $validated['tradicional']->getClientOriginalName(),
             'no_tradicional' => $validated['no_tradicional']->getClientOriginalName(),
+            'recargas' => isset($validated['recargas']) ? $validated['recargas']->getClientOriginalName() : null,
         ])->with('success', 'Ventas guardadas para el domingo '.$fecha->format('d/m/Y').'. Pulsa Generar reporte cuando quieras consultarlo.');
     }
 

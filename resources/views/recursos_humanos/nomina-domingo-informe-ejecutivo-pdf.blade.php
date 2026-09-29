@@ -16,14 +16,14 @@
         .header-subtitle { color: #cbd8ea; font-size: 10px; }
         .header-meta { text-align: right; line-height: 1.7; }
         .section-title { margin: 18px 0 8px; color: #13294b; font-size: 13px; }
-        .kpi-table td { width: 25%; padding-right: 8px; vertical-align: top; }
+        .kpi-table td { width: 20%; padding-right: 8px; vertical-align: top; }
         .kpi-table td:last-child { padding-right: 0; }
         .kpi { min-height: 67px; padding: 11px 13px; border: 1px solid #dbe3ee; border-top: 4px solid #09aa94; border-radius: 5px; background: #f9fbfd; }
         .kpi.blue { border-top-color: #3498db; }
         .kpi.green { border-top-color: #28b463; }
         .kpi.orange { border-top-color: #f39c12; }
         .kpi-label { color: #718096; font-size: 8px; text-transform: uppercase; letter-spacing: .5px; }
-        .kpi-value { margin-top: 5px; color: #172b4d; font-size: 17px; font-weight: 700; }
+        .kpi-value { margin-top: 5px; color: #172b4d; font-size: 14px; font-weight: 700; }
         .kpi-note { margin-top: 3px; color: #718096; font-size: 8px; }
         .content-table > tbody > tr > td { width: 50%; vertical-align: top; }
         .content-table > tbody > tr > td:first-child { padding-right: 9px; }
@@ -40,6 +40,7 @@
         .sales-bar { min-width: 2px; height: 7px; border-radius: 2px; }
         .bar-traditional { background: #09aa94; }
         .bar-nontraditional { background: #3498db; }
+        .bar-recharges { background: #f59e0b; }
         .growth { margin-left: 6px; font-size: 8px; }
         .legend { margin-top: 7px; color: #68778d; font-size: 8px; }
         .dot { display: inline-block; width: 7px; height: 7px; margin-right: 3px; border-radius: 50%; }
@@ -82,6 +83,7 @@
             <td><div class="kpi"><div class="kpi-label">Ventas totales</div><div class="kpi-value">RD$ {{ number_format($informe['ventas_total'], 2) }}</div><div class="kpi-note">Acumulado de 4 semanas</div></div></td>
             <td><div class="kpi blue"><div class="kpi-label">Ventas tradicionales</div><div class="kpi-value">RD$ {{ number_format($informe['ventas_tradicionales'], 2) }}</div><div class="kpi-note">Participación: {{ $informe['ventas_total'] > 0 ? number_format(($informe['ventas_tradicionales'] / $informe['ventas_total']) * 100, 1) : '0.0' }}%</div></div></td>
             <td><div class="kpi orange"><div class="kpi-label">Ventas no tradicionales</div><div class="kpi-value">RD$ {{ number_format($informe['ventas_no_tradicionales'], 2) }}</div><div class="kpi-note">Participación: {{ $informe['ventas_total'] > 0 ? number_format(($informe['ventas_no_tradicionales'] / $informe['ventas_total']) * 100, 1) : '0.0' }}%</div></div></td>
+            <td><div class="kpi orange"><div class="kpi-label">Recargas</div><div class="kpi-value">RD$ {{ number_format($informe['ventas_recargas'], 2) }}</div><div class="kpi-note">Participación: {{ $informe['ventas_total'] > 0 ? number_format(($informe['ventas_recargas'] / $informe['ventas_total']) * 100, 1) : '0.0' }}%</div></div></td>
             <td><div class="kpi green"><div class="kpi-label">Cumplimiento de horario</div><div class="kpi-value">{{ $informe['porcentaje_cumplimiento'] !== null ? number_format($informe['porcentaje_cumplimiento'], 1).'%' : 'Sin datos' }}</div><div class="kpi-note">{{ number_format($informe['cumplen']) }} de {{ number_format($informe['evaluados']) }} evaluaciones</div></div></td>
         </tr>
     </table>
@@ -92,11 +94,12 @@
             <td>
                 <div class="panel">
                     <div class="panel-title">Ventas de las últimas cuatro semanas</div>
-                    <div class="panel-subtitle">Dos barras por semana: Tradicional y No tradicional. La variación compara el total con la semana anterior.</div>
+                    <div class="panel-subtitle">Tres barras por semana: Tradicional, No tradicional y Recargas. La variación compara el total con la semana anterior.</div>
                     @foreach ($informe['semanas'] as $semana)
                         @php
                             $tradicionalAncho = ($semana['tradicional'] / $informe['venta_maxima']) * 100;
                             $noTradicionalAncho = ($semana['no_tradicional'] / $informe['venta_maxima']) * 100;
+                            $recargasAncho = ($semana['recargas'] / $informe['venta_maxima']) * 100;
                         @endphp
                         <div class="week">
                             <div class="week-label">
@@ -122,9 +125,13 @@
                                 <span class="sales-label">No tradicional</span><span class="sales-amount">RD$ {{ number_format($semana['no_tradicional'], 2) }}</span>
                                 <div class="sales-bar bar-nontraditional" style="width: {{ $noTradicionalAncho }}%"></div>
                             </div>
+                            <div class="sales-row">
+                                <span class="sales-label">Recargas</span><span class="sales-amount">RD$ {{ number_format($semana['recargas'], 2) }}</span>
+                                <div class="sales-bar bar-recharges" style="width: {{ $recargasAncho }}%"></div>
+                            </div>
                         </div>
                     @endforeach
-                    <div class="legend"><span class="dot" style="background:#09aa94"></span> Tradicional &nbsp;&nbsp; <span class="dot" style="background:#3498db"></span> No tradicional</div>
+                    <div class="legend"><span class="dot" style="background:#09aa94"></span> Tradicional &nbsp;&nbsp; <span class="dot" style="background:#3498db"></span> No tradicional &nbsp;&nbsp; <span class="dot" style="background:#f59e0b"></span> Recargas</div>
                 </div>
             </td>
             <td>

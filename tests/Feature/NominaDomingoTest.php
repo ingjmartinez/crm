@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ViewErrorBag;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class NominaDomingoTest extends TestCase
@@ -90,6 +92,7 @@ class NominaDomingoTest extends TestCase
         });
         Schema::create('agencias', function (Blueprint $table): void {
             $table->id();
+            $table->string('agencia')->nullable();
             $table->string('terminal')->nullable();
             $table->string('empresa')->nullable();
             $table->string('coordinador')->nullable();
@@ -267,6 +270,7 @@ class NominaDomingoTest extends TestCase
             ['terminal' => '12', 'usuario_venta' => '00100000002', 'fecha_transaccion' => '2026-09-13 12:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 80],
             ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-20 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 80],
             ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-20 13:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 70],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-20 14:00:00', 'tipo' => 'Recargas', 'total_apostado' => 30],
         ]);
 
         $tendencia = app(NominaDomingoService::class)->tendenciaMensual(Carbon::parse('2026-09-13'));
@@ -274,13 +278,15 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(['06/09', '13/09', '20/09', '27/09'], $tendencia['labels']);
         $this->assertSame([100.0, 120.0, 80.0, null], $tendencia['tradicional']);
         $this->assertSame([50.0, 80.0, 70.0, null], $tendencia['no_tradicional']);
+        $this->assertSame([0.0, 0.0, 30.0, null], $tendencia['recargas']);
         $this->assertSame([100.0, 50.0, 100.0, null], $tendencia['cumplimiento']);
-        $this->assertSame(150.0, $tendencia['total_actual']);
-        $this->assertSame(0.0, $tendencia['variacion_ventas']);
+        $this->assertSame(180.0, $tendencia['total_actual']);
+        $this->assertSame(20.0, $tendencia['variacion_ventas']);
         $this->assertSame(0.0, $tendencia['variacion_tradicional']);
         $this->assertSame(50.0, $tendencia['variacion_no_tradicional']);
         $this->assertSame(300.0, $tendencia['tradicional_mes']);
         $this->assertSame(200.0, $tendencia['no_tradicional_mes']);
+        $this->assertSame(30.0, $tendencia['recargas_mes']);
         $this->assertSame(75.0, $tendencia['cumplimiento_mensual']);
         $this->assertSame(-33.3, $tendencia['variacion_cumplimiento']);
 
@@ -291,6 +297,7 @@ class NominaDomingoTest extends TestCase
             ->assertSee('Ventas Tradicional')
             ->assertSee('Evoluci&oacute;n mensual Tradicional', false)
             ->assertSee('Evoluci&oacute;n mensual No Tradicional', false)
+            ->assertSee('Evoluci&oacute;n mensual Recargas', false)
             ->assertSee('Cumplimiento mensual ponderado')
             ->assertSee('Cumplimiento horario')
             ->assertSee("type: 'column'", false)
@@ -317,6 +324,7 @@ class NominaDomingoTest extends TestCase
             ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-20 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 300],
             ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-27 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 300],
             ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-27 13:00:00', 'tipo' => 'No Tradicional', 'total_apostado' => 100],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-09-27 14:00:00', 'tipo' => 'Recargas', 'total_apostado' => 50],
             ['terminal' => '99', 'usuario_venta' => '00900000001', 'fecha_transaccion' => '2026-09-27 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 9999],
         ]);
 
@@ -326,19 +334,21 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('06/09/2026 - 27/09/2026', $informe['periodo']);
         $this->assertSame(700.0, $informe['ventas_tradicionales']);
         $this->assertSame(300.0, $informe['ventas_no_tradicionales']);
-        $this->assertSame(1000.0, $informe['ventas_total']);
+        $this->assertSame(50.0, $informe['ventas_recargas']);
+        $this->assertSame(1050.0, $informe['ventas_total']);
         $this->assertSame(4, $informe['evaluados']);
         $this->assertSame(3, $informe['cumplen']);
         $this->assertSame(1, $informe['no_cumplen']);
         $this->assertSame(75.0, $informe['porcentaje_cumplimiento']);
-        $this->assertSame(300.0, $informe['variacion_ventas']);
+        $this->assertSame(350.0, $informe['variacion_ventas']);
         $this->assertSame(0.0, $informe['variacion_cumplimiento']);
-        $this->assertSame([null, 100.0, 50.0, 33.3], array_column($informe['semanas'], 'variacion_ventas'));
+        $this->assertSame([null, 100.0, 50.0, 50.0], array_column($informe['semanas'], 'variacion_ventas'));
 
         $vista = view('recursos_humanos.nomina-domingo-informe-ejecutivo-pdf', compact('informe'))->render();
 
         $this->assertStringContainsString('sales-bar bar-traditional', $vista);
         $this->assertStringContainsString('sales-bar bar-nontraditional', $vista);
+        $this->assertStringContainsString('sales-bar bar-recharges', $vista);
         $this->assertStringContainsString('100.0%', $vista);
         $this->assertStringContainsString('% cumple', $vista);
         $this->assertStringContainsString('% no cumple', $vista);
@@ -503,6 +513,137 @@ class NominaDomingoTest extends TestCase
         $conciliacion = app(NominaDomingoService::class)->conciliacionVentas(Carbon::parse('2026-09-13'));
         $this->assertSame(1000.0, $conciliacion['tradicional']['archivo']);
         $this->assertSame(400.0, $conciliacion['no_tradicional']['archivo']);
+    }
+
+    public function test_recargas_report_uses_sales_terminal_for_matching_cedula(): void
+    {
+        DB::table('asistencias_bet')->insert([
+            'fecha' => '2026-09-13',
+            'agencia_id' => '05502619',
+            'cedula' => '00112345678',
+            'usuario' => 'Ana',
+            'primer_login' => '2026-09-13 08:00:00',
+            'ultimo_login' => '2026-09-13 16:00:00',
+        ]);
+
+        $this->post(route('recursos-humanos.nomina-domingo.cargar-ventas'), [
+            'fecha_nomina' => '2026-09-13',
+            'tradicional' => UploadedFile::fake()->createWithContent('tradicional.csv', "Fecha,Agencia,Total Apostado,Estatus,Terminal,Usr. Venta\n2026-09-13 12:00:00,Agencia 12,1000,Validos,05502619,00112345678\n"),
+            'no_tradicional' => UploadedFile::fake()->createWithContent('no_tradicional.csv', "Agencia,Estatus,Fecha,Id Terminal,Usr. Venta,Total Apostado\nAgencia 12,Validos,2026-09-13 13:00:00,05502619,00112345678,400\n"),
+            'recargas' => $this->archivoRecargas('2026-09-13 05:30:00 PM', '001-1234567-8'),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('nomina_domingo_ventas', [
+            'tipo' => 'Recargas',
+            'agencia' => null,
+            'terminal' => '05502619',
+            'usuario_venta' => '001-1234567-8',
+            'fecha_transaccion' => '2026-09-13 17:30:00',
+            'estatus' => 'Validos',
+        ]);
+
+        $fila = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'))->first();
+        $this->assertSame(2, $fila['recargas_cantidad']);
+        $this->assertSame(250.0, $fila['recargas_monto']);
+        $this->assertSame('2026-09-13 17:35:00', $fila['salida_efectiva']);
+    }
+
+    public function test_recargas_without_matching_sale_are_pending_and_do_not_affect_payroll(): void
+    {
+        $this->post(route('recursos-humanos.nomina-domingo.cargar-ventas'), [
+            'fecha_nomina' => '2026-09-13',
+            'tradicional' => UploadedFile::fake()->createWithContent('tradicional.csv', "Fecha,Agencia,Total Apostado,Estatus,Terminal,Usr. Venta\n2026-09-13 12:00:00,Agencia 12,1000,Validos,12,00112345678\n"),
+            'no_tradicional' => UploadedFile::fake()->createWithContent('no_tradicional.csv', "Agencia,Estatus,Fecha,Id Terminal,Usr. Venta,Total Apostado\nAgencia 12,Validos,2026-09-13 13:00:00,12,00112345678,400\n"),
+            'recargas' => $this->archivoRecargas('2026-09-13 05:30:00 PM', '00999999999'),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('nomina_domingo_ventas', [
+            'tipo' => 'Recargas',
+            'usuario_venta' => '00999999999',
+            'terminal' => null,
+            'estatus' => 'Pendiente',
+        ]);
+        $this->assertSame(2, app(NominaDomingoService::class)->recargasPendientes(Carbon::parse('2026-09-13'))['total']);
+        $filas = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'));
+        $this->assertCount(1, $filas);
+        $this->assertSame(0, $filas->sum('recargas_cantidad'));
+        $this->assertSame('2026-09-13 13:00:00', $filas->first()['ultima_transaccion']);
+        $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13', 'consultar' => 1]))
+            ->assertOk()
+            ->assertSee('Recargas pendientes: 2')
+            ->assertSee('00999999999');
+    }
+
+    public function test_recargas_for_cedula_with_multiple_terminals_remain_pending(): void
+    {
+        $this->post(route('recursos-humanos.nomina-domingo.cargar-ventas'), [
+            'fecha_nomina' => '2026-09-13',
+            'tradicional' => UploadedFile::fake()->createWithContent('tradicional.csv', "Fecha,Agencia,Total Apostado,Estatus,Terminal,Usr. Venta\n2026-09-13 12:00:00,Agencia 12,1000,Validos,12,00112345678\n"),
+            'no_tradicional' => UploadedFile::fake()->createWithContent('no_tradicional.csv', "Agencia,Estatus,Fecha,Id Terminal,Usr. Venta,Total Apostado\nAgencia 13,Validos,2026-09-13 13:00:00,13,00112345678,400\n"),
+            'recargas' => $this->archivoRecargas('2026-09-13 05:30:00 PM'),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertSame(2, DB::table('nomina_domingo_ventas')->where('tipo', 'Recargas')->where('estatus', 'Pendiente')->count());
+        $this->assertCount(2, app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13')));
+        $this->assertSame(0, app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'))->sum('recargas_cantidad'));
+    }
+
+    public function test_reupload_without_recargas_keeps_previous_recargas(): void
+    {
+        DB::table('nomina_domingo_ventas')->insert([
+            'tipo' => 'Recargas',
+            'fecha_transaccion' => '2026-09-13 17:00:00',
+            'total_apostado' => 75,
+        ]);
+
+        $this->post(route('recursos-humanos.nomina-domingo.cargar-ventas'), [
+            'fecha_nomina' => '2026-09-13',
+            'tradicional' => UploadedFile::fake()->createWithContent('tradicional.csv', "Fecha,Agencia,Total Apostado,Estatus,Terminal,Usr. Venta\n2026-09-13 12:00:00,Agencia 12,1000,Validos,12,00112345678\n"),
+            'no_tradicional' => UploadedFile::fake()->createWithContent('no_tradicional.csv', "Agencia,Estatus,Fecha,Id Terminal,Usr. Venta,Total Apostado\nAgencia 12,Validos,2026-09-13 13:00:00,12,00112345678,400\n"),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('nomina_domingo_ventas', ['tipo' => 'Recargas', 'total_apostado' => 75]);
+        $this->assertSame(3, DB::table('nomina_domingo_ventas')->count());
+    }
+
+    public function test_recargas_with_another_date_do_not_replace_sunday_sales(): void
+    {
+        DB::table('nomina_domingo_ventas')->insert(['tipo' => 'Tradicional', 'fecha_transaccion' => '2026-09-13 10:00:00', 'total_apostado' => 999]);
+
+        $this->post(route('recursos-humanos.nomina-domingo.cargar-ventas'), [
+            'fecha_nomina' => '2026-09-13',
+            'tradicional' => UploadedFile::fake()->createWithContent('tradicional.csv', "Fecha,Agencia,Total Apostado,Estatus,Terminal,Usr. Venta\n2026-09-13 12:00:00,Agencia 12,1000,Validos,12,00112345678\n"),
+            'no_tradicional' => UploadedFile::fake()->createWithContent('no_tradicional.csv', "Agencia,Estatus,Fecha,Id Terminal,Usr. Venta,Total Apostado\nAgencia 12,Validos,2026-09-13 13:00:00,12,00112345678,400\n"),
+            'recargas' => $this->archivoRecargas('2026-09-14 05:30:00 PM'),
+        ])->assertSessionHasErrors('recargas');
+
+        $this->assertSame(1, DB::table('nomina_domingo_ventas')->count());
+        $this->assertSame(999.0, (float) DB::table('nomina_domingo_ventas')->sum('total_apostado'));
+    }
+
+    private function archivoRecargas(string $fecha, string $cedula = '00112345678'): UploadedFile
+    {
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setCellValue('A10', 'Estatus: Confirmada');
+        foreach (['A' => 'Agencia', 'K' => 'Fecha', 'R' => 'Monto', 'S' => 'Usr. Venta'] as $columna => $encabezado) {
+            $sheet->setCellValue($columna.'13', $encabezado);
+        }
+        $sheet->setCellValue('A17', '20267');
+        $sheet->setCellValue('K17', $fecha);
+        $sheet->setCellValue('R17', 100);
+        $sheet->setCellValue('S17', $cedula);
+        $sheet->setCellValue('K18', '2026-09-13 03:00:00 PM');
+        $sheet->setCellValue('R18', 150);
+        $sheet->setCellValue('S18', $cedula);
+
+        $path = tempnam(sys_get_temp_dir(), 'recargas_');
+        (new Xlsx($spreadsheet))->save($path);
+        $archivo = UploadedFile::fake()->createWithContent('recargas.xlsx', file_get_contents($path));
+        unlink($path);
+        $spreadsheet->disconnectWorksheets();
+
+        return $archivo;
     }
 
     public function test_successful_upload_confirmation_is_displayed_as_a_modal(): void

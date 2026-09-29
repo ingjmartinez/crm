@@ -64,6 +64,8 @@ class NominaDomingoService
                 'tradicional_monto' => $anterior['tradicional_monto'] + $venta['tradicional_monto'],
                 'no_tradicional_cantidad' => $anterior['no_tradicional_cantidad'] + $venta['no_tradicional_cantidad'],
                 'no_tradicional_monto' => $anterior['no_tradicional_monto'] + $venta['no_tradicional_monto'],
+                'recargas_cantidad' => $anterior['recargas_cantidad'] + $venta['recargas_cantidad'],
+                'recargas_monto' => $anterior['recargas_monto'] + $venta['recargas_monto'],
             ]);
         }
 
@@ -124,6 +126,8 @@ class NominaDomingoService
                 'tradicional_monto' => $venta['tradicional_monto'] ?? 0.0,
                 'no_tradicional_cantidad' => $venta['no_tradicional_cantidad'] ?? 0,
                 'no_tradicional_monto' => $venta['no_tradicional_monto'] ?? 0.0,
+                'recargas_cantidad' => $venta['recargas_cantidad'] ?? 0,
+                'recargas_monto' => $venta['recargas_monto'] ?? 0.0,
                 'incidencia' => $incidencia,
                 'minutos_trabajados' => $minutosTrabajados,
                 'horas_trabajadas' => round($horas, 2),
@@ -153,6 +157,28 @@ class NominaDomingoService
 
         return Agencia::query()->whereNotNull('empresa')->where('empresa', '<>', '')
             ->distinct()->orderBy('empresa')->pluck('empresa');
+    }
+
+    /** @return array{total: int, usuarios: Collection<int, object>} */
+    public function recargasPendientes(Carbon $fecha): array
+    {
+        if (! Schema::hasTable('nomina_domingo_ventas')) {
+            return ['total' => 0, 'usuarios' => collect()];
+        }
+
+        $query = DB::table('nomina_domingo_ventas')
+            ->whereDate('fecha_transaccion', $fecha->toDateString())
+            ->where('tipo', 'Recargas')
+            ->where('estatus', 'Pendiente');
+
+        return [
+            'total' => (clone $query)->count(),
+            'usuarios' => $query->selectRaw('usuario_venta, COUNT(*) AS cantidad, MAX(fecha_transaccion) AS ultima_fecha, SUM(total_apostado) AS monto')
+                ->groupBy('usuario_venta')
+                ->orderByDesc('cantidad')
+                ->limit(100)
+                ->get(),
+        ];
     }
 
     /**
@@ -230,15 +256,19 @@ class NominaDomingoService
      *     labels: array<int, string>,
      *     tradicional: array<int, float|null>,
      *     no_tradicional: array<int, float|null>,
+     *     recargas: array<int, float|null>,
      *     cumplimiento: array<int, float|null>,
      *     total_actual: float|null,
      *     variacion_ventas: float|null,
      *     tradicional_actual: float|null,
      *     no_tradicional_actual: float|null,
+     *     recargas_actual: float|null,
      *     variacion_tradicional: float|null,
      *     variacion_no_tradicional: float|null,
+     *     variacion_recargas: float|null,
      *     tradicional_mes: float,
      *     no_tradicional_mes: float,
+     *     recargas_mes: float,
      *     cumplimiento_mensual: float|null,
      *     cumplimiento_actual: float|null,
      *     variacion_cumplimiento: float|null
@@ -273,7 +303,7 @@ class NominaDomingoService
             $fechaDomingo = $domingo->toDateString();
 
             if (! $fechasConVentas->has($fechaDomingo)) {
-                return ['fecha' => $fechaDomingo, 'tradicional' => null, 'no_tradicional' => null, 'cumplimiento' => null, 'evaluados' => 0, 'cumplen' => 0];
+                return ['fecha' => $fechaDomingo, 'tradicional' => null, 'no_tradicional' => null, 'recargas' => null, 'cumplimiento' => null, 'evaluados' => 0, 'cumplen' => 0];
             }
 
             $filas = $filasFechaSeleccionada !== null && $fecha->isSameDay($domingo)
@@ -291,6 +321,7 @@ class NominaDomingoService
                 'fecha' => $fechaDomingo,
                 'tradicional' => round((float) $filas->sum('tradicional_monto'), 2),
                 'no_tradicional' => round((float) $filas->sum('no_tradicional_monto'), 2),
+                'recargas' => round((float) $filas->sum('recargas_monto'), 2),
                 'cumplimiento' => $totalEvaluado > 0 ? round(($totalCumplen / $totalEvaluado) * 100, 1) : null,
                 'evaluados' => $totalEvaluado,
                 'cumplen' => $totalCumplen,
@@ -301,8 +332,8 @@ class NominaDomingoService
         $actual = $puntosConDatos->last();
         $primero = $puntosConDatos->count() > 1 ? $puntosConDatos->first() : null;
         $puntosPosteriores = $puntosConDatos->slice(1)->values();
-        $totalActual = $actual !== null ? (float) $actual['tradicional'] + (float) $actual['no_tradicional'] : null;
-        $totalPrimero = $primero !== null ? (float) $primero['tradicional'] + (float) $primero['no_tradicional'] : null;
+        $totalActual = $actual !== null ? (float) $actual['tradicional'] + (float) $actual['no_tradicional'] + (float) $actual['recargas'] : null;
+        $totalPrimero = $primero !== null ? (float) $primero['tradicional'] + (float) $primero['no_tradicional'] + (float) $primero['recargas'] : null;
         $totalEvaluadosMes = (int) $puntos->sum('evaluados');
         $totalCumplenMes = (int) $puntos->sum('cumplen');
         $evaluadosPosteriores = (int) $puntosPosteriores->sum('evaluados');
@@ -310,12 +341,14 @@ class NominaDomingoService
         $cumplimientoPosterior = $evaluadosPosteriores > 0 ? ($cumplenPosteriores / $evaluadosPosteriores) * 100 : null;
         $promedioTradicionalPosterior = $puntosPosteriores->isNotEmpty() ? (float) $puntosPosteriores->avg('tradicional') : null;
         $promedioNoTradicionalPosterior = $puntosPosteriores->isNotEmpty() ? (float) $puntosPosteriores->avg('no_tradicional') : null;
+        $promedioRecargasPosterior = $puntosPosteriores->isNotEmpty() ? (float) $puntosPosteriores->avg('recargas') : null;
 
         return [
             'mes' => $fecha->locale('es')->translatedFormat('F Y'),
             'labels' => $puntos->map(fn (array $punto): string => Carbon::parse($punto['fecha'])->format('d/m'))->all(),
             'tradicional' => $puntos->pluck('tradicional')->all(),
             'no_tradicional' => $puntos->pluck('no_tradicional')->all(),
+            'recargas' => $puntos->pluck('recargas')->all(),
             'cumplimiento' => $puntos->pluck('cumplimiento')->all(),
             'total_actual' => $totalActual,
             'variacion_ventas' => $totalActual !== null && $totalPrimero !== null && $totalPrimero != 0.0
@@ -323,14 +356,19 @@ class NominaDomingoService
                 : null,
             'tradicional_actual' => $actual !== null ? (float) $actual['tradicional'] : null,
             'no_tradicional_actual' => $actual !== null ? (float) $actual['no_tradicional'] : null,
+            'recargas_actual' => $actual !== null ? (float) $actual['recargas'] : null,
             'variacion_tradicional' => $primero !== null && $promedioTradicionalPosterior !== null && (float) $primero['tradicional'] != 0.0
                 ? round((($promedioTradicionalPosterior - (float) $primero['tradicional']) / (float) $primero['tradicional']) * 100, 1)
                 : null,
             'variacion_no_tradicional' => $primero !== null && $promedioNoTradicionalPosterior !== null && (float) $primero['no_tradicional'] != 0.0
                 ? round((($promedioNoTradicionalPosterior - (float) $primero['no_tradicional']) / (float) $primero['no_tradicional']) * 100, 1)
                 : null,
+            'variacion_recargas' => $primero !== null && $promedioRecargasPosterior !== null && (float) $primero['recargas'] != 0.0
+                ? round((($promedioRecargasPosterior - (float) $primero['recargas']) / (float) $primero['recargas']) * 100, 1)
+                : null,
             'tradicional_mes' => round((float) $puntosConDatos->sum('tradicional'), 2),
             'no_tradicional_mes' => round((float) $puntosConDatos->sum('no_tradicional'), 2),
+            'recargas_mes' => round((float) $puntosConDatos->sum('recargas'), 2),
             'cumplimiento_mensual' => $totalEvaluadosMes > 0 ? round(($totalCumplenMes / $totalEvaluadosMes) * 100, 1) : null,
             'cumplimiento_actual' => $actual['cumplimiento'] ?? null,
             'variacion_cumplimiento' => $primero !== null && $cumplimientoPosterior !== null && $primero['cumplimiento'] !== null
@@ -368,9 +406,10 @@ class NominaDomingoService
                 : collect();
             $tradicional = round((float) $filas->sum('tradicional_monto'), 2);
             $noTradicional = round((float) $filas->sum('no_tradicional_monto'), 2);
+            $recargas = round((float) $filas->sum('recargas_monto'), 2);
             $evaluados = $filas->count();
             $cumplen = $filas->where('estatus', 'Cumple')->count();
-            $ventasTotal = round($tradicional + $noTradicional, 2);
+            $ventasTotal = round($tradicional + $noTradicional + $recargas, 2);
             $variacionVentas = $cargado && $ventaSemanaAnterior !== null && $ventaSemanaAnterior > 0
                 ? round((($ventasTotal - $ventaSemanaAnterior) / $ventaSemanaAnterior) * 100, 1)
                 : null;
@@ -385,6 +424,7 @@ class NominaDomingoService
                 'cargado' => $cargado,
                 'tradicional' => $tradicional,
                 'no_tradicional' => $noTradicional,
+                'recargas' => $recargas,
                 'ventas_total' => $ventasTotal,
                 'variacion_ventas' => $variacionVentas,
                 'evaluados' => $evaluados,
@@ -408,6 +448,7 @@ class NominaDomingoService
             'semanas' => $semanas->all(),
             'ventas_tradicionales' => round((float) $semanas->sum('tradicional'), 2),
             'ventas_no_tradicionales' => round((float) $semanas->sum('no_tradicional'), 2),
+            'ventas_recargas' => round((float) $semanas->sum('recargas'), 2),
             'ventas_total' => round((float) $semanas->sum('ventas_total'), 2),
             'venta_maxima' => max(1, (float) $semanas->max('ventas_total')),
             'evaluados' => $evaluados,
@@ -433,7 +474,8 @@ class NominaDomingoService
 
         return DB::table('nomina_domingo_ventas')->whereDate('fecha_transaccion', $fecha->toDateString())
             ->whereNotNull('usuario_venta')->where('usuario_venta', '<>', '')
-            ->get(['terminal', 'usuario_venta', 'fecha_transaccion', 'tipo', 'total_apostado'])
+            ->get(['terminal', 'usuario_venta', 'fecha_transaccion', 'tipo', 'total_apostado', 'estatus'])
+            ->reject(fn (object $fila): bool => $fila->tipo === 'Recargas' && $fila->estatus === 'Pendiente')
             ->groupBy(fn (object $fila): string => $this->clave($fila->terminal, $fila->usuario_venta))
             ->map(fn (Collection $filas): array => [
                 'primera_transaccion' => (string) $filas->min('fecha_transaccion'),
@@ -443,6 +485,8 @@ class NominaDomingoService
                 'tradicional_monto' => (float) $filas->where('tipo', 'Tradicional')->sum('total_apostado'),
                 'no_tradicional_cantidad' => $filas->where('tipo', 'No Tradicional')->count(),
                 'no_tradicional_monto' => (float) $filas->where('tipo', 'No Tradicional')->sum('total_apostado'),
+                'recargas_cantidad' => $filas->where('tipo', 'Recargas')->count(),
+                'recargas_monto' => (float) $filas->where('tipo', 'Recargas')->sum('total_apostado'),
             ]);
     }
 

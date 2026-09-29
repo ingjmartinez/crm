@@ -20,6 +20,7 @@ class CargarNominaDomingoRequest extends FormRequest
             'fecha_nomina' => ['required', 'date_format:Y-m-d'],
             'tradicional' => ['required', 'file', 'mimes:xlsx,csv,txt', 'max:51200'],
             'no_tradicional' => ['required', 'file', 'mimes:xlsx,csv,txt', 'max:51200'],
+            'recargas' => ['nullable', 'file', 'mimes:xlsx', 'max:51200'],
         ];
     }
 
@@ -29,6 +30,7 @@ class CargarNominaDomingoRequest extends FormRequest
         return [
             'tradicional.uploaded' => 'No se pudo subir el archivo Tradicional. Revisa que no supere el límite de subida configurado en PHP.',
             'no_tradicional.uploaded' => 'No se pudo subir el archivo No Tradicional. Revisa que no supere el límite de subida configurado en PHP.',
+            'recargas.uploaded' => 'No se pudo subir el archivo Recargas. Revisa que no supere el límite de subida configurado en PHP.',
         ];
     }
 }

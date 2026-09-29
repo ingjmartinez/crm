@@ -16,14 +16,20 @@ class NominaDomingoVentasImportService
 
     private string $fechaNomina;
 
-    public function importar(UploadedFile $tradicional, UploadedFile $noTradicional, Carbon $fecha): void
+    public function importar(UploadedFile $tradicional, UploadedFile $noTradicional, Carbon $fecha, ?UploadedFile $recargas = null): void
     {
         set_time_limit(300);
         DB::connection()->disableQueryLog();
         $this->fechaNomina = $fecha->toDateString();
 
-        DB::transaction(function () use ($tradicional, $noTradicional): void {
-            DB::table('nomina_domingo_ventas')->whereDate('fecha_transaccion', $this->fechaNomina)->delete();
+        DB::transaction(function () use ($tradicional, $noTradicional, $recargas): void {
+            $ventasAnteriores = DB::table('nomina_domingo_ventas')->whereDate('fecha_transaccion', $this->fechaNomina);
+
+            if ($recargas === null) {
+                $ventasAnteriores->whereIn('tipo', ['Tradicional', 'No Tradicional']);
+            }
+
+            $ventasAnteriores->delete();
 
             $this->limpiarArchivo($tradicional, 'Tradicional', [
                 'fecha' => 'Fecha',
@@ -44,7 +50,121 @@ class NominaDomingoVentasImportService
                 'total_apostado' => 'Total Apostado',
             ]);
             $this->verificarVentas('No Tradicional');
+
+            if ($recargas !== null) {
+                $this->importarRecargas($recargas);
+                $this->verificarVentas('Recargas');
+            }
         });
+    }
+
+    private function importarRecargas(UploadedFile $archivo): void
+    {
+        $path = $archivo->getRealPath();
+
+        if ($path === false) {
+            throw ValidationException::withMessages(['recargas' => 'No se pudo leer el archivo Recargas.']);
+        }
+
+        $zip = new ZipArchive;
+
+        if ($zip->open($path) !== true) {
+            throw ValidationException::withMessages(['recargas' => 'No se pudo abrir el archivo Recargas.']);
+        }
+
+        try {
+            $sheetXml = $zip->getFromName($this->obtenerPrimeraHoja($zip));
+
+            if ($sheetXml === false) {
+                throw ValidationException::withMessages(['recargas' => 'No se pudo leer la hoja de Recargas.']);
+            }
+
+            $sharedStrings = $this->leerSharedStrings($zip);
+            $terminalesPorCedula = DB::table('nomina_domingo_ventas')
+                ->whereDate('fecha_transaccion', $this->fechaNomina)
+                ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
+                ->whereNotNull('terminal')
+                ->get(['usuario_venta', 'terminal'])
+                ->groupBy(fn (object $venta): string => $this->normalizarCedula($venta->usuario_venta))
+                ->map(fn ($ventas): array => $ventas
+                    ->groupBy(fn (object $venta): string => $this->claveAgenciaReporte((string) $venta->terminal, ''))
+                    ->map(fn ($terminal): string => (string) $terminal->first()->terminal)
+                    ->values()
+                    ->all())
+                ->all();
+            $columnas = null;
+            $filas = [];
+
+            foreach ($this->iterarFilas($sheetXml) as $numeroFila => $rowXml) {
+                $row = $this->parsearFilaXml($rowXml, $sharedStrings);
+
+                if ($numeroFila === 10 && ! str_contains($this->limpiarTexto($row['A'] ?? ''), 'Confirmada')) {
+                    throw ValidationException::withMessages(['recargas' => 'El reporte de Recargas debe estar filtrado por estatus Confirmada.']);
+                }
+
+                if ($numeroFila === 13) {
+                    $columnas = $this->mapearColumnas($row, [
+                        'fecha' => 'Fecha',
+                        'monto' => 'Monto',
+                        'usuario_venta' => 'Usr. Venta',
+                    ], 'Recargas');
+
+                    continue;
+                }
+
+                if ($numeroFila < 14 || $columnas === null) {
+                    continue;
+                }
+
+                $fechaTexto = $this->limpiarTexto($row[$columnas['fecha']] ?? '');
+
+                if ($fechaTexto === '') {
+                    continue;
+                }
+
+                $fecha = $this->normalizarFecha($fechaTexto);
+                $fechaSql = $this->fechaSql($fecha['orden'] ?? null);
+
+                if ($fechaSql === null || substr($fechaSql, 0, 10) !== $this->fechaNomina) {
+                    throw ValidationException::withMessages(['recargas' => 'La fila '.$numeroFila.' de Recargas tiene una fecha fuera del domingo '.$this->fechaNomina.'.']);
+                }
+
+                $usuarioVenta = $this->limpiarTexto($row[$columnas['usuario_venta']] ?? '');
+
+                if ($usuarioVenta === '') {
+                    throw ValidationException::withMessages(['recargas' => 'Falta Usr. Venta en la fila '.$numeroFila.' de Recargas.']);
+                }
+
+                $cedula = $this->normalizarCedula($usuarioVenta);
+                $terminales = $cedula !== '' ? ($terminalesPorCedula[$cedula] ?? []) : [];
+                $terminal = count($terminales) === 1 ? $terminales[0] : null;
+
+                $this->agregarFilaProcesada([
+                    'tipo' => 'Recargas',
+                    'fecha_transaccion' => $fechaSql,
+                    'fecha_texto' => $fecha['texto'],
+                    'agencia' => null,
+                    'terminal' => $terminal,
+                    'terminal_clave' => $terminal !== null ? $this->claveAgenciaReporte($terminal, '') : null,
+                    'usuario_venta' => $usuarioVenta,
+                    'total_apostado' => $this->limpiarMonto($row[$columnas['monto']] ?? 0),
+                    'estatus' => $terminal !== null ? 'Validos' : 'Pendiente',
+                ], $filas);
+            }
+
+            if ($columnas === null) {
+                throw ValidationException::withMessages(['recargas' => 'No se encontraron los encabezados del reporte de Recargas.']);
+            }
+
+            $this->insertarFilasReporte($filas);
+        } finally {
+            $zip->close();
+        }
+    }
+
+    private function normalizarCedula(mixed $cedula): string
+    {
+        return preg_replace('/\D+/', '', (string) $cedula) ?? '';
     }
 
     private function verificarVentas(string $tipo): void
@@ -606,7 +726,7 @@ class NominaDomingoVentasImportService
         }
 
         $texto = $this->limpiarTexto($valor);
-        $formatos = ['d-m-Y h:i:s A', 'd-m-Y H:i:s', 'd/m/Y h:i:s A', 'd/m/Y H:i:s', 'Y-m-d H:i:s'];
+        $formatos = ['d-m-Y h:i:s A', 'd-m-Y H:i:s', 'd/m/Y h:i:s A', 'd/m/Y H:i:s', 'Y-m-d h:i:s A', 'Y-m-d H:i:s'];
 
         foreach ($formatos as $formato) {
             try {
@@ -690,6 +810,10 @@ class NominaDomingoVentasImportService
 
     private function campoArchivo(string $tipo): string
     {
-        return $tipo === 'Tradicional' ? 'tradicional' : 'no_tradicional';
+        return match ($tipo) {
+            'Tradicional' => 'tradicional',
+            'No Tradicional' => 'no_tradicional',
+            'Recargas' => 'recargas',
+        };
     }
 }
