@@ -15,6 +15,7 @@ class ContabilidadGastoIncentivoAgenciaController extends Controller
 {
     public function __construct(
         private readonly IncentivosController $incentivosController,
+        private readonly IncentivoV6Controller $incentivoV6Controller,
         private readonly DistribuidorIncentivoAgencia $distribuidor,
     ) {}
 
@@ -28,6 +29,7 @@ class ContabilidadGastoIncentivoAgenciaController extends Controller
         $validated = $request->validated();
         $validated['terminales_excluidas'] = $validated['terminales_excluidas']
             ?? json_encode($this->terminalesExcluidas(), JSON_THROW_ON_ERROR);
+        $validated['tipo_pago'] = 'tramos_60';
         $incentivoRequest = Request::create(
             $request->url(),
             'GET',
@@ -43,6 +45,8 @@ class ContabilidadGastoIncentivoAgenciaController extends Controller
         if ($incentivoResponse->status() >= 400) {
             return response()->json($payload, $incentivoResponse->status());
         }
+
+        $payload = $this->incentivoV6Controller->applyPaymentCalendar($payload, $validated);
 
         $agentes = $this->agruparAgentes(collect($payload['data'] ?? []));
         $cedulas = $agentes->keys()->values();
@@ -219,6 +223,8 @@ class ContabilidadGastoIncentivoAgenciaController extends Controller
             'total_ventas' => round((float) $rows->sum('ventas_agencia'), 2),
             'total_incentivo' => (int) $rows->sum('incentivo_agencia'),
             'incentivo_origen' => $this->monto($incentivoMeta['total_incentivo'] ?? 0),
+            'modo_tipos_pago' => $incentivoMeta['modo_tipos_pago'] ?? null,
+            'configuraciones_diarias_aplicadas' => $incentivoMeta['configuraciones_diarias_aplicadas'] ?? 0,
         ];
     }
 

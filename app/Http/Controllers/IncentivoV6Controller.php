@@ -330,10 +330,25 @@ class IncentivoV6Controller extends Controller
 
         $filters = $request->validated();
         $filters['terminales_excluidas'] = $this->decodeJsonArray($filters['terminales_excluidas'] ?? null);
-        $rangesByType = $this->paymentRangesByType($filters['rangos_pago_por_tipo'] ?? null);
-        $payload = $this->calculator->applyDailyPaymentTypes($payload, $filters, $rangesByType);
+        $payload = $this->applyPaymentCalendar($payload, $filters);
 
         return response()->json($payload);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function applyPaymentCalendar(array $payload, array $filters): array
+    {
+        $filters['terminales_excluidas'] = $this->decodeJsonArray($filters['terminales_excluidas'] ?? []);
+
+        return $this->calculator->applyDailyPaymentTypes(
+            $payload,
+            $filters,
+            $this->paymentRangesByType($filters['rangos_pago_por_tipo'] ?? null)
+        );
     }
 
     public function guardarPeriodo(GuardarPeriodoIncentivoV6Request $request): JsonResponse

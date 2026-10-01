@@ -10,3 +10,8 @@ Artisan::command('inspire', function () {
 
 Schedule::command('auto-proceso:run-due')->everyMinute();
 Schedule::command('chatbot:close-inactive-sessions')->everyMinute();
+Schedule::command('bi:capturar-ventas-hora')->everyFiveMinutes()->between('06:00', '22:00')->withoutOverlapping(10);
+Schedule::command('bi:resumir-ventas-dia')->dailyAt('05:00')->withoutOverlapping(180);
+Schedule::command('bi:resumir-ventas-dia')->dailyAt('06:30')->withoutOverlapping(180);
+Schedule::command('bi:resumir-ventas-dia')->dailyAt('12:30')->withoutOverlapping(180);
+Schedule::command('bi:resumir-ventas-dia --solo-faltantes')->dailyAt('16:30')->withoutOverlapping(180);

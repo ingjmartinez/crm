@@ -7,8 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 class Premio extends Model
 {
     protected $table = 'premios_bet';
+
     public $timestamps = false;
+
     protected $primaryKey = 'premio_id';
+
     protected $fillable = [
         'consorcio_id',
         'producto_id',
@@ -17,4 +20,12 @@ class Premio extends Model
         'descripcion',
         'fecha',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'monto' => 'decimal:2',
+            'fecha' => 'date',
+        ];
+    }
 }

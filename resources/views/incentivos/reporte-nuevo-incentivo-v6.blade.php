@@ -2652,6 +2652,13 @@
         return String(value ?? '').trim();
     }
 
+    function getDesvinculadoEmpleadoKey(row) {
+        const empleadoId = getEmpleadoIdKey(row?.empleadoid);
+        const cedula = getCedulaKey(row?.cedula);
+
+        return empleadoId && cedula ? `${empleadoId}|${cedula}` : '';
+    }
+
     function getFixedBagBaseBudget(administrativePoolBase) {
         return toIntegerAmount(toIntegerAmount(administrativePoolBase) * (getPuestoPctByCategoryKey('g45') / 100));
     }
@@ -2698,9 +2705,13 @@
     }
 
     function isRowExcludedByModuleDesvinculados(row, cedulasSet, empleadoIdsSet) {
-        const empleadoId = getEmpleadoIdKey(row?.empleadoid);
-        if (empleadoId) {
-            return empleadoIdsSet.has(empleadoId);
+        const empleadoKey = getDesvinculadoEmpleadoKey(row);
+        if (empleadoKey) {
+            return empleadoIdsSet.has(empleadoKey);
+        }
+
+        if (getEmpleadoIdKey(row?.empleadoid)) {
+            return false;
         }
 
         const cedula = getCedulaKey(row?.cedula);
@@ -7101,16 +7112,20 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
     function getModuleDesvinculadosAffectedRows(sourceRows, desvinculadosRows) {
         const empleadoIds = new Set((Array.isArray(desvinculadosRows) ? desvinculadosRows : [])
-            .map((row) => getEmpleadoIdKey(row?.empleadoid))
+            .map(getDesvinculadoEmpleadoKey)
             .filter(Boolean));
         const cedulas = new Set((Array.isArray(desvinculadosRows) ? desvinculadosRows : [])
             .map((row) => getCedulaKey(row?.cedula))
             .filter(Boolean));
 
         return (Array.isArray(sourceRows) ? sourceRows : []).filter((row) => {
-            const empleadoId = getEmpleadoIdKey(row?.empleadoid);
-            if (empleadoId) {
-                return empleadoIds.has(empleadoId);
+            const empleadoKey = getDesvinculadoEmpleadoKey(row);
+            if (empleadoKey) {
+                return empleadoIds.has(empleadoKey);
+            }
+
+            if (getEmpleadoIdKey(row?.empleadoid)) {
+                return false;
             }
 
             const cedula = getCedulaKey(row?.cedula);
@@ -7124,15 +7139,17 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         const empleadoIdsSet = isAdmin ? excludedAdministrativeDesvinculadosEmpleadoIds : excludedCoordinatorDesvinculadosEmpleadoIds;
 
         affectedRows.forEach((row) => {
-            const empleadoId = getEmpleadoIdKey(row?.empleadoid);
-            if (empleadoId) {
-                empleadoIdsSet.add(empleadoId);
+            const empleadoKey = getDesvinculadoEmpleadoKey(row);
+            if (empleadoKey) {
+                empleadoIdsSet.add(empleadoKey);
                 return;
             }
 
-            const cedula = getCedulaKey(row?.cedula);
-            if (cedula) {
-                cedulasSet.add(cedula);
+            if (!getEmpleadoIdKey(row?.empleadoid)) {
+                const cedula = getCedulaKey(row?.cedula);
+                if (cedula) {
+                    cedulasSet.add(cedula);
+                }
             }
         });
 

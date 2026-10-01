@@ -71,6 +71,70 @@ class IncentivoV6DesvinculadosTest extends TestCase
         ], $response->getData(true));
     }
 
+    public function test_exit_date_identifies_the_active_company_when_status_is_still_active(): void
+    {
+        DB::table('empleados')->insert([
+            [
+                'companyid' => 168,
+                'empleadoid' => 1774,
+                'nombres' => 'Persona',
+                'apellidos' => 'Anterior',
+                'cedula' => '01100358512',
+                'activo' => true,
+                'fechasalida' => '2026-09-20',
+            ],
+            [
+                'companyid' => 169,
+                'empleadoid' => 3512,
+                'nombres' => 'Persona',
+                'apellidos' => 'Actual',
+                'cedula' => '01100358512',
+                'activo' => true,
+                'fechasalida' => null,
+            ],
+        ]);
+
+        $response = app(IncentivosController::class)->desvinculadosReporteNuevoIncentivoV5(
+            Request::create('/incentivos/reporte-nuevo-incentivo-v5/desvinculados', 'POST', [
+                'cedulas' => ['01100358512'],
+            ])
+        );
+
+        $this->assertSame([], $response->getData(true)['data']);
+    }
+
+    public function test_duplicate_employee_id_does_not_unlink_a_different_cedula(): void
+    {
+        DB::table('empleados')->insert([
+            [
+                'companyid' => 168,
+                'empleadoid' => 1774,
+                'nombres' => 'Persona',
+                'apellidos' => 'Desvinculada',
+                'cedula' => '01100358512',
+                'activo' => false,
+                'fechasalida' => '2026-09-20',
+            ],
+            [
+                'companyid' => 169,
+                'empleadoid' => 1774,
+                'nombres' => 'Otra',
+                'apellidos' => 'Persona',
+                'cedula' => '02200469623',
+                'activo' => true,
+                'fechasalida' => null,
+            ],
+        ]);
+
+        $response = app(IncentivosController::class)->desvinculadosReporteNuevoIncentivoV5(
+            Request::create('/incentivos/reporte-nuevo-incentivo-v5/desvinculados', 'POST', [
+                'cedulas' => ['01100358512', '02200469623'],
+            ])
+        );
+
+        $this->assertSame(['1100358512'], array_column($response->getData(true)['data'], 'cedula'));
+    }
+
     public function test_cedula_is_unlinked_when_no_company_has_an_active_record(): void
     {
         DB::table('empleados')->insert([

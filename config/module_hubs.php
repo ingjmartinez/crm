@@ -6,6 +6,15 @@ return [
         'breadcrumb' => 'Dashboard',
         'items' => [
             [
+                'nombre' => 'BI',
+                'descripcion' => 'Nuevo módulo de inteligencia de negocios.',
+                'url' => '/bi',
+                'icono' => 'ri-bar-chart-grouped-line',
+                'categoria' => 'Principal',
+                'tags' => ['bi', 'indicadores', 'tableros'],
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Tablero Principal',
                 'descripcion' => 'Consulta indicadores claves, ventas por tipo, agencias y balance mensual.',
                 'url' => '/',
@@ -400,6 +409,15 @@ return [
         'titulo' => 'Mantenimiento',
         'breadcrumb' => 'Mantenimiento',
         'items' => [
+            [
+                'nombre' => 'Tipo Pago',
+                'descripcion' => 'Carga y consulta el tipo de pago diario de cada terminal desde LTKBancas.csv.',
+                'url' => '/mantenimiento/tipo-pago',
+                'icono' => 'ri-money-dollar-circle-line',
+                'categoria' => 'Agencias',
+                'tags' => ['tipo pago', 'terminales', 'calendario', 'csv'],
+                'activo' => true,
+            ],
             [
                 'nombre' => 'Agencias',
                 'descripcion' => 'Administra agencias, terminales, estatus y datos operativos.',

@@ -7,6 +7,7 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AutoProcesoConfigController;
 use App\Http\Controllers\BancoOperacionController;
+use App\Http\Controllers\Bi\DashboardController as BiDashboardController;
 use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\ComercialController;
 use App\Http\Controllers\ContabilidadComisionController;
@@ -38,6 +39,7 @@ use App\Http\Controllers\InicioController;
 use App\Http\Controllers\InicioV2Controller;
 use App\Http\Controllers\KpiLotobetController;
 use App\Http\Controllers\LegalBitacoraAgenciaController;
+use App\Http\Controllers\MantenimientoTipoPagoController;
 use App\Http\Controllers\MarController;
 use App\Http\Controllers\MetaIncentivoController;
 use App\Http\Controllers\ModuleHubController;
@@ -108,6 +110,12 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'force.password.change'])->group(function () {
+    Route::get('/bi', [BiDashboardController::class, 'index'])
+        ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
+        ->name('bi.index');
+    Route::post('/bi/recalcular', [BiDashboardController::class, 'recalcular'])
+        ->middleware([\App\Http\Middleware\HandleBiInertiaRequests::class, 'throttle:2,1'])
+        ->name('bi.recalcular');
     Route::post('/favoritos/toggle', [UserFavoritoController::class, 'toggle'])->name('favoritos.toggle');
     Route::get('/gerencia', [ModuleHubController::class, 'gerencia'])->name('gerencia.index');
     Route::get('/gerencia/beneficio-bruto', [BeneficioBrutoController::class, 'index'])
@@ -536,6 +544,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
     Route::prefix('mantenimiento')->name('mantenimiento.')->group(function () {
         Route::get('/', [ModuleHubController::class, 'mantenimiento'])->name('index');
+        Route::get('/tipo-pago', [MantenimientoTipoPagoController::class, 'index'])->name('tipo-pago.index');
+        Route::get('/tipo-pago/data', [MantenimientoTipoPagoController::class, 'data'])->name('tipo-pago.data');
+        Route::post('/tipo-pago', [MantenimientoTipoPagoController::class, 'store'])->name('tipo-pago.store');
         Route::get('/solicitudes-terminales', [SolicitudTerminalController::class, 'index'])->name('solicitudes-terminales.index');
         Route::post('/solicitudes-terminales/sugerir', [SolicitudTerminalController::class, 'preview'])->name('solicitudes-terminales.preview');
         Route::post('/solicitudes-terminales', [SolicitudTerminalController::class, 'store'])->name('solicitudes-terminales.store');

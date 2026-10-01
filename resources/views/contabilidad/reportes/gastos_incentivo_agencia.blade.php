@@ -75,14 +75,6 @@
                                 <label for="minDias" class="form-label">Mín. días de venta</label>
                                 <input type="number" id="minDias" class="form-control" value="1" min="1">
                             </div>
-                            <div class="col-md-2">
-                                <label for="tipoPago" class="form-label">Tipo de pago</label>
-                                <select id="tipoPago" class="form-select">
-                                    <option value="tramos_60">Pagos a 60</option>
-                                    <option value="tramos_70">Pagos a 70</option>
-                                    <option value="tramos_80">Pagos a 80</option>
-                                </select>
-                            </div>
                             <div class="col-md-2 d-grid">
                                 <button type="submit" class="btn btn-primary" id="btnGenerar">
                                     <i class="ri-file-chart-line me-1"></i>Generar reporte
@@ -164,6 +156,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-success" id="resumenDesvinculados"></div>
+                    <div class="small text-muted mb-2" id="montoDesvinculados"></div>
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered">
                             <thead><tr><th>Cédula</th><th>IdEmpleado</th><th>Nombre</th><th>Estatus</th><th>Fecha salida</th></tr></thead>
@@ -191,25 +184,10 @@
         let faltantesActuales = new Set();
         let desvinculadosCedulasActuales = new Set();
         let desvinculadosIdsActuales = new Set();
+        let desvinculadosConsultados = false;
         let cedulasExcluidas = new Set();
         let empleadoIdsExcluidos = new Set();
         let table = null;
-
-        const buildRanges = (percent, pagos) => [
-            { desde: 100001, hasta: 250000, pago: pagos[0], tipo: 'fijo' },
-            { desde: 250001, hasta: 400000, pago: pagos[1], tipo: 'fijo' },
-            { desde: 400001, hasta: 550000, pago: pagos[2], tipo: 'fijo' },
-            { desde: 550001, hasta: 700000, pago: pagos[3], tipo: 'fijo' },
-            { desde: 700001, hasta: 850000, pago: pagos[4], tipo: 'fijo' },
-            { desde: 850001, hasta: 1000000, pago: pagos[5], tipo: 'fijo' },
-            { desde: 1000001, hasta: 5000000, pago: percent, tipo: 'porcentaje' },
-            { desde: 5000001, hasta: null, pago: percent, tipo: 'porcentaje' },
-        ];
-        const payoutRanges = {
-            tramos_60: buildRanges(1, [1000, 2000, 4000, 6000, 8000, 9000]),
-            tramos_70: buildRanges(0.75, [750, 1500, 3000, 4500, 6000, 6750]),
-            tramos_80: buildRanges(0.5, [500, 1000, 2000, 3000, 4000, 4500]),
-        };
 
         document.addEventListener('DOMContentLoaded', function () {
             const today = new Date();
@@ -227,14 +205,11 @@
         async function generarReporte(event) {
             event.preventDefault();
             const button = document.getElementById('btnGenerar');
-            const tipoPago = document.getElementById('tipoPago').value;
             const params = new URLSearchParams({
                 fecha_ini: document.getElementById('fechaIni').value,
                 fecha_fin: document.getElementById('fechaFin').value,
                 sistema: document.getElementById('sistema').value,
                 min_dias_venta: document.getElementById('minDias').value,
-                tipo_pago: tipoPago,
-                rangos_pago: JSON.stringify(payoutRanges[tipoPago]),
             });
 
             button.disabled = true;
@@ -247,9 +222,11 @@
                 sourceRows = Array.isArray(payload.data) ? payload.data : [];
                 cedulasExcluidas = new Set();
                 empleadoIdsExcluidos = new Set();
+                desvinculadosConsultados = false;
+                document.getElementById('btnAplicarDesvinculados').disabled = true;
                 aplicarFiltros();
                 document.getElementById('rangoEvaluado').textContent =
-                    `Período: ${payload.meta.fecha_ini} al ${payload.meta.fecha_fin} · ${payload.meta.sistema}`;
+                    `Período: ${payload.meta.fecha_ini} al ${payload.meta.fecha_fin} · ${payload.meta.sistema} · Calendario aplicado: ${Number(payload.meta.configuraciones_diarias_aplicadas || 0).toLocaleString('es-DO')} lecturas. Sin asignación se usa tramo 60.`;
                 document.getElementById('btnDescargarExcel').disabled = sourceRows.length === 0;
                 document.getElementById('btnFaltantes').disabled = sourceRows.length === 0;
                 document.getElementById('btnDesvinculados').disabled = sourceRows.length === 0;
@@ -369,19 +346,25 @@
 
         async function consultarDesvinculados() {
             const cedulas = unique(displayedRows.map(row => key(row.cedula)));
-            const empleadoids = unique(displayedRows.map(row => String(row.empleadoid || '').trim()).filter(Boolean));
-            if (!cedulas.length && !empleadoids.length) {
+            desvinculadosConsultados = false;
+            document.getElementById('btnAplicarDesvinculados').disabled = true;
+            if (!cedulas.length) {
                 return;
             }
 
             try {
                 loading('Consultando desvinculados...');
-                const payload = await postJson(desvinculadosUrl, { cedulas, empleadoids });
+                const payload = await postJson(desvinculadosUrl, { cedulas });
                 const rows = Array.isArray(payload.data) ? payload.data : [];
                 desvinculadosCedulasActuales = new Set(rows.map(row => key(row.cedula)));
-                desvinculadosIdsActuales = new Set(rows.map(row => String(row.empleadoid || '').trim()).filter(Boolean));
+                desvinculadosIdsActuales = new Set();
+                desvinculadosConsultados = true;
+                document.getElementById('btnAplicarDesvinculados').disabled = false;
+                const affectedAmount = displayedRows.filter(row => desvinculadosCedulasActuales.has(key(row.cedula)))
+                    .reduce((sum, row) => sum + Number(row.incentivo_agencia || 0), 0);
+                document.getElementById('montoDesvinculados').textContent = `Gasto asociado: ${money(affectedAmount)}.`;
                 document.getElementById('resumenDesvinculados').textContent =
-                    `${Number(payload.total_desvinculados || 0)} usuarios desvinculados; ${Number(payload.total_desactivados || 0)} desactivados.`;
+                    `${Number(payload.total_desvinculados || 0)} usuarios desvinculados; ${Number(payload.total_desactivados || 0)} desactivados; ${Number(payload.total_con_fecha_salida || 0)} con fecha de salida.`;
                 document.getElementById('detalleDesvinculados').innerHTML = rows.map(row => `
                     <tr><td>${escapeHtml(row.cedula)}</td><td>${escapeHtml(row.empleadoid || '-')}</td>
                     <td>${escapeHtml(row.nombre)}</td><td>${escapeHtml(row.estatus)}</td>
@@ -402,6 +385,15 @@
         }
 
         function aplicarDesvinculados() {
+            if (!desvinculadosConsultados) {
+                Swal.fire({ title: 'Consulta pendiente', text: 'Primero debes consultar los usuarios desvinculados.', icon: 'warning' });
+                return;
+            }
+            if (!desvinculadosCedulasActuales.size) {
+                bootstrap.Modal.getInstance(document.getElementById('modalDesvinculados'))?.hide();
+                Swal.fire({ title: 'Desvinculados validados', text: 'La consulta no encontro usuarios desvinculados.', icon: 'success' });
+                return;
+            }
             desvinculadosCedulasActuales.forEach(cedula => cedulasExcluidas.add(cedula));
             desvinculadosIdsActuales.forEach(id => empleadoIdsExcluidos.add(id));
             bootstrap.Modal.getInstance(document.getElementById('modalDesvinculados'))?.hide();

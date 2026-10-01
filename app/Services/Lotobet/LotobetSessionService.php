@@ -55,7 +55,7 @@ class LotobetSessionService
     public function getToken(): Token
     {
         $token = Token::find(self::TOKEN_ID);
-        if (! $token || now()->greaterThan($token->fecha) || ! is_file($this->cookiePath())) {
+        if (! $token || now()->addMinutes(2)->greaterThanOrEqualTo($token->fecha) || ! is_file($this->cookiePath())) {
             return $this->generateToken();
         }
 
@@ -64,27 +64,40 @@ class LotobetSessionService
 
     public function getVentasProducto(string $fecha): array
     {
-        $token = $this->getToken();
-        $url = self::BASE_URL."/kotFQlCe5XVFoJcjEz/{$token->token}/{$fecha}/05";
-        $response = $this->request($url);
-        $data = json_decode($response['body'], true);
+        for ($intento = 0; $intento < 2; $intento++) {
+            $token = $this->getToken();
+            $url = self::BASE_URL."/kotFQlCe5XVFoJcjEz/{$token->token}/{$fecha}/05";
+            $response = $this->request($url);
+            $data = json_decode($response['body'], true);
+            $status = (int) $response['status'];
+            $code = is_array($data) ? strtolower(trim((string) ($data['code'] ?? ''))) : '';
+            $message = is_array($data) ? (string) ($data['msg'] ?? $data['message'] ?? '') : '';
+            $tokenRechazado = in_array($status, [401, 403], true)
+                || in_array($code, ['401', '403'], true)
+                || (str_contains(mb_strtolower($message), 'token') && (! in_array($code, ['', '0', '200', 'success', 'ok'], true) || ! is_array($data['Content'] ?? null)));
 
-        if (! is_array($data)) {
-            throw new RuntimeException('Respuesta invalida de API externa.');
-        }
-
-        $code = strtolower(trim((string) ($data['code'] ?? '')));
-        if ($code !== '' && ! in_array($code, ['0', '200', 'success', 'ok'], true)) {
-            $message = (string) ($data['msg'] ?? $data['message'] ?? 'La API de Lotobet rechazo la solicitud.');
-
-            if ($code === '401' || str_contains(strtolower($message), 'token')) {
+            if ($tokenRechazado) {
                 $this->clearSession();
+
+                if ($intento === 0) {
+                    continue;
+                }
+
+                throw new RuntimeException('LotoBet rechazó el token renovado.');
             }
 
-            throw new RuntimeException($message);
+            if (! is_array($data)) {
+                throw new RuntimeException('Respuesta inválida de API externa.');
+            }
+
+            if ($status >= 400 || ($code !== '' && ! in_array($code, ['0', '200', 'success', 'ok'], true))) {
+                throw new RuntimeException($message !== '' ? $message : "LotoBet respondió HTTP {$status}.");
+            }
+
+            return $data;
         }
 
-        return $data;
+        throw new RuntimeException('No se pudo consultar la API de LotoBet.');
     }
 
     public function clearSession(): void
@@ -98,7 +111,7 @@ class LotobetSessionService
         }
     }
 
-    private function request(string $url): array
+    protected function request(string $url): array
     {
         File::ensureDirectoryExists(dirname($this->cookiePath()));
         $curl = curl_init();
@@ -138,7 +151,7 @@ class LotobetSessionService
         return ['status' => $status, 'body' => (string) $body];
     }
 
-    private function cookiePath(): string
+    protected function cookiePath(): string
     {
         return storage_path('app/etl/lotobet_cookie.txt');
     }

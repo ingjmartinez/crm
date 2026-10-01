@@ -2,8 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\IncentivosController;
+use App\Http\Controllers\IncentivoV6Controller;
 use App\Services\Contabilidad\DistribuidorIncentivoAgencia;
+use App\Services\IncentivoV6Calculator;
 use Illuminate\Support\Facades\Route;
+use Mockery;
 use Tests\TestCase;
 
 class ContabilidadGastoIncentivoAgenciaTest extends TestCase
@@ -22,6 +26,31 @@ class ContabilidadGastoIncentivoAgenciaTest extends TestCase
         $view->assertSee('Generando reporte...');
         $view->assertSee('Reporte generado');
         $view->assertSee("extend: 'excelHtml5'", false);
+        $view->assertDontSee('id="tipoPago"', false);
+        $view->assertSee('desvinculadosConsultados', false);
+        $view->assertSee('Calendario aplicado:', false);
+    }
+
+    public function test_shared_v6_calendar_calculation_receives_all_payment_ranges_and_excluded_terminals(): void
+    {
+        $calculator = Mockery::mock(IncentivoV6Calculator::class);
+        $calculator->shouldReceive('applyDailyPaymentTypes')
+            ->once()
+            ->withArgs(function (array $payload, array $filters, array $ranges): bool {
+                return $payload === ['data' => []]
+                    && $filters['terminales_excluidas'] === ['1001']
+                    && isset($ranges['tramos_60'], $ranges['tramos_70'], $ranges['tramos_80']);
+            })
+            ->andReturn(['data' => [], 'meta' => ['modo_tipos_pago' => 'calendario_diario_terminal']]);
+
+        $controller = new IncentivoV6Controller(Mockery::mock(IncentivosController::class), $calculator);
+        $result = $controller->applyPaymentCalendar(['data' => []], [
+            'fecha_ini' => '2026-09-01',
+            'fecha_fin' => '2026-09-30',
+            'terminales_excluidas' => '["1001"]',
+        ]);
+
+        $this->assertSame('calendario_diario_terminal', $result['meta']['modo_tipos_pago']);
     }
 
     public function test_it_distributes_incentive_proportionally_to_agency_sales(): void
