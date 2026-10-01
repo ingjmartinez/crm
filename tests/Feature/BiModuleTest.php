@@ -22,6 +22,8 @@ class BiModuleTest extends TestCase
     {
         parent::setUp();
 
+        (require database_path('migrations/2026_10_01_123543_create_bi_limite_productos_table.php'))->up();
+
         Schema::create('agencias', function (Blueprint $table): void {
             $table->id();
             $table->string('terminal')->nullable();
@@ -38,6 +40,7 @@ class BiModuleTest extends TestCase
             $table->id();
             $table->string('producto_id')->unique();
             $table->string('tipo')->nullable();
+            $table->string('descripcion')->nullable();
         });
 
         Schema::create('vt_usuarios_bet', function (Blueprint $table): void {
@@ -66,6 +69,7 @@ class BiModuleTest extends TestCase
             $table->unsignedInteger('registros');
             $table->dateTime('capturado_en');
             $table->json('rutas')->nullable();
+            $table->json('productos')->nullable();
             $table->unsignedInteger('terminales_evaluadas')->nullable();
             $table->unsignedInteger('terminales_con_venta')->nullable();
             $table->json('terminales_categoria')->nullable();
@@ -118,6 +122,7 @@ class BiModuleTest extends TestCase
             $table->foreignId('calculado_por_id')->nullable();
             $table->timestamps();
         });
+        (require database_path('migrations/2026_10_01_125650_add_terminal_scope_to_bi_limits.php'))->up();
     }
 
     public function test_bi_route_is_protected_and_listed_in_dashboard_hub(): void
@@ -141,6 +146,9 @@ class BiModuleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('component', 'Bi/Dashboard')
             ->assertJsonPath('props.modulo', 'BI')
+            ->assertJsonPath('props.limitesProductosUrl', route('bi.limites-productos.guardar'))
+            ->assertJsonPath('props.alertasProductos', [])
+            ->assertJsonPath('props.productosDisponibles', [])
             ->assertJsonPath('props.menuUrl', route('dashboard.index'))
             ->assertJsonPath('props.biUrl', route('bi.index'))
             ->assertJsonPath('props.recalcularUrl', route('bi.recalcular'))
@@ -166,6 +174,35 @@ class BiModuleTest extends TestCase
             ->assertOk()
             ->assertSee('data-page="app"', false)
             ->assertSee('"component":"Bi\\/Dashboard"', false);
+    }
+
+    public function test_product_alerts_use_latest_today_snapshot_independently_of_selected_period(): void
+    {
+        \App\Models\CatalogoJuego::query()->create(['producto_id' => '43', 'descripcion' => 'Quiniela Loteka']);
+        \App\Models\BiLimiteProducto::factory()->create(['producto_id' => '43', 'monto' => 100]);
+        Agencia::query()->create(['terminal' => '00100', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia Norte']);
+        \App\Models\BiLimiteProducto::factory()->create(['producto_id' => '43', 'terminal' => '100', 'monto' => 50]);
+        BiVentaHora::factory()->create(['fecha' => today()->subDay()->toDateString(), 'hora' => 22, 'productos' => ['43' => 9999]]);
+        BiVentaHora::factory()->create(['fecha' => today()->toDateString(), 'hora' => 6, 'productos' => ['43' => 80]]);
+        BiVentaHora::factory()->create(['fecha' => today()->toDateString(), 'hora' => 7, 'productos' => ['43' => 120], 'productos_terminales' => ['100' => ['43' => 60]]]);
+
+        $this->withoutMiddleware()->withHeader('X-Inertia', 'true')
+            ->get(route('bi.index', ['desde' => today()->subDays(5)->toDateString(), 'hasta' => today()->subDay()->toDateString()]))
+            ->assertOk()
+            ->assertJsonPath('props.productosDisponibles.0.descripcion', 'Quiniela Loteka')
+            ->assertJsonPath('props.alertasProductos.0.ventas', 120)
+            ->assertJsonPath('props.alertasProductos.0.porcentaje', 120)
+            ->assertJsonPath('props.alertasProductos.0.alerta', true)
+            ->assertJsonPath('props.alertasProductos.1.terminal', '100')
+            ->assertJsonPath('props.alertasProductos.1.ventas', 60)
+            ->assertJsonPath('props.alertasProductos.1.alerta', true)
+            ->assertJsonPath('props.terminalesLimites.0.terminal', '100')
+            ->assertJsonPath('props.terminalesLimites.0.nombre', 'Agencia Norte');
+
+        BiVentaHora::query()->whereDate('fecha', today()->toDateString())->delete();
+        $this->get(route('bi.index'))->assertOk()
+            ->assertJsonPath('props.alertasProductos.0.ventas', null)
+            ->assertJsonPath('props.alertasProductos.0.estado', 'Sin lectura');
     }
 
     public function test_bi_reads_terminals_from_agencias_and_filters_on_the_server(): void

@@ -54,6 +54,8 @@ class CapturarVentasBiHoraTest extends TestCase
             $table->unsignedInteger('registros');
             $table->dateTime('capturado_en');
             $table->json('rutas')->nullable();
+            $table->json('productos')->nullable();
+            $table->json('productos_terminales')->nullable();
             $table->unsignedInteger('terminales_evaluadas')->nullable();
             $table->unsignedInteger('terminales_con_venta')->nullable();
             $table->json('terminales_categoria')->nullable();
@@ -108,6 +110,8 @@ class CapturarVentasBiHoraTest extends TestCase
         $this->assertSame(1, $primera->terminales_categoria['recargas']);
         $this->assertSame(1, $segunda->terminales_categoria['tradicional']);
         $this->assertSame(1, $segunda->terminales_categoria['no_tradicional']);
+        $this->assertEquals(['100' => ['1' => 100, '3' => 10], '200' => ['2' => 40]], $primera->productos_terminales);
+        $this->assertEquals(['100' => ['1' => 125], '200' => ['2' => 60]], $segunda->productos_terminales);
     }
 
     public function test_invalid_api_response_does_not_create_a_snapshot(): void
@@ -131,7 +135,7 @@ class CapturarVentasBiHoraTest extends TestCase
             ->shouldReceive('getVentasProducto')
             ->once()
             ->andReturn(['Content' => [
-                ['producto_id' => 43, 'agencia_id' => '100', 'monto' => 125],
+                ['producto_id' => 43, 'agencia_id' => '00100', 'monto' => 125],
                 ['producto_id' => '43', 'agencia_id' => '200', 'monto' => 75],
                 ['producto_id' => 44, 'agencia_id' => '100', 'monto' => 50],
                 ['producto_id' => 38, 'agencia_id' => '100', 'monto' => 30],
@@ -141,6 +145,8 @@ class CapturarVentasBiHoraTest extends TestCase
 
         $this->assertSame('200.00', $lectura->quiniela_loteka_acumulado);
         $this->assertSame('30.00', $lectura->mega_chance_acumulado);
+        $this->assertEquals(['43' => 200, '44' => 50, '38' => 30], $lectura->productos);
+        $this->assertEquals(['100' => ['43' => 125, '44' => 50, '38' => 30], '200' => ['43' => 75]], $lectura->productos_terminales);
     }
 
     public function test_zero_sales_counts_only_active_lotobet_terminals_with_positive_net_sales(): void

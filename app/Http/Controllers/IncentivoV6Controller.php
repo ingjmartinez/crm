@@ -229,9 +229,9 @@ class IncentivoV6Controller extends Controller
         $guardadas = $asignaciones->whereNotNull('tipo_pago')->values();
 
         DB::transaction(function () use ($asignaciones): void {
-            if ($asignaciones->isNotEmpty()) {
+            foreach ($asignaciones->chunk(1000) as $lote) {
                 IncentivoTerminalTipoPago::query()->upsert(
-                    $asignaciones->all(),
+                    $lote->all(),
                     ['sistema', 'terminal', 'fecha'],
                     ['tipo_pago', 'updated_by', 'updated_at']
                 );

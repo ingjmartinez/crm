@@ -8,6 +8,17 @@ use Illuminate\Database\Eloquent\Builder;
 
 class AgenciaTerminalCatalogo
 {
+    /** @return array<int, array{terminal: string, nombre: string}> */
+    public function paraAlertas(): array
+    {
+        return Agencia::lotobet()->whereNotNull('terminal')->where('terminal', '<>', '')
+            ->orderBy('id')->get(['terminal', 'nombre_agencia', 'agencia'])
+            ->map(fn (Agencia $agencia): array => [
+                'terminal' => ltrim(trim((string) $agencia->terminal), '0') ?: '0',
+                'nombre' => (string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $agencia->terminal),
+            ])->unique('terminal')->sortBy('terminal', SORT_NATURAL)->values()->all();
+    }
+
     public function ultimaActualizacion(): ?string
     {
         $fecha = Agencia::query()->max('updated_at');

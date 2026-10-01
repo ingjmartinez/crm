@@ -1,6 +1,7 @@
-﻿<script setup>
+<script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
+import { currencyInputCaret, formatCurrencyInput, normalizeCurrencyInput } from '../../currency-input.js';
 
 const props = defineProps({
     modulo: { type: String, required: true },
@@ -25,6 +26,11 @@ const props = defineProps({
     megaChanceHoy: { type: Number, default: null },
     megaChanceSemanaAnterior: { type: Number, default: null },
     megaChanceRecordAnterior: { type: Number, default: null },
+    limitesProductosUrl: { type: String, required: true },
+    mensajeLimite: { type: String, default: null },
+    productosDisponibles: { type: Array, default: () => [] },
+    alertasProductos: { type: Array, default: () => [] },
+    terminalesLimites: { type: Array, default: () => [] },
 });
 
 const tabs = [
@@ -40,7 +46,81 @@ const activePeriod = ref('5 días');
 const activeView = ref('Monto');
 const activeSalesView = ref('Monto');
 const activeEntry = ref('Detalle diario');
-const activeLimit = ref('Todas');
+const limiteForm = useForm({ producto_id: '', alcance: 'global', terminal: '', monto: '', activo: true });
+const filtroAlcance = ref('todos');
+const nombresTerminales = computed(() => Object.fromEntries(props.terminalesLimites.map((row) => [row.terminal, row.nombre])));
+const soloAlertas = ref(false);
+const limiteGuardado = ref(false);
+const cantidadAlertas = computed(() => props.alertasProductos.filter((row) => row.alerta).length);
+const productosVigilados = computed(() => props.alertasProductos.filter((row) => row.activo).length);
+const filteredLimits = computed(() => props.alertasProductos.filter((row) =>
+    `${row.producto_id} ${row.nombre} ${row.terminal} ${nombresTerminales.value[row.terminal] || ''}`.toLowerCase().includes(search.value.toLowerCase())
+    && (!soloAlertas.value || row.alerta) && (filtroAlcance.value === 'todos' || row.alcance === filtroAlcance.value)));
+
+function editarLimite(row) {
+    limiteForm.clearErrors();
+    limiteGuardado.value = false;
+    limiteForm.producto_id = row.producto_id;
+    limiteForm.alcance = row.alcance;
+    limiteForm.terminal = row.terminal;
+    limiteForm.monto = row.monto;
+    limiteForm.activo = row.activo;
+    document.getElementById('limite-monto')?.focus();
+}
+
+function seleccionarProductoLimite() {
+    const terminal = limiteForm.alcance === 'global' ? '' : limiteForm.terminal;
+    const row = props.alertasProductos.find((item) => item.producto_id === limiteForm.producto_id && item.terminal === terminal);
+    limiteForm.clearErrors();
+    limiteGuardado.value = false;
+    limiteForm.monto = row?.monto ?? '';
+    limiteForm.activo = row?.activo ?? true;
+}
+
+function cambiarAlcanceLimite() {
+    limiteForm.terminal = '';
+    seleccionarProductoLimite();
+}
+
+async function actualizarMontoLimite(event) {
+    const input = event.target;
+    const caret = currencyInputCaret(input.value, input.selectionStart ?? input.value.length);
+    limiteForm.monto = normalizeCurrencyInput(input.value);
+    input.value = formatCurrencyInput(limiteForm.monto);
+    await nextTick();
+    input.setSelectionRange(caret, caret);
+}
+
+function completarMontoLimite(event) {
+    const formatted = formatCurrencyInput(limiteForm.monto, true);
+    limiteForm.monto = normalizeCurrencyInput(formatted);
+    event.target.value = formatted;
+}
+
+function borrarSeparadorMonto(event) {
+    const input = event.target;
+    const caret = input.selectionStart;
+    if (caret !== input.selectionEnd) return;
+    if (event.key === 'Backspace' && input.value[caret - 1] === ',') {
+        event.preventDefault();
+        input.value = input.value.slice(0, caret - 2) + input.value.slice(caret);
+        input.setSelectionRange(caret - 2, caret - 2);
+        actualizarMontoLimite(event);
+    } else if (event.key === 'Delete' && input.value[caret] === ',') {
+        event.preventDefault();
+        input.value = input.value.slice(0, caret) + input.value.slice(caret + 2);
+        input.setSelectionRange(caret, caret);
+        actualizarMontoLimite(event);
+    }
+}
+
+function guardarLimite() {
+    limiteGuardado.value = false;
+    limiteForm.post(props.limitesProductosUrl, {
+        preserveScroll: true,
+        onSuccess: () => { limiteForm.reset(); limiteGuardado.value = true; },
+    });
+}
 const zone = ref('');
 const search = ref('');
 const catalogSearch = ref(props.busquedaTerminal);
@@ -77,7 +157,7 @@ onMounted(() => {
     window.addEventListener('keydown', handleModalKeydown);
     hourlyRefreshTimer = window.setInterval(() => {
         if (!document.hidden) {
-            router.reload({ only: ['lecturasPorHora', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy'], preserveScroll: true });
+            router.reload({ only: ['lecturasPorHora', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos'], preserveScroll: true });
         }
     }, 120_000);
 });
@@ -87,6 +167,7 @@ onUnmounted(() => {
     window.removeEventListener('keydown', handleModalKeydown);
 });
 const formatDop = (amount) => `DOP ${new Intl.NumberFormat('es-DO', { maximumFractionDigits: 0 }).format(amount)}`;
+const formatLimiteDop = (amount) => `DOP ${new Intl.NumberFormat('es-DO', { maximumFractionDigits: 2 }).format(amount)}`;
 const formatNumber = (amount) => new Intl.NumberFormat('es-DO', { maximumFractionDigits: 0 }).format(amount);
 const formatCompactDop = (amount) => amount === null ? '—' : Math.abs(amount) >= 1_000_000 ? `DOP ${(amount / 1_000_000).toFixed(2)}M` : formatDop(amount);
 const shortDate = (date) => date ? date.slice(5) : '—';
@@ -329,13 +410,7 @@ const entries = [
     { id: '5347', name: 'AGENCIA EJEMPLO 02', login: '07:37', delta: '+7 min tarde', logout: '11:49' },
     { id: '5357', name: 'AGENCIA EJEMPLO 03', login: '06:57', delta: '33 min antes', logout: '09:38' },
 ];
-const limits = [
-    { name: 'AGENCIA EJEMPLO 01', recargas: 47.3, tradicional: 123.7, noTradicional: 533.3 },
-    { name: 'AGENCIA EJEMPLO 02', recargas: 59.2, tradicional: 60.9, noTradicional: 396.6 },
-    { name: 'AGENCIA EJEMPLO 03', recargas: 369.5, tradicional: 252.7, noTradicional: 376.9 },
-];
 const filteredEntries = computed(() => entries.filter((row) => `${row.id} ${row.name}`.toLowerCase().includes(search.value.toLowerCase())));
-const filteredLimits = computed(() => limits.filter((row) => row.name.toLowerCase().includes(search.value.toLowerCase())));
 
 function selectPeriod(period) {
     activePeriod.value = period;
@@ -387,7 +462,7 @@ function recalcularVentas() {
             <div class="bi-header-actions"><span class="bi-updated">LotoBet: {{ periodoVentas.ultimaFecha || 'sin datos' }} · Datos desde {{ periodoVentas.primeraFecha || '—' }}<br>Catálogo actualizado: {{ catalogoActualizado || 'sin fecha' }}</span><a class="bi-back" :href="menuUrl">← Volver al menú</a></div>
         </header>
         <nav class="bi-nav" aria-label="Secciones BI">
-            <button v-for="tab in tabs" :key="tab.key" type="button" class="bi-nav-item" :class="{ active: activeTab === tab.key }" @click="selectTab(tab.key)"><span :class="tab.color">■</span>{{ tab.name }}<b v-if="tab.key === 'limites'" class="bi-nav-badge" title="Valor ilustrativo">83</b></button>
+            <button v-for="tab in tabs" :key="tab.key" type="button" class="bi-nav-item" :class="{ active: activeTab === tab.key }" @click="selectTab(tab.key)"><span :class="tab.color">■</span>{{ tab.name }}<b v-if="tab.key === 'limites' && cantidadAlertas" class="bi-nav-badge" title="Productos con alerta">{{ cantidadAlertas }}</b></button>
             <select v-model="zone" class="bi-zone" aria-label="Elegir zona"><option value="">— Elegir zona —</option><option>ZONA NORTE</option><option>ZONA SUR</option><option>ZONA ESTE</option><option>ZONA CENTRAL</option></select>
         </nav>
 <div class="bi-filters"><strong>FILTRAR POR PERÍODO</strong><input v-model="from" type="date" aria-label="Fecha inicial"><input v-model="until" type="date" aria-label="Fecha final"><button class="bi-primary" type="button" @click="activePeriod = 'Personalizado'; applyPeriod()">Aplicar</button><button class="bi-clear" type="button" @click="resetPeriod">✕ Todo</button><div class="bi-periods"><button v-for="period in periods" :key="period" type="button" :class="{ active: activePeriod === period }" @click="selectPeriod(period)">{{ period }}</button></div><button class="bi-recalculate" type="button" :disabled="recalculando" title="Recalcula hasta 31 días cerrados de ventas y premios" @click="recalcularVentas">{{ recalculando ? 'Recalculando…' : '↻ Recalcular datos' }}</button></div>
@@ -395,9 +470,9 @@ function recalcularVentas() {
             <div v-if="periodError" class="bi-period-error" role="alert">{{ periodError }}</div>
             <div v-if="recalculoError" class="bi-period-error" role="alert">{{ recalculoError }}</div>
             <div v-if="mensajeRecalculo" class="bi-recalculate-success" role="status">{{ mensajeRecalculo }}</div>
-            <div v-if="activeTab !== 'productos'" class="bi-notice"><b>BI EN CONSTRUCCIÓN</b> Ventas, premios y resúmenes usan datos reales. Control de Entrada, Límites y algunas métricas esperan sus fuentes.</div>
-            <div v-if="activeTab !== 'productos' && ventasPorCategoria.diasSinDatos" class="bi-period-error" role="status">Faltan {{ ventasPorCategoria.diasSinDatos }} día(s) de datos históricos en este período. El total mostrado es parcial.</div>
-            <div v-if="activeTab !== 'productos' && includesToday" class="bi-notice">El día en curso se muestra arriba. Los gráficos históricos usan días cerrados hasta ayer.</div>
+            <div v-if="activeTab !== 'productos' && activeTab !== 'limites'" class="bi-notice"><b>BI EN CONSTRUCCIÓN</b> Ventas, premios y resúmenes usan datos reales. Control de Entrada y algunas métricas esperan sus fuentes.</div>
+            <div v-if="activeTab !== 'productos' && activeTab !== 'limites' && ventasPorCategoria.diasSinDatos" class="bi-period-error" role="status">Faltan {{ ventasPorCategoria.diasSinDatos }} día(s) de datos históricos en este período. El total mostrado es parcial.</div>
+            <div v-if="activeTab !== 'productos' && activeTab !== 'limites' && includesToday" class="bi-notice">El día en curso se muestra arriba. Los gráficos históricos usan días cerrados hasta ayer.</div>
             <template v-if="activeTab === 'dashboard'">
                 <section class="bi-panel bi-today">
                     <div class="bi-title"><h2>DÍA EN CURSO <em>PARCIAL</em></h2><span>Lecturas horarias de LotoBet · {{ fechaLecturas }} · {{ lecturasPorHora.length }} lecturas hoy</span></div>
@@ -495,7 +570,44 @@ function recalcularVentas() {
                 </section>
             </template>
             <template v-else-if="activeTab === 'entrada'"><div class="bi-heading"><h1>Control de Entrada — Consorcio</h1><p>Todas las zonas. Usa el filtro de fecha global.</p></div><div class="bi-subnav"><button v-for="view in ['Detalle diario', '🏆 Top Puntualidad', '⚠️ Top Impuntualidad']" :key="view" :class="{ active: activeEntry === view }" @click="activeEntry = view">{{ view }}</button></div><div class="bi-date-buttons"><span>Fecha:</span><button v-for="date in ['09/29', '09/28', '09/27', '09/26', '09/25']" :key="date">{{ date }}</button></div><div class="bi-kpi-grid three"><div v-for="card in [{ name: 'PUNTUALES ENTRADA', value: '270', detail: 'de 1271 terminales', color: 'blue' }, { name: 'TARDANZAS ENTRADA', value: '1,001', detail: 'llegaron tarde', color: 'red' }, { name: 'CIERRES ANTICIPADOS', value: '1,271', detail: 'salieron antes', color: 'gold' }]" :key="card.name" class="bi-panel bi-stat"><span>{{ card.name }}</span><strong :class="card.color">{{ card.value }}</strong><small>{{ card.detail }}</small></div></div><section class="bi-panel bi-table-panel"><div class="bi-title"><h2>CONTROL DE ENTRADA — CONSORCIO · 1,271 TERMINALES</h2><input v-model="search" placeholder="Buscar terminal…" aria-label="Buscar terminal"></div><div class="bi-table-scroll"><table><thead><tr><th>#</th><th>Terminal</th><th>Agencia</th><th>Empleado T1</th><th>Prog.</th><th>Login</th><th>Δ Entrada</th><th>Logout</th><th>Empleado T2</th><th>Cierre</th></tr></thead><tbody><tr v-for="(row, index) in filteredEntries" :key="row.id"><td>{{ index + 1 }}</td><td>{{ row.id }}</td><td>{{ row.name }}</td><td>EMPLEADO EJEMPLO</td><td>07:30–14:30</td><td>{{ row.login }}</td><td :class="row.delta.includes('tarde') ? 'red' : 'green'">{{ row.delta }}</td><td>{{ row.logout }}</td><td>—</td><td>21:30</td></tr><tr v-if="!filteredEntries.length"><td colspan="10" class="bi-empty">Sin resultados</td></tr></tbody></table></div></section></template>
-            <template v-else-if="activeTab === 'limites'"><div class="bi-heading"><h1>Límite de Ventas — Consorcio</h1><p>Alertas y consumo por agencia.</p></div><div class="bi-kpi-grid four"><div v-for="card in [{ name: 'AGENCIAS CON ALERTA', value: '83', detail: 'de 1,460 agencias evaluadas' }, { name: 'RECARGAS EXCEDIDAS', value: '32', detail: '4 cerca del límite' }, { name: 'TRADICIONAL EXCEDIDAS', value: '15', detail: '3 cerca del límite' }, { name: 'NO TRADICIONAL EXCEDIDAS', value: '57', detail: '18 cerca del límite' }]" :key="card.name" class="bi-panel bi-stat"><span>{{ card.name }}</span><strong class="red">{{ card.value }}</strong><small>{{ card.detail }}</small></div></div><section class="bi-panel bi-table-panel"><div class="bi-title"><h2>AGENCIAS SOBRE EL LÍMITE</h2><input v-model="search" placeholder="Buscar agencia…" aria-label="Buscar agencia"></div><div class="bi-subnav compact"><button v-for="view in ['Todas', 'Recargas', 'Tradicional', 'No tradicional']" :key="view" :class="{ active: activeLimit === view }" @click="activeLimit = view">{{ view }}</button></div><div class="bi-table-scroll"><table><thead><tr><th>Estado</th><th>Agencia</th><th>Grupo</th><th>Recargas</th><th>Tradicional</th><th>No tradicional</th></tr></thead><tbody><tr v-for="row in filteredLimits" :key="row.name"><td><span class="bi-alert">♨ Excedida</span></td><td><b>{{ row.name }}</b></td><td>GRUPO EJEMPLO</td><td v-for="(value, kind) in { recargas: row.recargas, tradicional: row.tradicional, noTradicional: row.noTradicional }" :key="kind"><b :class="value > 100 ? 'red' : ''">{{ value }}%</b><div class="bi-progress"><span :class="value > 100 ? 'red' : kind === 'recargas' ? 'blue' : 'violet'" :style="{ width: `${Math.min(value, 100)}%` }"></span></div></td></tr><tr v-if="!filteredLimits.length"><td colspan="6" class="bi-empty">Sin resultados</td></tr></tbody></table></div></section></template>
+<template v-else-if="activeTab === 'limites'">
+                <div class="bi-heading"><h1>Límite de Ventas — Consorcio</h1><p>Alertas diarias por producto · Globales y por terminal · {{ fechaLecturas }}.</p></div>
+                <div class="bi-kpi-grid three">
+                    <div class="bi-panel bi-stat"><span>LÍMITES ACTIVOS</span><strong>{{ productosVigilados }}</strong><small>Globales y por terminal</small></div>
+                    <div class="bi-panel bi-stat"><span>LÍMITES ALCANZADOS</span><strong class="red">{{ cantidadAlertas }}</strong><small>Alertas que requieren atención</small></div>
+                    <div class="bi-panel bi-stat"><span>ÚLTIMA LECTURA</span><strong>{{ alertasProductos[0]?.capturadoEn?.slice(11, 16) || '—' }}</strong><small>Ventas acumuladas del día</small></div>
+                </div>
+                <section class="bi-panel bi-table-panel">
+                    <div class="bi-title"><h2>CONFIGURAR ALERTA POR PRODUCTO</h2></div>
+                    <p class="bi-caption">El límite global vigila la venta total del producto en el consorcio. El límite por terminal vigila únicamente esa terminal. Puedes configurar ambos a la vez; son diarios y no bloquean ventas.</p>
+                    <form class="bi-limit-form" @submit.prevent="guardarLimite">
+                        <div><label for="limite-alcance">Aplicar límite</label><select id="limite-alcance" v-model="limiteForm.alcance" @change="cambiarAlcanceLimite"><option value="global">Global — Consorcio</option><option value="terminal">Por terminal</option></select><small v-if="limiteForm.errors.alcance" class="red" role="alert">{{ limiteForm.errors.alcance }}</small></div>
+                        <div v-if="limiteForm.alcance === 'terminal'"><label for="limite-terminal">Terminal</label><input id="limite-terminal" v-model="limiteForm.terminal" list="terminales-limites" placeholder="Escribe el código de terminal" required @change="seleccionarProductoLimite"><datalist id="terminales-limites"><option v-for="terminal in terminalesLimites" :key="terminal.terminal" :value="terminal.terminal">{{ terminal.nombre }}</option></datalist><small v-if="nombresTerminales[limiteForm.terminal]">{{ nombresTerminales[limiteForm.terminal] }}</small><small v-if="limiteForm.errors.terminal" class="red" role="alert">{{ limiteForm.errors.terminal }}</small></div>
+                        <div><label for="limite-producto">Producto a vigilar</label><select id="limite-producto" v-model="limiteForm.producto_id" required @change="seleccionarProductoLimite"><option value="" disabled>Seleccionar producto…</option><option v-for="producto in productosDisponibles" :key="producto.producto_id" :value="producto.producto_id">{{ producto.descripcion || 'Producto ' + producto.producto_id }} ({{ producto.producto_id }})</option></select><small v-if="limiteForm.errors.producto_id" class="red" role="alert">{{ limiteForm.errors.producto_id }}</small></div>
+                        <div><label for="limite-monto">Límite diario (DOP)</label><div class="bi-currency-input"><span aria-hidden="true">DOP</span><input id="limite-monto" :value="formatCurrencyInput(limiteForm.monto)" type="text" inputmode="decimal" placeholder="100,000.00" required @input="actualizarMontoLimite" @blur="completarMontoLimite" @keydown="borrarSeparadorMonto"></div><small v-if="limiteForm.errors.monto" class="red" role="alert">{{ limiteForm.errors.monto }}</small></div>
+                        <div><label for="limite-activo">Estado</label><select id="limite-activo" v-model="limiteForm.activo"><option :value="true">Activa</option><option :value="false">Pausada</option></select><small v-if="limiteForm.errors.activo" class="red" role="alert">{{ limiteForm.errors.activo }}</small></div>
+                        <button type="submit" class="bi-primary" :disabled="limiteForm.processing || !productosDisponibles.length">{{ limiteForm.processing ? 'Guardando…' : 'Guardar alerta' }}</button>
+                    </form>
+                    <p v-if="!productosDisponibles.length" class="bi-caption">No hay productos disponibles en el catálogo.</p>
+                    <p v-if="limiteGuardado && mensajeLimite" class="bi-recalculate-success" role="status">{{ mensajeLimite }}</p>
+                </section>
+                <section class="bi-panel bi-table-panel">
+                    <div class="bi-title"><h2>PRODUCTOS EN VIGILANCIA</h2><input v-model="search" placeholder="Buscar producto o terminal…" aria-label="Buscar producto o terminal"></div>
+                    <div class="bi-subnav compact"><button v-for="option in [{ key: 'todos', label: 'Todos los límites' }, { key: 'global', label: 'Globales' }, { key: 'terminal', label: 'Por terminal' }]" :key="option.key" type="button" :class="{ active: filtroAlcance === option.key }" @click="filtroAlcance = option.key">{{ option.label }}</button></div>
+                    <div class="bi-subnav compact"><button type="button" :class="{ active: !soloAlertas }" @click="soloAlertas = false">Todos</button><button type="button" :class="{ active: soloAlertas }" @click="soloAlertas = true">Con alerta ({{ cantidadAlertas }})</button></div>
+                    <div class="bi-table-scroll"><table><thead><tr><th>Estado</th><th>Producto</th><th>Alcance / Terminal</th><th>Límite diario</th><th>Venta de hoy</th><th>Consumo</th><th>Acciones</th></tr></thead><tbody>
+                        <tr v-for="row in filteredLimits" :key="row.id">
+                            <td><span :class="row.alerta ? 'bi-alert' : ''">{{ row.estado }}</span></td><td><b>{{ row.nombre }}</b><br><small>{{ row.producto_id }}</small></td>
+                            <td><b>{{ row.alcance === 'global' ? 'Global — Consorcio' : 'Terminal ' + row.terminal }}</b><br><small v-if="row.terminal">{{ nombresTerminales[row.terminal] || 'Sin nombre en catálogo' }}</small></td>
+                            <td>{{ formatLimiteDop(row.monto) }}</td><td>{{ row.ventas === null ? 'Sin lectura' : formatLimiteDop(row.ventas) }}</td>
+                            <td><b :class="{ red: row.alerta }">{{ row.porcentaje === null ? '—' : row.porcentaje + '%' }}</b><div v-if="row.porcentaje !== null" class="bi-progress"><span :class="row.alerta ? 'red' : 'blue'" :style="{ width: Math.max(0, Math.min(row.porcentaje, 100)) + '%' }"></span></div></td>
+                            <td><button type="button" @click="editarLimite(row)">Editar</button></td>
+                        </tr>
+                        <tr v-if="!filteredLimits.length"><td colspan="7" class="bi-empty">{{ alertasProductos.length ? 'Sin resultados para este filtro.' : 'Agrega una alerta para empezar a vigilar productos.' }}</td></tr>
+                    </tbody></table></div>
+                    <p class="bi-caption">La venta se actualiza con las capturas del día. Sin una lectura nueva por producto, se muestra “Sin lectura”.</p>
+                </section>
+            </template>
             <template v-else><div class="bi-heading"><h1>Métricas — Consorcio</h1><p>Indicadores comparativos del período seleccionado.</p></div><div class="bi-kpi-grid four"><div v-for="metric in metrics" :key="metric.name" class="bi-panel bi-stat"><span>{{ metric.name.toUpperCase() }}</span><strong :class="metric.color">{{ metric.value }}</strong><small>{{ metric.change }}</small></div></div><section class="bi-panel bi-chart-panel"><div class="bi-title"><h2>EVOLUCIÓN DE INDICADORES</h2></div><span class="bi-demo-label">Gráfico ilustrativo pendiente de datos comparativos</span><div class="bi-bars-chart"><div v-for="(height, index) in sales" :key="index" class="bi-bar-set"><div class="bi-bars"><div class="bi-bar sales" :style="{ height: `${height}%` }"></div><div class="bi-bar prizes" :style="{ height: `${prizes[index]}%` }"></div></div><small>{{ dates[index] }}</small></div></div></section></template>
         </main>
         <div v-if="comparativoAbierto" class="bi-modal-backdrop" @click.self="cerrarComparativo">

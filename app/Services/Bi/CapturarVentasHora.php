@@ -50,6 +50,8 @@ class CapturarVentasHora
         $ventasPorTerminal = [];
         $quinielaLoteka = 0.0;
         $megaChance = 0.0;
+        $productos = [];
+        $productosTerminales = [];
 
         foreach ($contenido as $venta) {
             if (! is_array($venta) || ! is_numeric($venta['monto'] ?? null)) {
@@ -62,6 +64,10 @@ class CapturarVentasHora
 
             $categoria = $this->clasificador->categoria($venta);
             $totales[$categoria] += (float) $venta['monto'];
+            $productoId = trim((string) ($venta['producto_id'] ?? ''));
+            if ($productoId !== '') {
+                $productos[$productoId] = ($productos[$productoId] ?? 0) + (float) $venta['monto'];
+            }
             if (trim((string) ($venta['producto_id'] ?? '')) === '43') {
                 $quinielaLoteka += (float) $venta['monto'];
             }
@@ -70,6 +76,9 @@ class CapturarVentasHora
             }
 
             $terminal = $this->normalizarTerminal((string) ($venta['agencia_id'] ?? ''));
+            if ($terminal !== '' && $productoId !== '') {
+                $productosTerminales[$terminal][$productoId] = ($productosTerminales[$terminal][$productoId] ?? 0) + (float) $venta['monto'];
+            }
             if (isset($terminalesEvaluadas[$terminal])) {
                 $ventasPorTerminal[$terminal][$categoria] = ($ventasPorTerminal[$terminal][$categoria] ?? 0) + (float) $venta['monto'];
             }
@@ -121,6 +130,11 @@ class CapturarVentasHora
             'terminales_categoria' => $terminalesCategoria,
             'quiniela_loteka_acumulado' => round($quinielaLoteka, 2),
             'mega_chance_acumulado' => round($megaChance, 2),
+            'productos' => array_map(fn (float $monto): float => round($monto, 2), $productos),
+            'productos_terminales' => array_map(
+                fn (array $ventas): array => array_map(fn (float $monto): float => round($monto, 2), $ventas),
+                $productosTerminales,
+            ),
         ]);
         $lectura->save();
 

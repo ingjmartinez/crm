@@ -26,6 +26,8 @@ class BiVentaHora extends Model
         'terminales_categoria',
         'quiniela_loteka_acumulado',
         'mega_chance_acumulado',
+        'productos',
+        'productos_terminales',
     ];
 
     protected function casts(): array
@@ -46,6 +48,8 @@ class BiVentaHora extends Model
             'terminales_categoria' => 'array',
             'quiniela_loteka_acumulado' => 'decimal:2',
             'mega_chance_acumulado' => 'decimal:2',
+            'productos' => 'array',
+            'productos_terminales' => 'array',
         ];
     }
 }

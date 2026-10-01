@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Bi\IndexAgenciaTerminalRequest;
 use App\Http\Requests\Bi\RecalcularVentasRequest;
 use App\Models\BiVentaHora;
+use App\Models\CatalogoJuego;
 use App\Models\VentaOnlinePromedioHistorico;
 use App\Services\Bi\AgenciaTerminalCatalogo;
+use App\Services\Bi\AlertasProductos;
 use App\Services\Bi\IndicadoresBi;
 use App\Services\Bi\ResumirPremiosDia;
 use App\Services\Bi\ResumirVentasDia;
@@ -21,7 +23,7 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(IndexAgenciaTerminalRequest $request, AgenciaTerminalCatalogo $catalogo, VentasBetPorCategoria $ventasBet, VentasPremiosPeriodo $ventasPremios, IndicadoresBi $indicadores): Response
+    public function index(IndexAgenciaTerminalRequest $request, AgenciaTerminalCatalogo $catalogo, VentasBetPorCategoria $ventasBet, VentasPremiosPeriodo $ventasPremios, IndicadoresBi $indicadores, AlertasProductos $alertasProductos): Response
     {
         $busqueda = trim((string) $request->validated('q', ''));
         $rangoDisponible = $ventasBet->rangoDisponible();
@@ -31,11 +33,16 @@ class DashboardController extends Controller
             ->whereDate('fecha', today()->toDateString())
             ->whereBetween('hora', [6, 22])
             ->orderBy('hora')
-            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'quiniela_loteka_acumulado', 'mega_chance_acumulado', 'capturado_en', 'rutas', 'terminales_evaluadas', 'terminales_con_venta', 'terminales_categoria']);
+            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'quiniela_loteka_acumulado', 'mega_chance_acumulado', 'capturado_en', 'rutas', 'terminales_evaluadas', 'terminales_con_venta', 'terminales_categoria', 'productos', 'productos_terminales']);
         $diaSemanaAnterior = CarbonImmutable::today()->subDays(7);
 
         return Inertia::render('Bi/Dashboard', [
             'modulo' => 'BI',
+            'limitesProductosUrl' => route('bi.limites-productos.guardar'),
+            'mensajeLimite' => session('biLimiteMensaje'),
+            'productosDisponibles' => fn () => CatalogoJuego::query()->orderBy('descripcion')->get(['producto_id', 'descripcion']),
+            'terminalesLimites' => fn () => $catalogo->paraAlertas(),
+            'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last()),
             'menuUrl' => route('dashboard.index'),
             'biUrl' => route('bi.index'),
             'recalcularUrl' => route('bi.recalcular'),

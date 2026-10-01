@@ -60,6 +60,24 @@ class IncentivoV6CalendarTest extends TestCase
         });
     }
 
+    public function test_calendar_assignments_larger_than_one_batch_are_saved(): void
+    {
+        $this->actingAs(User::factory()->make(['id' => 55]));
+
+        $asignaciones = [];
+        for ($i = 1; $i <= 2500; $i++) {
+            $asignaciones[] = ['sistema' => 'Lotobet', 'terminal' => (string) $i, 'fecha' => '2026-09-03', 'tipo_pago' => 'tramos_60'];
+        }
+
+        $this->putJson(route('incentivos.reporte-nuevo-incentivo-v6.calendario.guardar'), [
+            'asignaciones' => $asignaciones,
+        ])
+            ->assertOk()
+            ->assertJsonPath('guardadas', 2500);
+
+        $this->assertDatabaseCount('incentivo_terminal_tipo_pagos', 2500);
+    }
+
     public function test_calendar_assignments_can_be_saved_in_bulk_and_cleared_individually(): void
     {
         $this->actingAs(User::factory()->make(['id' => 55]));
