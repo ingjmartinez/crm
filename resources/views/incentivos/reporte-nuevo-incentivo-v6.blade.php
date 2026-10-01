@@ -2209,8 +2209,8 @@
             });
         });
 
-        if (projectedKeys.size > 10000) {
-            Swal.fire({ title: 'Demasiadas configuraciones', text: 'El guardado permite hasta 10,000 combinaciones de terminal y dia. Reduce el periodo o divide la carga.', icon: 'warning' });
+        if (projectedKeys.size > 100000) {
+            Swal.fire({ title: 'Demasiadas configuraciones', text: 'Se permiten hasta 100,000 combinaciones de terminal y dia por carga. Reduce el periodo o divide la carga.', icon: 'warning' });
             return;
         }
 
@@ -2267,7 +2267,13 @@
             didOpen: () => Swal.showLoading(),
         });
 
-        fetch(CALENDARIO_V6_GUARDAR_URL, {
+        const batchSize = 5000;
+        const batches = [];
+        for (let offset = 0; offset < assignments.length; offset += batchSize) {
+            batches.push(assignments.slice(offset, offset + batchSize));
+        }
+
+        const saveBatch = (batch) => fetch(CALENDARIO_V6_GUARDAR_URL, {
             method: 'PUT',
             headers: {
                 'Accept': 'application/json',
@@ -2275,13 +2281,24 @@
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': csrfToken(),
             },
-            body: JSON.stringify({ asignaciones: assignments }),
-        })
-            .then(response => parseResponseAsJson(response, 'No se pudo guardar el calendario de pagos'))
+            body: JSON.stringify({ asignaciones: batch }),
+        }).then(response => parseResponseAsJson(response, 'No se pudo guardar el calendario de pagos'));
+
+        (async () => {
+            let response = null;
+            for (const batch of batches) {
+                response = await saveBatch(batch);
+            }
+            return response;
+        })()
             .then((response) => {
                 calendarDirtyAssignments.clear();
                 loadCalendarPaymentGrid(calendarPaymentPagination.pagina_actual || 1, false, false);
-                Swal.fire({ title: 'Calendario actualizado', text: response.message, icon: 'success' });
+                Swal.fire({
+                    title: 'Calendario actualizado',
+                    text: batches.length > 1 ? `Se guardaron ${assignments.length.toLocaleString('en-US')} cambios.` : response.message,
+                    icon: 'success',
+                });
             })
             .catch((error) => Swal.fire({ title: 'Error', text: error.message || String(error), icon: 'error' }));
     }
