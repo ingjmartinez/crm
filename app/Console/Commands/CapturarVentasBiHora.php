@@ -29,6 +29,8 @@ class CapturarVentasBiHora extends Command
      */
     public function handle(CapturarVentasHora $captura): int
     {
+        ini_set('memory_limit', '1024M');
+
         $momento = CarbonImmutable::now();
 
         if ($momento->hour < 6 || $momento->hour > 22 || ($momento->hour === 22 && $momento->minute > 0)) {
@@ -38,8 +40,7 @@ class CapturarVentasBiHora extends Command
         }
 
         if (! $this->option('force') && BiVentaHora::query()
-            ->where('fecha', '>=', $momento->toDateString())
-            ->where('fecha', '<', $momento->addDay()->toDateString())
+            ->where('fecha', $momento->toDateString())
             ->where('hora', $momento->hour)->exists()) {
             $this->info('Captura omitida: esta hora ya tiene una lectura guardada.');
 

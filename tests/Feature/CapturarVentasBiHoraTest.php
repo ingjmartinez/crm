@@ -271,4 +271,28 @@ class CapturarVentasBiHoraTest extends TestCase
         $this->assertSame(1, BiVentaHora::query()->count());
         $this->assertSame('2026-09-30 08:05:00', BiVentaHora::query()->firstOrFail()->capturado_en->toDateTimeString());
     }
+
+    public function test_command_saves_a_large_lotobet_response(): void
+    {
+        CarbonImmutable::setTestNow('2026-09-30 14:05:00');
+
+        $this->mock(LotobetSessionService::class)
+            ->shouldReceive('getVentasProducto')
+            ->once()
+            ->with('2026-09-30')
+            ->andReturn(['Content' => array_fill(0, 65001, [
+                'fecha' => '2026-09-30',
+                'producto_id' => '1',
+                'agencia_id' => '100',
+                'tipo' => 'Tradicional',
+                'monto' => 1,
+            ])]);
+
+        $this->artisan('bi:capturar-ventas-hora')->assertSuccessful();
+
+        $lectura = BiVentaHora::query()->firstOrFail();
+        $this->assertSame(65001, $lectura->registros);
+        $this->assertSame('65001.00', $lectura->tradicional_acumulado);
+        $this->assertSame(14, $lectura->hora);
+    }
 }

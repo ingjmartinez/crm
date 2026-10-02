@@ -24,6 +24,9 @@ class CapturarVentasHora
             throw new RuntimeException('La API de LotoBet no devolvió un listado de ventas válido.');
         }
 
+        $registros = count($contenido);
+        unset($respuesta);
+
         $totales = [
             'tradicional' => 0.0,
             'no_tradicional' => 0.0,
@@ -88,6 +91,8 @@ class CapturarVentasHora
             }
         }
 
+        unset($contenido);
+
         $terminalesConVenta = 0;
         $terminalesCategoria = array_fill_keys(array_keys($totales), 0);
         foreach ($ventasPorTerminal as $categorias) {
@@ -112,8 +117,7 @@ class CapturarVentasHora
         }
 
         $lectura = BiVentaHora::query()
-            ->where('fecha', '>=', $momento->toDateString())
-            ->where('fecha', '<', $momento->addDay()->toDateString())
+            ->where('fecha', $momento->toDateString())
             ->where('hora', $momento->hour)
             ->first() ?? new BiVentaHora(['fecha' => $momento->toDateString(), 'hora' => $momento->hour]);
 
@@ -123,7 +127,7 @@ class CapturarVentasHora
             'externas_acumulado' => round($totales['externas'], 2),
             'recargas_acumulado' => round($totales['recargas'], 2),
             'otros_acumulado' => round($totales['otros'], 2),
-            'registros' => count($contenido),
+            'registros' => $registros,
             'capturado_en' => $momento->toDateTimeString(),
             'rutas' => $rutas,
             'terminales_evaluadas' => count($terminalesEvaluadas),
