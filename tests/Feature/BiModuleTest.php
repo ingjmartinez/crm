@@ -176,6 +176,28 @@ class BiModuleTest extends TestCase
             ->assertSee('"component":"Bi\\/Dashboard"', false);
     }
 
+    public function test_authenticated_bi_page_loads_with_a_today_hourly_snapshot(): void
+    {
+        BiVentaHora::factory()->create([
+            'fecha' => today()->toDateString(),
+            'hora' => 12,
+            'productos' => ['43' => 80],
+        ]);
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        $this->withoutMiddleware([ExpireInactiveSession::class, PreventDeletionForAdmin2::class]);
+        $this->actingAs(new User(['name' => 'Usuario BI', 'email' => 'bi@example.test']))
+            ->get(route('bi.index'))
+            ->assertOk()
+            ->assertSee('"hora":12', false);
+
+        $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'bi_venta_horas') && str_contains($sql, 'fecha') && ! str_contains(strtolower($sql), 'date(')));
+    }
+
     public function test_product_list_offers_category_totals_alongside_individual_products(): void
     {
         \App\Models\CatalogoJuego::query()->create(['producto_id' => '43', 'descripcion' => 'Quiniela Loteka']);

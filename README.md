@@ -59,3 +59,11 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Despliegue de CRM en Dokploy
+
+Las aplicaciones PHP (`pruebacrm-crm`, `dockerfile`) y nginx (`pruebacrm-nginx`, `docker/nginx/Dockerfile`) deben usar el mismo repositorio. PHP compila Vite y al arrancar copia `public/build` al volumen compartido. nginx sirve `/build/` desde ese volumen; una ruta de assets ausente responde 404 en vez de devolver `index.php`.
+
+Configura en Dokploy un **mismo volumen Docker persistente** para ambas aplicaciones, montado en `/var/www/public/build`: lectura y escritura en PHP, solo lectura en nginx. El volumen debe estar en el mismo host Docker. En un despliegue inicial, despliega PHP primero y nginx después. A partir de entonces se pueden redesplegar por separado: cada arranque de PHP actualiza el volumen y nginx sirve los nuevos archivos sin recompilar. No borres el volumen durante los despliegues; los assets con hash anteriores permanecen disponibles para las páginas que aún los referencian. El nginx debe enviar las peticiones PHP al servicio FPM configurado en `docker/nginx/default.conf`.
+
+Si usas `docker-compose.yml`, el volumen `build_assets` ya está conectado a ambos servicios. Proporciona `DB_PASSWORD` y `MYSQL_ROOT_PASSWORD` como variables de entorno del host o en un `.env` local no versionado antes de iniciar Compose. Las contraseñas que estuvieron versionadas deben rotarse en MySQL y en Dokploy; quitarlas del archivo no las elimina del historial de Git.

@@ -37,7 +37,10 @@ class CapturarVentasBiHora extends Command
             return self::SUCCESS;
         }
 
-        if (! $this->option('force') && BiVentaHora::query()->whereDate('fecha', $momento->toDateString())->where('hora', $momento->hour)->exists()) {
+        if (! $this->option('force') && BiVentaHora::query()
+            ->where('fecha', '>=', $momento->toDateString())
+            ->where('fecha', '<', $momento->addDay()->toDateString())
+            ->where('hora', $momento->hour)->exists()) {
             $this->info('Captura omitida: esta hora ya tiene una lectura guardada.');
 
             return self::SUCCESS;

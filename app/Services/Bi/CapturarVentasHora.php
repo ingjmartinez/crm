@@ -112,7 +112,8 @@ class CapturarVentasHora
         }
 
         $lectura = BiVentaHora::query()
-            ->whereDate('fecha', $momento->toDateString())
+            ->where('fecha', '>=', $momento->toDateString())
+            ->where('fecha', '<', $momento->addDay()->toDateString())
             ->where('hora', $momento->hour)
             ->first() ?? new BiVentaHora(['fecha' => $momento->toDateString(), 'hora' => $momento->hour]);
 
@@ -138,7 +139,10 @@ class CapturarVentasHora
         ]);
         $lectura->save();
 
-        BiVentaHora::query()->whereDate('fecha', '!=', $momento->toDateString())->delete();
+        BiVentaHora::query()
+            ->where('fecha', '<', $momento->toDateString())
+            ->orWhere('fecha', '>=', $momento->addDay()->toDateString())
+            ->delete();
 
         return $lectura;
     }

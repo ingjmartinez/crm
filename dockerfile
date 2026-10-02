@@ -25,6 +25,8 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 COPY . .
 COPY --from=node-build /app/public/build /var/www/public/build
+COPY --from=node-build /app/public/build /opt/crm-build
+COPY docker/entrypoint.sh /usr/local/bin/crm-entrypoint
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress \
     || (sleep 5 && composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress) \
@@ -32,4 +34,5 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-di
 
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/crm-entrypoint"]
 CMD ["php-fpm"]

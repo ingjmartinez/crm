@@ -15,7 +15,10 @@ class VentasBetPorCategoria
             ->selectRaw('MIN(fecha) AS desde, MAX(fecha) AS hasta')
             ->first();
         $hoy = today()->toDateString();
-        $hayLecturaHoy = BiVentaHora::query()->whereDate('fecha', $hoy)->exists();
+        $hayLecturaHoy = BiVentaHora::query()
+            ->where('fecha', '>=', $hoy)
+            ->where('fecha', '<', today()->addDay()->toDateString())
+            ->exists();
 
         return [
             'desde' => $rango?->desde ? substr((string) $rango->desde, 0, 10) : ($hayLecturaHoy ? $hoy : null),
