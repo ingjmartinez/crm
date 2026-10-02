@@ -524,7 +524,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const fecha = @json($fecha);
-            const csrfToken = @json(csrf_token());
+            let csrfToken = @json(csrf_token());
             const errorFechaImportacion = @json($errors->first('fecha_reporte'));
             const detalleUrl = @json(route('operaciones.movimientos-rutas-v2.detalle'));
             const opcionesGastoUrl = @json(route('operaciones.movimientos-rutas-v2.gastos.opciones'));
@@ -804,11 +804,23 @@
                 boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
 
                 try {
-                    const response = await fetch(formulario.action, {
+                    const enviar = () => fetch(formulario.action, {
                         method: 'POST',
                         headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken },
                         body: new FormData(formulario),
                     });
+                    let response = await enviar();
+
+                    if (response.status === 419) {
+                        const tokenResponse = await fetch(@json(route('operaciones.movimientos-rutas-v2.token')), { headers: { Accept: 'application/json' } });
+                        const tokenPayload = await tokenResponse.json().catch(() => ({}));
+
+                        if (tokenPayload.token) {
+                            csrfToken = tokenPayload.token;
+                            response = await enviar();
+                        }
+                    }
+
                     const payload = await response.json().catch(() => ({}));
 
                     if (!response.ok) {

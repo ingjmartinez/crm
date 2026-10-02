@@ -200,6 +200,11 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->with('success', $message);
     }
 
+    public function tokenCsrf(): JsonResponse
+    {
+        return response()->json(['token' => csrf_token()]);
+    }
+
     public function opcionesGasto(ConsultarOpcionesMovimientoRutaV2GastoRequest $request): JsonResponse
     {
         return response()->json([

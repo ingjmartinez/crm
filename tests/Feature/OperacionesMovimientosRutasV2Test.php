@@ -380,6 +380,16 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertSame(2, (int) $banreservas->cantidad_depositos);
     }
 
+    public function test_entrega_un_token_csrf_vigente_para_reintentar_el_guardado(): void
+    {
+        $respuesta = $this->withoutMiddleware()
+            ->withSession(['_token' => 'token-vigente'])
+            ->getJson(route('operaciones.movimientos-rutas-v2.token'))
+            ->assertOk();
+
+        $this->assertSame('token-vigente', $respuesta->json('token'));
+    }
+
     public function test_aplica_deposito_y_gasto_por_ajax_sin_recargar_la_tabla(): void
     {
         app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
