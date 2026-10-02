@@ -50,6 +50,86 @@ class BiLimiteProductoTest extends TestCase
         $this->assertSame(0, BiLimiteProducto::query()->count());
     }
 
+    public function test_category_limits_can_be_saved_updated_and_paused_in_both_scopes(): void
+    {
+        Agencia::query()->create(['terminal' => '00100', 'sistema' => 'LOTOBET']);
+        $this->withoutMiddleware()->actingAs(new User(['name' => 'Usuario BI']));
+
+        foreach (array_keys(BiLimiteProducto::GRUPOS) as $productoId) {
+            foreach (['global', 'terminal'] as $alcance) {
+                $payload = [
+                    'producto_id' => $productoId, 'alcance' => $alcance,
+                    'terminal' => $alcance === 'terminal' ? '00100' : '', 'monto' => 100, 'activo' => true,
+                ];
+                $this->post(route('bi.limites-productos.guardar'), $payload)
+                    ->assertRedirect()->assertSessionHasNoErrors();
+                $this->post(route('bi.limites-productos.guardar'), array_replace($payload, ['monto' => 200, 'activo' => false]))
+                    ->assertRedirect()->assertSessionHasNoErrors();
+            }
+        }
+
+        $this->assertSame(4, BiLimiteProducto::query()->count());
+        foreach (BiLimiteProducto::query()->get() as $limite) {
+            $this->assertSame('200.00', $limite->monto);
+            $this->assertFalse($limite->activo);
+            $this->assertContains($limite->terminal, ['', '100']);
+        }
+
+        foreach (['grupo:otros', 'grupo:TRADICIONAL', 'grupo:', 'missing'] as $productoId) {
+            $this->postJson(route('bi.limites-productos.guardar'), [
+                'producto_id' => $productoId, 'monto' => 100, 'activo' => true,
+            ])->assertUnprocessable()->assertJsonValidationErrors('producto_id');
+        }
+        $this->assertSame(4, BiLimiteProducto::query()->count());
+    }
+
+    public function test_category_alerts_total_global_and_terminal_sales_without_mixing_other_products(): void
+    {
+        foreach ([['43', ' Tradicional '], ['44', 'TRADICIONAL'], ['38', 'No Tradicional'], ['39', 'no_tradicional'], ['99', 'Recargas']] as [$id, $tipo]) {
+            CatalogoJuego::query()->updateOrCreate(['producto_id' => $id], ['tipo' => $tipo]);
+        }
+        foreach (array_keys(BiLimiteProducto::GRUPOS) as $productoId) {
+            foreach (['', '100', '200'] as $terminal) {
+                BiLimiteProducto::factory()->create(['producto_id' => $productoId, 'terminal' => $terminal, 'monto' => 100]);
+            }
+        }
+        $reading = BiVentaHora::factory()->make([
+            'tradicional_acumulado' => 120, 'no_tradicional_acumulado' => 100,
+            'productos' => ['43' => 60, '44' => 60, '38' => 45, '39' => 55, '99' => 1000],
+            'productos_terminales' => ['100' => ['43' => 40, '44' => 60, '38' => 20, '39' => 30, '99' => 1000]],
+        ]);
+        $service = app(AlertasProductos::class);
+        $rows = collect($service->resumir($reading))->keyBy(fn (array $row): string => $row['producto_id'].'/'.$row['terminal']);
+
+        $this->assertSame(120.0, $rows['grupo:tradicional/']['ventas']);
+        $this->assertSame(100.0, $rows['grupo:no_tradicional/']['ventas']);
+        $this->assertSame('Total Tradicionales', $rows['grupo:tradicional/']['nombre']);
+        $this->assertTrue($rows['grupo:tradicional/']['esGrupo']);
+        $this->assertSame('Total No tradicionales', $rows['grupo:no_tradicional/']['nombre']);
+        $this->assertTrue($rows['grupo:tradicional/']['alerta']);
+        $this->assertTrue($rows['grupo:no_tradicional/']['alerta']);
+        $this->assertSame(100.0, $rows['grupo:tradicional/100']['ventas']);
+        $this->assertSame(100.0, $rows['grupo:tradicional/100']['porcentaje']);
+        $this->assertTrue($rows['grupo:tradicional/100']['alerta']);
+        $this->assertSame(50.0, $rows['grupo:no_tradicional/100']['ventas']);
+        $this->assertFalse($rows['grupo:no_tradicional/100']['alerta']);
+        $this->assertSame(0.0, $rows['grupo:tradicional/200']['ventas']);
+
+        $reading->productos_terminales = null;
+        foreach ($service->resumir($reading) as $row) {
+            if ($row['terminal'] !== '') {
+                $this->assertNull($row['ventas']);
+                $this->assertSame('Sin lectura', $row['estado']);
+                $this->assertFalse($row['alerta']);
+            }
+        }
+        foreach ($service->resumir(null) as $row) {
+            $this->assertNull($row['ventas']);
+            $this->assertNull($row['porcentaje']);
+            $this->assertFalse($row['alerta']);
+        }
+    }
+
     public function test_saves_updates_and_pauses_one_limit_per_product(): void
     {
         $this->withoutMiddleware()->actingAs(new User(['name' => 'Usuario BI']));
@@ -97,6 +177,7 @@ class BiLimiteProductoTest extends TestCase
             $row = $service->resumir($reading)[0];
             $this->assertSame($expected, $row['alerta']);
             $this->assertSame('Quiniela Loteka', $row['nombre']);
+            $this->assertFalse($row['esGrupo']);
         }
 
         $limit->update(['activo' => false]);

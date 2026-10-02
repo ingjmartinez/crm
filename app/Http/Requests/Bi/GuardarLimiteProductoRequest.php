@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Bi;
 
+use App\Models\BiLimiteProducto;
 use App\Services\Bi\AgenciaTerminalCatalogo;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -25,7 +26,11 @@ class GuardarLimiteProductoRequest extends FormRequest
     public function rules(AgenciaTerminalCatalogo $catalogo): array
     {
         return [
-            'producto_id' => ['required', 'string', 'exists:catalogo_juegos,producto_id'],
+            'producto_id' => ['required', 'string', Rule::when(
+                is_string($this->input('producto_id')) && array_key_exists($this->input('producto_id'), BiLimiteProducto::GRUPOS),
+                [Rule::in(array_keys(BiLimiteProducto::GRUPOS))],
+                ['exists:catalogo_juegos,producto_id'],
+            )],
             'monto' => ['required', 'numeric', 'min:0.01', 'max:999999999999.99', 'decimal:0,2'],
             'activo' => ['required', 'boolean'],
             'alcance' => ['sometimes', 'required', Rule::in(['global', 'terminal'])],

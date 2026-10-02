@@ -176,6 +176,22 @@ class BiModuleTest extends TestCase
             ->assertSee('"component":"Bi\\/Dashboard"', false);
     }
 
+    public function test_product_list_offers_category_totals_alongside_individual_products(): void
+    {
+        \App\Models\CatalogoJuego::query()->create(['producto_id' => '43', 'descripcion' => 'Quiniela Loteka']);
+
+        $this->withoutMiddleware()->withHeader('X-Inertia', 'true')
+            ->get(route('bi.index'))
+            ->assertOk()
+            ->assertJsonCount(1, 'props.productosDisponibles')
+            ->assertJsonPath('props.productosDisponibles.0.producto_id', '43')
+            ->assertJsonCount(2, 'props.gruposDisponibles')
+            ->assertJsonPath('props.gruposDisponibles.0.producto_id', 'grupo:tradicional')
+            ->assertJsonPath('props.gruposDisponibles.0.descripcion', 'Total Tradicionales')
+            ->assertJsonPath('props.gruposDisponibles.1.producto_id', 'grupo:no_tradicional')
+            ->assertJsonPath('props.gruposDisponibles.1.descripcion', 'Total No tradicionales');
+    }
+
     public function test_product_alerts_use_latest_today_snapshot_independently_of_selected_period(): void
     {
         \App\Models\CatalogoJuego::query()->create(['producto_id' => '43', 'descripcion' => 'Quiniela Loteka']);

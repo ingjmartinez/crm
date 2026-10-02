@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Bi;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Bi\IndexAgenciaTerminalRequest;
 use App\Http\Requests\Bi\RecalcularVentasRequest;
+use App\Models\BiLimiteProducto;
 use App\Models\BiVentaHora;
 use App\Models\CatalogoJuego;
 use App\Models\VentaOnlinePromedioHistorico;
@@ -41,6 +42,10 @@ class DashboardController extends Controller
             'limitesProductosUrl' => route('bi.limites-productos.guardar'),
             'mensajeLimite' => session('biLimiteMensaje'),
             'productosDisponibles' => fn () => CatalogoJuego::query()->orderBy('descripcion')->get(['producto_id', 'descripcion']),
+            'gruposDisponibles' => collect(BiLimiteProducto::GRUPOS)->map(fn (string $nombre, string $id): array => [
+                'producto_id' => $id,
+                'descripcion' => $nombre,
+            ])->values()->all(),
             'terminalesLimites' => fn () => $catalogo->paraAlertas(),
             'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last()),
             'menuUrl' => route('dashboard.index'),

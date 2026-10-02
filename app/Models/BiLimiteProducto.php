@@ -8,6 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BiLimiteProducto extends Model
 {
+    public const GRUPOS = [
+        'grupo:tradicional' => 'Total Tradicionales',
+        'grupo:no_tradicional' => 'Total No tradicionales',
+    ];
+
     /** @use HasFactory<\Database\Factories\BiLimiteProductoFactory> */
     use HasFactory;
 

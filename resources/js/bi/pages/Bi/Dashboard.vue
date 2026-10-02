@@ -29,6 +29,7 @@ const props = defineProps({
     limitesProductosUrl: { type: String, required: true },
     mensajeLimite: { type: String, default: null },
     productosDisponibles: { type: Array, default: () => [] },
+    gruposDisponibles: { type: Array, default: () => [] },
     alertasProductos: { type: Array, default: () => [] },
     terminalesLimites: { type: Array, default: () => [] },
 });
@@ -579,14 +580,26 @@ function recalcularVentas() {
                 </div>
                 <section class="bi-panel bi-table-panel">
                     <div class="bi-title"><h2>CONFIGURAR ALERTA POR PRODUCTO</h2></div>
-                    <p class="bi-caption">El límite global vigila la venta total del producto en el consorcio. El límite por terminal vigila únicamente esa terminal. Puedes configurar ambos a la vez; son diarios y no bloquean ventas.</p>
+                    <p class="bi-caption">Selecciona un producto o el total de Tradicionales o No tradicionales. El límite global vigila la venta total en el consorcio; el límite por terminal vigila únicamente esa terminal. Puedes configurar ambos a la vez; son diarios y no bloquean ventas.</p>
                     <form class="bi-limit-form" @submit.prevent="guardarLimite">
                         <div><label for="limite-alcance">Aplicar límite</label><select id="limite-alcance" v-model="limiteForm.alcance" @change="cambiarAlcanceLimite"><option value="global">Global — Consorcio</option><option value="terminal">Por terminal</option></select><small v-if="limiteForm.errors.alcance" class="red" role="alert">{{ limiteForm.errors.alcance }}</small></div>
                         <div v-if="limiteForm.alcance === 'terminal'"><label for="limite-terminal">Terminal</label><input id="limite-terminal" v-model="limiteForm.terminal" list="terminales-limites" placeholder="Escribe el código de terminal" required @change="seleccionarProductoLimite"><datalist id="terminales-limites"><option v-for="terminal in terminalesLimites" :key="terminal.terminal" :value="terminal.terminal">{{ terminal.nombre }}</option></datalist><small v-if="nombresTerminales[limiteForm.terminal]">{{ nombresTerminales[limiteForm.terminal] }}</small><small v-if="limiteForm.errors.terminal" class="red" role="alert">{{ limiteForm.errors.terminal }}</small></div>
-                        <div><label for="limite-producto">Producto a vigilar</label><select id="limite-producto" v-model="limiteForm.producto_id" required @change="seleccionarProductoLimite"><option value="" disabled>Seleccionar producto…</option><option v-for="producto in productosDisponibles" :key="producto.producto_id" :value="producto.producto_id">{{ producto.descripcion || 'Producto ' + producto.producto_id }} ({{ producto.producto_id }})</option></select><small v-if="limiteForm.errors.producto_id" class="red" role="alert">{{ limiteForm.errors.producto_id }}</small></div>
+                        <div>
+                            <label for="limite-producto">Producto a vigilar</label>
+                            <select id="limite-producto" v-model="limiteForm.producto_id" required @change="seleccionarProductoLimite">
+                                <option value="" disabled>Seleccionar producto…</option>
+                                <optgroup v-if="gruposDisponibles.length" label="Totales por tipo">
+                                    <option v-for="grupo in gruposDisponibles" :key="grupo.producto_id" :value="grupo.producto_id">{{ grupo.descripcion }}</option>
+                                </optgroup>
+                                <optgroup v-if="productosDisponibles.length" label="Productos individuales">
+                                    <option v-for="producto in productosDisponibles" :key="producto.producto_id" :value="producto.producto_id">{{ producto.descripcion || 'Producto ' + producto.producto_id }} ({{ producto.producto_id }})</option>
+                                </optgroup>
+                            </select>
+                            <small v-if="limiteForm.errors.producto_id" class="red" role="alert">{{ limiteForm.errors.producto_id }}</small>
+                        </div>
                         <div><label for="limite-monto">Límite diario (DOP)</label><div class="bi-currency-input"><span aria-hidden="true">DOP</span><input id="limite-monto" :value="formatCurrencyInput(limiteForm.monto)" type="text" inputmode="decimal" placeholder="100,000.00" required @input="actualizarMontoLimite" @blur="completarMontoLimite" @keydown="borrarSeparadorMonto"></div><small v-if="limiteForm.errors.monto" class="red" role="alert">{{ limiteForm.errors.monto }}</small></div>
                         <div><label for="limite-activo">Estado</label><select id="limite-activo" v-model="limiteForm.activo"><option :value="true">Activa</option><option :value="false">Pausada</option></select><small v-if="limiteForm.errors.activo" class="red" role="alert">{{ limiteForm.errors.activo }}</small></div>
-                        <button type="submit" class="bi-primary" :disabled="limiteForm.processing || !productosDisponibles.length">{{ limiteForm.processing ? 'Guardando…' : 'Guardar alerta' }}</button>
+                        <button type="submit" class="bi-primary" :disabled="limiteForm.processing || (!productosDisponibles.length && !gruposDisponibles.length)">{{ limiteForm.processing ? 'Guardando…' : 'Guardar alerta' }}</button>
                     </form>
                     <p v-if="!productosDisponibles.length" class="bi-caption">No hay productos disponibles en el catálogo.</p>
                     <p v-if="limiteGuardado && mensajeLimite" class="bi-recalculate-success" role="status">{{ mensajeLimite }}</p>
@@ -597,7 +610,7 @@ function recalcularVentas() {
                     <div class="bi-subnav compact"><button type="button" :class="{ active: !soloAlertas }" @click="soloAlertas = false">Todos</button><button type="button" :class="{ active: soloAlertas }" @click="soloAlertas = true">Con alerta ({{ cantidadAlertas }})</button></div>
                     <div class="bi-table-scroll"><table><thead><tr><th>Estado</th><th>Producto</th><th>Alcance / Terminal</th><th>Límite diario</th><th>Venta de hoy</th><th>Consumo</th><th>Acciones</th></tr></thead><tbody>
                         <tr v-for="row in filteredLimits" :key="row.id">
-                            <td><span :class="row.alerta ? 'bi-alert' : ''">{{ row.estado }}</span></td><td><b>{{ row.nombre }}</b><br><small>{{ row.producto_id }}</small></td>
+                            <td><span :class="row.alerta ? 'bi-alert' : ''">{{ row.estado }}</span></td><td><b>{{ row.nombre }}</b><template v-if="!row.esGrupo"><br><small>{{ row.producto_id }}</small></template></td>
                             <td><b>{{ row.alcance === 'global' ? 'Global — Consorcio' : 'Terminal ' + row.terminal }}</b><br><small v-if="row.terminal">{{ nombresTerminales[row.terminal] || 'Sin nombre en catálogo' }}</small></td>
                             <td>{{ formatLimiteDop(row.monto) }}</td><td>{{ row.ventas === null ? 'Sin lectura' : formatLimiteDop(row.ventas) }}</td>
                             <td><b :class="{ red: row.alerta }">{{ row.porcentaje === null ? '—' : row.porcentaje + '%' }}</b><div v-if="row.porcentaje !== null" class="bi-progress"><span :class="row.alerta ? 'red' : 'blue'" :style="{ width: Math.max(0, Math.min(row.porcentaje, 100)) + '%' }"></span></div></td>

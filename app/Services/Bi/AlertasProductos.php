@@ -7,6 +7,8 @@ use App\Models\BiVentaHora;
 
 class AlertasProductos
 {
+    public function __construct(private ClasificarVentaBi $clasificador) {}
+
     /** @return array<int, array<string, mixed>> */
     public function resumir(?BiVentaHora $lectura): array
     {
@@ -14,9 +16,15 @@ class AlertasProductos
             ->map(function (BiLimiteProducto $limite) use ($lectura): array {
                 $terminal = (string) $limite->terminal;
                 $productos = $terminal === '' ? $lectura?->productos : ($lectura?->productos_terminales !== null ? ($lectura->productos_terminales[$terminal] ?? []) : null);
-                $ventas = $productos !== null
-                    ? (float) ($productos[$limite->producto_id] ?? 0)
-                    : null;
+                $grupo = BiLimiteProducto::GRUPOS[$limite->producto_id] ?? null;
+                if ($grupo !== null) {
+                    $categoria = substr($limite->producto_id, strlen('grupo:'));
+                    $ventas = $terminal === ''
+                        ? ($lectura !== null ? (float) $lectura->getAttribute($categoria.'_acumulado') : null)
+                        : ($productos !== null ? $this->sumarCategoria($productos, $categoria) : null);
+                } else {
+                    $ventas = $productos !== null ? (float) ($productos[$limite->producto_id] ?? 0) : null;
+                }
                 $porcentaje = $ventas !== null ? round($ventas / (float) $limite->monto * 100, 1) : null;
 
                 return [
@@ -24,7 +32,8 @@ class AlertasProductos
                     'terminal' => $terminal,
                     'alcance' => $terminal === '' ? 'global' : 'terminal',
                     'producto_id' => $limite->producto_id,
-                    'nombre' => $limite->producto?->descripcion ?: "Producto {$limite->producto_id}",
+                    'esGrupo' => $grupo !== null,
+                    'nombre' => $grupo ?? ($limite->producto?->descripcion ?: "Producto {$limite->producto_id}"),
                     'monto' => (float) $limite->monto,
                     'activo' => $limite->activo,
                     'ventas' => $ventas,
@@ -34,5 +43,18 @@ class AlertasProductos
                     'capturadoEn' => $lectura?->capturado_en->toDateTimeString(),
                 ];
             })->all();
+    }
+
+    /** @param array<string, int|float> $productos */
+    private function sumarCategoria(array $productos, string $categoria): float
+    {
+        $total = 0.0;
+        foreach ($productos as $productoId => $monto) {
+            if ($this->clasificador->categoria(['producto_id' => $productoId]) === $categoria) {
+                $total += (float) $monto;
+            }
+        }
+
+        return round($total, 2);
     }
 }
