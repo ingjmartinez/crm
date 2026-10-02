@@ -29,6 +29,7 @@ class AlertasProductos
 
                 return [
                     'id' => $limite->id,
+                    'eliminarUrl' => route('bi.limites-productos.eliminar', $limite),
                     'terminal' => $terminal,
                     'alcance' => $terminal === '' ? 'global' : 'terminal',
                     'producto_id' => $limite->producto_id,

@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import { currencyInputCaret, formatCurrencyInput, normalizeCurrencyInput } from '../../currency-input.js';
+import { cantidadTerminalesAl80, limitesTerminalesAl80 } from '../../terminales-limites.js';
 
 const props = defineProps({
     modulo: { type: String, required: true },
@@ -52,8 +53,23 @@ const filtroAlcance = ref('todos');
 const nombresTerminales = computed(() => Object.fromEntries(props.terminalesLimites.map((row) => [row.terminal, row.nombre])));
 const soloAlertas = ref(false);
 const limiteGuardado = ref(false);
+const eliminandoLimite = ref(null);
 const cantidadAlertas = computed(() => props.alertasProductos.filter((row) => row.alerta).length);
 const productosVigilados = computed(() => props.alertasProductos.filter((row) => row.activo).length);
+const terminalesAl80 = computed(() => limitesTerminalesAl80(props.alertasProductos));
+const totalTerminalesAl80 = computed(() => cantidadTerminalesAl80(props.alertasProductos));
+const terminalesAl80Abierto = ref(false);
+const abrirTerminalesAl80Button = ref(null);
+const cerrarTerminalesAl80Button = ref(null);
+async function abrirTerminalesAl80() {
+    terminalesAl80Abierto.value = true;
+    await nextTick();
+    cerrarTerminalesAl80Button.value?.focus();
+}
+function cerrarTerminalesAl80() {
+    terminalesAl80Abierto.value = false;
+    abrirTerminalesAl80Button.value?.focus();
+}
 const filteredLimits = computed(() => props.alertasProductos.filter((row) =>
     `${row.producto_id} ${row.nombre} ${row.terminal} ${nombresTerminales.value[row.terminal] || ''}`.toLowerCase().includes(search.value.toLowerCase())
     && (!soloAlertas.value || row.alerta) && (filtroAlcance.value === 'todos' || row.alcance === filtroAlcance.value)));
@@ -67,6 +83,27 @@ function editarLimite(row) {
     limiteForm.monto = row.monto;
     limiteForm.activo = row.activo;
     document.getElementById('limite-monto')?.focus();
+}
+
+function eliminarLimite(row) {
+    if (eliminandoLimite.value !== null || limiteForm.processing) return;
+    const alcance = row.alcance === 'global' ? 'Global — Consorcio' : `Terminal ${row.terminal}`;
+    if (!window.confirm(`¿Eliminar la configuración de ${row.nombre} (${alcance})?`)) return;
+
+    limiteGuardado.value = false;
+    eliminandoLimite.value = row.id;
+    router.delete(row.eliminarUrl, {
+        preserveScroll: true,
+        onSuccess: () => {
+            const terminal = limiteForm.alcance === 'global' ? '' : limiteForm.terminal;
+            if (limiteForm.producto_id === row.producto_id && terminal === row.terminal) {
+                limiteForm.reset();
+                limiteForm.clearErrors();
+            }
+            limiteGuardado.value = true;
+        },
+        onFinish: () => { eliminandoLimite.value = null; },
+    });
 }
 
 function seleccionarProductoLimite() {
@@ -151,6 +188,7 @@ function cerrarComparativo() {
 function handleModalKeydown(event) {
     if (event.key === 'Escape') {
         cerrarComparativo();
+        if (terminalesAl80Abierto.value) cerrarTerminalesAl80();
     }
 }
 
@@ -573,8 +611,9 @@ function recalcularVentas() {
             <template v-else-if="activeTab === 'entrada'"><div class="bi-heading"><h1>Control de Entrada — Consorcio</h1><p>Todas las zonas. Usa el filtro de fecha global.</p></div><div class="bi-subnav"><button v-for="view in ['Detalle diario', '🏆 Top Puntualidad', '⚠️ Top Impuntualidad']" :key="view" :class="{ active: activeEntry === view }" @click="activeEntry = view">{{ view }}</button></div><div class="bi-date-buttons"><span>Fecha:</span><button v-for="date in ['09/29', '09/28', '09/27', '09/26', '09/25']" :key="date">{{ date }}</button></div><div class="bi-kpi-grid three"><div v-for="card in [{ name: 'PUNTUALES ENTRADA', value: '270', detail: 'de 1271 terminales', color: 'blue' }, { name: 'TARDANZAS ENTRADA', value: '1,001', detail: 'llegaron tarde', color: 'red' }, { name: 'CIERRES ANTICIPADOS', value: '1,271', detail: 'salieron antes', color: 'gold' }]" :key="card.name" class="bi-panel bi-stat"><span>{{ card.name }}</span><strong :class="card.color">{{ card.value }}</strong><small>{{ card.detail }}</small></div></div><section class="bi-panel bi-table-panel"><div class="bi-title"><h2>CONTROL DE ENTRADA — CONSORCIO · 1,271 TERMINALES</h2><input v-model="search" placeholder="Buscar terminal…" aria-label="Buscar terminal"></div><div class="bi-table-scroll"><table><thead><tr><th>#</th><th>Terminal</th><th>Agencia</th><th>Empleado T1</th><th>Prog.</th><th>Login</th><th>Δ Entrada</th><th>Logout</th><th>Empleado T2</th><th>Cierre</th></tr></thead><tbody><tr v-for="(row, index) in filteredEntries" :key="row.id"><td>{{ index + 1 }}</td><td>{{ row.id }}</td><td>{{ row.name }}</td><td>EMPLEADO EJEMPLO</td><td>07:30–14:30</td><td>{{ row.login }}</td><td :class="row.delta.includes('tarde') ? 'red' : 'green'">{{ row.delta }}</td><td>{{ row.logout }}</td><td>—</td><td>21:30</td></tr><tr v-if="!filteredEntries.length"><td colspan="10" class="bi-empty">Sin resultados</td></tr></tbody></table></div></section></template>
 <template v-else-if="activeTab === 'limites'">
                 <div class="bi-heading"><h1>Límite de Ventas — Consorcio</h1><p>Alertas diarias por producto · Globales y por terminal · {{ fechaLecturas }}.</p></div>
-                <div class="bi-kpi-grid three">
+                <div class="bi-kpi-grid four">
                     <div class="bi-panel bi-stat"><span>LÍMITES ACTIVOS</span><strong>{{ productosVigilados }}</strong><small>Globales y por terminal</small></div>
+                    <button ref="abrirTerminalesAl80Button" type="button" class="bi-panel bi-stat bi-limit-card" aria-haspopup="dialog" @click="abrirTerminalesAl80"><span>TERMINALES AL 80 %</span><strong class="gold">{{ totalTerminalesAl80 }}</strong><small>Del límite diario configurado · Ver terminales</small></button>
                     <div class="bi-panel bi-stat"><span>LÍMITES ALCANZADOS</span><strong class="red">{{ cantidadAlertas }}</strong><small>Alertas que requieren atención</small></div>
                     <div class="bi-panel bi-stat"><span>ÚLTIMA LECTURA</span><strong>{{ alertasProductos[0]?.capturadoEn?.slice(11, 16) || '—' }}</strong><small>Ventas acumuladas del día</small></div>
                 </div>
@@ -599,7 +638,7 @@ function recalcularVentas() {
                         </div>
                         <div><label for="limite-monto">Límite diario (DOP)</label><div class="bi-currency-input"><span aria-hidden="true">DOP</span><input id="limite-monto" :value="formatCurrencyInput(limiteForm.monto)" type="text" inputmode="decimal" placeholder="100,000.00" required @input="actualizarMontoLimite" @blur="completarMontoLimite" @keydown="borrarSeparadorMonto"></div><small v-if="limiteForm.errors.monto" class="red" role="alert">{{ limiteForm.errors.monto }}</small></div>
                         <div><label for="limite-activo">Estado</label><select id="limite-activo" v-model="limiteForm.activo"><option :value="true">Activa</option><option :value="false">Pausada</option></select><small v-if="limiteForm.errors.activo" class="red" role="alert">{{ limiteForm.errors.activo }}</small></div>
-                        <button type="submit" class="bi-primary" :disabled="limiteForm.processing || (!productosDisponibles.length && !gruposDisponibles.length)">{{ limiteForm.processing ? 'Guardando…' : 'Guardar alerta' }}</button>
+                        <button type="submit" class="bi-primary" :disabled="limiteForm.processing || eliminandoLimite !== null || (!productosDisponibles.length && !gruposDisponibles.length)">{{ limiteForm.processing ? 'Guardando…' : 'Guardar alerta' }}</button>
                     </form>
                     <p v-if="!productosDisponibles.length" class="bi-caption">No hay productos disponibles en el catálogo.</p>
                     <p v-if="limiteGuardado && mensajeLimite" class="bi-recalculate-success" role="status">{{ mensajeLimite }}</p>
@@ -614,7 +653,10 @@ function recalcularVentas() {
                             <td><b>{{ row.alcance === 'global' ? 'Global — Consorcio' : 'Terminal ' + row.terminal }}</b><br><small v-if="row.terminal">{{ nombresTerminales[row.terminal] || 'Sin nombre en catálogo' }}</small></td>
                             <td>{{ formatLimiteDop(row.monto) }}</td><td>{{ row.ventas === null ? 'Sin lectura' : formatLimiteDop(row.ventas) }}</td>
                             <td><b :class="{ red: row.alerta }">{{ row.porcentaje === null ? '—' : row.porcentaje + '%' }}</b><div v-if="row.porcentaje !== null" class="bi-progress"><span :class="row.alerta ? 'red' : 'blue'" :style="{ width: Math.max(0, Math.min(row.porcentaje, 100)) + '%' }"></span></div></td>
-                            <td><button type="button" @click="editarLimite(row)">Editar</button></td>
+                            <td>
+                                <button type="button" :disabled="limiteForm.processing || eliminandoLimite !== null" @click="editarLimite(row)">Editar</button>
+                                <button type="button" class="red" :disabled="limiteForm.processing || eliminandoLimite !== null" @click="eliminarLimite(row)">{{ eliminandoLimite === row.id ? 'Eliminando…' : 'Eliminar' }}</button>
+                            </td>
                         </tr>
                         <tr v-if="!filteredLimits.length"><td colspan="7" class="bi-empty">{{ alertasProductos.length ? 'Sin resultados para este filtro.' : 'Agrega una alerta para empezar a vigilar productos.' }}</td></tr>
                     </tbody></table></div>
@@ -623,6 +665,14 @@ function recalcularVentas() {
             </template>
             <template v-else><div class="bi-heading"><h1>Métricas — Consorcio</h1><p>Indicadores comparativos del período seleccionado.</p></div><div class="bi-kpi-grid four"><div v-for="metric in metrics" :key="metric.name" class="bi-panel bi-stat"><span>{{ metric.name.toUpperCase() }}</span><strong :class="metric.color">{{ metric.value }}</strong><small>{{ metric.change }}</small></div></div><section class="bi-panel bi-chart-panel"><div class="bi-title"><h2>EVOLUCIÓN DE INDICADORES</h2></div><span class="bi-demo-label">Gráfico ilustrativo pendiente de datos comparativos</span><div class="bi-bars-chart"><div v-for="(height, index) in sales" :key="index" class="bi-bar-set"><div class="bi-bars"><div class="bi-bar sales" :style="{ height: `${height}%` }"></div><div class="bi-bar prizes" :style="{ height: `${prizes[index]}%` }"></div></div><small>{{ dates[index] }}</small></div></div></section></template>
         </main>
+        <div v-if="terminalesAl80Abierto" class="bi-modal-backdrop" @click.self="cerrarTerminalesAl80">
+            <section class="bi-comparison-modal" role="dialog" aria-modal="true" aria-labelledby="bi-terminales-limites-title">
+                <div class="bi-comparison-header"><h2 id="bi-terminales-limites-title">Terminales al 80 % del límite · {{ totalTerminalesAl80 }}</h2><button ref="cerrarTerminalesAl80Button" type="button" aria-label="Cerrar listado de terminales" @click="cerrarTerminalesAl80">×</button></div>
+                <p class="bi-comparison-note">Límites activos por terminal con venta de hoy igual o superior al 80 %. Una terminal puede aparecer varias veces si tiene varios productos en este nivel.</p>
+                <div v-if="terminalesAl80.length" class="bi-comparison-scroll"><table><thead><tr><th>Terminal / Agencia</th><th>Producto</th><th>Límite diario</th><th>Venta de hoy</th><th>Consumo</th></tr></thead><tbody><tr v-for="row in terminalesAl80" :key="row.id"><td><b>{{ row.terminal }}</b><br><small>{{ nombresTerminales[row.terminal] || 'Sin nombre en catálogo' }}</small></td><td>{{ row.nombre }}</td><td>{{ formatLimiteDop(row.monto) }}</td><td>{{ formatLimiteDop(row.ventas) }}</td><td><b :class="{ red: row.alerta }">{{ row.porcentaje }} %</b></td></tr></tbody></table></div>
+                <p v-else class="bi-caption">Ninguna terminal ha alcanzado el 80 % de un límite activo.</p>
+            </section>
+        </div>
         <div v-if="comparativoAbierto" class="bi-modal-backdrop" @click.self="cerrarComparativo">
             <section class="bi-comparison-modal" role="dialog" aria-modal="true" aria-labelledby="bi-comparison-title">
                 <div class="bi-comparison-header"><h2 id="bi-comparison-title">Comparativo — Consorcio · {{ indicadores.comparativoDia.hoy.fecha }}</h2><button ref="cerrarComparativoButton" type="button" aria-label="Cerrar comparativo" @click="cerrarComparativo">×</button></div>
@@ -635,6 +685,8 @@ function recalcularVentas() {
 </template>
 
 <style scoped>
+.bi-limit-card { width: 100%; border: 0; text-align: left; cursor: pointer; }
+.bi-limit-card:hover, .bi-limit-card:focus-visible { outline: 2px solid #d69e27; outline-offset: 2px; }
 .bi-catalog-search { display: flex; gap: 8px; flex-wrap: wrap; }
 .bi-catalog-search button { border: 0; border-radius: 8px; background: #05abc8; color: white; font-weight: 700; padding: 8px 14px; }
 .bi-real-tag { display: inline-block; margin-left: 8px; color: #15904d; font-size: 11px; font-weight: 700; }

@@ -119,6 +119,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/bi/limites-productos', [\App\Http\Controllers\Bi\LimiteProductoController::class, 'guardar'])
         ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
         ->name('bi.limites-productos.guardar');
+    Route::delete('/bi/limites-productos/{limiteProducto}', [\App\Http\Controllers\Bi\LimiteProductoController::class, 'eliminar'])
+        ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
+        ->name('bi.limites-productos.eliminar');
     Route::post('/favoritos/toggle', [UserFavoritoController::class, 'toggle'])->name('favoritos.toggle');
     Route::get('/gerencia', [ModuleHubController::class, 'gerencia'])->name('gerencia.index');
     Route::get('/gerencia/beneficio-bruto', [BeneficioBrutoController::class, 'index'])

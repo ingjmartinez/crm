@@ -18,4 +18,11 @@ class LimiteProductoController extends Controller
 
         return back()->with('biLimiteMensaje', 'La alerta por producto se guardó.');
     }
+
+    public function eliminar(BiLimiteProducto $limiteProducto): RedirectResponse
+    {
+        $limiteProducto->delete();
+
+        return back()->with('biLimiteMensaje', 'La configuración del límite se eliminó.');
+    }
 }

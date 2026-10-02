@@ -229,6 +229,7 @@ class BiModuleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('props.productosDisponibles.0.descripcion', 'Quiniela Loteka')
             ->assertJsonPath('props.alertasProductos.0.ventas', 120)
+            ->assertJsonPath('props.alertasProductos.0.eliminarUrl', route('bi.limites-productos.eliminar', \App\Models\BiLimiteProducto::query()->where('terminal', '')->firstOrFail()))
             ->assertJsonPath('props.alertasProductos.0.porcentaje', 120)
             ->assertJsonPath('props.alertasProductos.0.alerta', true)
             ->assertJsonPath('props.alertasProductos.1.terminal', '100')

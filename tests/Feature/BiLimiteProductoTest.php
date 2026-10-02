@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\ExpireInactiveSession;
+use App\Http\Middleware\PreventDeletionForAdmin2;
 use App\Models\Agencia;
 use App\Models\BiLimiteProducto;
 use App\Models\BiVentaHora;
@@ -48,6 +50,65 @@ class BiLimiteProductoTest extends TestCase
         ])->assertRedirect(route('login'));
 
         $this->assertSame(0, BiLimiteProducto::query()->count());
+    }
+
+    public function test_guests_cannot_delete_limits(): void
+    {
+        $limite = BiLimiteProducto::factory()->create(['producto_id' => '43']);
+
+        $this->delete(route('bi.limites-productos.eliminar', $limite))->assertRedirect(route('login'));
+
+        $this->assertModelExists($limite);
+    }
+
+    public function test_deletes_only_the_selected_product_or_group_configuration(): void
+    {
+        $this->withoutMiddleware([ExpireInactiveSession::class, PreventDeletionForAdmin2::class])
+            ->actingAs(new User(['name' => 'Usuario BI']));
+
+        foreach (['43', ...array_keys(BiLimiteProducto::GRUPOS)] as $productoId) {
+            foreach (['', '100'] as $terminal) {
+                foreach ([true, false] as $activo) {
+                    $limite = BiLimiteProducto::factory()->create(compact('terminal', 'activo') + ['producto_id' => $productoId]);
+                    $otroAlcance = BiLimiteProducto::factory()->create(['producto_id' => $productoId, 'terminal' => $terminal === '' ? '100' : '']);
+                    $otroProducto = BiLimiteProducto::factory()->create(['producto_id' => '99', 'terminal' => $terminal]);
+
+                    $this->from(route('bi.index'))->delete(route('bi.limites-productos.eliminar', $limite))
+                        ->assertRedirect(route('bi.index'))
+                        ->assertSessionHas('biLimiteMensaje', 'La configuración del límite se eliminó.');
+
+                    $this->assertModelMissing($limite);
+                    $this->assertModelExists($otroAlcance);
+                    $this->assertModelExists($otroProducto);
+                    $this->assertSame(2, BiLimiteProducto::query()->count());
+                    $otroAlcance->delete();
+                    $otroProducto->delete();
+                }
+            }
+        }
+    }
+
+    public function test_deleting_a_missing_configuration_returns_not_found(): void
+    {
+        $limite = BiLimiteProducto::factory()->create(['producto_id' => '43']);
+        $this->withoutMiddleware([ExpireInactiveSession::class, PreventDeletionForAdmin2::class])
+            ->actingAs(new User(['name' => 'Usuario BI']));
+
+        $this->delete(route('bi.limites-productos.eliminar', $limite->id + 1))->assertNotFound();
+
+        $this->assertModelExists($limite);
+    }
+
+    public function test_admin2_cannot_delete_a_limit_configuration(): void
+    {
+        $limite = BiLimiteProducto::factory()->create(['producto_id' => '43']);
+        $user = \Mockery::mock(User::class)->makePartial();
+        $user->shouldReceive('hasRole')->with('admin2')->andReturnTrue();
+
+        $this->withoutMiddleware(ExpireInactiveSession::class)->actingAs($user)
+            ->delete(route('bi.limites-productos.eliminar', $limite))->assertForbidden();
+
+        $this->assertModelExists($limite);
     }
 
     public function test_category_limits_can_be_saved_updated_and_paused_in_both_scopes(): void
