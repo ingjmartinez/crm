@@ -183,6 +183,7 @@ class BiModuleTest extends TestCase
             'hora' => 12,
             'productos' => ['43' => 80],
         ]);
+        $this->assertSame(today()->toDateString(), DB::table('bi_venta_horas')->value('fecha'));
 
         $queries = [];
         DB::listen(function ($query) use (&$queries): void {
@@ -195,7 +196,7 @@ class BiModuleTest extends TestCase
             ->assertOk()
             ->assertSee('"hora":12', false);
 
-        $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'bi_venta_horas') && str_contains($sql, 'fecha') && ! str_contains(strtolower($sql), 'date(')));
+        $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'bi_venta_horas') && str_contains($sql, '"fecha" = ?') && str_contains($sql, 'order by "hora" asc')));
     }
 
     public function test_product_list_offers_category_totals_alongside_individual_products(): void

@@ -31,8 +31,7 @@ class DashboardController extends Controller
         $hasta = CarbonImmutable::parse($request->validated('hasta') ?: ($rangoDisponible['hasta'] ?? null) ?: today()->toDateString());
         $desde = CarbonImmutable::parse($request->validated('desde') ?: $hasta->subDays(4)->toDateString());
         $lecturas = BiVentaHora::query()
-            ->where('fecha', '>=', today()->toDateString())
-            ->where('fecha', '<', today()->addDay()->toDateString())
+            ->where('fecha', today()->toDateString())
             ->whereBetween('hora', [6, 22])
             ->orderBy('hora')
             ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'quiniela_loteka_acumulado', 'mega_chance_acumulado', 'capturado_en', 'rutas', 'terminales_evaluadas', 'terminales_con_venta', 'terminales_categoria', 'productos', 'productos_terminales']);

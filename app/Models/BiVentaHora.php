@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -29,6 +31,13 @@ class BiVentaHora extends Model
         'productos',
         'productos_terminales',
     ];
+
+    protected function fecha(): Attribute
+    {
+        return Attribute::make(
+            set: fn (string|\DateTimeInterface $fecha): string => Carbon::parse($fecha)->toDateString(),
+        );
+    }
 
     protected function casts(): array
     {
