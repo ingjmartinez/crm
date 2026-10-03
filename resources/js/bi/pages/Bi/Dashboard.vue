@@ -324,13 +324,14 @@ const hourlyChart = computed(() => {
         total: Number(reading.total),
     }));
     const highest = Math.max(1, ...values.map((reading) => reading.total), ...previousValues.map((reading) => reading.total));
-    const magnitude = 10 ** Math.floor(Math.log10(highest / 4));
-    const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate * 4 >= highest);
-    const maximum = step * 4;
+    const magnitude = 10 ** Math.floor(Math.log10(highest / 5));
+    const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => Math.ceil(highest / candidate) <= 5);
+    const intervals = Math.max(1, Math.ceil(highest / step));
+    const maximum = step * intervals;
     const formatAxis = (amount) => amount >= 1_000_000
         ? `DOP ${(amount / 1_000_000).toFixed(1).replace('.0', '')}M`
         : amount >= 1_000 ? `DOP ${Math.round(amount / 1_000)}K` : formatDop(amount);
-    const ticks = Array.from({ length: 5 }, (_, index) => ({ y: 180 - index * 40, label: formatAxis(index * step) }));
+    const ticks = Array.from({ length: intervals + 1 }, (_, index) => ({ y: 180 - index * (160 / intervals), label: formatAxis(index * step) }));
     const hours = Array.from({ length: 17 }, (_, index) => ({ hour: index + 6, x: 72 + index * 34.5 }));
     const points = values.map((reading) => ({
         ...reading,
