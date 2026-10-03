@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BiVentaHora;
+use App\Models\BiVentaSnapshot;
 use App\Services\Bi\CapturarVentasHora;
 use App\Services\Lotobet\LotobetSessionService;
 use Carbon\CarbonImmutable;
@@ -64,6 +65,7 @@ class CapturarVentasBiHoraTest extends TestCase
             $table->timestamps();
             $table->unique(['fecha', 'hora']);
         });
+        (require database_path('migrations/2026_10_03_130148_create_bi_venta_snapshots_table.php'))->up();
     }
 
     public function test_captures_classified_cumulative_sales_and_updates_the_same_hour(): void
@@ -102,16 +104,17 @@ class CapturarVentasBiHoraTest extends TestCase
         $this->assertSame('0.00', $segunda->otros_acumulado);
         $this->assertSame('0.00', $segunda->recargas_acumulado);
         $this->assertSame(2, $segunda->registros);
-        $this->assertSame('RUTA NORTE', $segunda->rutas[0]['nombre']);
-        $this->assertSame(125, $segunda->rutas[0]['monto']);
-        $this->assertSame('RUTA SUR', $segunda->rutas[1]['nombre']);
+        $snapshot = BiVentaSnapshot::query()->firstOrFail();
+        $this->assertSame('RUTA NORTE', $snapshot->rutas[0]['nombre']);
+        $this->assertSame(125, $snapshot->rutas[0]['monto']);
+        $this->assertSame('RUTA SUR', $snapshot->rutas[1]['nombre']);
         $this->assertSame(2, $segunda->terminales_evaluadas);
         $this->assertSame(2, $segunda->terminales_con_venta);
         $this->assertSame(1, $primera->terminales_categoria['recargas']);
         $this->assertSame(1, $segunda->terminales_categoria['tradicional']);
         $this->assertSame(1, $segunda->terminales_categoria['no_tradicional']);
-        $this->assertEquals(['100' => ['1' => 100, '3' => 10], '200' => ['2' => 40]], $primera->productos_terminales);
-        $this->assertEquals(['100' => ['1' => 125], '200' => ['2' => 60]], $segunda->productos_terminales);
+        $this->assertEquals(['100' => ['1' => 125], '200' => ['2' => 60]], $snapshot->productos_terminales);
+        $this->assertSame(1, BiVentaSnapshot::query()->count());
     }
 
     public function test_invalid_api_response_does_not_create_a_snapshot(): void
@@ -126,6 +129,7 @@ class CapturarVentasBiHoraTest extends TestCase
             $this->fail('La respuesta inválida debió rechazarse.');
         } catch (RuntimeException $exception) {
             $this->assertSame(0, BiVentaHora::query()->count());
+            $this->assertSame(0, BiVentaSnapshot::query()->count());
         }
     }
 
@@ -146,7 +150,7 @@ class CapturarVentasBiHoraTest extends TestCase
         $this->assertSame('200.00', $lectura->quiniela_loteka_acumulado);
         $this->assertSame('30.00', $lectura->mega_chance_acumulado);
         $this->assertEquals(['43' => 200, '44' => 50, '38' => 30], $lectura->productos);
-        $this->assertEquals(['100' => ['43' => 125, '44' => 50, '38' => 30], '200' => ['43' => 75]], $lectura->productos_terminales);
+        $this->assertEquals(['100' => ['43' => 125, '44' => 50, '38' => 30], '200' => ['43' => 75]], BiVentaSnapshot::query()->firstOrFail()->productos_terminales);
     }
 
     public function test_zero_sales_counts_only_active_lotobet_terminals_with_positive_net_sales(): void
@@ -201,7 +205,7 @@ class CapturarVentasBiHoraTest extends TestCase
         $this->assertSame(1, $lectura->terminales_categoria['recargas']);
     }
 
-    public function test_capture_keeps_only_requested_day_and_rejects_rows_from_another_date(): void
+    public function test_capture_rejects_rows_from_another_date_and_keeps_previous_days_within_retention(): void
     {
         BiVentaHora::factory()->create(['fecha' => '2026-09-28', 'hora' => 14]);
 
@@ -222,8 +226,29 @@ class CapturarVentasBiHoraTest extends TestCase
 
         $capturador->capturar(CarbonImmutable::parse('2026-09-29 15:05:00'));
 
-        $this->assertSame(1, BiVentaHora::query()->count());
-        $this->assertSame('2026-09-29', BiVentaHora::query()->first()->fecha->toDateString());
+        $this->assertSame(
+            ['2026-09-28', '2026-09-29'],
+            BiVentaHora::query()->orderBy('fecha')->get()->map(fn (BiVentaHora $lectura): string => $lectura->fecha->toDateString())->all(),
+        );
+    }
+
+    public function test_capture_keeps_seven_previous_days_and_deletes_older_and_future_rows(): void
+    {
+        foreach (['2026-09-21', '2026-09-22', '2026-09-28', '2026-09-30'] as $fecha) {
+            BiVentaHora::factory()->create(['fecha' => $fecha, 'hora' => 14]);
+        }
+
+        $lotobet = $this->mock(LotobetSessionService::class);
+        $lotobet->shouldReceive('getVentasProducto')->once()->with('2026-09-29')->andReturn(
+            ['Content' => [['fecha' => '2026-09-29', 'producto_id' => '1', 'tipo' => 'Tradicional', 'monto' => 20]]],
+        );
+
+        app(CapturarVentasHora::class)->capturar(CarbonImmutable::parse('2026-09-29 15:05:00'));
+
+        $this->assertSame(
+            ['2026-09-22', '2026-09-28', '2026-09-29'],
+            BiVentaHora::query()->orderBy('fecha')->get()->map(fn (BiVentaHora $lectura): string => $lectura->fecha->toDateString())->all(),
+        );
     }
 
     public function test_command_does_not_call_api_outside_capture_hours(): void
@@ -272,27 +297,67 @@ class CapturarVentasBiHoraTest extends TestCase
         $this->assertSame('2026-09-30 08:05:00', BiVentaHora::query()->firstOrFail()->capturado_en->toDateTimeString());
     }
 
-    public function test_command_saves_a_large_lotobet_response(): void
+    public function test_command_saves_two_hundred_thousand_lotobet_sales_within_512mb(): void
     {
         CarbonImmutable::setTestNow('2026-09-30 14:05:00');
+        ini_set('memory_limit', '512M');
+        $ventas = [];
+        for ($indice = 0; $indice < 200000; $indice++) {
+            $ventas[] = [
+                'fecha' => '2026-09-30',
+                'producto_id' => '1',
+                'agencia_id' => (string) ($indice % 100),
+                'tipo' => 'Tradicional',
+                'monto' => 1,
+            ];
+        }
 
         $this->mock(LotobetSessionService::class)
             ->shouldReceive('getVentasProducto')
             ->once()
             ->with('2026-09-30')
-            ->andReturn(['Content' => array_fill(0, 65001, [
-                'fecha' => '2026-09-30',
-                'producto_id' => '1',
-                'agencia_id' => '100',
-                'tipo' => 'Tradicional',
-                'monto' => 1,
-            ])]);
+            ->andReturn(['Content' => $ventas]);
 
         $this->artisan('bi:capturar-ventas-hora')->assertSuccessful();
 
         $lectura = BiVentaHora::query()->firstOrFail();
-        $this->assertSame(65001, $lectura->registros);
-        $this->assertSame('65001.00', $lectura->tradicional_acumulado);
+        $this->assertSame(200000, $lectura->registros);
+        $this->assertSame('200000.00', $lectura->tradicional_acumulado);
         $this->assertSame(14, $lectura->hora);
+        $this->assertSame('512M', ini_get('memory_limit'));
+        $this->assertLessThan(512 * 1024 * 1024, memory_get_peak_usage(true));
+    }
+
+    public function test_snapshot_migration_moves_latest_detail_and_restores_it_on_rollback(): void
+    {
+        $migration = require database_path('migrations/2026_10_03_130148_create_bi_venta_snapshots_table.php');
+        $migration->down();
+
+        foreach ([6, 14] as $hora) {
+            DB::table('bi_venta_horas')->insert([
+                'fecha' => '2026-09-30',
+                'hora' => $hora,
+                'capturado_en' => "2026-09-30 {$hora}:05:00",
+                'tradicional_acumulado' => $hora,
+                'no_tradicional_acumulado' => 0,
+                'otros_acumulado' => 0,
+                'registros' => 1,
+                'rutas' => json_encode([['nombre' => "RUTA {$hora}", 'monto' => $hora]]),
+                'productos_terminales' => json_encode(['100' => ['43' => $hora]]),
+            ]);
+        }
+
+        $migration->up();
+
+        $snapshot = BiVentaSnapshot::query()->firstOrFail();
+        $this->assertSame(14, $snapshot->hora);
+        $this->assertSame('RUTA 14', $snapshot->rutas[0]['nombre']);
+        $this->assertEquals(['100' => ['43' => 14]], $snapshot->productos_terminales);
+        $this->assertFalse(Schema::hasColumn('bi_venta_horas', 'rutas'));
+
+        $migration->down();
+
+        $this->assertSame('RUTA 14', json_decode(DB::table('bi_venta_horas')->where('hora', 14)->value('rutas'), true)[0]['nombre']);
+        $this->assertTrue(Schema::hasColumn('bi_venta_horas', 'productos_terminales'));
     }
 }

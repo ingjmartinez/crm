@@ -6,6 +6,7 @@ use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\PreventDeletionForAdmin2;
 use App\Models\Agencia;
 use App\Models\BiVentaHora;
+use App\Models\BiVentaSnapshot;
 use App\Models\User;
 use App\Services\Bi\ResumirPremiosDia;
 use App\Services\Bi\ResumirVentasDia;
@@ -123,6 +124,7 @@ class BiModuleTest extends TestCase
             $table->timestamps();
         });
         (require database_path('migrations/2026_10_01_125650_add_terminal_scope_to_bi_limits.php'))->up();
+        (require database_path('migrations/2026_10_03_130148_create_bi_venta_snapshots_table.php'))->up();
     }
 
     public function test_bi_route_is_protected_and_listed_in_dashboard_hub(): void
@@ -197,6 +199,7 @@ class BiModuleTest extends TestCase
             ->assertSee('"hora":12', false);
 
         $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'bi_venta_horas') && str_contains($sql, '"fecha" = ?') && str_contains($sql, 'order by "hora" asc')));
+        $this->assertFalse(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'bi_venta_horas') && str_contains($sql, 'order by "hora" asc') && (str_contains($sql, 'rutas') || str_contains($sql, 'productos_terminales'))));
     }
 
     public function test_product_list_offers_category_totals_alongside_individual_products(): void
@@ -223,7 +226,8 @@ class BiModuleTest extends TestCase
         \App\Models\BiLimiteProducto::factory()->create(['producto_id' => '43', 'terminal' => '100', 'monto' => 50]);
         BiVentaHora::factory()->create(['fecha' => today()->subDay()->toDateString(), 'hora' => 22, 'productos' => ['43' => 9999]]);
         BiVentaHora::factory()->create(['fecha' => today()->toDateString(), 'hora' => 6, 'productos' => ['43' => 80]]);
-        BiVentaHora::factory()->create(['fecha' => today()->toDateString(), 'hora' => 7, 'productos' => ['43' => 120], 'productos_terminales' => ['100' => ['43' => 60]]]);
+        BiVentaHora::factory()->create(['fecha' => today()->toDateString(), 'hora' => 7, 'productos' => ['43' => 120]]);
+        BiVentaSnapshot::query()->create(['fecha' => today()->toDateString(), 'hora' => 7, 'capturado_en' => now(), 'productos_terminales' => ['100' => ['43' => 60]]]);
 
         $this->withoutMiddleware()->withHeader('X-Inertia', 'true')
             ->get(route('bi.index', ['desde' => today()->subDays(5)->toDateString(), 'hasta' => today()->subDay()->toDateString()]))
@@ -298,8 +302,8 @@ class BiModuleTest extends TestCase
             'quiniela_loteka_acumulado' => 35,
             'mega_chance_acumulado' => 45,
             'capturado_en' => today()->setTime(14, 5),
-            'rutas' => [['nombre' => 'RUTA NORTE', 'monto' => 185]],
         ]);
+        BiVentaSnapshot::query()->create(['fecha' => today()->toDateString(), 'hora' => 14, 'capturado_en' => now(), 'rutas' => [['nombre' => 'RUTA NORTE', 'monto' => 185]]]);
 
         DB::table('ventas_online_promedios_historicos')->insert([
             'tipo_categoria' => 'tradicional',
@@ -329,6 +333,35 @@ class BiModuleTest extends TestCase
             ->assertJsonPath('props.promediosHistoricos.tradicional.meses.0', '2026-06');
     }
 
+    public function test_dashboard_sends_same_weekday_hourly_series_from_seven_days_ago(): void
+    {
+        $this->withoutMiddleware()
+            ->withHeader('X-Inertia', 'true')
+            ->get(route('bi.index'))
+            ->assertOk()
+            ->assertJsonPath('props.lecturasSemanaAnterior', [])
+            ->assertJsonPath('props.fechaLecturasSemanaAnterior', today()->subDays(7)->toDateString());
+
+        BiVentaHora::factory()->create([
+            'fecha' => today()->subDays(7)->toDateString(),
+            'hora' => 10,
+            'tradicional_acumulado' => 100,
+            'no_tradicional_acumulado' => 50,
+            'externas_acumulado' => 5,
+            'recargas_acumulado' => 10,
+            'otros_acumulado' => 5,
+        ]);
+        BiVentaHora::factory()->create(['fecha' => today()->subDays(6)->toDateString(), 'hora' => 11]);
+
+        $this->withoutMiddleware()
+            ->withHeader('X-Inertia', 'true')
+            ->get(route('bi.index'))
+            ->assertOk()
+            ->assertJsonCount(1, 'props.lecturasSemanaAnterior')
+            ->assertJsonPath('props.lecturasSemanaAnterior.0.hora', 10)
+            ->assertJsonPath('props.lecturasSemanaAnterior.0.total', 170);
+    }
+
     public function test_bi_shows_the_ten_highest_routes_from_the_latest_hourly_snapshot(): void
     {
         $routes = collect(range(1, 12))
@@ -341,8 +374,8 @@ class BiModuleTest extends TestCase
         BiVentaHora::factory()->create([
             'fecha' => today()->toDateString(),
             'hora' => 10,
-            'rutas' => $routes,
         ]);
+        BiVentaSnapshot::query()->create(['fecha' => today()->toDateString(), 'hora' => 10, 'capturado_en' => now(), 'rutas' => $routes]);
 
         $this->withoutMiddleware()
             ->withHeader('X-Inertia', 'true')

@@ -28,6 +28,7 @@ class LotobetSessionService
         File::ensureDirectoryExists(dirname($this->cookiePath()));
         $response = $this->request(self::TOKEN_URL);
         $data = json_decode($response['body'], true);
+        unset($response['body']);
 
         if (! is_array($data)) {
             throw new RuntimeException('La API de token devolvio una respuesta invalida.');
@@ -69,6 +70,7 @@ class LotobetSessionService
             $url = self::BASE_URL."/kotFQlCe5XVFoJcjEz/{$token->token}/{$fecha}/05";
             $response = $this->request($url);
             $data = json_decode($response['body'], true);
+            unset($response['body']);
             $status = (int) $response['status'];
             $code = is_array($data) ? strtolower(trim((string) ($data['code'] ?? ''))) : '';
             $message = is_array($data) ? (string) ($data['msg'] ?? $data['message'] ?? '') : '';

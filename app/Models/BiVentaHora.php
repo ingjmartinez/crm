@@ -22,14 +22,12 @@ class BiVentaHora extends Model
         'recargas_acumulado',
         'registros',
         'capturado_en',
-        'rutas',
         'terminales_evaluadas',
         'terminales_con_venta',
         'terminales_categoria',
         'quiniela_loteka_acumulado',
         'mega_chance_acumulado',
         'productos',
-        'productos_terminales',
     ];
 
     protected function fecha(): Attribute
@@ -51,14 +49,12 @@ class BiVentaHora extends Model
             'recargas_acumulado' => 'decimal:2',
             'registros' => 'integer',
             'capturado_en' => 'datetime',
-            'rutas' => 'array',
             'terminales_evaluadas' => 'integer',
             'terminales_con_venta' => 'integer',
             'terminales_categoria' => 'array',
             'quiniela_loteka_acumulado' => 'decimal:2',
             'mega_chance_acumulado' => 'decimal:2',
             'productos' => 'array',
-            'productos_terminales' => 'array',
         ];
     }
 }

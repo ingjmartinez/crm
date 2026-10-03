@@ -7,6 +7,7 @@ use App\Http\Requests\Bi\IndexAgenciaTerminalRequest;
 use App\Http\Requests\Bi\RecalcularVentasRequest;
 use App\Models\BiLimiteProducto;
 use App\Models\BiVentaHora;
+use App\Models\BiVentaSnapshot;
 use App\Models\CatalogoJuego;
 use App\Models\VentaOnlinePromedioHistorico;
 use App\Services\Bi\AgenciaTerminalCatalogo;
@@ -34,8 +35,16 @@ class DashboardController extends Controller
             ->where('fecha', today()->toDateString())
             ->whereBetween('hora', [6, 22])
             ->orderBy('hora')
-            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'quiniela_loteka_acumulado', 'mega_chance_acumulado', 'capturado_en', 'rutas', 'terminales_evaluadas', 'terminales_con_venta', 'terminales_categoria', 'productos', 'productos_terminales']);
+            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'quiniela_loteka_acumulado', 'mega_chance_acumulado', 'capturado_en', 'terminales_evaluadas', 'terminales_con_venta', 'terminales_categoria', 'productos']);
+        $snapshot = $lecturas->isNotEmpty()
+            ? BiVentaSnapshot::query()->where('fecha', today()->toDateString())->first(['hora', 'rutas', 'productos_terminales'])
+            : null;
         $diaSemanaAnterior = CarbonImmutable::today()->subDays(7);
+        $lecturasSemanaAnterior = BiVentaHora::query()
+            ->where('fecha', $diaSemanaAnterior->toDateString())
+            ->whereBetween('hora', [6, 22])
+            ->orderBy('hora')
+            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado']);
 
         return Inertia::render('Bi/Dashboard', [
             'modulo' => 'BI',
@@ -47,7 +56,7 @@ class DashboardController extends Controller
                 'descripcion' => $nombre,
             ])->values()->all(),
             'terminalesLimites' => fn () => $catalogo->paraAlertas(),
-            'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last()),
+            'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last(), $snapshot),
             'menuUrl' => route('dashboard.index'),
             'biUrl' => route('bi.index'),
             'recalcularUrl' => route('bi.recalcular'),
@@ -77,7 +86,16 @@ class DashboardController extends Controller
                 'capturadoEn' => $lectura->capturado_en->toDateTimeString(),
             ])
                 ->all(),
-            'rutasConMasVenta' => collect($lecturas->last()?->rutas ?? [])->take(10)->values()->all(),
+            'fechaLecturasSemanaAnterior' => $diaSemanaAnterior->toDateString(),
+            'lecturasSemanaAnterior' => $lecturasSemanaAnterior->map(fn (BiVentaHora $lectura): array => [
+                'hora' => $lectura->hora,
+                'total' => (float) $lectura->tradicional_acumulado
+                    + (float) $lectura->no_tradicional_acumulado
+                    + (float) $lectura->externas_acumulado
+                    + (float) $lectura->recargas_acumulado
+                    + (float) $lectura->otros_acumulado,
+            ])->all(),
+            'rutasConMasVenta' => collect($snapshot?->rutas ?? [])->take(10)->values()->all(),
             'quinielaLotekaHoy' => $lecturas->last()?->quiniela_loteka_acumulado !== null
                 ? (float) $lecturas->last()->quiniela_loteka_acumulado
                 : null,

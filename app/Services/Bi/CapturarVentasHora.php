@@ -4,12 +4,16 @@ namespace App\Services\Bi;
 
 use App\Models\Agencia;
 use App\Models\BiVentaHora;
+use App\Models\BiVentaSnapshot;
 use App\Services\Lotobet\LotobetSessionService;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class CapturarVentasHora
 {
+    public const DIAS_RETENCION_HORAS = 7;
+
     public function __construct(
         private readonly LotobetSessionService $lotobet,
         private readonly ClasificarVentaBi $clasificador,
@@ -129,24 +133,36 @@ class CapturarVentasHora
             'otros_acumulado' => round($totales['otros'], 2),
             'registros' => $registros,
             'capturado_en' => $momento->toDateTimeString(),
-            'rutas' => $rutas,
             'terminales_evaluadas' => count($terminalesEvaluadas),
             'terminales_con_venta' => $terminalesConVenta,
             'terminales_categoria' => $terminalesCategoria,
             'quiniela_loteka_acumulado' => round($quinielaLoteka, 2),
             'mega_chance_acumulado' => round($megaChance, 2),
             'productos' => array_map(fn (float $monto): float => round($monto, 2), $productos),
-            'productos_terminales' => array_map(
-                fn (array $ventas): array => array_map(fn (float $monto): float => round($monto, 2), $ventas),
-                $productosTerminales,
-            ),
         ]);
-        $lectura->save();
 
-        BiVentaHora::query()
-            ->where('fecha', '<', $momento->toDateString())
-            ->orWhere('fecha', '>=', $momento->addDay()->toDateString())
-            ->delete();
+        DB::transaction(function () use ($lectura, $momento, $rutas, $productosTerminales): void {
+            $lectura->save();
+
+            BiVentaSnapshot::query()->updateOrCreate(
+                ['fecha' => $momento->toDateString()],
+                [
+                    'hora' => $momento->hour,
+                    'capturado_en' => $momento->toDateTimeString(),
+                    'rutas' => $rutas,
+                    'productos_terminales' => array_map(
+                        fn (array $ventas): array => array_map(fn (float $monto): float => round($monto, 2), $ventas),
+                        $productosTerminales,
+                    ),
+                ],
+            );
+
+            BiVentaHora::query()
+                ->where(fn ($query) => $query
+                    ->where('fecha', '<', $momento->subDays(self::DIAS_RETENCION_HORAS)->toDateString())
+                    ->orWhere('fecha', '>=', $momento->addDay()->toDateString()))
+                ->delete();
+        });
 
         return $lectura;
     }

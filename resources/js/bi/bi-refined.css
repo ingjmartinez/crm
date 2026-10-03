@@ -28,6 +28,7 @@
 .bi-today-card strong, .bi-metric strong, .bi-category strong { color: #1e293b; font-weight: 800; }
 .bi-hour-legend { display: flex; gap: 16px; margin: 6px 0; font-size: 12px; }
 .bi-hour-legend .blue { color: #0092bf; }
+.bi-hour-legend .orange { color: #d97706; }
 .bi-hour-legend .pink { color: #db0c81; }
 .bi-hour-empty { display: grid; place-items: center; min-height: 150px; color: #64748b; font-size: 13px; }
 .bi-group-list { width: 100%; max-width: 360px; justify-self: end; }

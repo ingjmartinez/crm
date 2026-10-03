@@ -4,18 +4,21 @@ namespace App\Services\Bi;
 
 use App\Models\BiLimiteProducto;
 use App\Models\BiVentaHora;
+use App\Models\BiVentaSnapshot;
 
 class AlertasProductos
 {
     public function __construct(private ClasificarVentaBi $clasificador) {}
 
     /** @return array<int, array<string, mixed>> */
-    public function resumir(?BiVentaHora $lectura): array
+    public function resumir(?BiVentaHora $lectura, ?BiVentaSnapshot $snapshot = null): array
     {
+        $productosTerminales = $snapshot?->productos_terminales;
+
         return BiLimiteProducto::query()->with('producto')->orderBy('producto_id')->orderBy('terminal')->get()
-            ->map(function (BiLimiteProducto $limite) use ($lectura): array {
+            ->map(function (BiLimiteProducto $limite) use ($lectura, $productosTerminales): array {
                 $terminal = (string) $limite->terminal;
-                $productos = $terminal === '' ? $lectura?->productos : ($lectura?->productos_terminales !== null ? ($lectura->productos_terminales[$terminal] ?? []) : null);
+                $productos = $terminal === '' ? $lectura?->productos : ($productosTerminales !== null ? ($productosTerminales[$terminal] ?? []) : null);
                 $grupo = BiLimiteProducto::GRUPOS[$limite->producto_id] ?? null;
                 if ($grupo !== null) {
                     $categoria = substr($limite->producto_id, strlen('grupo:'));

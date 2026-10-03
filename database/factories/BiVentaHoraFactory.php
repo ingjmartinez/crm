@@ -27,7 +27,6 @@ class BiVentaHoraFactory extends Factory
             'recargas_acumulado' => 0,
             'registros' => fake()->numberBetween(1, 100),
             'capturado_en' => now(),
-            'rutas' => [],
         ];
     }
 }

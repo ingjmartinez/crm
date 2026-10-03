@@ -6,6 +6,7 @@ use App\Models\BiVentaHora;
 use App\Services\Bi\CapturarVentasHora;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class CapturarVentasBiHora extends Command
@@ -29,9 +30,21 @@ class CapturarVentasBiHora extends Command
      */
     public function handle(CapturarVentasHora $captura): int
     {
-        ini_set('memory_limit', '1024M');
+        ini_set('memory_limit', '512M');
 
         $momento = CarbonImmutable::now();
+        $reservaMemoria = str_repeat(' ', 65536);
+        register_shutdown_function(static function () use ($momento, &$reservaMemoria): void {
+            $error = error_get_last();
+            if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE], true)) {
+                $reservaMemoria = null;
+                Log::error('Fallo fatal en la captura horaria BI.', [
+                    'hora' => $momento->toDateTimeString(),
+                    'error' => $error['message'],
+                    'pico_memoria_bytes' => memory_get_peak_usage(true),
+                ]);
+            }
+        });
 
         if ($momento->hour < 6 || $momento->hour > 22 || ($momento->hour === 22 && $momento->minute > 0)) {
             $this->info('Captura omitida: horario permitido de 06:00 a 22:00.');
@@ -57,6 +70,11 @@ class CapturarVentasBiHora extends Command
         }
 
         $this->info("Lectura {$lectura->fecha->toDateString()} {$lectura->hora}:00 guardada.");
+        Log::info('Captura horaria BI guardada.', [
+            'hora' => $momento->toDateTimeString(),
+            'registros' => $lectura->registros,
+            'pico_memoria_bytes' => memory_get_peak_usage(true),
+        ]);
 
         return self::SUCCESS;
     }

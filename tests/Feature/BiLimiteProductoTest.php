@@ -7,6 +7,7 @@ use App\Http\Middleware\PreventDeletionForAdmin2;
 use App\Models\Agencia;
 use App\Models\BiLimiteProducto;
 use App\Models\BiVentaHora;
+use App\Models\BiVentaSnapshot;
 use App\Models\CatalogoJuego;
 use App\Models\User;
 use App\Services\Bi\AlertasProductos;
@@ -157,10 +158,10 @@ class BiLimiteProductoTest extends TestCase
         $reading = BiVentaHora::factory()->make([
             'tradicional_acumulado' => 120, 'no_tradicional_acumulado' => 100,
             'productos' => ['43' => 60, '44' => 60, '38' => 45, '39' => 55, '99' => 1000],
-            'productos_terminales' => ['100' => ['43' => 40, '44' => 60, '38' => 20, '39' => 30, '99' => 1000]],
         ]);
+        $snapshot = new BiVentaSnapshot(['productos_terminales' => ['100' => ['43' => 40, '44' => 60, '38' => 20, '39' => 30, '99' => 1000]]]);
         $service = app(AlertasProductos::class);
-        $rows = collect($service->resumir($reading))->keyBy(fn (array $row): string => $row['producto_id'].'/'.$row['terminal']);
+        $rows = collect($service->resumir($reading, $snapshot))->keyBy(fn (array $row): string => $row['producto_id'].'/'.$row['terminal']);
 
         $this->assertSame(120.0, $rows['grupo:tradicional/']['ventas']);
         $this->assertSame(100.0, $rows['grupo:no_tradicional/']['ventas']);
@@ -176,7 +177,7 @@ class BiLimiteProductoTest extends TestCase
         $this->assertFalse($rows['grupo:no_tradicional/100']['alerta']);
         $this->assertSame(0.0, $rows['grupo:tradicional/200']['ventas']);
 
-        $reading->productos_terminales = null;
+        $snapshot->productos_terminales = null;
         foreach ($service->resumir($reading) as $row) {
             if ($row['terminal'] !== '') {
                 $this->assertNull($row['ventas']);
@@ -292,9 +293,9 @@ class BiLimiteProductoTest extends TestCase
         }
         $reading = BiVentaHora::factory()->make([
             'productos' => ['43' => 120],
-            'productos_terminales' => ['100' => ['43' => 8], '200' => ['43' => 112]],
         ]);
-        $rows = collect(app(AlertasProductos::class)->resumir($reading))->keyBy('terminal');
+        $snapshot = new BiVentaSnapshot(['productos_terminales' => ['100' => ['43' => 8], '200' => ['43' => 112]]]);
+        $rows = collect(app(AlertasProductos::class)->resumir($reading, $snapshot))->keyBy('terminal');
         $this->assertTrue($rows['']['alerta']);
         $this->assertSame(120.0, $rows['']['ventas']);
         $this->assertSame('global', $rows['']['alcance']);
@@ -304,13 +305,13 @@ class BiLimiteProductoTest extends TestCase
         $this->assertTrue($rows['200']['alerta']);
         $this->assertSame(112.0, $rows['200']['ventas']);
 
-        $reading->productos_terminales = null;
+        $snapshot->productos_terminales = null;
         $rows = app(AlertasProductos::class)->resumir($reading);
         $this->assertSame('Sin lectura', $rows[1]['estado']);
         $this->assertNull($rows[1]['ventas']);
         $this->assertTrue($rows[0]['alerta']);
-        $reading->productos_terminales = [];
-        $this->assertSame(0.0, app(AlertasProductos::class)->resumir($reading)[1]['ventas']);
+        $snapshot->productos_terminales = [];
+        $this->assertSame(0.0, app(AlertasProductos::class)->resumir($reading, $snapshot)[1]['ventas']);
     }
 
     public function test_terminal_migration_preserves_existing_global_limits(): void

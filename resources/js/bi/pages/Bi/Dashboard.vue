@@ -19,6 +19,8 @@ const props = defineProps({
     indicadores: { type: Object, required: true },
     fechaLecturas: { type: String, required: true },
     lecturasPorHora: { type: Array, required: true },
+    lecturasSemanaAnterior: { type: Array, default: () => [] },
+    fechaLecturasSemanaAnterior: { type: String, default: '' },
     rutasConMasVenta: { type: Array, required: true },
     promediosHistoricos: { type: Object, required: true },
     quinielaLotekaHoy: { type: Number, default: null },
@@ -196,7 +198,7 @@ onMounted(() => {
     window.addEventListener('keydown', handleModalKeydown);
     hourlyRefreshTimer = window.setInterval(() => {
         if (!document.hidden) {
-            router.reload({ only: ['lecturasPorHora', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos'], preserveScroll: true });
+            router.reload({ only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos'], preserveScroll: true });
         }
     }, 120_000);
 });
@@ -317,7 +319,11 @@ const hourlyChart = computed(() => {
         hora: Number(reading.hora),
         total: Number(reading.total),
     }));
-    const highest = Math.max(1, ...values.map((reading) => reading.total));
+    const previousValues = props.lecturasSemanaAnterior.map((reading) => ({
+        hora: Number(reading.hora),
+        total: Number(reading.total),
+    }));
+    const highest = Math.max(1, ...values.map((reading) => reading.total), ...previousValues.map((reading) => reading.total));
     const magnitude = 10 ** Math.floor(Math.log10(highest / 4));
     const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate * 4 >= highest);
     const maximum = step * 4;
@@ -334,7 +340,14 @@ const hourlyChart = computed(() => {
     const line = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
     const area = points.length > 1 ? `${line} L ${points.at(-1).x} 180 L ${points[0].x} 180 Z` : '';
 
-    return { ticks, hours, points, line, area };
+    const previousPoints = previousValues.map((reading) => ({
+        ...reading,
+        x: 72 + (reading.hora - 6) * 34.5,
+        y: 180 - (reading.total / maximum) * 160,
+    }));
+    const previousLine = previousPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+
+    return { ticks, hours, points, line, area, previousPoints, previousLine };
 });
 const categories = computed(() => [
     { key: 'tradicional', name: 'Tradicional', amount: props.ventasPorCategoria.tradicional, color: 'blue' },
@@ -527,12 +540,14 @@ function recalcularVentas() {
                         </div>
                         <div class="bi-hour-chart">
                             <span>VENTAS ACUMULADAS POR HORA</span>
-                            <div v-if="lecturasPorHora.length" class="bi-hour-legend"><span class="blue">● Ventas totales</span><small>Última lectura {{ String(hourlyLatest.hora).padStart(2, '0') }}:00</small></div>
+                            <div v-if="lecturasPorHora.length" class="bi-hour-legend"><span class="blue">● Ventas totales</span><span v-if="hourlyChart.previousPoints.length" class="orange">● Mismo día semana anterior ({{ fechaLecturasSemanaAnterior }})</span><small>Última lectura {{ String(hourlyLatest.hora).padStart(2, '0') }}:00</small></div>
                             <svg v-if="lecturasPorHora.length" viewBox="0 0 640 218" role="img" :aria-label="`Ventas acumuladas desde las 06:00 hasta las 22:00. Última lectura: ${formatDop(hourlyLatest.total)} a las ${String(hourlyLatest.hora).padStart(2, '0')}:00`">
                                 <g v-for="tick in hourlyChart.ticks" :key="tick.y"><line x1="72" :y1="tick.y" x2="624" :y2="tick.y" stroke="#d9eaf0"/><text x="65" :y="tick.y + 4" text-anchor="end" fill="#789bab" font-size="10">{{ tick.label }}</text></g>
                                 <path v-if="hourlyChart.area" :d="hourlyChart.area" fill="#bce9f6" fill-opacity="0.65"/>
                                 <path :d="hourlyChart.line" fill="none" stroke="#0092bf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                                <circle v-for="point in hourlyChart.points" :key="point.hora" :cx="point.x" :cy="point.y" r="3.5" fill="#0092bf" stroke="white" stroke-width="1.5"><title>{{ String(point.hora).padStart(2, '0') }}:00 · {{ formatDop(point.total) }}</title></circle>
+                                <path v-if="hourlyChart.previousPoints.length" :d="hourlyChart.previousLine" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6 4" stroke-linecap="round" stroke-linejoin="round"/>
+                                <circle v-for="point in hourlyChart.previousPoints" :key="`prev-${point.hora}`" :cx="point.x" :cy="point.y" r="2.5" fill="#f59e0b" stroke="white" stroke-width="1"><title>Semana anterior · {{ String(point.hora).padStart(2, '0') }}:00 · {{ formatDop(point.total) }}</title></circle>
+                                <circle v-for="point in hourlyChart.points":key="point.hora" :cx="point.x" :cy="point.y" r="3.5" fill="#0092bf" stroke="white" stroke-width="1.5"><title>{{ String(point.hora).padStart(2, '0') }}:00 · {{ formatDop(point.total) }}</title></circle>
                                 <text v-for="hour in hourlyChart.hours" :key="hour.hour" :x="hour.x" y="208" text-anchor="middle" fill="#789bab" font-size="9">{{ String(hour.hour).padStart(2, '0') }}:00</text>
                             </svg>
                             <p v-else class="bi-hour-empty">Esperando la primera captura horaria.</p>
