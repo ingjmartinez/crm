@@ -9,7 +9,9 @@ use App\Http\Requests\RecursosHumanos\ConsultarCedulaNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\ConsultarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\DescargarInformeEjecutivoNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\EnviarNominaDomingoTelegramRequest;
+use App\Http\Requests\RecursosHumanos\GuardarNominaDomingoTerminalesDobleTurnoRequest;
 use App\Http\Requests\RecursosHumanos\GuardarNominaDomingoTerminalesExcluidasRequest;
+use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesDobleTurnoRequest;
 use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesExcluidasRequest;
 use App\Http\Requests\RecursosHumanos\ResolverRecargaPendienteNominaDomingoRequest;
 use App\Imports\AgenciasActualizacionMasivaImport;
@@ -20,6 +22,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -220,6 +223,16 @@ class NominaDomingoController extends Controller
 
     public function reconocerTerminalesExcluidas(ReconocerNominaDomingoTerminalesExcluidasRequest $request): JsonResponse
     {
+        return $this->reconocerTerminales($request);
+    }
+
+    public function reconocerTerminalesDobleTurno(ReconocerNominaDomingoTerminalesDobleTurnoRequest $request): JsonResponse
+    {
+        return $this->reconocerTerminales($request);
+    }
+
+    private function reconocerTerminales(Request $request): JsonResponse
+    {
         $terminales = collect();
         $totalFilas = 0;
 
@@ -261,6 +274,47 @@ class NominaDomingoController extends Controller
         $terminales = $this->terminalesExcluidasGuardadas();
 
         return response()->json(['ok' => true, 'terminales' => $terminales->all(), 'count' => $terminales->count()]);
+    }
+
+    public function listarTerminalesDobleTurno(): JsonResponse
+    {
+        $terminales = $this->terminalesDobleTurnoGuardadas();
+
+        return response()->json(['ok' => true, 'terminales' => $terminales->all(), 'count' => $terminales->count()]);
+    }
+
+    public function guardarTerminalesDobleTurno(GuardarNominaDomingoTerminalesDobleTurnoRequest $request): JsonResponse
+    {
+        if (! Schema::hasTable('nomina_domingo_terminales_doble_turno')) {
+            return response()->json(['ok' => false, 'message' => 'Ejecuta las migraciones pendientes para guardar las terminales doble turno.'], 500);
+        }
+
+        $terminales = collect($request->validated('terminales'))->map(fn (mixed $terminal): string => trim((string) $terminal))
+            ->filter()->unique()->values();
+        $userId = auth()->id();
+
+        DB::transaction(function () use ($terminales, $userId): void {
+            DB::table('nomina_domingo_terminales_doble_turno')
+                ->when($terminales->isNotEmpty(), fn ($query) => $query->whereNotIn('terminal', $terminales->all()))->delete();
+            foreach ($terminales as $terminal) {
+                DB::table('nomina_domingo_terminales_doble_turno')->updateOrInsert(
+                    ['terminal' => $terminal],
+                    ['created_by' => $userId, 'updated_by' => $userId, 'created_at' => now(), 'updated_at' => now()]
+                );
+            }
+        });
+
+        $guardadas = $this->terminalesDobleTurnoGuardadas();
+
+        return response()->json(['ok' => true, 'message' => 'Terminales doble turno guardadas correctamente.', 'terminales' => $guardadas->all(), 'count' => $guardadas->count()]);
+    }
+
+    /** @return Collection<int, string> */
+    private function terminalesDobleTurnoGuardadas(): Collection
+    {
+        return Schema::hasTable('nomina_domingo_terminales_doble_turno')
+            ? DB::table('nomina_domingo_terminales_doble_turno')->orderBy('terminal')->pluck('terminal')
+            : collect();
     }
 
     public function guardarTerminalesExcluidas(GuardarNominaDomingoTerminalesExcluidasRequest $request): JsonResponse

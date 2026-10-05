@@ -26,6 +26,7 @@ class NominaDomingoTest extends TestCase
         Schema::create('nomina_domingo_configuraciones', function (Blueprint $table): void {
             $table->id();
             $table->decimal('horas_requeridas', 5, 2);
+            $table->unsignedSmallInteger('minutos_requeridos_doble_turno')->nullable();
             $table->decimal('monto_fijo', 12, 2);
             $table->timestamps();
         });
@@ -43,6 +44,13 @@ class NominaDomingoTest extends TestCase
             $table->timestamps();
         });
         Schema::create('nomina_domingo_terminales_excluidas', function (Blueprint $table): void {
+            $table->id();
+            $table->string('terminal')->unique();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('nomina_domingo_terminales_doble_turno', function (Blueprint $table): void {
             $table->id();
             $table->string('terminal')->unique();
             $table->unsignedBigInteger('created_by')->nullable();
@@ -115,7 +123,7 @@ class NominaDomingoTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_excluidas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones'] as $tabla) {
+        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_doble_turno', 'nomina_domingo_terminales_excluidas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones'] as $tabla) {
             Schema::dropIfExists($tabla);
         }
         parent::tearDown();
@@ -161,6 +169,39 @@ class NominaDomingoTest extends TestCase
             'terminales' => ['13'],
         ])->assertOk()->assertJson(['terminales' => ['13'], 'count' => 1]);
         $this->assertDatabaseMissing('nomina_domingo_terminales_excluidas', ['terminal' => '12']);
+    }
+
+    public function test_double_shift_terminal_uses_shared_minimum_for_each_user(): void
+    {
+        DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 7.75, 'minutos_requeridos_doble_turno' => 225, 'monto_fijo' => 1500]);
+        DB::table('nomina_domingo_terminales_doble_turno')->insert(['terminal' => '0012']);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '0012', 'cedula' => '00100000001', 'usuario' => 'Turno uno', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 11:45:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '0012', 'cedula' => '00100000002', 'usuario' => 'Turno dos', 'primer_login' => '2026-09-13 12:00:00', 'ultimo_login' => '2026-09-13 15:44:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '0013', 'cedula' => '00100000003', 'usuario' => 'Turno normal', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 11:45:00'],
+        ]);
+
+        $filas = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'));
+
+        $this->assertSame('Cumple', $filas->firstWhere('cedula', '00100000001')['estatus']);
+        $this->assertSame(1500.0, $filas->firstWhere('cedula', '00100000001')['monto_pagar']);
+        $this->assertSame('No cumple', $filas->firstWhere('cedula', '00100000002')['estatus']);
+        $this->assertSame('No cumple', $filas->firstWhere('cedula', '00100000003')['estatus']);
+    }
+
+    public function test_double_shift_terminals_can_be_recognized_saved_listed_and_removed(): void
+    {
+        DB::table('agencias')->insert([['terminal' => '12'], ['terminal' => '13']]);
+
+        $this->postJson(route('recursos-humanos.nomina-domingo.terminales-doble-turno.reconocer'), ['terminales_manual' => "12\n999"])
+            ->assertOk()->assertJson(['terminales_encontradas' => ['12'], 'terminales_no_encontradas' => ['999']]);
+        $this->postJson(route('recursos-humanos.nomina-domingo.terminales-doble-turno.store'), ['terminales' => ['12', '13']])
+            ->assertOk()->assertJson(['count' => 2]);
+        $this->getJson(route('recursos-humanos.nomina-domingo.terminales-doble-turno.index'))
+            ->assertOk()->assertJson(['terminales' => ['12', '13']]);
+        $this->postJson(route('recursos-humanos.nomina-domingo.terminales-doble-turno.store'), ['terminales' => ['13']])
+            ->assertOk()->assertJson(['terminales' => ['13']]);
+        $this->assertDatabaseMissing('nomina_domingo_terminales_doble_turno', ['terminal' => '12']);
     }
 
     public function test_terminal_recognition_requires_a_file_or_manual_values(): void
@@ -1219,11 +1260,13 @@ class NominaDomingoTest extends TestCase
         $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
             'horas_requeridas_horas' => 7,
             'horas_requeridas_minutos' => 30,
+            'doble_turno_horas' => 3,
+            'doble_turno_minutos' => 45,
             'monto_fijo' => 1200,
         ])
             ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('nomina_domingo_configuraciones', ['id' => 1, 'horas_requeridas' => 7.5, 'monto_fijo' => 1200]);
+        $this->assertDatabaseHas('nomina_domingo_configuraciones', ['id' => 1, 'horas_requeridas' => 7.5, 'minutos_requeridos_doble_turno' => 225, 'monto_fijo' => 1200]);
     }
 
     public function test_configuration_rejects_sixty_minutes(): void
@@ -1231,8 +1274,21 @@ class NominaDomingoTest extends TestCase
         $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
             'horas_requeridas_horas' => 7,
             'horas_requeridas_minutos' => 60,
+            'doble_turno_horas' => 3,
+            'doble_turno_minutos' => 45,
             'monto_fijo' => 1200,
         ])->assertInvalid(['horas_requeridas_minutos']);
+    }
+
+    public function test_configuration_rejects_zero_double_shift_time(): void
+    {
+        $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
+            'horas_requeridas_horas' => 7,
+            'horas_requeridas_minutos' => 45,
+            'doble_turno_horas' => 0,
+            'doble_turno_minutos' => 0,
+            'monto_fijo' => 1200,
+        ])->assertInvalid(['doble_turno_horas']);
     }
 
     public function test_configuration_preserves_minute_precision_when_reading_decimal_storage(): void
@@ -1240,6 +1296,8 @@ class NominaDomingoTest extends TestCase
         $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
             'horas_requeridas_horas' => 7,
             'horas_requeridas_minutos' => 1,
+            'doble_turno_horas' => 3,
+            'doble_turno_minutos' => 45,
             'monto_fijo' => 1200,
         ])->assertSessionHasNoErrors();
 

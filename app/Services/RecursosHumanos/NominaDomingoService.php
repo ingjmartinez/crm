@@ -12,21 +12,27 @@ use Illuminate\Validation\ValidationException;
 
 class NominaDomingoService
 {
-    /** @return array{horas_requeridas: float, monto_fijo: float} */
+    /** @return array{horas_requeridas: float, minutos_requeridos_doble_turno: ?int, monto_fijo: float} */
     public function configuracion(): array
     {
         $configuracion = Schema::hasTable('nomina_domingo_configuraciones') ? DB::table('nomina_domingo_configuraciones')->first() : null;
         $horasAlmacenadas = (float) ($configuracion->horas_requeridas ?? 8);
         $horasRequeridas = round($horasAlmacenadas * 60) / 60;
 
-        return ['horas_requeridas' => $horasRequeridas, 'monto_fijo' => (float) ($configuracion->monto_fijo ?? 0)];
+        return [
+            'horas_requeridas' => $horasRequeridas,
+            'minutos_requeridos_doble_turno' => isset($configuracion->minutos_requeridos_doble_turno) ? (int) $configuracion->minutos_requeridos_doble_turno : null,
+            'monto_fijo' => (float) ($configuracion->monto_fijo ?? 0),
+        ];
     }
 
-    /** @param array{horas_requeridas: float|int|string, monto_fijo: float|int|string, horas_requeridas_horas?: int, horas_requeridas_minutos?: int} $datos */
+    /** @param array{horas_requeridas: float|int|string, monto_fijo: float|int|string, doble_turno_horas: int, doble_turno_minutos: int} $datos */
     public function guardarConfiguracion(array $datos): void
     {
         DB::table('nomina_domingo_configuraciones')->updateOrInsert(['id' => 1], [
-            'horas_requeridas' => $datos['horas_requeridas'], 'monto_fijo' => $datos['monto_fijo'],
+            'horas_requeridas' => $datos['horas_requeridas'],
+            'minutos_requeridos_doble_turno' => $datos['doble_turno_horas'] * 60 + $datos['doble_turno_minutos'],
+            'monto_fijo' => $datos['monto_fijo'],
             'created_at' => now(), 'updated_at' => now(),
         ]);
     }
@@ -71,6 +77,7 @@ class NominaDomingoService
         }
 
         $terminalesExcluidas = $this->terminalesExcluidas();
+        $terminalesDobleTurno = $this->terminalesDobleTurno();
         $claves = $ventasAsociadas->keys()->merge($ponches->keys())->unique()
             ->reject(function (string $clave) use ($terminalesExcluidas): bool {
                 $claveSinPrefijo = str_starts_with($clave, 'venta:') ? substr($clave, 6) : $clave;
@@ -82,7 +89,7 @@ class NominaDomingoService
         $empleados = $this->empleados($cedulas);
         $agencias = $this->agencias();
 
-        return $claves->map(function (string $clave) use ($ventasAsociadas, $ponches, $empleados, $agencias, $configuracion): array {
+        return $claves->map(function (string $clave) use ($ventasAsociadas, $ponches, $empleados, $agencias, $configuracion, $terminalesDobleTurno): array {
             $ventaSinPonche = str_starts_with($clave, 'venta:');
             [$terminal, $cedula] = explode('|', $ventaSinPonche ? substr($clave, 6) : $clave, 2);
             $venta = $ventasAsociadas->get($clave);
@@ -104,7 +111,9 @@ class NominaDomingoService
                 ? max(0, $entrada->diffInSeconds($salidaEfectiva, false) / 3600)
                 : 0;
             $minutosTrabajados = (int) round($horas * 60);
-            $minutosRequeridos = (int) round($configuracion['horas_requeridas'] * 60);
+            $minutosRequeridos = $terminalesDobleTurno->contains($terminal) && $configuracion['minutos_requeridos_doble_turno'] !== null
+                ? $configuracion['minutos_requeridos_doble_turno']
+                : (int) round($configuracion['horas_requeridas'] * 60);
             $cumple = $incidencia === null && $minutosTrabajados >= $minutosRequeridos;
             $agencia = $agencias->get($terminal);
             $empleadoMaestra = $empleados->get($cedula);
@@ -131,6 +140,7 @@ class NominaDomingoService
                 'recargas_monto' => $venta['recargas_monto'] ?? 0.0,
                 'incidencia' => $incidencia,
                 'minutos_trabajados' => $minutosTrabajados,
+                'minutos_requeridos' => $minutosRequeridos,
                 'horas_trabajadas' => round($horas, 2),
                 'horas_trabajadas_formato' => $this->formatearMinutosTrabajados($minutosTrabajados),
                 'estatus' => $incidencia !== null ? 'Revisar' : ($cumple ? 'Cumple' : 'No cumple'),
@@ -731,6 +741,18 @@ class NominaDomingoService
         }
 
         return DB::table('nomina_domingo_terminales_excluidas')->pluck('terminal')
+            ->map(fn (mixed $terminal): string => $this->normalizar($terminal))
+            ->filter()->unique()->values();
+    }
+
+    /** @return Collection<int, string> */
+    private function terminalesDobleTurno(): Collection
+    {
+        if (! Schema::hasTable('nomina_domingo_terminales_doble_turno')) {
+            return collect();
+        }
+
+        return DB::table('nomina_domingo_terminales_doble_turno')->pluck('terminal')
             ->map(fn (mixed $terminal): string => $this->normalizar($terminal))
             ->filter()->unique()->values();
     }

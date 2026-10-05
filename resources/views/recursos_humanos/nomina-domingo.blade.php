@@ -89,6 +89,9 @@
                             <button class="btn btn-warning" type="button" id="btnAbrirTerminalesExcluidas" data-bs-toggle="modal" data-bs-target="#modalTerminalesExcluidas">
                                 <i class="ri-forbid-line me-1"></i> Terminales excluidas <span class="badge bg-dark ms-1" id="cantidadTerminalesExcluidas">0</span>
                             </button>
+                            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#modalTerminalesDobleTurno">
+                                <i class="ri-time-line me-1"></i> Terminales doble turno <span class="badge bg-dark ms-1" id="cantidadTerminalesDobleTurno">0</span>
+                            </button>
                         </div>
                     </div>
                     <div class="card-body">
@@ -504,6 +507,23 @@
         </div></div>
     </div>
 
+    <div class="modal fade" id="modalTerminalesDobleTurno" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+            <div class="modal-header"><div><h5 class="modal-title">Terminales doble turno</h5><small class="text-muted">Los usuarios de estas terminales se evaluarán con el tiempo especial de Configurar nómina.</small></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="archivoTerminalesDobleTurno">Archivo Excel o CSV</label><input class="form-control" id="archivoTerminalesDobleTurno" type="file" accept=".xlsx,.xls,.csv"><a class="small d-inline-block mt-2" href="{{ route('recursos-humanos.nomina-domingo.terminales-excluidas.plantilla') }}"><i class="ri-download-line"></i> Descargar plantilla</a></div>
+                    <div class="col-md-6"><label class="form-label" for="textoTerminalesDobleTurno">Agregar manualmente</label><textarea class="form-control" id="textoTerminalesDobleTurno" rows="4" placeholder="Una terminal por línea o separadas por coma"></textarea></div>
+                </div>
+                <div class="d-flex gap-2 mt-3"><button class="btn btn-primary" type="button" id="btnReconocerDobleTurno"><i class="ri-search-line me-1"></i> Reconocer terminales</button><button class="btn btn-outline-danger" type="button" id="btnLimpiarDobleTurno"><i class="ri-delete-bin-line me-1"></i> Quitar todas</button></div>
+                <div class="alert alert-info mt-3 mb-2">Marca las terminales de doble turno. Desmarca cualquiera para volver a aplicar el tiempo general.</div>
+                <div id="resultadoTerminalesDobleTurno" class="border rounded p-3"><span class="text-muted">Cargando terminales guardadas...</span></div>
+                <div id="terminalesDobleTurnoNoEncontradas" class="mt-3"></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="btnGuardarTerminalesDobleTurno">Aplicar doble turno</button></div>
+        </div></div>
+    </div>
+
     <div class="modal fade" id="modalConfiguracion" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog"><div class="modal-content">
             <form method="POST" action="{{ route('recursos-humanos.nomina-domingo.configuracion') }}">
@@ -521,6 +541,14 @@
                             </div>
                         </div>
                         <small class="text-muted">Los minutos deben estar entre 0 y 59.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tiempo requerido por usuario en terminales doble turno</label>
+                        <div class="row g-2">
+                            <div class="col-6"><div class="input-group"><input type="number" min="0" max="24" step="1" class="form-control" name="doble_turno_horas" value="{{ old('doble_turno_horas', $configuracion['minutos_requeridos_doble_turno'] !== null ? intdiv($configuracion['minutos_requeridos_doble_turno'], 60) : '') }}" required><span class="input-group-text">horas</span></div></div>
+                            <div class="col-6"><div class="input-group"><input type="number" min="0" max="59" step="1" class="form-control" name="doble_turno_minutos" value="{{ old('doble_turno_minutos', $configuracion['minutos_requeridos_doble_turno'] !== null ? $configuracion['minutos_requeridos_doble_turno'] % 60 : '') }}" required><span class="input-group-text">minutos</span></div></div>
+                        </div>
+                        <small class="text-muted">Un solo tiempo para todas las terminales doble turno. Hasta configurarlo se aplica el tiempo general.</small>
                     </div>
                     <div><label class="form-label" for="monto_fijo">Monto fijo</label><div class="input-group"><span class="input-group-text">RD$</span><input type="number" step="0.01" min="0" class="form-control" id="monto_fijo" name="monto_fijo" value="{{ $configuracion['monto_fijo'] }}" required></div></div>
                 </div>
@@ -946,6 +974,59 @@
                 this.disabled = true;
                 try { const data = await guardarTerminales(); await Swal.fire({ icon: 'success', title: 'Exclusiones actualizadas', text: data.message }); window.location.reload(); }
                 catch (error) { Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: error.message }); } finally { this.disabled = false; }
+            });
+
+            const urlsDobleTurno = {
+                listar: @json(route('recursos-humanos.nomina-domingo.terminales-doble-turno.index')),
+                reconocer: @json(route('recursos-humanos.nomina-domingo.terminales-doble-turno.reconocer')),
+                guardar: @json(route('recursos-humanos.nomina-domingo.terminales-doble-turno.store')),
+            };
+            let terminalesDobleTurno = new Set();
+            const contenedorDobleTurno = document.getElementById('resultadoTerminalesDobleTurno');
+            const renderDobleTurno = () => {
+                const terminales = [...terminalesDobleTurno].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                document.getElementById('cantidadTerminalesDobleTurno').textContent = terminales.length;
+                contenedorDobleTurno.innerHTML = terminales.length
+                    ? `<div class="row g-2">${terminales.map((terminal) => `<div class="col-sm-6 col-md-4"><label class="form-check border rounded p-2 w-100"><input class="form-check-input ms-0 me-2 terminal-doble-turno-check" type="checkbox" value="${escaparTerminal(terminal)}" checked><span>${escaparTerminal(terminal)}</span></label></div>`).join('')}</div>`
+                    : '<span class="text-muted">No hay terminales doble turno.</span>';
+            };
+            fetch(urlsDobleTurno.listar, { headers: { Accept: 'application/json' } })
+                .then((response) => response.json())
+                .then((data) => { terminalesDobleTurno = new Set(data.terminales || []); renderDobleTurno(); })
+                .catch(() => { contenedorDobleTurno.innerHTML = '<span class="text-danger">No se pudieron cargar las terminales.</span>'; });
+            contenedorDobleTurno?.addEventListener('change', (event) => {
+                if (event.target.matches('.terminal-doble-turno-check') && ! event.target.checked) {
+                    terminalesDobleTurno.delete(event.target.value);
+                    renderDobleTurno();
+                }
+            });
+            document.getElementById('btnReconocerDobleTurno')?.addEventListener('click', async function () {
+                const formData = new FormData();
+                const archivo = document.getElementById('archivoTerminalesDobleTurno').files[0];
+                if (archivo) formData.append('file', archivo);
+                formData.append('terminales_manual', document.getElementById('textoTerminalesDobleTurno').value);
+                this.disabled = true;
+                try {
+                    const response = await fetch(urlsDobleTurno.reconocer, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': tokenCsrf }, body: formData });
+                    const data = await response.json();
+                    if (! response.ok) throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || 'No se pudieron reconocer las terminales.');
+                    (data.terminales_encontradas || []).forEach((terminal) => terminalesDobleTurno.add(terminal));
+                    renderDobleTurno();
+                    document.getElementById('terminalesDobleTurnoNoEncontradas').innerHTML = data.terminales_no_encontradas?.length
+                        ? `<div class="alert alert-warning mb-0"><strong>No encontradas:</strong> ${data.terminales_no_encontradas.map(escaparTerminal).join(', ')}</div>`
+                        : '<div class="alert alert-success mb-0">Todas las terminales fueron reconocidas.</div>';
+                } catch (error) { Swal.fire({ icon: 'error', title: 'No se pudo reconocer', text: error.message }); } finally { this.disabled = false; }
+            });
+            document.getElementById('btnLimpiarDobleTurno')?.addEventListener('click', () => { terminalesDobleTurno.clear(); renderDobleTurno(); });
+            document.getElementById('btnGuardarTerminalesDobleTurno')?.addEventListener('click', async function () {
+                this.disabled = true;
+                try {
+                    const response = await fetch(urlsDobleTurno.guardar, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': tokenCsrf }, body: JSON.stringify({ terminales: [...terminalesDobleTurno] }) });
+                    const data = await response.json();
+                    if (! response.ok) throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || 'No se pudieron guardar las terminales.');
+                    await Swal.fire({ icon: 'success', title: 'Doble turno actualizado', text: data.message });
+                    window.location.reload();
+                } catch (error) { Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: error.message }); } finally { this.disabled = false; }
             });
 
             formFiltrar?.addEventListener('submit', function () {

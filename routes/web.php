@@ -400,6 +400,12 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             ->name('recursos-humanos.nomina-domingo.terminales-excluidas.store');
         Route::get('/recursos-humanos/nomina-domingo/terminales-excluidas/plantilla', [NominaDomingoController::class, 'plantillaTerminalesExcluidas'])
             ->name('recursos-humanos.nomina-domingo.terminales-excluidas.plantilla');
+        Route::post('/recursos-humanos/nomina-domingo/terminales-doble-turno/reconocer', [NominaDomingoController::class, 'reconocerTerminalesDobleTurno'])
+            ->name('recursos-humanos.nomina-domingo.terminales-doble-turno.reconocer');
+        Route::get('/recursos-humanos/nomina-domingo/terminales-doble-turno', [NominaDomingoController::class, 'listarTerminalesDobleTurno'])
+            ->name('recursos-humanos.nomina-domingo.terminales-doble-turno.index');
+        Route::post('/recursos-humanos/nomina-domingo/terminales-doble-turno', [NominaDomingoController::class, 'guardarTerminalesDobleTurno'])
+            ->name('recursos-humanos.nomina-domingo.terminales-doble-turno.store');
         Route::get('/empleados', [EmpleadoController::class, 'index']);
         Route::get('/empleados/list', [EmpleadoController::class, 'list']);
         Route::get('/empleados/exportar', [EmpleadoController::class, 'export'])->name('empleados.export');
