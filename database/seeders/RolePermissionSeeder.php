@@ -123,7 +123,7 @@ class RolePermissionSeeder extends Seeder
             'admin2' => Permission::query()
                 ->where('guard_name', 'web')
                 ->pluck('name')
-                ->reject(fn (string $permission): bool => str_ends_with($permission, '.delete'))
+                ->reject(fn (string $permission): bool => str_ends_with($permission, '.delete') || $permission === 'usuarios.create')
                 ->values()
                 ->all(),
             'contabilidad' => ['usuarios.view', 'usuarios.list'],

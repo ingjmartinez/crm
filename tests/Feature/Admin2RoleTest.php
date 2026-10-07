@@ -81,7 +81,7 @@ class Admin2RoleTest extends TestCase
         $permissions = Role::findByName('admin2')->permissions->pluck('name');
 
         $this->assertTrue($permissions->contains('dashboard.view'));
-        $this->assertTrue($permissions->contains('usuarios.create'));
+        $this->assertFalse($permissions->contains('usuarios.create'));
         $this->assertTrue($permissions->contains('usuarios.edit'));
         $this->assertFalse($permissions->contains('usuarios.delete'));
         $this->assertFalse($permissions->contains('roles.delete'));
@@ -152,6 +152,20 @@ class Admin2RoleTest extends TestCase
         } catch (HttpException $exception) {
             $this->assertSame(403, $exception->getStatusCode());
         }
+    }
+
+    public function test_admin2_cannot_create_users_even_with_a_direct_permission(): void
+    {
+        $request = $this->requestForAdmin2('/usuarios/create', 'GET');
+        $user = $request->user();
+        $user->givePermissionTo('usuarios.create');
+
+        $this->assertFalse($user->can('usuarios.create'));
+        $this->actingAs($user)->get(route('usuarios.create'))->assertForbidden();
+        $this->actingAs($user)->post(route('usuarios.store'), [])->assertForbidden();
+
+        $view = file_get_contents(resource_path('views/usuarios/index.blade.php'));
+        $this->assertStringContainsString("! auth()->user()?->hasRole('admin2')", $view);
     }
 
     public function test_admin2_can_use_regular_pages_and_view_restricted_audit_routes(): void

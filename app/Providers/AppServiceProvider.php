@@ -21,6 +21,10 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         Gate::before(function (User $user, string $ability): ?bool {
+            if ($ability === 'usuarios.create' && $user->hasRole('admin2')) {
+                return false;
+            }
+
             if ($user->hasRole('superadmin')) {
                 return true;
             }

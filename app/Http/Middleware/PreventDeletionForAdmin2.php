@@ -17,8 +17,9 @@ class PreventDeletionForAdmin2
     {
         $user = $request->user();
 
-        if ($user && method_exists($user, 'hasRole') && $user->hasRole('admin2') && $this->isDeletionRequest($request)) {
-            abort(403, 'El rol admin2 no tiene permiso para eliminar contenido.');
+        if ($user && method_exists($user, 'hasRole') && $user->hasRole('admin2')) {
+            abort_if($this->isDeletionRequest($request), 403, 'El rol admin2 no tiene permiso para eliminar contenido.');
+            abort_if($request->routeIs('usuarios.create', 'usuarios.store'), 403, 'El rol admin2 no tiene permiso para crear usuarios.');
         }
 
         return $next($request);

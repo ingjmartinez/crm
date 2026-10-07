@@ -33,11 +33,11 @@
                                     </div>
                                     <div class="col-12 col-md-6">
                                         <div class="d-flex flex-column flex-sm-row gap-2 justify-content-md-end">
-                                            @can('usuarios.create')
+                                            @if (! auth()->user()?->hasRole('admin2') && auth()->user()?->can('usuarios.create'))
                                                 <a href="{{ route('usuarios.create') }}" class="btn btn-primary">
                                                     <i class="ri-add-line align-bottom me-1"></i> Nuevo Usuario
                                                 </a>
-                                            @endcan
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
