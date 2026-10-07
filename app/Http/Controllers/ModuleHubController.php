@@ -4,10 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\FavoritoCatalogoService;
+use App\ViewPermissionCatalog;
 
 class ModuleHubController extends Controller
 {
-    public function __construct(private readonly FavoritoCatalogoService $favoritoCatalogo) {}
+    public function __construct(private readonly FavoritoCatalogoService $favoritoCatalogo, private readonly ViewPermissionCatalog $viewPermissions) {}
 
     public function dashboard()
     {
@@ -72,24 +73,16 @@ class ModuleHubController extends Controller
 
         /** @var User|null $user */
         $user = auth()->user();
+        if ($user !== null) {
+            $canSeeModule = $user->can($module.'.view')
+                || collect($hub['items'] ?? [])->contains(fn (array $item): bool => $this->viewPermissions->canAccess($user, $module, $item));
+            abort_unless($canSeeModule, 403);
+        }
+
         $favoritos = $user ? $this->favoritoCatalogo->favoritos($user)->pluck('key')->flip() : collect();
 
         $items = collect($hub['items'] ?? [])
-            ->filter(function ($item) use ($user) {
-                if (! (bool) ($item['activo'] ?? true)) {
-                    return false;
-                }
-
-                if (! empty($item['permission']) && (! $user || ! $user->can($item['permission']))) {
-                    return false;
-                }
-
-                if (! empty($item['role']) && (! $user || ! method_exists($user, 'hasRole') || ! $user->hasRole($item['role']))) {
-                    return false;
-                }
-
-                return true;
-            })
+            ->filter(fn (array $item): bool => $user === null || $this->viewPermissions->canAccess($user, $module, $item))
             ->map(function ($item) use ($module, $favoritos) {
                 $path = ltrim((string) parse_url((string) $item['url'], PHP_URL_PATH), '/');
                 $item['url'] = url($item['url']);

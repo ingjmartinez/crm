@@ -26,6 +26,7 @@
                                     <option value="">Todas</option>
                                     <option value="registrado" {{ $accion === 'registrado' ? 'selected' : '' }}>Registro</option>
                                     <option value="eliminado" {{ $accion === 'eliminado' ? 'selected' : '' }}>Eliminacion</option>
+                                    <option value="intercambiado" {{ $accion === 'intercambiado' ? 'selected' : '' }}>Intercambio</option>
                                 </select>
                             </div>
                             <div class="col-md-4 col-lg-2">
@@ -64,8 +65,8 @@
                                         <tr>
                                             <td class="text-nowrap">{{ $auditoria->created_at->format('d/m/Y h:i:s A') }}</td>
                                             <td>
-                                                <span class="badge {{ $auditoria->accion === 'registrado' ? 'bg-success' : 'bg-danger' }}">
-                                                    {{ $auditoria->accion === 'registrado' ? 'Registro' : 'Eliminacion' }}
+                                                <span class="badge {{ $auditoria->accion === 'registrado' ? 'bg-success' : ($auditoria->accion === 'intercambiado' ? 'bg-warning' : 'bg-danger') }}">
+                                                    {{ match ($auditoria->accion) { 'registrado' => 'Registro', 'intercambiado' => 'Intercambio', default => 'Eliminacion' } }}
                                                 </span>
                                             </td>
                                             <td>

@@ -143,6 +143,8 @@ class RolePermissionSeeder extends Seeder
             $role->syncPermissions($rolePermissions);
         }
 
+        $this->call(MissingViewPermissionsSeeder::class);
+
         $superAdminEmail = env('SUPERADMIN_EMAIL', 'admin@joselitogroud.com');
         $superAdmin = User::where('email', $superAdminEmail)->first();
 

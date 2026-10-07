@@ -3,19 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Services\FavoritoCatalogoService;
+use App\ViewPermissionCatalog;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class RecursosHumanosController extends Controller
 {
-    public function index(Request $request, FavoritoCatalogoService $favoritoCatalogo): View
+    public function index(Request $request, FavoritoCatalogoService $favoritoCatalogo, ViewPermissionCatalog $viewPermissions): View
     {
         $favoritos = $request->user()
             ? $favoritoCatalogo->favoritos($request->user())->pluck('key')->flip()
             : collect();
 
         $modulos = collect(config('recursos_humanos', []))
-            ->filter(fn ($modulo) => (bool) ($modulo['activo'] ?? true))
+            ->filter(fn (array $modulo): bool => $viewPermissions->canAccess($request->user(), 'recursos_humanos', $modulo))
             ->map(function ($modulo) use ($favoritos) {
                 $path = ltrim((string) parse_url((string) $modulo['url'], PHP_URL_PATH), '/');
                 $modulo['url'] = url($modulo['url']);

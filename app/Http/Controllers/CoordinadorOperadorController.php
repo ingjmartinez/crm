@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\AgenciasAsignadasCoordinadorExport;
 use App\Exports\CoordinadorOperadorExport;
+use App\Http\Requests\IntercambiarCoordinadorRequest;
 use App\Http\Requests\SearchCoordinadorEmpleadoRequest;
 use App\Http\Requests\StoreCoordinadorOperadorRequest;
 use App\Http\Requests\UpdateCoordinadorOperadorRequest;
@@ -88,6 +90,12 @@ class CoordinadorOperadorController extends Controller
             ->orderBy('agencia')
             ->get();
 
+        $bloques = CoordinadorOperador::query()
+            ->where('puesto', 'coordinador')
+            ->withCount('agencias')
+            ->orderBy('id')
+            ->get(['id', 'nombre', 'apellido', 'empleado_id']);
+
         $asignacionesAgencia = DB::table('coordinador_operador_agencia as coa')
             ->join('coordinador_operador as co', 'co.id', '=', 'coa.coordinador_operador_id')
             ->select('coa.agencia_id', 'co.id as coordinador_id', 'co.nombre', 'co.apellido')
@@ -120,7 +128,8 @@ class CoordinadorOperadorController extends Controller
             'asignacionesAgencia',
             'buscar',
             'empresas',
-            'departamentos'
+            'departamentos',
+            'bloques'
         ));
     }
 
@@ -145,6 +154,64 @@ class CoordinadorOperadorController extends Controller
             new CoordinadorOperadorExport($coordinadores),
             'coordinadores_terminales_'.now()->format('Y-m-d_His').'.xlsx'
         );
+    }
+
+    public function exportarAgencias(CoordinadorOperador $coordinador_operador): BinaryFileResponse
+    {
+        $coordinador_operador->load('agencias:id,agencia,nombre_agencia,terminal');
+
+        return Excel::download(
+            new AgenciasAsignadasCoordinadorExport($coordinador_operador),
+            'agencias_bloque_'.$coordinador_operador->id.'_'.now()->format('Y-m-d_His').'.xlsx'
+        );
+    }
+
+    public function intercambiar(IntercambiarCoordinadorRequest $request, CoordinadorOperador $coordinador_operador): RedirectResponse
+    {
+        $destinoId = (int) $request->validated('destino_id');
+
+        if ($coordinador_operador->id === $destinoId) {
+            throw ValidationException::withMessages(['destino_id' => 'Seleccione otro bloque.']);
+        }
+
+        DB::transaction(function () use ($request, $coordinador_operador, $destinoId): void {
+            $bloques = CoordinadorOperador::query()
+                ->whereKey([$coordinador_operador->id, $destinoId])
+                ->where('puesto', 'coordinador')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($bloques->count() !== 2) {
+                throw ValidationException::withMessages(['destino_id' => 'Uno de los bloques ya no está disponible.']);
+            }
+
+            $origen = $bloques->get($coordinador_operador->id);
+            $destino = $bloques->get($destinoId);
+
+            if ($origen->empleado_id === null) {
+                throw ValidationException::withMessages(['destino_id' => 'El bloque de origen no tiene un coordinador asignado.']);
+            }
+
+            $campos = ['empleado_id', 'nombre', 'apellido', 'correo', 'cedula', 'telefono'];
+            $datosOrigen = $origen->only($campos);
+            $datosDestino = $destino->only($campos);
+            $datosOrigen['cedula'] = $origen->getRawOriginal('cedula');
+            $datosDestino['cedula'] = $destino->getRawOriginal('cedula');
+
+            $origen->update(['empleado_id' => null, 'cedula' => null]);
+            $destino->update(['empleado_id' => null, 'cedula' => null]);
+
+            $origen->update($datosDestino);
+            $destino->update($datosOrigen);
+
+            $this->registrarAuditoria($request, 'intercambiado', $origen);
+            $this->registrarAuditoria($request, 'intercambiado', $destino);
+        });
+
+        return redirect()->route('coordinador-operador.index')
+            ->with('success', 'Coordinadores movidos entre bloques correctamente. Las agencias permanecen en sus bloques.');
     }
 
     public function create(): RedirectResponse
@@ -273,7 +340,7 @@ class CoordinadorOperadorController extends Controller
                         ->orWhere('puesto', 'like', $termino);
                 });
             })
-            ->when(in_array($accion, ['registrado', 'eliminado'], true), fn (EloquentBuilder $query) => $query->where('accion', $accion))
+            ->when(in_array($accion, ['registrado', 'eliminado', 'intercambiado'], true), fn (EloquentBuilder $query) => $query->where('accion', $accion))
             ->when($desde, fn (EloquentBuilder $query) => $query->whereDate('created_at', '>=', $desde))
             ->when($hasta, fn (EloquentBuilder $query) => $query->whereDate('created_at', '<=', $hasta))
             ->latest()

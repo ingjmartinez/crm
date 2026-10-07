@@ -11,6 +11,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -78,6 +79,9 @@ class UserFavoritoTest extends TestCase
         });
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+        Permission::findOrCreate('contabilidad.estado_resultado.view', 'web');
+        Permission::findOrCreate('reportes.compensacion.view', 'web');
+        Permission::findOrCreate('recursos_humanos.novedades_de_horario.view', 'web');
     }
 
     protected function tearDown(): void
@@ -159,12 +163,14 @@ class UserFavoritoTest extends TestCase
         $usuario = $this->usuario('recursos-humanos@example.com');
         Role::query()->create(['name' => 'rh', 'guard_name' => 'web']);
         $usuario->assignRole('rh');
+        $usuario->givePermissionTo('recursos_humanos.novedades_de_horario.view');
         $key = 'recursos-humanos:recursos-humanos/novedades-horario';
 
         $this->actingAs($usuario)
             ->get(route('recursos-humanos.index'))
             ->assertOk()
-            ->assertSee('data-favorito-key="'.$key.'"', false);
+            ->assertSee('data-favorito-key="'.$key.'"', false)
+            ->assertDontSee('Generar Lotobet');
 
         $this->actingAs($usuario)
             ->postJson(route('favoritos.toggle'), ['favorito_key' => $key])
@@ -215,11 +221,15 @@ class UserFavoritoTest extends TestCase
 
     private function usuario(string $email): User
     {
-        return User::query()->create([
+        $user = User::query()->create([
             'name' => 'Usuario Favoritos',
             'email' => $email,
             'password' => Hash::make('password'),
             'must_change_password' => false,
         ]);
+
+        $user->givePermissionTo(['contabilidad.estado_resultado.view', 'reportes.compensacion.view']);
+
+        return $user;
     }
 }

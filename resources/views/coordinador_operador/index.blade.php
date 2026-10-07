@@ -300,6 +300,7 @@
                                                             type="button"
                                                             class="btn btn-info btn-sm btn-ver-agencias"
                                                             title="Ver agencias asignadas"
+                                                            data-export-url="{{ route('coordinador-operador.agencias.export', $item) }}"
                                                             data-nombre="{{ $item->nombre }} {{ $item->apellido }}"
                                                             data-agencias='@json($item->agencias->map(fn($agencia) => ['terminal' => $agencia->terminal, 'nombre_agencia' => $agencia->nombre_agencia, 'agencia' => $agencia->agencia])->values())'>
                                                             {{ $item->agencias_count }}
@@ -326,6 +327,15 @@
                                                                 data-asignadas='@json($item->agencias->pluck('id')->values())'>
                                                                 <i class="ri-building-line"></i>
                                                             </button>
+                                                            @if ($item->puesto === 'coordinador' && $item->empleado_id)
+                                                                <button type="button" class="btn btn-warning btn-sm btn-intercambiar-coordinador"
+                                                                    title="Mover coordinador a otro bloque"
+                                                                    data-id="{{ $item->id }}"
+                                                                    data-nombre="{{ $item->nombre }} {{ $item->apellido }}"
+                                                                    data-url="{{ route('coordinador-operador.intercambiar', $item) }}">
+                                                                    <i class="ri-arrow-left-right-line"></i>
+                                                                </button>
+                                                            @endif
                                                             <form action="{{ route('coordinador-operador.destroy', $item->id) }}" method="POST" onsubmit="return confirm('¿Está seguro de eliminar este registro?')">
                                                                 @csrf
                                                                 @method('DELETE')
@@ -415,6 +425,35 @@
         </div>
     </div>
 
+    <div class="modal fade" id="intercambiarCoordinadorModal" tabindex="-1" aria-labelledby="intercambiarCoordinadorModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formIntercambiarCoordinador" method="POST">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="intercambiarCoordinadorModalLabel">Mover coordinador de bloque</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Coordinador: <strong id="nombreIntercambio">-</strong></p>
+                        <label for="destinoIntercambio" class="form-label">Bloque de destino</label>
+                        <select id="destinoIntercambio" name="destino_id" class="form-select" required>
+                            <option value="">Seleccione un bloque</option>
+                            @foreach ($bloques as $bloque)
+                                <option value="{{ $bloque->id }}">Bloque #{{ $bloque->id }} · {{ $bloque->empleado_id ? trim($bloque->nombre.' '.$bloque->apellido) : 'Sin coordinador' }} · {{ $bloque->agencias_count }} agencias</option>
+                            @endforeach
+                        </select>
+                        <p class="text-muted small mt-2 mb-0">Las agencias permanecen en cada bloque. Si el destino tiene coordinador, ambos intercambian bloques.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-warning">Confirmar movimiento</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="verAgenciasAsignadasModal" tabindex="-1" aria-labelledby="verAgenciasAsignadasModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -427,6 +466,7 @@
                     <div id="contenidoVerAgencias" class="border rounded p-2" style="max-height: 320px; overflow-y: auto;"></div>
                 </div>
                 <div class="modal-footer">
+                    <a id="descargarAgenciasExcel" href="#" class="btn btn-success"><i class="ri-file-excel-2-line"></i> Descargar Excel</a>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -442,6 +482,10 @@
         const modal = new bootstrap.Modal(modalElement);
         const modalVerAgenciasElement = document.getElementById('verAgenciasAsignadasModal');
         const modalVerAgencias = new bootstrap.Modal(modalVerAgenciasElement);
+        const modalIntercambiar = new bootstrap.Modal(document.getElementById('intercambiarCoordinadorModal'));
+        const formIntercambiar = document.getElementById('formIntercambiarCoordinador');
+        const destinoIntercambio = document.getElementById('destinoIntercambio');
+        const descargarAgenciasExcel = document.getElementById('descargarAgenciasExcel');
         const form = document.getElementById('formAsignarAgencias');
         const nombreAsignacion = document.getElementById('nombreAsignacion');
         const nombreVerAgencias = document.getElementById('nombreVerAgencias');
@@ -1163,6 +1207,7 @@
                 const agencias = JSON.parse(this.dataset.agencias || '[]');
 
                 nombreVerAgencias.textContent = nombre;
+                descargarAgenciasExcel.href = this.dataset.exportUrl;
                 if (contadorVerAgencias) {
                     contadorVerAgencias.textContent = String(agencias.length || 0);
                 }
@@ -1178,6 +1223,18 @@
                 }
 
                 modalVerAgencias.show();
+            });
+        });
+
+        document.querySelectorAll('.btn-intercambiar-coordinador').forEach(function (button) {
+            button.addEventListener('click', function () {
+                formIntercambiar.action = this.dataset.url;
+                document.getElementById('nombreIntercambio').textContent = this.dataset.nombre;
+                destinoIntercambio.value = '';
+                Array.from(destinoIntercambio.options).forEach((option) => {
+                    option.disabled = option.value === this.dataset.id;
+                });
+                modalIntercambiar.show();
             });
         });
     });

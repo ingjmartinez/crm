@@ -4,12 +4,15 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\UserFavorito;
+use App\ViewPermissionCatalog;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
 class FavoritoCatalogoService
 {
+    public function __construct(private readonly ViewPermissionCatalog $viewPermissions) {}
+
     /** @return Collection<int, array<string, mixed>> */
     public function catalogo(?User $usuario): Collection
     {
@@ -20,7 +23,7 @@ class FavoritoCatalogoService
                 }
 
                 return collect($hub['items'] ?? [])
-                    ->filter(fn (array $item): bool => $this->puedeAcceder($item, $usuario))
+                    ->filter(fn (array $item): bool => $this->viewPermissions->canAccess($usuario, $modulo, $item))
                     ->map(function (array $item) use ($modulo, $hub): array {
                         $path = '/'.ltrim((string) parse_url((string) $item['url'], PHP_URL_PATH), '/');
 
@@ -38,7 +41,7 @@ class FavoritoCatalogoService
             });
 
         $reportes = collect(config('reportes', []))
-            ->filter(fn (mixed $item): bool => is_array($item) && (bool) ($item['activo'] ?? true))
+            ->filter(fn (mixed $item): bool => is_array($item) && $this->viewPermissions->canAccess($usuario, 'reportes', $item))
             ->map(function (array $item): array {
                 $path = '/'.ltrim((string) parse_url((string) $item['url'], PHP_URL_PATH), '/');
 
@@ -56,7 +59,7 @@ class FavoritoCatalogoService
 
         $recursosHumanos = $this->puedeAccederRecursosHumanos($usuario)
             ? collect(config('recursos_humanos', []))
-                ->filter(fn (mixed $item): bool => is_array($item) && (bool) ($item['activo'] ?? true))
+                ->filter(fn (mixed $item): bool => is_array($item) && $this->viewPermissions->canAccess($usuario, 'recursos_humanos', $item))
                 ->map(function (array $item): array {
                     $path = '/'.ltrim((string) parse_url((string) $item['url'], PHP_URL_PATH), '/');
 
@@ -143,27 +146,6 @@ class FavoritoCatalogoService
         }
 
         return ['activo' => $activo, 'favorito' => $item, 'favoritos' => $this->favoritos($usuario)];
-    }
-
-    private function puedeAcceder(array $item, ?User $usuario): bool
-    {
-        if (! (bool) ($item['activo'] ?? true)) {
-            return false;
-        }
-
-        try {
-            if (! empty($item['permission']) && (! $usuario || ! $usuario->can($item['permission']))) {
-                return false;
-            }
-
-            if (! empty($item['role']) && (! $usuario || ! $usuario->hasRole($item['role']))) {
-                return false;
-            }
-        } catch (QueryException) {
-            return false;
-        }
-
-        return true;
     }
 
     private function puedeAccederRecursosHumanos(?User $usuario): bool

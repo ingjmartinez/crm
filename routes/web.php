@@ -109,7 +109,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/password/cambiar-obligatorio', [AuthController::class, 'forcePasswordChange'])->name('password.force.update');
 });
 
-Route::middleware(['auth', 'force.password.change'])->group(function () {
+Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureViewPermission::class])->group(function () {
     Route::get('/bi', [BiDashboardController::class, 'index'])
         ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
         ->name('bi.index');
@@ -544,6 +544,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('coordinador-operador.empleados');
     Route::get('coordinador-operador/exportar/excel', [CoordinadorOperadorController::class, 'export'])
         ->name('coordinador-operador.export');
+    Route::get('coordinador-operador/{coordinador_operador}/agencias/excel', [CoordinadorOperadorController::class, 'exportarAgencias'])
+        ->name('coordinador-operador.agencias.export');
+    Route::post('coordinador-operador/{coordinador_operador}/intercambiar', [CoordinadorOperadorController::class, 'intercambiar'])
+        ->name('coordinador-operador.intercambiar');
     Route::get('coordinador-operador/auditoria', [CoordinadorOperadorController::class, 'auditoria'])
         ->middleware('role:superadmin|admin2')
         ->name('coordinador-operador.auditoria');

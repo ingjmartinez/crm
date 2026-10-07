@@ -6,6 +6,7 @@ use App\Exports\VentasUsuarioExport;
 use App\Http\Requests\ConsultarVentasUsuarioBetRequest;
 use App\Models\CoordinadorOperador;
 use App\Services\FavoritoCatalogoService;
+use App\ViewPermissionCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,14 +18,14 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ReporteController extends Controller
 {
-    public function indexReportes(Request $request, FavoritoCatalogoService $favoritoCatalogo): View
+    public function indexReportes(Request $request, FavoritoCatalogoService $favoritoCatalogo, ViewPermissionCatalog $viewPermissions): View
     {
         $favoritos = $request->user()
             ? $favoritoCatalogo->favoritos($request->user())->pluck('key')->flip()
             : collect();
 
         $reportes = collect(config('reportes', []))
-            ->filter(fn ($reporte) => (bool) ($reporte['activo'] ?? true))
+            ->filter(fn (array $reporte): bool => $viewPermissions->canAccess($request->user(), 'reportes', $reporte))
             ->map(function ($reporte) use ($favoritos) {
                 $path = ltrim((string) parse_url((string) $reporte['url'], PHP_URL_PATH), '/');
                 $reporte['url'] = url($reporte['url']);

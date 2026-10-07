@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\PreventDeletionForAdmin2;
 use App\Models\User;
+use App\ViewPermissionCatalog;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -85,6 +86,48 @@ class Admin2RoleTest extends TestCase
         $this->assertFalse($permissions->contains('usuarios.delete'));
         $this->assertFalse($permissions->contains('roles.delete'));
         $this->assertFalse($permissions->contains('permissions.delete'));
+    }
+
+    public function test_catalog_pages_have_permissions_and_roles_receive_their_module_pages(): void
+    {
+        $catalog = app(ViewPermissionCatalog::class);
+        $items = $catalog->items();
+
+        $this->assertCount(
+            collect(config('module_hubs'))->sum(fn (array $hub): int => count($hub['items'] ?? []))
+                + count(config('recursos_humanos'))
+                + count(config('reportes'))
+                + collect(config('view_permissions'))->sum(fn (array $pages): int => count($pages)),
+            $items
+        );
+        $this->assertTrue($items->every(fn (array $item): bool => $item['permission'] !== ''));
+        $this->assertTrue(Role::findByName('rh')->hasPermissionTo('recursos_humanos.nomina_domingo.view'));
+        $this->assertTrue(Role::findByName('rh')->hasPermissionTo('reportes.ventas_por_cedula.view'));
+        $this->assertFalse(Role::findByName('rh')->hasPermissionTo('gerencia.gerencial.view'));
+    }
+
+    public function test_page_permission_blocks_a_direct_request_without_the_required_permission(): void
+    {
+        $user = User::query()->create(['name' => 'Recursos humanos', 'email' => 'rh@example.com', 'password' => 'password']);
+        $user->assignRole('rh');
+
+        $allowed = Request::create('/recursos-humanos/nomina-domingo', 'GET');
+        $allowed->setUserResolver(fn (): User => $user);
+        $this->assertSame(200, app(\App\Http\Middleware\EnsureViewPermission::class)->handle($allowed, fn () => response('permitido'))->getStatusCode());
+
+        $this->actingAs($user)->get(route('gerencia.gerencial'))->assertForbidden();
+        $this->actingAs($user)->get(route('gerencia.index'))->assertForbidden();
+
+        $limitedRole = Role::findOrCreate('solo-rh', 'web');
+        $limitedRole->givePermissionTo('recursos_humanos.view');
+        $limitedUser = User::query()->create(['name' => 'Acceso general RH', 'email' => 'solo-rh@example.com', 'password' => 'password']);
+        $limitedUser->assignRole($limitedRole);
+        $this->actingAs($limitedUser)->get(route('recursos-humanos.nomina-domingo.index'))->assertForbidden();
+
+        $denied = Request::create('/gerencia/gerencial', 'GET');
+        $denied->setUserResolver(fn (): User => $user);
+        $this->expectException(HttpException::class);
+        app(\App\Http\Middleware\EnsureViewPermission::class)->handle($denied, fn () => response('permitido'));
     }
 
     public function test_admin2_is_blocked_from_delete_requests(): void

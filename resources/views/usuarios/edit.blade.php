@@ -109,6 +109,7 @@
                                             </select>
                                             <div class="form-text">Puedes seleccionar uno o varios roles.</div>
                                         </div>
+                                        @include('usuarios.view-permissions')
                                     </div>
 
                                     <div class="d-flex flex-column flex-sm-row justify-content-end gap-2 mt-3">

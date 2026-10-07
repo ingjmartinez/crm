@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Exports\AgenciasAsignadasCoordinadorExport;
 use App\Exports\CoordinadorOperadorExport;
+use App\Http\Middleware\EnsureViewPermission;
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\ForcePasswordChange;
 use App\Models\CoordinadorOperador;
@@ -26,6 +28,7 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             Authenticate::class,
             ForcePasswordChange::class,
             ExpireInactiveSession::class,
+            EnsureViewPermission::class,
         ]);
 
         Schema::dropIfExists('coordinador_operador_agencia');
@@ -169,6 +172,7 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
             'email' => 'auditor@example.com',
         ]);
         $user->id = 77;
+        $user->setRelation('roles', collect());
         $this->actingAs($user);
 
         $this->post(route('coordinador-operador.store'), [
@@ -631,6 +635,96 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
         $this->get(route('coordinador-operador.index'))
             ->assertOk()
             ->assertSee('Descargar Excel');
+    }
+
+    public function test_coordinators_exchange_blocks_without_moving_agencies(): void
+    {
+        $firstEmployee = $this->insertEmployee();
+        $secondEmployee = $this->insertEmployee([
+            'empleadoid' => 1002,
+            'nombres' => 'Luis',
+            'apellidos' => 'Gómez',
+            'cedula' => '00111111112',
+        ]);
+        $firstBlock = CoordinadorOperador::query()->create([
+            'empleado_id' => $firstEmployee, 'nombre' => 'Ana', 'apellido' => 'Pérez',
+            'cedula' => '00111111111', 'puesto' => 'coordinador',
+        ]);
+        $secondBlock = CoordinadorOperador::query()->create([
+            'empleado_id' => $secondEmployee, 'nombre' => 'Luis', 'apellido' => 'Gómez',
+            'cedula' => '00111111112', 'puesto' => 'coordinador',
+        ]);
+        DB::table('coordinador_operador_agencia')->insert([
+            ['coordinador_operador_id' => $firstBlock->id, 'agencia_id' => 10],
+            ['coordinador_operador_id' => $secondBlock->id, 'agencia_id' => 20],
+        ]);
+
+        $this->get(route('coordinador-operador.index'))
+            ->assertOk()
+            ->assertSee('btn-intercambiar-coordinador')
+            ->assertSee(route('coordinador-operador.intercambiar', $firstBlock));
+
+        $this->post(route('coordinador-operador.intercambiar', $firstBlock), ['destino_id' => $secondBlock->id])
+            ->assertRedirect(route('coordinador-operador.index'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('coordinador_operador', ['id' => $firstBlock->id, 'empleado_id' => $secondEmployee, 'nombre' => 'Luis', 'cedula' => '00111111112']);
+        $this->assertDatabaseHas('coordinador_operador', ['id' => $secondBlock->id, 'empleado_id' => $firstEmployee, 'nombre' => 'Ana', 'cedula' => '00111111111']);
+        $this->assertDatabaseHas('coordinador_operador_agencia', ['coordinador_operador_id' => $firstBlock->id, 'agencia_id' => 10]);
+        $this->assertDatabaseHas('coordinador_operador_agencia', ['coordinador_operador_id' => $secondBlock->id, 'agencia_id' => 20]);
+        $this->assertDatabaseCount('coordinador_operador_auditorias', 2);
+    }
+
+    public function test_coordinator_can_move_to_empty_block_and_cannot_select_same_block(): void
+    {
+        $employeeId = $this->insertEmployee();
+        $source = CoordinadorOperador::query()->create([
+            'empleado_id' => $employeeId, 'nombre' => 'Ana', 'apellido' => 'Pérez',
+            'cedula' => '00111111111', 'puesto' => 'coordinador',
+        ]);
+        $destination = CoordinadorOperador::query()->create([
+            'nombre' => 'Pool Norte', 'apellido' => 'Sin coordinador', 'puesto' => 'coordinador',
+        ]);
+
+        $this->from(route('coordinador-operador.index'))
+            ->post(route('coordinador-operador.intercambiar', $source), ['destino_id' => $source->id])
+            ->assertSessionHasErrors('destino_id');
+
+        $this->post(route('coordinador-operador.intercambiar', $source), ['destino_id' => $destination->id])
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('coordinador_operador', ['id' => $source->id, 'empleado_id' => null, 'nombre' => 'Pool Norte', 'cedula' => null]);
+        $this->assertDatabaseHas('coordinador_operador', ['id' => $destination->id, 'empleado_id' => $employeeId, 'nombre' => 'Ana']);
+
+        $this->from(route('coordinador-operador.index'))
+            ->post(route('coordinador-operador.intercambiar', $source), ['destino_id' => $destination->id])
+            ->assertSessionHasErrors('destino_id');
+    }
+
+    public function test_assigned_agencies_modal_has_excel_download_for_that_block(): void
+    {
+        $block = CoordinadorOperador::query()->create([
+            'nombre' => 'Ana', 'apellido' => 'Pérez', 'puesto' => 'coordinador',
+        ]);
+        $agencyId = DB::table('agencias')->insertGetId([
+            'agencia' => 'A-1', 'nombre_agencia' => 'Agencia Uno', 'terminal' => '00123',
+        ]);
+        DB::table('coordinador_operador_agencia')->insert([
+            'coordinador_operador_id' => $block->id, 'agencia_id' => $agencyId,
+        ]);
+
+        $this->get(route('coordinador-operador.index'))
+            ->assertOk()
+            ->assertSee(route('coordinador-operador.agencias.export', $block))
+            ->assertSee('descargarAgenciasExcel');
+
+        Excel::fake();
+        Carbon::setTestNow('2026-10-07 08:00:00');
+        $this->get(route('coordinador-operador.agencias.export', $block))->assertOk();
+        Excel::assertDownloaded('agencias_bloque_'.$block->id.'_2026-10-07_080000.xlsx', fn (AgenciasAsignadasCoordinadorExport $export): bool => $export->headings() === ['Terminal', 'Agencia']
+            && $export->collection()->all() === [['00123', 'Agencia Uno']]
+        );
+        Carbon::setTestNow();
     }
 
     /** @param array<string, mixed> $overrides */
