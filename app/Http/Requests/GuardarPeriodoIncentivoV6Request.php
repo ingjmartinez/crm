@@ -37,6 +37,8 @@ class GuardarPeriodoIncentivoV6Request extends FormRequest
             'terminales_excluidas.*' => ['string', 'max:50', 'distinct'],
             'faltantes_aplicados' => ['required', 'accepted'],
             'desvinculados_aplicados' => ['required', 'accepted'],
+            'horario_aplicado' => ['required', 'accepted'],
+            'horas_minimas' => ['required', 'numeric', 'min:0'],
             'detalles' => ['required', 'array', 'min:1', 'max:20000'],
             'detalles.*.cedula' => ['required', 'string', 'max:30'],
             'detalles.*.empleadoid' => ['nullable', 'string', 'max:50'],
@@ -51,7 +53,7 @@ class GuardarPeriodoIncentivoV6Request extends FormRequest
             'detalles.*.incentivo_generado' => ['required', 'numeric', 'min:0'],
             'detalles.*.monto_pagado' => ['required', 'numeric', 'min:0'],
             'detalles.*.motivos' => ['nullable', 'array'],
-            'detalles.*.motivos.*' => [Rule::in(['faltante', 'desvinculado', 'agencia_excluida', 'meta_no_alcanzada'])],
+            'detalles.*.motivos.*' => [Rule::in(['faltante', 'desvinculado', 'horario', 'agencia_excluida', 'meta_no_alcanzada'])],
             'detalles.*.tipos_pago_detalle' => ['nullable', 'array'],
         ];
     }
@@ -69,6 +71,22 @@ class GuardarPeriodoIncentivoV6Request extends FormRequest
 
                 if ($fechaInicio && $fechaFin && ! $fechaInicio->isSameMonth($fechaFin)) {
                     $validator->errors()->add('fecha_fin', 'El período guardado debe pertenecer a un solo mes.');
+                }
+
+                if ($validator->errors()->has('horas_minimas')) {
+                    return;
+                }
+
+                foreach ($this->input('detalles', []) as $index => $detalle) {
+                    if (! is_array($detalle) || (float) ($detalle['incentivo_generado'] ?? 0) <= 0) {
+                        continue;
+                    }
+
+                    $incumpleHorario = (float) ($detalle['horas_total'] ?? 0) < (float) $this->input('horas_minimas');
+                    $motivos = $detalle['motivos'] ?? [];
+                    if ($incumpleHorario && (! is_array($motivos) || ! in_array('horario', $motivos, true) || (float) ($detalle['monto_pagado'] ?? 0) > 0)) {
+                        $validator->errors()->add("detalles.{$index}.motivos", 'El incentivo con horas insuficientes debe quedar retenido por horario.');
+                    }
                 }
             },
         ];

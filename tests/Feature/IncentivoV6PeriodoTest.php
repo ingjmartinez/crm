@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\EnsureViewPermission;
 use App\Http\Middleware\ForcePasswordChange;
+use App\Http\Middleware\PreventDeletionForAdmin2;
 use App\Models\IncentivoPeriodoDetalle;
 use App\Models\User;
 use Illuminate\Auth\Middleware\Authenticate;
@@ -16,6 +18,8 @@ class IncentivoV6PeriodoTest extends TestCase
     {
         parent::setUp();
 
+        $this->withoutMiddleware([EnsureViewPermission::class, PreventDeletionForAdmin2::class]);
+
         Schema::create('incentivo_periodos', function (Blueprint $table): void {
             $table->id();
             $table->unsignedSmallInteger('anio');
@@ -26,6 +30,7 @@ class IncentivoV6PeriodoTest extends TestCase
             $table->string('modo_calculo', 30);
             $table->string('tipo_pago_defecto', 30);
             $table->unsignedSmallInteger('min_dias_venta');
+            $table->decimal('horas_minimas', 8, 2)->default(0);
             $table->json('rangos_pago_por_tipo')->nullable();
             $table->json('terminales_excluidas')->nullable();
             $table->json('resumen')->nullable();
@@ -190,6 +195,49 @@ class IncentivoV6PeriodoTest extends TestCase
         $this->assertDatabaseCount('incentivo_periodo_detalles', 2);
     }
 
+    public function test_period_requires_horario_to_be_applied(): void
+    {
+        $payload = $this->payload([$this->detail('40211111111', 1000, 1000)]);
+        $payload['horario_aplicado'] = false;
+
+        $this->actingAs($this->userWithId(7))
+            ->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('incentivos.reporte-nuevo-incentivo-v6.periodo.guardar'), $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('horario_aplicado');
+    }
+
+    public function test_insufficient_hours_cannot_be_saved_as_paid(): void
+    {
+        $detalle = $this->detail('40211111111', 1000, 1000);
+        $detalle['horas_total'] = 39;
+        $payload = $this->payload([$detalle]);
+        $payload['horas_minimas'] = 40;
+
+        $this->actingAs($this->userWithId(7))
+            ->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('incentivos.reporte-nuevo-incentivo-v6.periodo.guardar'), $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('detalles.0.motivos');
+    }
+
+    public function test_insufficient_hours_are_saved_as_unpaid_with_horario_reason(): void
+    {
+        $detalle = $this->detail('40211111111', 1000, 0, ['horario']);
+        $detalle['horas_total'] = 39;
+        $payload = $this->payload([$detalle]);
+        $payload['horas_minimas'] = 40;
+
+        $this->actingAs($this->userWithId(7))
+            ->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('incentivos.reporte-nuevo-incentivo-v6.periodo.guardar'), $payload)
+            ->assertOk()
+            ->assertJsonPath('resumen.no_pagados', 1);
+
+        $this->assertSame(['horario'], IncentivoPeriodoDetalle::query()->firstOrFail()->motivos);
+        $this->assertDatabaseHas('incentivo_periodos', ['horas_minimas' => 40]);
+    }
+
     public function test_person_below_goal_is_saved_as_not_qualified(): void
     {
         $response = $this->actingAs($this->userWithId(7))
@@ -241,6 +289,8 @@ class IncentivoV6PeriodoTest extends TestCase
             'terminales_excluidas' => ['1001'],
             'faltantes_aplicados' => true,
             'desvinculados_aplicados' => true,
+            'horario_aplicado' => true,
+            'horas_minimas' => 0,
             'detalles' => $details,
         ];
     }

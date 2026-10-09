@@ -21,6 +21,7 @@ class IncentivoPeriodo extends Model
         'modo_calculo',
         'tipo_pago_defecto',
         'min_dias_venta',
+        'horas_minimas',
         'rangos_pago_por_tipo',
         'terminales_excluidas',
         'resumen',
@@ -36,6 +37,7 @@ class IncentivoPeriodo extends Model
             'fecha_fin' => 'date',
             'rangos_pago_por_tipo' => 'array',
             'terminales_excluidas' => 'array',
+            'horas_minimas' => 'decimal:2',
             'resumen' => 'array',
         ];
     }

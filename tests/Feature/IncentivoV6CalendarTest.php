@@ -774,7 +774,9 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('guardarPeriodoIncentivo', $v6);
         $this->assertStringContainsString('estadoFaltantesPeriodo', $v6);
         $this->assertStringContainsString('estadoDesvinculadosPeriodo', $v6);
-        $this->assertStringContainsString('faltantesPeriodoAplicados && desvinculadosPeriodoAplicados', $v6);
+        $this->assertStringContainsString('estadoHorarioPeriodo', $v6);
+        $this->assertStringContainsString('faltantesPeriodoAplicados && desvinculadosPeriodoAplicados && horarioPeriodoAplicado', $v6);
+        $this->assertStringContainsString('horarioDisponible', $v6);
         $this->assertStringContainsString('agencia_excluida', $v6);
         $this->assertStringContainsString('meta_no_alcanzada', $v6);
         $this->assertStringContainsString('/incentivos/reporte-nuevo-incentivo-v6?', $v6);
@@ -847,6 +849,64 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringNotContainsString('excludedCoordinatorIds', $paymentRowsFunction);
         $this->assertStringNotContainsString('getExcludedCoordinatorPaymentKeys', $view);
         $this->assertStringContainsString('function getCoordinatorExcludedTotal()', $view);
+    }
+
+    public function test_horario_excluded_cedulas_are_removed_from_agent_payment_txt(): void
+    {
+        $view = view('incentivos.reporte-nuevo-incentivo-v6', [
+            'coordinadores' => collect(),
+            'administrativosConfig' => [],
+            'terminalesExcluidasIncentivo' => [],
+        ])->render();
+
+        $paymentRowsStart = strpos($view, 'function getPagoIncentivoExportRows()');
+        $paymentDataStart = strpos($view, 'function getPagoIncentivoExportData(', $paymentRowsStart);
+        $paymentDataEnd = strpos($view, 'function getAdministrativosPagoExportData()', $paymentDataStart);
+        $txtStart = strpos($view, 'function generarTxtPagoIncentivo(');
+        $txtEnd = strpos($view, 'function generarTxtPagoDesdeData(', $txtStart);
+
+        $this->assertNotFalse($paymentRowsStart);
+        $this->assertNotFalse($paymentDataStart);
+        $this->assertNotFalse($paymentDataEnd);
+        $this->assertNotFalse($txtStart);
+        $this->assertNotFalse($txtEnd);
+        $this->assertStringContainsString(
+            'rows = rows.filter(item => !excludedHorarioCedulas.has(getCedulaKey(item?.cedula)))',
+            substr($view, $paymentRowsStart, $paymentDataStart - $paymentRowsStart)
+        );
+        $this->assertStringContainsString(
+            'const rows = getPagoIncentivoExportRows()',
+            substr($view, $paymentDataStart, $paymentDataEnd - $paymentDataStart)
+        );
+        $this->assertStringContainsString(
+            'getPagoIncentivoExportData(options)',
+            substr($view, $txtStart, $txtEnd - $txtStart)
+        );
+    }
+
+    public function test_horario_preview_does_not_rebuild_the_main_table(): void
+    {
+        $view = view('incentivos.reporte-nuevo-incentivo-v6', [
+            'coordinadores' => collect(),
+            'administrativosConfig' => [],
+            'terminalesExcluidasIncentivo' => [],
+        ])->render();
+
+        $previewStart = strpos($view, 'function evaluarHorarioIncentivo()');
+        $applyStart = strpos($view, 'function aplicarHorarioIncentivo()', $previewStart);
+        $tableStart = strpos($view, 'function renderTableFromData(data)');
+        $tableEnd = strpos($view, 'function renderFaltantesIncentivoTable(', $tableStart);
+
+        $this->assertNotFalse($previewStart);
+        $this->assertNotFalse($applyStart);
+        $this->assertNotFalse($tableStart);
+        $this->assertNotFalse($tableEnd);
+        $this->assertStringNotContainsString('applyLocalFilters(false)', substr($view, $previewStart, $applyStart - $previewStart));
+        $this->assertStringNotContainsString('excludedHorarioCedulas =', substr($view, $previewStart, $applyStart - $previewStart));
+        $this->assertStringContainsString('deferRender: true', substr($view, $tableStart, $tableEnd - $tableStart));
+        $this->assertStringContainsString('pageLength: 100', substr($view, $tableStart, $tableEnd - $tableStart));
+        $this->assertStringContainsString('Aplicando horario...', substr($view, $applyStart, 1300));
+        $this->assertStringContainsString('setTimeout(() => {', substr($view, $applyStart, 1300));
     }
 
     public function test_payment_excel_can_combine_administrators_and_coordinators_into_two_company_sheets(): void

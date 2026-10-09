@@ -384,6 +384,7 @@ class IncentivoV6Controller extends Controller
                 'modo_calculo' => $validated['modo_calculo'],
                 'tipo_pago_defecto' => $validated['tipo_pago_defecto'],
                 'min_dias_venta' => $validated['min_dias_venta'],
+                'horas_minimas' => $validated['horas_minimas'],
                 'rangos_pago_por_tipo' => $validated['rangos_pago_por_tipo'] ?? [],
                 'terminales_excluidas' => $validated['terminales_excluidas'] ?? [],
                 'updated_by' => $userId,

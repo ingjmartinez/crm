@@ -664,6 +664,7 @@
                                             <div class="ni-action-grid">
                                                 <button type="button" class="btn btn-soft-warning ni-action-primary" id="btnConsultarFaltantes"><i class="ri-user-search-line me-2"></i>Faltantes <span class="badge bg-secondary ms-auto" id="estadoFaltantesPeriodo">Pendiente</span></button>
                                                 <button type="button" class="btn btn-soft-success ni-action-primary" id="btnConsultarDesvinculados"><i class="ri-user-unfollow-line me-2"></i>Desvinculados <span class="badge bg-secondary ms-auto" id="estadoDesvinculadosPeriodo">Pendiente</span></button>
+                                                <button type="button" class="btn btn-soft-info ni-action-primary" id="btnConsultarHorario"><i class="ri-time-line me-2"></i>Horario <span class="badge bg-secondary ms-auto" id="estadoHorarioPeriodo">Pendiente</span></button>
                                             </div>
                                         </section>
                                     </div>
@@ -1219,6 +1220,53 @@
         </div>
     </div>
 
+    <div id="modalHorarioIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Validar horario del incentivo</h5>
+                        <small class="text-muted">Consulta basada en las horas acumuladas del reporte actual.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label" for="horario_minimo_incentivo">Mínimo de horas acumuladas</label>
+                    <div class="input-group mb-3">
+                        <input type="number" id="horario_minimo_incentivo" class="form-control" min="0" step="0.01" required>
+                        <span class="input-group-text">horas</span>
+                        <button type="button" class="btn btn-outline-primary" id="btnEvaluarHorarioIncentivo">Evaluar</button>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="border rounded p-3">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Cédulas bajo el mínimo</small>
+                                <strong class="fs-4 text-danger" id="horarioIncentivoTotalCedulas">0</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="border rounded p-3">
+                                <small class="text-muted d-block text-uppercase fw-semibold">Monto sujeto a retención</small>
+                                <strong class="fs-4 text-warning" id="horarioIncentivoTotalMonto">0</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-muted" id="horarioIncentivoResumen">Configura el mínimo para revisar el reporte actual.</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead><tr><th>Cédula</th><th>Nombre</th><th class="text-end">Horas</th><th class="text-end">Incentivo</th></tr></thead>
+                            <tbody id="horarioIncentivoFilas"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnAplicarHorarioIncentivo" disabled>Aplicar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="modalFaltantesIncentivo" class="modal fade" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
@@ -1692,10 +1740,15 @@
     let lastDesvinculadosEmpleadoIds = new Set();
     let excludedDesvinculadosCedulas = new Set();
     let excludedDesvinculadosEmpleadoIds = new Set();
+    let lastHorarioCedulas = new Set();
+    let excludedHorarioCedulas = new Set();
     let faltantesPeriodoConsultados = false;
     let faltantesPeriodoAplicados = false;
     let desvinculadosPeriodoConsultados = false;
     let desvinculadosPeriodoAplicados = false;
+    let horarioPeriodoConsultado = false;
+    let horarioPeriodoAplicado = false;
+    let horarioMinimoConsultado = null;
     let excludedAdministrativeDesvinculadosCedulas = new Set();
     let excludedAdministrativeDesvinculadosEmpleadoIds = new Set();
     let excludedCoordinatorDesvinculadosCedulas = new Set();
@@ -1735,12 +1788,15 @@
     let currentExcludedApplication = {
         faltantesDisponible: 0,
         desvinculadosDisponible: 0,
+        horarioDisponible: 0,
         coordinadoresDisponible: 0,
         aplicadoFaltantes: 0,
         aplicadoDesvinculados: 0,
+        aplicadoHorario: 0,
         aplicadoCoordinadores: 0,
         rebajadoFaltantes: 0,
         rebajadoDesvinculados: 0,
+        rebajadoHorario: 0,
         rebajadoCoordinadores: 0,
         totalAplicado: 0,
         totalRebajado: 0,
@@ -2387,12 +2443,15 @@
         return {
             faltantesDisponible: 0,
             desvinculadosDisponible: 0,
+            horarioDisponible: 0,
             coordinadoresDisponible: 0,
             aplicadoFaltantes: 0,
             aplicadoDesvinculados: 0,
+            aplicadoHorario: 0,
             aplicadoCoordinadores: 0,
             rebajadoFaltantes: 0,
             rebajadoDesvinculados: 0,
+            rebajadoHorario: 0,
             rebajadoCoordinadores: 0,
             totalAplicado: 0,
             totalRebajado: 0,
@@ -2450,9 +2509,12 @@
                     ) {
                         motivos.push('desvinculado');
                     }
+                    if (cedula && excludedHorarioCedulas.has(cedula)) {
+                        motivos.push('horario');
+                    }
                 }
 
-                const tieneRetencionTotal = motivos.includes('faltante') || motivos.includes('desvinculado');
+                const tieneRetencionTotal = motivos.includes('faltante') || motivos.includes('desvinculado') || motivos.includes('horario');
                 const montoPagado = tieneRetencionTotal ? 0 : incentivoDespuesAgencias;
 
                 return {
@@ -2480,6 +2542,7 @@
         const saveButton = document.getElementById('btnGuardarPeriodoIncentivo');
         const faltantesBadge = document.getElementById('estadoFaltantesPeriodo');
         const desvinculadosBadge = document.getElementById('estadoDesvinculadosPeriodo');
+        const horarioBadge = document.getElementById('estadoHorarioPeriodo');
 
         const updateBadge = (badge, consulted, applied) => {
             badge.className = 'badge ms-1';
@@ -2502,12 +2565,13 @@
 
         updateBadge(faltantesBadge, faltantesPeriodoConsultados, faltantesPeriodoAplicados);
         updateBadge(desvinculadosBadge, desvinculadosPeriodoConsultados, desvinculadosPeriodoAplicados);
+        updateBadge(horarioBadge, horarioPeriodoConsultado, horarioPeriodoAplicado);
 
-        const validationsCompleted = faltantesPeriodoAplicados && desvinculadosPeriodoAplicados;
+        const validationsCompleted = faltantesPeriodoAplicados && desvinculadosPeriodoAplicados && horarioPeriodoAplicado;
         saveButton.disabled = !cachedRows.length || !validationsCompleted;
         saveButton.title = validationsCompleted
             ? 'Guardar el cierre mensual validado'
-            : 'Primero consulta y aplica faltantes y usuarios desvinculados';
+            : 'Primero consulta y aplica faltantes, desvinculados y horario';
     }
 
     function resetPeriodoValidationState() {
@@ -2515,6 +2579,8 @@
         faltantesPeriodoAplicados = false;
         desvinculadosPeriodoConsultados = false;
         desvinculadosPeriodoAplicados = false;
+        horarioPeriodoConsultado = false;
+        horarioPeriodoAplicado = false;
         updatePeriodoValidationState();
     }
 
@@ -2524,10 +2590,10 @@
             return;
         }
 
-        if (!faltantesPeriodoAplicados || !desvinculadosPeriodoAplicados) {
+        if (!faltantesPeriodoAplicados || !desvinculadosPeriodoAplicados || !horarioPeriodoAplicado) {
             Swal.fire({
                 title: 'Validaciones pendientes',
-                text: 'Antes de guardar debes consultar y aplicar faltantes y usuarios desvinculados.',
+                text: 'Antes de guardar debes consultar y aplicar faltantes, desvinculados y horario.',
                 icon: 'warning',
             });
             return;
@@ -2640,6 +2706,8 @@
                     terminales_excluidas: terminalesExcluidas,
                     faltantes_aplicados: faltantesPeriodoAplicados,
                     desvinculados_aplicados: desvinculadosPeriodoAplicados,
+                    horario_aplicado: horarioPeriodoAplicado,
+                    horas_minimas: horasTotalMinimo,
                     detalles,
                 }),
             });
@@ -2713,6 +2781,7 @@
 
         return (cedula && excludedFaltantesCedulas.has(cedula))
             || (cedula && excludedDesvinculadosCedulas.has(cedula))
+            || (cedula && excludedHorarioCedulas.has(cedula))
             || (empleadoId && excludedDesvinculadosEmpleadoIds.has(empleadoId));
     }
 
@@ -2775,28 +2844,44 @@
         const faltantesCedulas = new Set([...excludedFaltantesCedulas].map(getCedulaKey).filter(Boolean));
         const desvinculadosCedulas = new Set([...excludedDesvinculadosCedulas].map(getCedulaKey).filter(Boolean));
         const desvinculadosEmpleadoIds = new Set([...excludedDesvinculadosEmpleadoIds].map(getEmpleadoIdKey).filter(Boolean));
+        const horarioCedulas = new Set([...excludedHorarioCedulas].map(getCedulaKey).filter(Boolean));
         const faltantesDisponible = sumIncentivesByCedulas(baseRows, faltantesCedulas);
         const desvinculadosDisponible = sumIncentivesByDesvinculados(baseRows, desvinculadosCedulas, desvinculadosEmpleadoIds, faltantesCedulas);
+        const horarioDisponible = baseRows
+            .filter((row) => {
+                const cedula = getCedulaKey(row?.cedula);
+                const empleadoId = getEmpleadoIdKey(row?.empleadoid);
+                return horarioCedulas.has(cedula)
+                    && !faltantesCedulas.has(cedula)
+                    && !desvinculadosCedulas.has(cedula)
+                    && !desvinculadosEmpleadoIds.has(empleadoId);
+            })
+            .reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
         const coordinadoresDisponible = getCoordinatorExcludedTotal();
         const faltantesUsados = Math.min(toIntegerAmount(shortage), faltantesDisponible);
         const restante = Math.max(toIntegerAmount(shortage) - faltantesUsados, 0);
         const desvinculadosUsados = Math.min(restante, desvinculadosDisponible);
         const restanteDespuesDesvinculados = Math.max(restante - desvinculadosUsados, 0);
-        const coordinadoresUsados = Math.min(restanteDespuesDesvinculados, coordinadoresDisponible);
+        const horarioUsado = Math.min(restanteDespuesDesvinculados, horarioDisponible);
+        const coordinadoresUsados = Math.min(Math.max(restanteDespuesDesvinculados - horarioUsado, 0), coordinadoresDisponible);
 
         return {
             faltantesDisponible,
             desvinculadosDisponible,
+            horarioDisponible,
             coordinadoresDisponible,
             aplicadoFaltantes: faltantesUsados,
             aplicadoDesvinculados: desvinculadosUsados,
+            aplicadoHorario: horarioUsado,
             aplicadoCoordinadores: coordinadoresUsados,
             rebajadoFaltantes: Math.max(faltantesDisponible - faltantesUsados, 0),
             rebajadoDesvinculados: Math.max(desvinculadosDisponible - desvinculadosUsados, 0),
+            rebajadoHorario: Math.max(horarioDisponible - horarioUsado, 0),
             rebajadoCoordinadores: Math.max(coordinadoresDisponible - coordinadoresUsados, 0),
-            totalAplicado: faltantesUsados + desvinculadosUsados + coordinadoresUsados,
+            totalAplicado: faltantesUsados + desvinculadosUsados + horarioUsado + coordinadoresUsados,
             totalRebajado: Math.max(faltantesDisponible - faltantesUsados, 0)
                 + Math.max(desvinculadosDisponible - desvinculadosUsados, 0)
+                + Math.max(horarioDisponible - horarioUsado, 0)
                 + Math.max(coordinadoresDisponible - coordinadoresUsados, 0),
         };
     }
@@ -3402,6 +3487,10 @@
 
         if (excludedDesvinculadosEmpleadoIds.size) {
             rows = rows.filter(item => !excludedDesvinculadosEmpleadoIds.has(getEmpleadoIdKey(item?.empleadoid)));
+        }
+
+        if (excludedHorarioCedulas.size) {
+            rows = rows.filter(item => !excludedHorarioCedulas.has(getCedulaKey(item?.cedula)));
         }
 
         return rows;
@@ -4754,6 +4843,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 const totalDeduccionesDetectadas = toIntegerAmount(
                     scaleExcluded(currentExcludedApplication.faltantesDisponible)
                     + scaleExcluded(currentExcludedApplication.desvinculadosDisponible)
+                    + scaleExcluded(currentExcludedApplication.horarioDisponible)
                     + scaleExcluded(currentExcludedApplication.coordinadoresDisponible)
                 );
                 const totalRebajadoInforme = scaleExcluded(currentExcludedApplication.totalRebajado);
@@ -4887,10 +4977,12 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                     [{ text: 'Concepto', style: 'tableHeader' }, { text: 'Monto', style: 'tableHeader', alignment: 'right' }],
                     ['Monto generado por faltantes', moneyCell(scaleExcluded(currentExcludedApplication.faltantesDisponible))],
                     ['Monto generado por desvinculados', moneyCell(scaleExcluded(currentExcludedApplication.desvinculadosDisponible))],
+                    ['Monto generado por horario', moneyCell(scaleExcluded(currentExcludedApplication.horarioDisponible))],
                     ['Monto generado por coordinadores excluidos', moneyCell(scaleExcluded(currentExcludedApplication.coordinadoresDisponible))],
                     totalRow(['Total deducciones detectadas', moneyCell(totalDeduccionesDetectadas, true)]),
                     ['Aplicado a bolsa fija por faltantes', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoFaltantes))],
                     ['Aplicado a bolsa fija por desvinculados', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoDesvinculados))],
+                    ['Aplicado a bolsa fija por horario', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoHorario))],
                     ['Monto en retención aplicado por coordinadores', moneyCell(scaleExcluded(currentExcludedApplication.aplicadoCoordinadores))],
                     totalRow(['Reasignado a operadores/seguridad', moneyCell(operadoresSeguridadTotal, true)]),
                     totalRow(['Rebaja neta por exclusiones', moneyCell(totalRebajadoInforme, true)]),
@@ -4917,6 +5009,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                     warningRow(['Monto usuarios sin IdEmpleado', moneyCell(empleadoIdSummary.montoSinId)]),
                     ['Cedulas excluidas por faltantes', numberCell(excludedFaltantesCedulas.size)],
                     ['Cedulas excluidas por desvinculados', numberCell(excludedDesvinculadosCedulas.size)],
+                    ['Cedulas excluidas por horario', numberCell(excludedHorarioCedulas.size)],
                     ['Ids excluidos por desvinculados', numberCell(excludedDesvinculadosEmpleadoIds.size)],
                     ['Coordinadores con monto en retención', numberCell(excludedCoordinatorIds.size)],
                     ['Terminales excluidas del calculo', numberCell(terminalesExcluidas.length)],
@@ -5093,7 +5186,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                         {
                             ul: [
                                 'Las terminales excluidas no fueron consideradas en el calculo de ventas ni incentivo.',
-                                'Los faltantes, desvinculados y coordinadores con monto en retención se usan primero para cubrir la bolsa fija; el excedente reduce el total final.',
+                                'Los faltantes, desvinculados, horarios y coordinadores con monto en retención se usan primero para cubrir la bolsa fija; el excedente reduce el total final.',
                                 'Los coordinadores no excluidos conservan el monto calculado originalmente.',
                                 'El informe refleja la configuracion activa al momento de generacion.',
                                 `Terminales excluidas: ${terminalesExcluidasText}`,
@@ -6270,7 +6363,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             <div>Administrativo: ${formatMoney(adminDistribucion)}</div>
             <div>Coordinador: ${formatMoney(coordinadorDistribucion)}</div>
             <div>Reasignado a Operadores/Seguridad: ${formatMoney(currentFixedBagTopUp)}</div>
-            <div>Deducciones detectadas: ${formatMoney(currentExcludedApplication.faltantesDisponible + currentExcludedApplication.desvinculadosDisponible + currentExcludedApplication.coordinadoresDisponible)}</div>
+            <div>Deducciones detectadas: ${formatMoney(currentExcludedApplication.faltantesDisponible + currentExcludedApplication.desvinculadosDisponible + currentExcludedApplication.horarioDisponible + currentExcludedApplication.coordinadoresDisponible)}</div>
             <div>Coordinadores con monto en retención: ${formatMoney(currentExcludedApplication.coordinadoresDisponible)}</div>
             <div>Usuarios con IdEmpleado: ${empleadoIdSummary.usuariosConId.toLocaleString('en-US')} | ${formatMoney(empleadoIdSummary.montoConId)}</div>
             <div>Usuarios sin IdEmpleado: ${empleadoIdSummary.usuariosSinId.toLocaleString('en-US')} | ${formatMoney(empleadoIdSummary.montoSinId)}</div>
@@ -6304,33 +6397,32 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             $('#tableNuevoIncentivo').DataTable().destroy();
         }
 
-        const tableBody = document.querySelector('#tableNuevoIncentivo tbody');
-        tableBody.innerHTML = '';
+        document.querySelector('#tableNuevoIncentivo tbody').innerHTML = '';
 
-        data.forEach(item => {
+        const tableRows = data.map(item => {
             const meta = evaluateMetaMinima(item);
             const cumpleBadge = meta.cumplio
                 ? '<span class="badge bg-success">CUMPLIO</span>'
                 : `<span class="badge bg-danger">NO CUMPLE | Faltan ${formatMoney(meta.faltante)} (${meta.faltantePct.toFixed(2)}%)</span>`;
 
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${item.cedula}</td>
-                <td>${escapeHtml(item.empleadoid || '')}</td>
-                <td class="cell-nombre">${renderNombreEmpleado(item.nombre)}</td>
-                <td>${escapeHtml(normalizeEmpresaLabel(item.empresa))}</td>
-                <td>${renderPaymentTypeBreakdown(item)}</td>
-                <td class="text-end">${formatMoney(item.ventas_ultimo_mes)}</td>
-                <td class="text-end">${formatMoney(item.ventas_mes_actual)}</td>
-                <td class="text-center">${item.dias_ventas_mes_actual ?? 0}</td>
-                <td class="text-center">${renderHorasTotal(item.horas_total)}</td>
-                <td>${cumpleBadge}</td>
-                <td class="text-end">${formatMoney(item.nuevo_incentivo)}</td>
-            `;
-            tableBody.appendChild(row);
+            return [
+                escapeHtml(item.cedula),
+                escapeHtml(item.empleadoid || ''),
+                renderNombreEmpleado(item.nombre),
+                escapeHtml(normalizeEmpresaLabel(item.empresa)),
+                renderPaymentTypeBreakdown(item),
+                formatMoney(item.ventas_ultimo_mes),
+                formatMoney(item.ventas_mes_actual),
+                item.dias_ventas_mes_actual ?? 0,
+                renderHorasTotal(item.horas_total),
+                cumpleBadge,
+                formatMoney(item.nuevo_incentivo),
+            ];
         });
 
         $('#tableNuevoIncentivo').DataTable({
+            data: tableRows,
+            deferRender: true,
             responsive: true,
             dom: 'Bfrtip',
             buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
@@ -6339,7 +6431,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             columnDefs: [
                 { targets: 0, width: '7rem' },
                 { targets: 1, width: '7rem' },
-                { targets: 2, width: '13rem' },
+                { targets: 2, width: '13rem', className: 'cell-nombre' },
                 { targets: 3, width: '8rem' },
                 { targets: 4, width: '7rem' },
                 { targets: [5, 6, 10], width: '8.4rem', className: 'text-end' },
@@ -6347,7 +6439,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
                 { targets: 8, width: '5.2rem', className: 'text-center' },
                 { targets: 9, width: '9rem' },
             ],
-            pageLength: 10000,
+            pageLength: 100,
             scrollY: '500px',
             scrollX: true,
             scrollCollapse: true,
@@ -6900,6 +6992,77 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         return sumIncentivesByDesvinculados(currentFilteredRows, cedulasSet, empleadoIdsSet);
     }
 
+    function consultarHorarioIncentivo() {
+        if (!cachedRows.length) {
+            Swal.fire({ title: 'Información', text: 'Primero debes generar el reporte.', icon: 'warning' });
+            return;
+        }
+
+        document.getElementById('horario_minimo_incentivo').value = horasTotalMinimo;
+        evaluarHorarioIncentivo();
+        new bootstrap.Modal(document.getElementById('modalHorarioIncentivo')).show();
+    }
+
+    function evaluarHorarioIncentivo() {
+        const input = document.getElementById('horario_minimo_incentivo');
+        const minimo = Number(input.value);
+        if (input.value === '' || !Number.isFinite(minimo) || minimo < 0) {
+            Swal.fire({ title: 'Validación', text: 'Indica un mínimo de horas válido.', icon: 'warning' });
+            return;
+        }
+
+        horarioMinimoConsultado = minimo;
+        const rows = getBaseFilteredRows().filter((row) =>
+            getCedulaKey(row?.cedula)
+            && toIntegerAmount(row?.nuevo_incentivo) > 0
+            && toNumber(row?.horas_total) < minimo
+        );
+        lastHorarioCedulas = new Set(rows.map((row) => getCedulaKey(row.cedula)));
+        horarioPeriodoConsultado = true;
+        updatePeriodoValidationState();
+
+        const total = rows.reduce((sum, row) => sum + toIntegerAmount(row?.nuevo_incentivo), 0);
+        document.getElementById('horarioIncentivoResumen').textContent =
+            `${lastHorarioCedulas.size} cédulas con menos de ${formatHours(minimo)} horas. Incentivo sujeto a retención: ${formatMoney(total)}.`;
+        document.getElementById('horarioIncentivoTotalCedulas').textContent = lastHorarioCedulas.size.toLocaleString('en-US');
+        document.getElementById('horarioIncentivoTotalMonto').textContent = formatMoney(total);
+        document.getElementById('horarioIncentivoFilas').innerHTML = rows.length
+            ? rows.slice(0, 100).map((row) => `<tr><td>${escapeHtml(row.cedula)}</td><td>${escapeHtml(row.nombre)}</td><td class="text-end">${formatHours(row.horas_total)}</td><td class="text-end">${formatMoney(row.nuevo_incentivo)}</td></tr>`).join('')
+                + (rows.length > 100 ? '<tr><td colspan="4" class="text-center text-muted">Se muestran los primeros 100 registros.</td></tr>' : '')
+            : '<tr><td colspan="4" class="text-center text-muted">Todas las cédulas cumplen el mínimo.</td></tr>';
+        document.getElementById('btnAplicarHorarioIncentivo').disabled = false;
+    }
+
+    function aplicarHorarioIncentivo() {
+        if (!horarioPeriodoConsultado || horarioMinimoConsultado === null) {
+            return;
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('modalHorarioIncentivo'))?.hide();
+        Swal.fire({
+            title: 'Aplicando horario...',
+            text: 'Estamos excluyendo las cédulas y recalculando el reporte.',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        setTimeout(() => {
+            horasTotalMinimo = horarioMinimoConsultado;
+            localStorage.setItem('incentivo_v6_horas_total_minimo', String(horasTotalMinimo));
+            excludedHorarioCedulas = new Set(lastHorarioCedulas);
+            horarioPeriodoAplicado = true;
+            updatePeriodoValidationState();
+            applyLocalFilters(false);
+            Swal.fire({
+                title: 'Horario aplicado',
+                text: `${lastHorarioCedulas.size} cédulas excluidas. Aplicado a bolsa fija: ${formatMoney(currentExcludedApplication.aplicadoHorario)}. Rebaja neta: ${formatMoney(currentExcludedApplication.rebajadoHorario)}.`,
+                icon: 'success',
+            });
+        }, 120);
+    }
+
     function aplicarFaltantesIncentivo() {
         if (!faltantesPeriodoConsultados) {
             Swal.fire({ title: 'Consulta pendiente', text: 'Primero debes consultar los faltantes del reporte.', icon: 'warning' });
@@ -7433,6 +7596,15 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             consultarDesvinculadosIncentivo();
         });
 
+        document.querySelector('#btnConsultarHorario').addEventListener('click', consultarHorarioIncentivo);
+        document.querySelector('#btnEvaluarHorarioIncentivo').addEventListener('click', evaluarHorarioIncentivo);
+        document.querySelector('#btnAplicarHorarioIncentivo').addEventListener('click', aplicarHorarioIncentivo);
+        document.querySelector('#horario_minimo_incentivo').addEventListener('input', function() {
+            horarioPeriodoConsultado = false;
+            horarioMinimoConsultado = null;
+            document.getElementById('btnAplicarHorarioIncentivo').disabled = true;
+        });
+
         document.querySelector('#btnAplicarFaltantesIncentivo').addEventListener('click', function() {
             aplicarFaltantesIncentivo();
         });
@@ -7759,10 +7931,16 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
 
             horasTotalMinimo = nuevoMinimo;
             localStorage.setItem('incentivo_v6_horas_total_minimo', String(horasTotalMinimo));
+            horarioPeriodoConsultado = false;
+            horarioPeriodoAplicado = false;
+            horarioMinimoConsultado = null;
+            lastHorarioCedulas = new Set();
+            excludedHorarioCedulas = new Set();
+            updatePeriodoValidationState();
             bootstrap.Modal.getInstance(document.getElementById('modalConfigHorasTotal'))?.hide();
 
-            if (currentFilteredRows.length) {
-                renderTableFromData(currentFilteredRows);
+            if (cachedRows.length) {
+                applyLocalFilters(false);
             }
 
             Swal.fire({
@@ -7803,6 +7981,9 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         lastDesvinculadosEmpleadoIds = new Set();
         excludedDesvinculadosCedulas = new Set();
         excludedDesvinculadosEmpleadoIds = new Set();
+        lastHorarioCedulas = new Set();
+        excludedHorarioCedulas = new Set();
+        horarioMinimoConsultado = null;
         excludedAdministrativeDesvinculadosCedulas = new Set();
         excludedAdministrativeDesvinculadosEmpleadoIds = new Set();
         excludedCoordinatorDesvinculadosCedulas = new Set();
