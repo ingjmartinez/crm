@@ -384,11 +384,19 @@
                             <div class="form-text">El monto se mostrará con separador de miles y dos decimales.</div>
                         </div>
                         <div class="col-md-6">
+                            <label for="empresa-deposito" class="form-label">Empresa</label>
+                            <select name="empresa_id" id="empresa-deposito" class="form-select" required>
+                                <option value="">Selecciona la empresa</option>
+                                <option value="168">168 - Grupo Joselito</option>
+                                <option value="169">169 - Negosur</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
                             <label for="banco-deposito" class="form-label">Banco</label>
-                            <select name="banco" class="form-select" id="banco-deposito" required>
+                            <select name="banco_id" class="form-select" id="banco-deposito" required>
                                 <option value="" selected disabled>Selecciona un banco</option>
                                 @foreach ($bancos as $banco)
-                                    <option value="{{ $banco }}" @selected(old('banco') === $banco)>{{ $banco }}</option>
+                                    <option value="{{ $banco->id }}" data-empresa="{{ $banco->empresa_id }}" @disabled(!$banco->empresa_id || !$banco->cuenta_codigo)>{{ $banco->nombre }}{{ $banco->cuenta_codigo ? ' - '.$banco->cuenta_codigo : ' (sin cuenta)' }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -531,6 +539,15 @@
             const modalEleccionElement = document.getElementById('modal-elegir-aplicacion');
             const modalEleccion = new bootstrap.Modal(modalEleccionElement);
             const modalDeposito = new bootstrap.Modal(document.getElementById('modal-aplicar-deposito'));
+            const empresaDeposito = document.getElementById('empresa-deposito');
+            const bancoDeposito = document.getElementById('banco-deposito');
+            function filtrarBancosDeposito() {
+                bancoDeposito.value = '';
+                bancoDeposito.querySelectorAll('option[data-empresa]').forEach(opcion => {
+                    opcion.hidden = opcion.dataset.empresa !== empresaDeposito.value;
+                });
+            }
+            empresaDeposito.addEventListener('change', filtrarBancosDeposito);
             const modalGasto = new bootstrap.Modal(document.getElementById('modal-aplicar-gasto'));
             const modalDetalle = new bootstrap.Modal(document.getElementById('modal-detalle-ruta-v2'));
             const modalClasificarGasto = new bootstrap.Modal(document.getElementById('modal-clasificar-gasto'));
@@ -968,6 +985,9 @@
                 controlMontoDeposito.limpiar();
                 document.getElementById('deposito-ruta-key').value = aplicacionActual.rutaKey;
                 document.getElementById('deposito-ruta').value = aplicacionActual.ruta;
+                const empresaRuta = aplicacionActual.ruta.match(/(?:^|[\s-])(GJ|NG)(?=$|[\s-])/i)?.[1]?.toUpperCase();
+                empresaDeposito.value = empresaRuta === 'GJ' ? '168' : empresaRuta === 'NG' ? '169' : @json($empresa === 'GJ' ? '168' : ($empresa === 'NG' ? '169' : ''));
+                filtrarBancosDeposito();
                 document.getElementById('deposito-ruta-titulo').textContent = `${aplicacionActual.ruta} · ${fecha || ''}`;
                 document.getElementById('deposito-resumen').textContent = `Neto esperado: ${moneda(aplicacionActual.neto)} · Depositado: ${moneda(aplicacionActual.depositado)} · Gastos: ${moneda(aplicacionActual.gastos)} · Pendiente: ${moneda(aplicacionActual.pendiente)}`;
                 abrirLuegoDeEleccion(modalDeposito);

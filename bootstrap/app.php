@@ -5,6 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -27,6 +28,14 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->respond(function (Response $response): Response {
+            if ($response->getStatusCode() === 419 && ! request()->expectsJson()) {
+                return redirect()->route('inicio.index');
+            }
+
+            return $response;
+        });
+
         $exceptions->render(function (PostTooLargeException $e, Request $request) {
             if ($request->is('reportes-gestion-agencias/procesar')) {
                 return response()->view('reportes.gestion-agencias', [

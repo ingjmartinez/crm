@@ -3,8 +3,10 @@
 namespace App\Services\Contabilidad;
 
 use App\Models\Agencia;
+use App\Models\BancoOperacion;
 use App\Models\CentroDeCosto;
 use App\Models\DistribucionGastoRutaMapeo;
+use App\Models\MovimientoRutaV2Deposito;
 use App\Models\MovimientoRutaV2Gasto;
 use App\Models\MovimientoRutaV2Transaccion;
 use App\Models\Ruta;
@@ -178,6 +180,33 @@ class DistribucionGastoRutaService
     }
 
     /**
+     * @param  Collection<int, DistribucionGastoRutaMapeo>  $mapeos
+     * @return Collection<int, array<int, int>>
+     */
+    public function centrosCostoRutaPorMapeo(Collection $mapeos): Collection
+    {
+        $centrosPorGrupo = CentroDeCosto::query()
+            ->where('inactivo', false)
+            ->where('ocultar', false)
+            ->whereNull('id_viejo')
+            ->where('descripcion', 'like', 'Grupo:%')
+            ->get(['id_centro_costo', 'company_id', 'id_grupo'])
+            ->groupBy(fn (CentroDeCosto $centro): string => $this->codigoCampo($centro->company_id).'|'.$this->codigoCampo($centro->id_grupo));
+
+        return $mapeos->mapWithKeys(function (DistribucionGastoRutaMapeo $mapeo) use ($centrosPorGrupo): array {
+            $clave = $mapeo->company_id.'|'.$mapeo->id_grupo;
+            $ids = $centrosPorGrupo->get($clave, collect())
+                ->pluck('id_centro_costo')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+
+            return [$mapeo->id => $ids];
+        });
+    }
+
+    /**
      * @return array{
      *   data: array<int, array<string, mixed>>,
      *   detalle: array<int, array<string, mixed>>,
@@ -189,12 +218,51 @@ class DistribucionGastoRutaService
     public function generar(string $fechaInicio, string $fechaFin, ?string $empresa = null, ?string $rutaKey = null): array
     {
         $gastos = $this->gastosPorRuta($fechaInicio, $fechaFin, $rutaKey);
+        $depositos = MovimientoRutaV2Deposito::query()
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->where('estado', 'aplicado')
+            ->when($rutaKey !== null, fn ($query) => $query->where('ruta_key', $rutaKey))
+            ->orderBy('fecha')
+            ->orderBy('id')
+            ->get(['id', 'fecha', 'ruta_key', 'ruta', 'monto', 'banco', 'empresa_id', 'cuenta_banco']);
+        $cuentasPorBanco = BancoOperacion::query()->whereNotNull('empresa_id')->get()
+            ->mapWithKeys(fn (BancoOperacion $banco): array => [$banco->empresa_id.'|'.$banco->nombre => $banco->cuenta_codigo]);
         $gastosPendientesClasificacion = $this->gastosPendientesClasificacion($fechaInicio, $fechaFin, $rutaKey);
         $rutas = Ruta::query()->with('agencias')->get();
         $centrosActivos = $this->centrosActivos();
         $centrosPorTerminal = $centrosActivos->groupBy(fn (CentroDeCosto $centro): string => $this->normalizarTerminal($centro->id_viejo));
         $mapeosPorRuta = DistribucionGastoRutaMapeo::query()->get()
             ->groupBy(fn (DistribucionGastoRutaMapeo $mapeo): string => $this->normalizarRuta($mapeo->ruta_key));
+        $centrosCostoRutaPorMapeo = $this->centrosCostoRutaPorMapeo($mapeosPorRuta->flatten());
+        $depositosRuta = $depositos->filter(function (MovimientoRutaV2Deposito $deposito) use ($empresa, $mapeosPorRuta): bool {
+            $mapeos = $mapeosPorRuta->get($this->normalizarRuta($deposito->ruta_key), collect());
+            $empresaDeposito = match ($deposito->empresa_id) {
+                '168' => 'GJ', '169' => 'NG', default => $this->empresaDesdeMapeos($mapeos) ?? $this->empresaDesdeNombre($deposito->ruta),
+            };
+
+            return $empresa === null || $empresaDeposito === $empresa;
+        })->flatMap(function (MovimientoRutaV2Deposito $deposito) use ($mapeosPorRuta, $centrosCostoRutaPorMapeo, $cuentasPorBanco): array {
+            $mapeos = $mapeosPorRuta->get($this->normalizarRuta($deposito->ruta_key), collect());
+            $empresasMapeo = $mapeos->pluck('company_id')->unique();
+            $empresaId = $deposito->empresa_id ?: ($empresasMapeo->count() === 1 ? $empresasMapeo->first() : null);
+            $centros = $mapeos->flatMap(fn (DistribucionGastoRutaMapeo $mapeo): array => $centrosCostoRutaPorMapeo->get($mapeo->id, []))
+                ->unique()->values();
+            $descripcion = 'Deposito '.$deposito->ruta.' '.$deposito->banco.' al '.$deposito->fecha->format('d/m/Y');
+            $centroCosto = $centros->count() === 1 ? str_pad((string) $centros->first(), 6, '0', STR_PAD_LEFT) : '';
+            $monto = (float) $deposito->monto;
+            $cuentaBanco = (string) ($deposito->cuenta_banco ?: $cuentasPorBanco->get($empresaId.'|'.$deposito->banco, ''));
+
+            return [
+                [
+                    'cuenta' => $cuentaBanco, 'descripcion' => $descripcion, 'debito' => $monto,
+                    'credito' => null, 'centro_costo' => $centroCosto, 'movimiento' => 'Deposito',
+                ],
+                [
+                    'cuenta' => '', 'descripcion' => $descripcion, 'debito' => null,
+                    'credito' => $monto, 'centro_costo' => $centroCosto, 'movimiento' => '',
+                ],
+            ];
+        })->values();
         $gastosPendientesClasificacion = $gastosPendientesClasificacion->filter(function (MovimientoRutaV2Gasto $gasto) use ($empresa, $mapeosPorRuta): bool {
             if ($empresa === null) {
                 return true;
@@ -456,6 +524,7 @@ class DistribucionGastoRutaService
 
         return [
             'data' => $resumenSocios->all(),
+            'depositos_ruta' => $depositosRuta->all(),
             'detalle' => $detalle->sortBy([['ruta', 'asc'], ['socio', 'asc'], ['terminal', 'asc']])->values()->all(),
             'rutas' => $resumenRutas->sortBy('ruta')->values()->all(),
             'incidencias' => $incidencias->sortBy([['ruta', 'asc'], ['terminal', 'asc']])->values()->all(),

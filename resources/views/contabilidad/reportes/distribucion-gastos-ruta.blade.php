@@ -167,12 +167,18 @@
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm table-bordered align-middle mb-0" id="tablaMapeosRutas">
-                                <thead><tr><th>Ruta del gasto</th><th>Empresa</th><th class="text-center">Socios relacionados</th><th class="text-center">Terminales</th><th class="text-center">Acción</th></tr></thead>
+                                <thead><tr><th>Ruta del gasto</th><th>Empresa</th><th>Centro de costo ruta</th><th>Cuenta contable de ruta (crédito)</th><th class="text-center">Socios relacionados</th><th class="text-center">Terminales</th><th class="text-center">Acción</th></tr></thead>
                                 <tbody>
                                     @forelse ($mapeosAgrupados as $grupoMapeo)
                                         <tr class="fila-ruta-agregada" data-ruta-nombre="{{ mb_strtolower($grupoMapeo['ruta_nombre'], 'UTF-8') }}">
                                             <td class="fw-semibold">{{ $grupoMapeo['ruta_nombre'] }}</td>
                                             <td>{{ implode(', ', $grupoMapeo['company_ids']) }}</td>
+                                            <td>{{ $grupoMapeo['centros_costo_ruta'] ? implode(', ', $grupoMapeo['centros_costo_ruta']) : '—' }}</td>
+                                            <td>
+                                                @foreach ($grupoMapeo['cuentas_credito'] as $cuentaRuta)
+                                                    <div>{{ $cuentaRuta['company_id'] }}: {{ $cuentaRuta['cuenta_codigo'] ? $cuentaRuta['cuenta_codigo'].' - '.$cuentaRuta['cuenta_descripcion'] : 'Sin coincidencia única' }}</div>
+                                                @endforeach
+                                            </td>
                                             <td class="text-center"><span class="badge bg-primary-subtle text-primary fs-6">{{ count($grupoMapeo['socios']) }}</span></td>
                                             <td class="text-center"><span class="badge bg-info-subtle text-info fs-6">{{ $grupoMapeo['terminales'] }}</span></td>
                                             <td class="text-center">
@@ -185,7 +191,7 @@
                                             </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="5" class="text-center text-muted py-3">Todavía no hay relaciones manuales.</td></tr>
+                                        <tr><td colspan="7" class="text-center text-muted py-3">Todavía no hay relaciones manuales.</td></tr>
                                     @endforelse
                                 </tbody>
                             </table>
@@ -276,6 +282,7 @@
                             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabAgencias" type="button">Detalle por agencia</button></li>
                             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRutas" type="button">Control por ruta</button></li>
                             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIncidencias" type="button">Incidencias <span class="badge bg-danger ms-1" id="cantidadIncidencias">0</span></button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDepositosRuta" type="button">Depósitos de ruta</button></li>
                         </ul>
 
                         <div class="tab-content">
@@ -311,6 +318,15 @@
                                     </table>
                                 </div>
                             </div>
+                            <div class="tab-pane fade" id="tabDepositosRuta">
+                                <p class="text-muted small mb-2">El débito usa la cuenta configurada en Banco. La cuenta de crédito de cada ruta sigue pendiente de asignación.</p>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-striped align-middle w-100" id="tablaDepositosRuta">
+                                        <thead><tr><th>Cuenta</th><th>Descripción</th><th class="text-end">Débito</th><th class="text-end">Crédito</th><th>Centro de costo</th><th>Movimiento</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -333,12 +349,13 @@
                         <div class="modal-body">
                             <div class="table-responsive">
                                 <table class="table table-bordered align-middle mb-0">
-                                    <thead class="table-light"><tr><th>Empresa</th><th>Ruta empresa</th><th>Socio</th><th class="text-center">Terminales</th><th class="text-center">Acción</th></tr></thead>
+                                    <thead class="table-light"><tr><th>Empresa</th><th>Ruta empresa</th><th>Centro de costo ruta</th><th>Socio</th><th class="text-center">Terminales</th><th class="text-center">Acción</th></tr></thead>
                                     <tbody>
                                         @foreach ($grupoMapeo['socios'] as $socioMapeo)
                                             <tr>
                                                 <td>{{ $socioMapeo['company_id'] }}</td>
                                                 <td>{{ $socioMapeo['id_grupo'] }} - {{ $socioMapeo['nombre_grupo'] }}</td>
+                                                <td>{{ $socioMapeo['centros_costo_ruta'] ? implode(', ', $socioMapeo['centros_costo_ruta']) : '—' }}</td>
                                                 <td>{{ $socioMapeo['id_sub_grupo'] }} - {{ $socioMapeo['nombre_socio'] }}</td>
                                                 <td class="text-center"><span class="badge bg-info-subtle text-info fs-6">{{ $socioMapeo['terminales'] }}</span></td>
                                                 <td class="text-center">
@@ -688,6 +705,12 @@
                 { data: 'ruta', render: texto }, { data: 'terminal', render: texto }, { data: 'agencia', render: texto },
                 { data: 'tipo', render: texto }, { data: 'detalle', render: texto }, { data: 'monto_pendiente', className: 'text-end', render: moneda },
             ], 'distribucion_gastos_ruta_incidencias');
+            tablasDistribucion.depositos = crearTabla('#tablaDepositosRuta', payload.depositos_ruta || [], [
+                { data: 'cuenta', render: texto }, { data: 'descripcion', render: texto },
+                { data: 'debito', className: 'text-end', render: montoAsiento },
+                { data: 'credito', className: 'text-end', render: montoAsiento },
+                { data: 'centro_costo', render: texto }, { data: 'movimiento', render: texto },
+            ], null);
 
             document.getElementById('btnExcel').disabled = !(payload.data || []).length;
         }
@@ -701,7 +724,7 @@
                 pageLength: 25,
                 order: [[0, 'asc']],
                 dom: 'Bfrtip',
-                buttons: [{ extend: 'excelHtml5', title: 'Distribución de Gastos de Ruta', filename: archivo, text: 'Excel' }],
+                buttons: archivo ? [{ extend: 'excelHtml5', title: 'Distribución de Gastos de Ruta', filename: archivo, text: 'Excel' }] : [],
                 language: { search: 'Buscar:', info: 'Mostrando _START_ a _END_ de _TOTAL_', infoEmpty: 'No hay datos', zeroRecords: 'No hay resultados', paginate: { next: 'Siguiente', previous: 'Anterior' } },
             });
         }
@@ -710,6 +733,7 @@
             return `RD$ ${Number(valor || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
         function moneda(valor, tipo) { return tipo === 'display' ? dinero(valor) : Number(valor || 0); }
+        function montoAsiento(valor, tipo) { return valor === null ? '' : moneda(valor, tipo); }
         function porcentaje(valor, tipo) { return tipo === 'display' ? `${Number(valor || 0).toFixed(2)}%` : Number(valor || 0); }
         function texto(valor, tipo) { return tipo === 'display' ? $('<div>').text(valor ?? '').html() : (valor ?? ''); }
         function estado(valor, tipo) {

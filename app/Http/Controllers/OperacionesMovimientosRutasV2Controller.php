@@ -58,7 +58,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'fechasDisponibles' => $fechasDisponibles,
             'rutas' => $rutas,
             'resumen' => $this->resumenGeneral($rutas),
-            'bancos' => BancoOperacion::nombresDisponibles(),
+            'bancos' => BancoOperacion::query()->orderBy('empresa_id')->orderBy('nombre')->get(),
             'depositosPorBanco' => $this->depositosPorBanco($fecha, $empresa),
             'importaciones' => $this->importacionesPorFecha($fecha),
         ]);
@@ -95,10 +95,26 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ]);
         }
 
+        $empresaRuta = $this->empresaDesdeRuta($movimiento->ruta);
+        $empresaIdRuta = match ($empresaRuta) {
+            'GJ' => '168', 'NG' => '169', default => null,
+        };
+        if ($empresaIdRuta !== null && $empresaIdRuta !== $validated['empresa_id']) {
+            throw ValidationException::withMessages(['empresa_id' => 'La empresa seleccionada no corresponde a la ruta.']);
+        }
+
+        $banco = BancoOperacion::query()->find($validated['banco_id']);
+        if ($banco?->empresa_id !== $validated['empresa_id'] || blank($banco->cuenta_codigo)) {
+            throw ValidationException::withMessages([
+                'banco_id' => 'Selecciona un banco con cuenta contable de la empresa de la ruta.',
+            ]);
+        }
+
         if (! empty($validated['referencia'])) {
             $duplicado = MovimientoRutaV2Deposito::query()
                 ->where('fecha', $validated['fecha'])
-                ->where('banco', $validated['banco'])
+                ->where('banco', $banco->nombre)
+                ->where('empresa_id', $validated['empresa_id'])
                 ->where('referencia', $validated['referencia'])
                 ->exists();
 
@@ -119,7 +135,9 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'ruta_key' => $movimiento->ruta_key,
             'ruta' => $movimiento->ruta,
             'monto' => $validated['monto'],
-            'banco' => trim($validated['banco']),
+            'banco' => $banco->nombre,
+            'empresa_id' => $validated['empresa_id'],
+            'cuenta_banco' => $banco->cuenta_codigo,
             'referencia' => filled($validated['referencia'] ?? null) ? trim($validated['referencia']) : null,
             'comprobante_path' => $comprobantePath,
             'observacion' => $validated['observacion'] ?? null,

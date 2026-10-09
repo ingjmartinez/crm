@@ -1920,6 +1920,24 @@
     <script src="{{ asset('libs/sweetalert2/sweetalert2.min.js') }}"></script>
     <!-- App js -->
     <script src="{{ asset('js/app.js') }}"></script>
+    <script>
+        document.addEventListener('livewire:init', () => {
+            Livewire.hook('request', ({ fail }) => {
+                fail(({ status, preventDefault }) => {
+                    if (status === 419) {
+                        preventDefault();
+                        window.location.assign(@json(route('inicio.index')));
+                    }
+                });
+            });
+        });
+
+        $(document).ajaxError((event, xhr) => {
+            if (xhr.status === 419) {
+                window.location.assign(@json(route('inicio.index')));
+            }
+        });
+    </script>
     <!-- Mobile Optimization JS -->
     <script src="{{ asset('js/mobile-optimization.js') }}"></script>
 

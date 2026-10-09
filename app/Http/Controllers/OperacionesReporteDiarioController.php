@@ -3,21 +3,26 @@
 namespace App\Http\Controllers;
 
 use App\Exports\ReporteDiarioRutaExport;
+use App\Http\Requests\Operaciones\GuardarBancoReporteDiarioRequest;
 use App\Models\BancoOperacion;
 use App\Models\OperadorRuta;
 use App\Models\ReporteDiarioRuta;
 use App\Models\Ruta;
+use App\Services\Operaciones\CatalogoCuentasBancariasEmpresa;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Throwable;
 
 class OperacionesReporteDiarioController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): View
     {
         $fechaFiltro = (string) $request->input('fecha', now()->toDateString());
 
@@ -37,7 +42,7 @@ class OperacionesReporteDiarioController extends Controller
         $fechaFiltro = (string) $request->input('fecha', now()->toDateString());
         $reportes = $this->obtenerReportesPorFecha($fechaFiltro);
 
-        $fileName = 'reporte_diario_operaciones_' . str_replace('-', '', $fechaFiltro) . '_' . now()->format('His') . '.xlsx';
+        $fileName = 'reporte_diario_operaciones_'.str_replace('-', '', $fechaFiltro).'_'.now()->format('His').'.xlsx';
 
         return Excel::download(new ReporteDiarioRutaExport($reportes), $fileName);
     }
@@ -52,7 +57,7 @@ class OperacionesReporteDiarioController extends Controller
             'fechaFiltro' => $fechaFiltro,
         ])->setPaper('A4', 'landscape');
 
-        return $pdf->download('reporte_diario_operaciones_' . str_replace('-', '', $fechaFiltro) . '.pdf');
+        return $pdf->download('reporte_diario_operaciones_'.str_replace('-', '', $fechaFiltro).'.pdf');
     }
 
     public function guardar(Request $request)
@@ -118,15 +123,22 @@ class OperacionesReporteDiarioController extends Controller
         return $this->enviarCorreoInforme($reporte, true);
     }
 
-    public function guardarBanco(Request $request)
+    public function guardarBanco(GuardarBancoReporteDiarioRequest $request, CatalogoCuentasBancariasEmpresa $catalogo): RedirectResponse
     {
-        $validated = $request->validateWithBag('guardarBanco', [
-            'nombre_banco' => ['required', 'string', 'max:150', 'unique:bancos_operaciones,nombre'],
-            'fecha' => ['nullable', 'date'],
-        ]);
+        $validated = $request->validated();
+        $cuenta = $catalogo->buscar($validated['empresa_id'], $validated['cuenta_codigo']);
+        if ($cuenta === null) {
+            throw ValidationException::withMessages(['cuenta_codigo' => 'La cuenta no existe en el catálogo de la empresa seleccionada.']);
+        }
+        if (BancoOperacion::query()->where('empresa_id', $validated['empresa_id'])->where('cuenta_codigo', $cuenta['cuenta'])->exists()) {
+            throw ValidationException::withMessages(['cuenta_codigo' => 'Esta cuenta bancaria ya está registrada para la empresa.']);
+        }
 
         BancoOperacion::create([
-            'nombre' => trim((string) $validated['nombre_banco']),
+            'nombre' => $cuenta['descripcion'],
+            'empresa_id' => $validated['empresa_id'],
+            'cuenta_codigo' => $cuenta['cuenta'],
+            'cuenta_descripcion' => $cuenta['descripcion'],
         ]);
 
         $fecha = (string) ($validated['fecha'] ?? now()->toDateString());
@@ -167,15 +179,15 @@ class OperacionesReporteDiarioController extends Controller
                 'reportes' => $reportes,
             ], function ($message) use ($correoDestino, $fechaFiltro) {
                 $message->to($correoDestino)
-                    ->subject('Reporte Diario de Operaciones - ' . $fechaFiltro);
+                    ->subject('Reporte Diario de Operaciones - '.$fechaFiltro);
             });
         } catch (Throwable $e) {
             return redirect()->route('operaciones.reporte.diario', ['fecha' => $fechaFiltro])
-                ->with('error', 'No se pudo enviar el correo masivo: ' . $e->getMessage());
+                ->with('error', 'No se pudo enviar el correo masivo: '.$e->getMessage());
         }
 
         return redirect()->route('operaciones.reporte.diario', ['fecha' => $fechaFiltro])
-            ->with('success', 'Reporte diario enviado correctamente a ' . $correoDestino . '.');
+            ->with('success', 'Reporte diario enviado correctamente a '.$correoDestino.'.');
     }
 
     public function actualizarGasto(Request $request, ReporteDiarioRuta $reporte_diario_ruta)
@@ -212,7 +224,7 @@ class OperacionesReporteDiarioController extends Controller
 
     public function verComprobante(ReporteDiarioRuta $reporte_diario_ruta, string $tipo)
     {
-        if (!in_array($tipo, ['entregado', 'diferencia'], true)) {
+        if (! in_array($tipo, ['entregado', 'diferencia'], true)) {
             abort(404);
         }
 
@@ -221,7 +233,7 @@ class OperacionesReporteDiarioController extends Controller
             : $reporte_diario_ruta->comprobante_diferencia_path;
         $rutaComprobante = $this->normalizarRutaStorage($rutaComprobanteRaw);
 
-        if (empty($rutaComprobante) || !Storage::disk('local')->exists($rutaComprobante)) {
+        if (empty($rutaComprobante) || ! Storage::disk('local')->exists($rutaComprobante)) {
             abort(404, 'Comprobante no encontrado.');
         }
 
@@ -236,14 +248,14 @@ class OperacionesReporteDiarioController extends Controller
         $urlEntregado = null;
         $urlDiferencia = null;
 
-        if (!empty($entregado) && Storage::disk('local')->exists($entregado)) {
+        if (! empty($entregado) && Storage::disk('local')->exists($entregado)) {
             $urlEntregado = route('operaciones.reporte.diario.comprobante', [
                 'reporte_diario_ruta' => $reporte_diario_ruta->id,
                 'tipo' => 'entregado',
             ]);
         }
 
-        if (!empty($diferencia) && Storage::disk('local')->exists($diferencia)) {
+        if (! empty($diferencia) && Storage::disk('local')->exists($diferencia)) {
             $urlDiferencia = route('operaciones.reporte.diario.comprobante', [
                 'reporte_diario_ruta' => $reporte_diario_ruta->id,
                 'tipo' => 'diferencia',
@@ -286,8 +298,8 @@ class OperacionesReporteDiarioController extends Controller
 
         $file = $validated['file'];
         $tipo = (string) $validated['tipo'];
-        $nombre = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
-        $ruta = 'operaciones/reportes_diarios/' . $tipo . '/' . now()->format('Y/m') . '/' . $nombre;
+        $nombre = Str::uuid()->toString().'.'.$file->getClientOriginalExtension();
+        $ruta = 'operaciones/reportes_diarios/'.$tipo.'/'.now()->format('Y/m').'/'.$nombre;
 
         Storage::disk('local')->putFileAs(
             dirname($ruta),
@@ -310,8 +322,8 @@ class OperacionesReporteDiarioController extends Controller
 
         $file = $validated['file'];
         $tipo = (string) $validated['tipo'];
-        $nombre = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
-        $ruta = 'operaciones/reportes_diarios/' . $tipo . '/' . now()->format('Y/m') . '/' . $nombre;
+        $nombre = Str::uuid()->toString().'.'.$file->getClientOriginalExtension();
+        $ruta = 'operaciones/reportes_diarios/'.$tipo.'/'.now()->format('Y/m').'/'.$nombre;
 
         Storage::disk('local')->putFileAs(
             dirname($ruta),
@@ -322,7 +334,7 @@ class OperacionesReporteDiarioController extends Controller
         $campo = $tipo === 'entregado' ? 'comprobante_entregado_path' : 'comprobante_diferencia_path';
         $anterior = $this->normalizarRutaStorage($reporte_diario_ruta->{$campo});
 
-        if (!empty($anterior) && Storage::disk('local')->exists($anterior)) {
+        if (! empty($anterior) && Storage::disk('local')->exists($anterior)) {
             Storage::disk('local')->delete($anterior);
         }
 
@@ -358,7 +370,7 @@ class OperacionesReporteDiarioController extends Controller
             'fecha' => optional($reporte->fecha)->format('d/m/Y') ?? now()->format('d/m/Y'),
             'ruta' => $reporte->ruta->nombre_ruta ?? '-',
             'empresa' => $reporte->ruta->empresa ?? '-',
-            'operador' => trim((($operador->nombre ?? '') . ' ' . ($operador->apellido ?? ''))),
+            'operador' => trim((($operador->nombre ?? '').' '.($operador->apellido ?? ''))),
             'entregado' => number_format((float) $reporte->entregado, 2),
             'procesado' => number_format((float) $reporte->procesado, 2),
             'gasto' => number_format((float) $reporte->gasto, 2),
@@ -369,11 +381,11 @@ class OperacionesReporteDiarioController extends Controller
         try {
             Mail::send('emails.operaciones.reporte_diario_ruta', $payload, function ($message) use ($correo, $payload) {
                 $message->to($correo)
-                    ->subject('Cuadre Diario de Ruta - ' . $payload['ruta'] . ' - ' . $payload['fecha']);
+                    ->subject('Cuadre Diario de Ruta - '.$payload['ruta'].' - '.$payload['fecha']);
             });
         } catch (Throwable $e) {
             return redirect()->route('operaciones.reporte.diario', ['fecha' => optional($reporte->fecha)->toDateString()])
-                ->with('error', 'No se pudo enviar el correo: ' . $e->getMessage());
+                ->with('error', 'No se pudo enviar el correo: '.$e->getMessage());
         }
 
         $reporte->enviado_operador_at = now();

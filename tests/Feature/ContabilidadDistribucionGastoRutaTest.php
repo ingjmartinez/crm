@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -13,6 +15,8 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
     {
         parent::setUp();
         $this->withoutMiddleware();
+        Cache::put('cuentas_ruta_empresa:168', [], now()->addMinute());
+        Cache::put('cuentas_ruta_empresa:169', [], now()->addMinute());
         $this->crearEsquema();
     }
 
@@ -22,6 +26,9 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         Schema::dropIfExists('ruta_agencia');
         Schema::dropIfExists('centros_de_costo');
         Schema::dropIfExists('movimientos_rutas_v2_gastos');
+        Schema::dropIfExists('movimientos_rutas_v2_depositos');
+        Schema::dropIfExists('bancos_operaciones');
+        Schema::dropIfExists('cuentas_contables');
         Schema::dropIfExists('movimientos_rutas_v2_transacciones');
         Schema::dropIfExists('agencias');
         Schema::dropIfExists('rutas');
@@ -384,6 +391,122 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         $this->assertCount(0, $xpath->query('//*[@id="modalesSociosRuta"]//ancestor::*[contains(concat(" ", normalize-space(@class), " "), " main-content ")]'));
     }
 
+    public function test_muestra_el_centro_de_costo_de_la_ruta_importado_del_api(): void
+    {
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            'ruta_key' => 'RUTA DISTRITO', 'ruta_nombre' => 'Ruta Distrito', 'company_id' => '168',
+            'id_grupo' => '68', 'nombre_grupo' => 'Gj Ruta 02 - Distrito', 'id_sub_grupo' => '65',
+            'nombre_socio' => 'Consorcio De Bancas Joselito', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('centros_de_costo')->insert([
+            [
+                'id_centro_costo' => 1101, 'company_id' => '168-Consorcio Joselito Srl',
+                'id_grupo' => '68-05 - Gj Ruta 02 - Distrito', 'id_sub_grupo' => '65-Consorcio De Bancas Joselito',
+                'id_viejo' => null, 'descripcion' => 'Grupo: Ruta Distrito 2 Euris',
+                'inactivo' => false, 'ocultar' => false,
+            ],
+            [
+                'id_centro_costo' => 1102, 'company_id' => '168-Consorcio Joselito Srl',
+                'id_grupo' => '68-05 - Gj Ruta 02 - Distrito', 'id_sub_grupo' => '65-Consorcio De Bancas Joselito',
+                'id_viejo' => '7001', 'descripcion' => 'Terminal 7001',
+                'inactivo' => false, 'ocultar' => false,
+            ],
+            [
+                'id_centro_costo' => 1103, 'company_id' => '169-Otra Empresa',
+                'id_grupo' => '68-05 - Gj Ruta 02 - Distrito', 'id_sub_grupo' => '65-Consorcio De Bancas Joselito',
+                'id_viejo' => null, 'descripcion' => 'Grupo: Ruta Distrito 2 Euris',
+                'inactivo' => false, 'ocultar' => false,
+            ],
+        ]);
+
+        $response = $this->get(route('operaciones.distribucion-gastos-ruta'))
+            ->assertOk()
+            ->assertSee('Centro de costo ruta');
+
+        $grupoMapeo = $response->viewData('mapeosAgrupados')->first();
+        $this->assertSame([1101], $grupoMapeo['centros_costo_ruta']);
+        $this->assertSame([1101], $grupoMapeo['socios'][0]['centros_costo_ruta']);
+        $this->assertSame(2, substr_count($response->getContent(), '<td>1101</td>'));
+    }
+
+    public function test_identifica_automaticamente_la_cuenta_de_credito_segun_empresa_y_nombre_del_id_de_ruta(): void
+    {
+        Cache::forget('cuentas_ruta_empresa:168');
+        Cache::forget('cuentas_ruta_empresa:169');
+        Http::fake(function ($request) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $empresa = (string) ($query['intIdEmpresa'] ?? '');
+
+            return Http::response(['Result' => ['Det' => [
+                ['Cuenta' => '100130007', 'Descripcion' => $empresa === '168' ? 'Ruta Distrito 2' : 'Ruta Bani 8'],
+                ['Cuenta' => '100130003', 'Descripcion' => $empresa === '169' ? 'Ruta Bani 9' : 'Ruta San Carlos'],
+                ['Cuenta' => '100210003', 'Descripcion' => 'Banco'],
+            ]]], 200);
+        });
+
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            ['ruta_key' => 'RUTA DISTRITO', 'ruta_nombre' => 'Ruta Distrito', 'company_id' => '168',
+                'id_grupo' => '68', 'nombre_grupo' => 'Distrito 02 Euris', 'id_sub_grupo' => '65',
+                'nombre_socio' => 'Socio', 'created_at' => now(), 'updated_at' => now()],
+            ['ruta_key' => 'RUTA BANI 9', 'ruta_nombre' => 'Ruta Bani 9', 'company_id' => '169',
+                'id_grupo' => '42', 'nombre_grupo' => '05 - Ng Ruta Bani 9', 'id_sub_grupo' => '66',
+                'nombre_socio' => 'Socio', 'created_at' => now(), 'updated_at' => now()],
+            ['ruta_key' => 'RUTA SIN CUENTA', 'ruta_nombre' => 'Ruta Sin Cuenta', 'company_id' => '169',
+                'id_grupo' => '43', 'nombre_grupo' => '05 - Ng Ruta Sin Cuenta', 'id_sub_grupo' => '67',
+                'nombre_socio' => 'Socio', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $response = $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()
+            ->assertSee('Cuenta contable de ruta (crédito)')
+            ->assertSee('100130007 - Ruta Distrito 2')
+            ->assertSee('100130003 - Ruta Bani 9');
+        $rutas = $response->viewData('mapeosAgrupados')->keyBy('ruta_key');
+        $this->assertSame('100130007', $rutas['RUTA DISTRITO']['cuentas_credito'][0]['cuenta_codigo']);
+        $this->assertSame('100130003', $rutas['RUTA BANI 9']['cuentas_credito'][0]['cuenta_codigo']);
+        $this->assertNull($rutas['RUTA SIN CUENTA']['cuentas_credito'][0]['cuenta_codigo']);
+    }
+
+    public function test_muestra_depositos_aplicados_del_periodo_con_su_centro_de_costo_de_ruta(): void
+    {
+        $cuentaId = DB::table('cuentas_contables')->insertGetId(['cuenta' => '100210003', 'descripcion' => 'Banreservas']);
+        DB::table('bancos_operaciones')->insert(['nombre' => 'Ban Reservas', 'empresa_id' => '168', 'cuenta_codigo' => '100210003', 'cuenta_contable_id' => $cuentaId]);
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            'ruta_key' => 'RUTA DISTRITO', 'ruta_nombre' => 'Ruta Distrito', 'company_id' => '168',
+            'id_grupo' => '68', 'nombre_grupo' => 'Distrito', 'id_sub_grupo' => '65',
+            'nombre_socio' => 'Socio', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('centros_de_costo')->insert([
+            'id_centro_costo' => 1101, 'company_id' => '168-Consorcio Joselito Srl',
+            'id_grupo' => '68-05 - Gj Ruta 02 - Distrito', 'descripcion' => 'Grupo: Ruta Distrito 2',
+            'inactivo' => false, 'ocultar' => false,
+        ]);
+        DB::table('movimientos_rutas_v2_depositos')->insert([
+            ['fecha' => '2026-08-10', 'ruta_key' => 'RUTA DISTRITO', 'ruta' => 'Ruta Distrito', 'banco' => 'Ban Reservas', 'cuenta_banco' => '100210003', 'monto' => 87051, 'estado' => 'aplicado'],
+            ['fecha' => '2026-08-12', 'ruta_key' => 'RUTA DISTRITO', 'ruta' => 'Ruta Distrito', 'banco' => 'Ban Reservas', 'cuenta_banco' => null, 'monto' => 125, 'estado' => 'aplicado'],
+            ['fecha' => '2026-08-11', 'ruta_key' => 'RUTA DISTRITO', 'ruta' => 'Ruta Distrito', 'banco' => 'Ban Reservas', 'cuenta_banco' => null, 'monto' => 500, 'estado' => 'anulado'],
+            ['fecha' => '2026-09-01', 'ruta_key' => 'RUTA DISTRITO', 'ruta' => 'Ruta Distrito', 'banco' => 'Ban Reservas', 'cuenta_banco' => null, 'monto' => 100, 'estado' => 'aplicado'],
+            ['fecha' => '2026-08-10', 'ruta_key' => 'RUTA NORTE NG', 'ruta' => 'Ruta Norte NG', 'banco' => 'Ban Reservas', 'cuenta_banco' => null, 'monto' => 200, 'estado' => 'aplicado'],
+        ]);
+
+        $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()->assertSee('Depósitos de ruta');
+        $payload = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
+            'fecha_ini' => '2026-08-01', 'fecha_fin' => '2026-08-31', 'empresa' => 'GJ',
+        ]))->assertOk()->json();
+
+        $this->assertCount(4, $payload['depositos_ruta']);
+        $this->assertSame('001101', $payload['depositos_ruta'][0]['centro_costo']);
+        $this->assertSame('100210003', $payload['depositos_ruta'][0]['cuenta']);
+        $this->assertSame('Deposito Ruta Distrito Ban Reservas al 10/08/2026', $payload['depositos_ruta'][0]['descripcion']);
+        $this->assertSame(87051.0, (float) $payload['depositos_ruta'][0]['debito']);
+        $this->assertNull($payload['depositos_ruta'][0]['credito']);
+        $this->assertNull($payload['depositos_ruta'][1]['debito']);
+        $this->assertSame(87051.0, (float) $payload['depositos_ruta'][1]['credito']);
+        $this->assertSame('Deposito', $payload['depositos_ruta'][0]['movimiento']);
+        $this->assertSame('', $payload['depositos_ruta'][1]['movimiento']);
+        $this->assertSame('100210003', $payload['depositos_ruta'][2]['cuenta']);
+        $this->assertSame(125.0, (float) $payload['depositos_ruta'][2]['debito']);
+    }
+
     public function test_selector_busca_rutas_unicas_importadas_y_con_gastos_aplicados(): void
     {
         DB::table('movimientos_rutas_v2_transacciones')->insert([
@@ -538,6 +661,32 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
             $table->string('socio_codigo')->nullable();
             $table->string('socio_nombre')->nullable();
             $table->string('estado')->default('aplicado');
+            $table->timestamps();
+        });
+        Schema::create('movimientos_rutas_v2_depositos', function (Blueprint $table): void {
+            $table->id();
+            $table->date('fecha');
+            $table->string('ruta_key');
+            $table->string('ruta');
+            $table->decimal('monto', 15, 2);
+            $table->string('banco');
+            $table->string('empresa_id', 3)->nullable();
+            $table->string('cuenta_banco')->nullable();
+            $table->string('estado')->default('aplicado');
+            $table->timestamps();
+        });
+        Schema::create('cuentas_contables', function (Blueprint $table): void {
+            $table->id();
+            $table->string('cuenta')->unique();
+            $table->string('descripcion');
+            $table->timestamps();
+        });
+        Schema::create('bancos_operaciones', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nombre')->unique();
+            $table->string('empresa_id', 3)->nullable();
+            $table->string('cuenta_codigo')->nullable();
+            $table->unsignedBigInteger('cuenta_contable_id')->nullable();
             $table->timestamps();
         });
         Schema::create('movimientos_rutas_v2_transacciones', function (Blueprint $table): void {

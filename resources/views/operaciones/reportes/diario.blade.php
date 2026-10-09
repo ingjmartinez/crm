@@ -252,18 +252,21 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <label class="form-label">Nombre del banco</label>
-                        <input
-                            type="text"
-                            name="nombre_banco"
-                            class="form-control"
-                            maxlength="150"
-                            placeholder="Ej: Banco Popular"
-                            value="{{ old('nombre_banco') }}"
-                            required
-                        >
-                        @if($errors->guardarBanco->has('nombre_banco'))
-                            <div class="text-danger small mt-1">{{ $errors->guardarBanco->first('nombre_banco') }}</div>
+                        <label for="empresa-banco-diario" class="form-label">Empresa</label>
+                        <select name="empresa_id" id="empresa-banco-diario" class="form-select" required>
+                            <option value="">Selecciona una empresa</option>
+                            <option value="168" @selected(old('empresa_id') === '168')>168 - Grupo Joselito</option>
+                            <option value="169" @selected(old('empresa_id') === '169')>169 - Negosur</option>
+                        </select>
+                        @if($errors->guardarBanco->has('empresa_id'))
+                            <div class="text-danger small mt-1">{{ $errors->guardarBanco->first('empresa_id') }}</div>
+                        @endif
+                        <label for="cuenta-banco-diario" class="form-label mt-3">Cuenta bancaria</label>
+                        <select name="cuenta_codigo" id="cuenta-banco-diario" class="form-select" data-selected="{{ old('cuenta_codigo') }}" required disabled>
+                            <option value="">Selecciona primero la empresa</option>
+                        </select>
+                        @if($errors->guardarBanco->has('cuenta_codigo'))
+                            <div class="text-danger small mt-1">{{ $errors->guardarBanco->first('cuenta_codigo') }}</div>
                         @endif
 
                         <div class="mt-3">
@@ -650,6 +653,31 @@
 @endphp
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const empresaBancoDiario = document.getElementById('empresa-banco-diario');
+        const cuentaBancoDiario = document.getElementById('cuenta-banco-diario');
+        const urlCuentasBancoDiario = @json(route('operaciones.bancos.cuentas', ['empresaId' => '__EMPRESA__']));
+        async function cargarCuentasBancoDiario() {
+            const empresa = empresaBancoDiario.value;
+            cuentaBancoDiario.replaceChildren(new Option(empresa ? 'Cargando cuentas...' : 'Selecciona primero la empresa', ''));
+            cuentaBancoDiario.disabled = true;
+            if (!empresa) return;
+            try {
+                const respuesta = await fetch(urlCuentasBancoDiario.replace('__EMPRESA__', empresa), { headers: { Accept: 'application/json' } });
+                if (!respuesta.ok) throw new Error('No se pudo cargar el catálogo.');
+                const datos = await respuesta.json();
+                cuentaBancoDiario.replaceChildren(new Option('Selecciona una cuenta bancaria', ''));
+                (datos.cuentas || []).forEach(cuenta => cuentaBancoDiario.add(new Option(`${cuenta.cuenta} - ${cuenta.descripcion}`, cuenta.cuenta)));
+                cuentaBancoDiario.value = cuentaBancoDiario.dataset.selected || '';
+                cuentaBancoDiario.disabled = false;
+            } catch (error) {
+                cuentaBancoDiario.replaceChildren(new Option(error.message, ''));
+            }
+        }
+        empresaBancoDiario.addEventListener('change', () => {
+            cuentaBancoDiario.dataset.selected = '';
+            cargarCuentasBancoDiario();
+        });
+        if (empresaBancoDiario.value) cargarCuentasBancoDiario();
         if (typeof Dropzone !== 'undefined') {
             Dropzone.autoDiscover = false;
         }

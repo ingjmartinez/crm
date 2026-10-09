@@ -605,7 +605,9 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     // Modulo Operaciones
     Route::get('/operaciones', [ModuleHubController::class, 'operaciones'])->name('operaciones.index');
     Route::get('/operaciones/bancos', [BancoOperacionController::class, 'index'])->name('operaciones.bancos.index');
+    Route::get('/operaciones/bancos/cuentas/{empresaId}', [BancoOperacionController::class, 'cuentas'])->name('operaciones.bancos.cuentas');
     Route::post('/operaciones/bancos', [BancoOperacionController::class, 'store'])->name('operaciones.bancos.store');
+    Route::put('/operaciones/bancos/{banco}', [BancoOperacionController::class, 'update'])->name('operaciones.bancos.update');
     Route::delete('/operaciones/bancos/{banco}', [BancoOperacionController::class, 'destroy'])->name('operaciones.bancos.destroy');
     Route::get('/operaciones/deposito-ruta', [OperacionDepositoRutaController::class, 'index'])->name('operaciones.deposito-ruta');
     Route::get('/operaciones/deposito-ruta/data', [OperacionDepositoRutaController::class, 'data'])->name('operaciones.deposito-ruta.data');

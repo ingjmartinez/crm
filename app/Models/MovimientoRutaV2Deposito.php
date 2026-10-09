@@ -10,7 +10,7 @@ class MovimientoRutaV2Deposito extends Model
     protected $table = 'movimientos_rutas_v2_depositos';
 
     protected $fillable = [
-        'fecha', 'ruta_key', 'ruta', 'monto', 'banco', 'referencia',
+        'fecha', 'ruta_key', 'ruta', 'monto', 'banco', 'empresa_id', 'cuenta_banco', 'referencia',
         'comprobante_path', 'observacion', 'estado', 'user_id',
     ];
 

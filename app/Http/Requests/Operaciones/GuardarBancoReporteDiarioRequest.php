@@ -4,36 +4,31 @@ namespace App\Http\Requests\Operaciones;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class GuardarBancoOperacionRequest extends FormRequest
+class GuardarBancoReporteDiarioRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
+    protected $errorBag = 'guardarBanco';
+
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, array<int, mixed>>
-     */
+    /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
         return [
             'empresa_id' => ['required', 'in:168,169'],
             'cuenta_codigo' => ['required', 'string', 'max:50', 'regex:/^10021[0-9]+$/'],
+            'fecha' => ['nullable', 'date'],
         ];
     }
 
+    /** @return array<string, string> */
     public function messages(): array
     {
         return [
             'empresa_id.required' => 'Selecciona la empresa.',
-            'empresa_id.in' => 'La empresa seleccionada no es válida.',
-            'cuenta_codigo.required' => 'Selecciona la cuenta bancaria de la empresa.',
-            'cuenta_codigo.regex' => 'Selecciona una cuenta bancaria válida.',
+            'cuenta_codigo.required' => 'Selecciona una cuenta bancaria.',
         ];
     }
 }

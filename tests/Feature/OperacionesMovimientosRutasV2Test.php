@@ -27,6 +27,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutMiddleware(\App\Http\Middleware\EnsureViewPermission::class);
 
         Schema::create('cuentas_contables', function (Blueprint $table): void {
             $table->id();
@@ -68,6 +69,10 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         Schema::create('bancos_operaciones', function (Blueprint $table): void {
             $table->id();
             $table->string('nombre')->unique();
+            $table->string('empresa_id', 3)->nullable();
+            $table->string('cuenta_codigo')->nullable();
+            $table->string('cuenta_descripcion')->nullable();
+            $table->unsignedBigInteger('cuenta_contable_id')->nullable();
             $table->timestamps();
         });
         Schema::create('movimientos_rutas_v2_importaciones', function (Blueprint $table): void {
@@ -104,6 +109,8 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             $table->string('ruta');
             $table->decimal('monto', 15, 2);
             $table->string('banco');
+            $table->string('empresa_id', 3)->nullable();
+            $table->string('cuenta_banco')->nullable();
             $table->string('referencia')->nullable();
             $table->string('comprobante_path')->nullable();
             $table->text('observacion')->nullable();
@@ -392,6 +399,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
 
     public function test_aplica_deposito_y_gasto_por_ajax_sin_recargar_la_tabla(): void
     {
+        $banco = BancoOperacion::query()->create(['nombre' => 'Banreservas', 'empresa_id' => '168', 'cuenta_codigo' => '100210003']);
         app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
             $this->retiro('T-AJAX', '03/08/2026', '05 - HAINA', -1000),
         ]), null, '2026-08-03');
@@ -401,7 +409,8 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             'ruta_key' => '05 - HAINA',
             'ruta' => '05 - HAINA',
             'monto' => '200.00',
-            'banco' => 'Banreservas',
+            'empresa_id' => '168',
+            'banco_id' => $banco->id,
             'referencia' => 'AJAX-001',
         ])->assertOk();
 
@@ -423,7 +432,9 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertSame(100.0, (float) $gasto->json('ruta.gastos_ruta'));
         $this->assertSame(700.0, (float) $gasto->json('ruta.pendiente'));
         $this->assertSame(700.0, (float) $gasto->json('resumen.pendiente'));
-        $this->assertDatabaseHas('movimientos_rutas_v2_depositos', ['referencia' => 'AJAX-001', 'monto' => 200]);
+        $this->assertDatabaseHas('movimientos_rutas_v2_depositos', ['referencia' => 'AJAX-001', 'monto' => 200, 'cuenta_banco' => '100210003']);
+        BancoOperacion::query()->where('nombre', 'Banreservas')->update(['cuenta_codigo' => '100210002']);
+        $this->assertDatabaseHas('movimientos_rutas_v2_depositos', ['referencia' => 'AJAX-001', 'cuenta_banco' => '100210003']);
         $this->assertDatabaseHas('movimientos_rutas_v2_gastos', [
             'concepto' => 'Combustibles Y Lubricantes',
             'cuenta_codigo' => '600120005',
@@ -435,6 +446,54 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringContainsString('fetch(formulario.action', $vista);
         $this->assertStringContainsString('tablaMovimientos.row(fila).data(datos).draw(false)', $vista);
         $this->assertStringNotContainsString('if (confirmado) formulario.submit();', $vista);
+    }
+
+    public function test_no_aplica_depositos_con_bancos_sin_cuenta_contable(): void
+    {
+        $banco = BancoOperacion::query()->create(['nombre' => 'Banco sin cuenta', 'empresa_id' => '168']);
+        app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-SIN-CUENTA', '03/08/2026', '05 - HAINA', -1000),
+        ]), null, '2026-08-03');
+
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - HAINA',
+            'ruta' => '05 - HAINA',
+            'monto' => '200.00',
+            'empresa_id' => '168',
+            'banco_id' => $banco->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors('banco_id');
+
+        $bancoOtraEmpresa = BancoOperacion::query()->create(['nombre' => 'Coopcentral', 'empresa_id' => '169', 'cuenta_codigo' => '100210003']);
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - HAINA',
+            'ruta' => '05 - HAINA',
+            'monto' => '200.00',
+            'empresa_id' => '168',
+            'banco_id' => $bancoOtraEmpresa->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors('banco_id');
+
+        $this->assertDatabaseCount('movimientos_rutas_v2_depositos', 0);
+    }
+
+    public function test_rechaza_la_empresa_del_banco_si_no_corresponde_a_la_ruta(): void
+    {
+        $banco = BancoOperacion::query()->create(['nombre' => 'Coopcentral', 'empresa_id' => '169', 'cuenta_codigo' => '100210003']);
+        app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-GJ-BANCO', '03/08/2026', '05 - GJ HAINA', -1000),
+        ]), null, '2026-08-03');
+
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - GJ HAINA',
+            'ruta' => '05 - GJ HAINA',
+            'monto' => '200.00',
+            'empresa_id' => '169',
+            'banco_id' => $banco->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors('empresa_id');
+
+        $this->assertDatabaseCount('movimientos_rutas_v2_depositos', 0);
     }
 
     public function test_clasifica_un_gasto_existente_sin_perder_sus_datos_originales(): void

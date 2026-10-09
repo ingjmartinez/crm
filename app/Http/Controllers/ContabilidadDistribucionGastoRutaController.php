@@ -9,17 +9,23 @@ use App\Http\Requests\Operaciones\GenerarDistribucionGastoRutaPdfRequest;
 use App\Http\Requests\Operaciones\GuardarDistribucionGastoRutaMapeoRequest;
 use App\Models\DistribucionGastoRutaMapeo;
 use App\Services\Contabilidad\DistribucionGastoRutaService;
+use App\Services\Operaciones\CatalogoCuentasRutaEmpresa;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
 
 class ContabilidadDistribucionGastoRutaController extends Controller
 {
-    public function __construct(private readonly DistribucionGastoRutaService $distribucionService) {}
+    public function __construct(
+        private readonly DistribucionGastoRutaService $distribucionService,
+        private readonly CatalogoCuentasRutaEmpresa $catalogoCuentasRuta,
+    ) {}
 
     public function index(): View
     {
@@ -29,13 +35,14 @@ class ContabilidadDistribucionGastoRutaController extends Controller
             ->orderBy('nombre_socio')
             ->get();
         $terminalesPorMapeo = $this->distribucionService->terminalesPorMapeo($mapeos);
+        $centrosCostoRutaPorMapeo = $this->distribucionService->centrosCostoRutaPorMapeo($mapeos);
         $rutasConfiguradas = $mapeos->pluck('ruta_key')->unique();
         $rutasConfigurables = $rutasDisponibles
             ->reject(fn (object $ruta): bool => $rutasConfiguradas->contains($ruta->ruta_key))
             ->values();
         $mapeosAgrupados = $mapeos
             ->groupBy(fn (DistribucionGastoRutaMapeo $mapeo): string => $mapeo->ruta_key)
-            ->map(function (Collection $relaciones) use ($terminalesPorMapeo): array {
+            ->map(function (Collection $relaciones) use ($terminalesPorMapeo, $centrosCostoRutaPorMapeo): array {
                 /** @var DistribucionGastoRutaMapeo $primeraRelacion */
                 $primeraRelacion = $relaciones->first();
 
@@ -43,10 +50,30 @@ class ContabilidadDistribucionGastoRutaController extends Controller
                     'ruta_key' => $primeraRelacion->ruta_key,
                     'ruta_nombre' => $primeraRelacion->ruta_nombre,
                     'company_ids' => $relaciones->pluck('company_id')->unique()->values()->all(),
+                    'cuentas_credito' => $relaciones->groupBy('company_id')
+                        ->map(function (Collection $mapeos, string $companyId): array {
+                            try {
+                                $cuenta = $this->catalogoCuentasRuta->resolver($companyId, $mapeos->first()->nombre_grupo);
+                            } catch (ConnectionException|RuntimeException) {
+                                $cuenta = null;
+                            }
+
+                            return [
+                                'company_id' => $companyId,
+                                'cuenta_codigo' => $cuenta['cuenta'] ?? null,
+                                'cuenta_descripcion' => $cuenta['descripcion'] ?? null,
+                            ];
+                        })->values()->all(),
                     'terminales' => $relaciones
                         ->flatMap(fn (DistribucionGastoRutaMapeo $mapeo): array => $terminalesPorMapeo->get($mapeo->id, []))
                         ->unique()
                         ->count(),
+                    'centros_costo_ruta' => $relaciones
+                        ->flatMap(fn (DistribucionGastoRutaMapeo $mapeo): array => $centrosCostoRutaPorMapeo->get($mapeo->id, []))
+                        ->unique()
+                        ->sort()
+                        ->values()
+                        ->all(),
                     'socios' => $relaciones->map(fn (DistribucionGastoRutaMapeo $mapeo): array => [
                         'id' => $mapeo->id,
                         'company_id' => $mapeo->company_id,
@@ -55,6 +82,7 @@ class ContabilidadDistribucionGastoRutaController extends Controller
                         'id_sub_grupo' => $mapeo->id_sub_grupo,
                         'nombre_socio' => $mapeo->nombre_socio,
                         'terminales' => count($terminalesPorMapeo->get($mapeo->id, [])),
+                        'centros_costo_ruta' => $centrosCostoRutaPorMapeo->get($mapeo->id, []),
                     ])->values()->all(),
                 ];
             })
