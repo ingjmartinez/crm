@@ -1161,6 +1161,7 @@
                             <thead class="table-light sticky-top">
                                 <tr>
                                     <th style="min-width: 280px;">Nombre</th>
+                                    <th style="min-width: 150px;">Empresa</th>
                                     <th style="min-width: 100px;">Agencias</th>
                                     <th style="min-width: 100px;">Validas</th>
                                     <th style="min-width: 130px;">Monto en retención</th>
@@ -6005,7 +6006,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         const rows = getCoordinatorDisplayRows();
 
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay coordinadores registrados.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No hay coordinadores registrados.</td></tr>';
             updateCoordinatorSummary();
             return;
         }
@@ -6021,6 +6022,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             tr.classList.toggle('table-warning', excluded);
             tr.innerHTML = `
                 <td><input type="text" class="form-control form-control-sm coord-input" data-field="nombre" data-idx="${idx}" value="${escapeHtml(row.nombre)}"></td>
+                <td>${escapeHtml(getCoordinatorCompanyLabel(row))}</td>
                 <td class="text-center fw-semibold">${toNumber(row.agencias)}</td>
                 <td class="text-center fw-semibold text-success">${toNumber(row.agencias_validas)}</td>
                 <td class="text-center">

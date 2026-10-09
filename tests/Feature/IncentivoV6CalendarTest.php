@@ -851,6 +851,30 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('function getCoordinatorExcludedTotal()', $view);
     }
 
+    public function test_coordinator_breakdown_shows_each_coordinators_company(): void
+    {
+        $view = view('incentivos.reporte-nuevo-incentivo-v6', [
+            'coordinadores' => collect([
+                ['nombre' => 'Coordinador de prueba', 'empresa' => 'Negosur'],
+            ]),
+            'administrativosConfig' => [],
+            'terminalesExcluidasIncentivo' => [],
+        ])->render();
+
+        $modalStart = strpos($view, 'id="modalCoordinadores"');
+        $modalEnd = strpos($view, 'id="modalCoordinadorDetalle"', $modalStart);
+        $tableStart = strpos($view, 'function renderCoordinatorTable()');
+        $tableEnd = strpos($view, 'function renderCoordinatorDetailTable(', $tableStart);
+
+        $this->assertNotFalse($modalStart);
+        $this->assertNotFalse($modalEnd);
+        $this->assertNotFalse($tableStart);
+        $this->assertNotFalse($tableEnd);
+        $this->assertStringContainsString('<th style="min-width: 150px;">Empresa</th>', substr($view, $modalStart, $modalEnd - $modalStart));
+        $this->assertStringContainsString('escapeHtml(getCoordinatorCompanyLabel(row))', substr($view, $tableStart, $tableEnd - $tableStart));
+        $this->assertStringContainsString('"empresa":"Negosur"', $view);
+    }
+
     public function test_horario_excluded_cedulas_are_removed_from_agent_payment_txt(): void
     {
         $view = view('incentivos.reporte-nuevo-incentivo-v6', [
