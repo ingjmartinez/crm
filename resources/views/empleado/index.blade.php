@@ -1,9 +1,217 @@
 @extends('app')
 
 @section('content')
+    <style>
+        .employee-page {
+            --employee-ink: #172033;
+            --employee-muted: #64748b;
+            --employee-border: #dfe7f1;
+            --employee-blue: #405189;
+            --employee-teal: #0f9d92;
+            color: var(--employee-ink);
+        }
+
+        .employee-page .employee-panel {
+            background: var(--vz-card-bg);
+            border: 1px solid var(--employee-border);
+            border-radius: 1rem;
+            box-shadow: 0 8px 28px rgba(15, 23, 42, .055);
+            overflow: hidden;
+        }
+
+        .employee-page .employee-hero {
+            background: linear-gradient(120deg, #f7f9ff 0%, #eef5ff 58%, #eaf8f5 100%);
+            border: 1px solid #dce8f5;
+            border-radius: 1.1rem;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .employee-page .employee-hero::after {
+            background: radial-gradient(circle, rgba(64, 81, 137, .11), transparent 68%);
+            content: '';
+            height: 23rem;
+            pointer-events: none;
+            position: absolute;
+            right: -7rem;
+            top: -10rem;
+            width: 23rem;
+        }
+
+        .employee-page .employee-eyebrow {
+            color: var(--employee-blue);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .11em;
+            text-transform: uppercase;
+        }
+
+        .employee-page .employee-hero h1 {
+            color: #1c2a49;
+            font-size: clamp(1.7rem, 2.5vw, 2.55rem);
+            font-weight: 750;
+            letter-spacing: -.035em;
+            line-height: 1.12;
+        }
+
+        .employee-page .employee-hero-copy {
+            color: #566782;
+            max-width: 38rem;
+        }
+
+        .employee-page .employee-filter-panel {
+            background: rgba(255, 255, 255, .85);
+            border: 1px solid #dce5f1;
+            border-radius: .9rem;
+            box-shadow: 0 10px 30px rgba(41, 67, 112, .07);
+            position: relative;
+            z-index: 1;
+        }
+
+        .employee-page .employee-section-label {
+            color: var(--employee-blue);
+            font-size: .7rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        .employee-page .employee-section-title {
+            color: var(--employee-ink);
+            font-size: 1.18rem;
+            font-weight: 700;
+            margin: .15rem 0 0;
+        }
+
+        .employee-page .employee-kpi {
+            border-top: 3px solid var(--employee-blue);
+            min-height: 10.3rem;
+        }
+
+        .employee-page .employee-kpi.is-teal { border-top-color: #0f9d92; }
+        .employee-page .employee-kpi.is-coral { border-top-color: #e98b74; }
+        .employee-page .employee-kpi.is-gold { border-top-color: #e9ad50; }
+
+        .employee-page .employee-kpi-label {
+            color: var(--employee-muted);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .employee-page .employee-kpi-value {
+            color: var(--employee-ink);
+            font-size: clamp(1.5rem, 2vw, 2rem);
+            font-weight: 750;
+            letter-spacing: -.04em;
+            line-height: 1.2;
+        }
+
+        .employee-page .employee-icon {
+            align-items: center;
+            background: #eef2ff;
+            border-radius: .8rem;
+            color: var(--employee-blue);
+            display: inline-flex;
+            font-size: 1.35rem;
+            height: 3rem;
+            justify-content: center;
+            width: 3rem;
+        }
+
+        .employee-page .employee-kpi.is-teal .employee-icon { background: #e4f7f2; color: #0d9488; }
+        .employee-page .employee-kpi.is-coral .employee-icon { background: #fff0e9; color: #db765e; }
+        .employee-page .employee-kpi.is-gold .employee-icon { background: #fff6e5; color: #c78621; }
+
+        .employee-page .employee-panel-header {
+            align-items: flex-start;
+            border-bottom: 1px solid #e9eef5;
+            display: flex;
+            gap: .8rem;
+            justify-content: space-between;
+            padding: 1.3rem 1.4rem 0;
+        }
+
+        .employee-page .employee-panel-header h3 {
+            color: var(--employee-ink);
+            font-size: 1rem;
+            font-weight: 700;
+            margin: 0 0 .25rem;
+        }
+
+        .employee-page .employee-panel-header p {
+            color: var(--employee-muted);
+            font-size: .8rem;
+            margin-bottom: 1rem;
+        }
+
+        .employee-page .employee-chart {
+            min-height: 320px;
+        }
+
+        .employee-page .employee-table th {
+            color: #52617a;
+            font-size: .71rem;
+            font-weight: 800;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .employee-page .employee-table td { vertical-align: middle; }
+
+        .employee-page .employee-update-status {
+            align-items: center;
+            color: var(--employee-muted);
+            display: inline-flex;
+            font-size: .78rem;
+            gap: .45rem;
+        }
+
+        .employee-page .employee-update-status::before {
+            background: #0f9d92;
+            border-radius: 50%;
+            content: '';
+            height: .45rem;
+            width: .45rem;
+        }
+
+        html[data-layout-mode="dark"] .employee-page {
+            --employee-ink: #e9eef7;
+            --employee-muted: #a8b4c6;
+            --employee-border: #344159;
+        }
+
+        html[data-layout-mode="dark"] .employee-page .employee-hero {
+            background: linear-gradient(120deg, #202c42, #1d3443);
+            border-color: #344159;
+        }
+
+        html[data-layout-mode="dark"] .employee-page .employee-filter-panel {
+            background: rgba(29, 43, 61, .95);
+            border-color: #344159;
+        }
+
+        html[data-layout-mode="dark"] .employee-page .employee-hero h1,
+        html[data-layout-mode="dark"] .employee-page .employee-kpi-value,
+        html[data-layout-mode="dark"] .employee-page .employee-panel-header h3 {
+            color: var(--employee-ink);
+        }
+
+        html[data-layout-mode="dark"] .employee-page .employee-hero-copy,
+        html[data-layout-mode="dark"] .employee-page .employee-panel-header p {
+            color: var(--employee-muted);
+        }
+
+        @media (max-width: 575.98px) {
+            .employee-page .employee-panel-header { padding: 1.1rem 1.1rem 0; }
+            .employee-page .employee-chart { min-height: 280px; }
+        }
+    </style>
     <div class="main-content">
         <div class="page-content">
-            <div class="container-fluid">
+            <div class="container-fluid employee-page">
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -12,7 +220,7 @@
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
                                     <li class="breadcrumb-item"><a href="{{ route('recursos-humanos.index') }}">Recursos Humanos</a></li>
-                                    <li class="breadcrumb-item active">Dashboard</li>
+                                    <li class="breadcrumb-item active">Empleados</li>
                                 </ol>
                             </div>
                         </div>
@@ -21,44 +229,48 @@
 
                 <div class="row g-3 mb-3">
                     <div class="col-12">
-                        <div class="card overflow-hidden border-0 shadow-sm" style="background: linear-gradient(135deg, #0f766e 0%, #1d4ed8 55%, #312e81 100%);">
-                            <div class="card-body p-4 p-lg-5 text-white position-relative">
+                        <div class="employee-hero">
+                            <div class="p-4 p-lg-5 position-relative">
                                 <div class="row align-items-center g-4">
                                     <div class="col-lg-7">
-                                        <span class="badge rounded-pill bg-white bg-opacity-10 text-white mb-3">Mini Dashboard RRHH</span>
-                                        <h2 class="fw-semibold text-white mb-2">Vista de Empleados, estatus y masa salariales</h2>
-                                        <p class="mb-0 text-white text-opacity-75">
-                                            Filtra por empresa y analiza usuarios activos, inactivos y salario mensual de usuarios activos agrupado por ciudad.
+                                        <div class="employee-eyebrow mb-2">Personas · Recursos Humanos</div>
+                                        <h1 class="mb-3">Panorama de empleados</h1>
+                                        <p class="employee-hero-copy mb-3">
+                                            Plantilla, actividad y masa salarial en una sola vista. Explora la distribución por ciudad y consulta la maestra de empleados.
                                         </p>
+                                        <span class="employee-update-status" id="dashboardActualizado">Preparando indicadores</span>
                                     </div>
                                     <div class="col-lg-5">
+                                        <div class="employee-filter-panel p-3 p-lg-4">
+                                        <div class="employee-section-label mb-3">Filtros y acciones</div>
                                         <div class="row g-3">
                                             <div class="col-sm-6">
-                                                <label class="form-label text-white text-opacity-75">Empresa</label>
-                                                <select id="empresa" class="form-select border-0 shadow-sm">
+                                                <label class="form-label fw-semibold" for="empresa">Empresa</label>
+                                                <select id="empresa" class="form-select">
                                                     <option value="">Todas</option>
                                                     <option value="168">168 = Grupo Joselito</option>
                                                     <option value="169">169 = Negosur</option>
                                                 </select>
                                             </div>
                                             <div class="col-sm-6">
-                                                <label class="form-label text-white text-opacity-75">Cédula específica</label>
-                                                <input type="text" id="cedulaSincronizar" class="form-control border-0 shadow-sm"
+                                                <label class="form-label fw-semibold" for="cedulaSincronizar">Cédula para sincronizar</label>
+                                                <input type="text" id="cedulaSincronizar" class="form-control"
                                                        inputmode="numeric" maxlength="13" placeholder="Opcional: 11 dígitos">
                                             </div>
-                                            <div class="col-12 d-flex align-items-end">
-                                                <div class="d-grid gap-2 w-100">
-                                                    <button type="button" class="btn btn-light text-primary fw-semibold" id="btnRefrescarDashboard">
-                                                        Actualizar dashboard
+                                            <div class="col-12">
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    <button type="button" class="btn btn-primary fw-semibold flex-grow-1" id="btnRefrescarDashboard">
+                                                        <i class="ri-refresh-line me-1"></i> Actualizar datos
                                                     </button>
-                                                    <button type="button" class="btn btn-outline-light fw-semibold" id="btnSincronizar">
-                                                        Sincronizar empleados
+                                                    <button type="button" class="btn btn-outline-primary fw-semibold flex-grow-1" id="btnSincronizar">
+                                                        <i class="ri-download-cloud-2-line me-1"></i> Sincronizar
                                                     </button>
-                                                    <a href="{{ route('empleados.ventas-bet-sin-maestra') }}" class="btn btn-outline-light fw-semibold">
-                                                        Revisar cédulas de ventas
+                                                    <a href="{{ route('empleados.ventas-bet-sin-maestra') }}" class="btn btn-soft-secondary fw-semibold w-100">
+                                                        Revisar cédulas de ventas <i class="ri-arrow-right-up-line ms-1"></i>
                                                     </a>
                                                 </div>
                                             </div>
+                                        </div>
                                         </div>
                                     </div>
                                 </div>
@@ -67,17 +279,25 @@
                     </div>
                 </div>
 
-                <div class="row g-3 mb-3">
+                <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+                    <div>
+                        <div class="employee-section-label">Indicadores clave</div>
+                        <h2 class="employee-section-title">Plantilla y nómina</h2>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary" id="badgeEmpresaActual">Todas las empresas</span>
+                </div>
+
+                <div class="row g-3 mb-4">
                     <div class="col-md-6 col-xl-3">
-                        <div class="card border-0 shadow-sm h-100">
+                        <div class="employee-panel employee-kpi h-100">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-3">
                                     <div>
-                                        <div class="text-muted text-uppercase small fw-semibold">Empleados totales</div>
-                                        <div class="display-6 fw-semibold mb-0" id="kpi-total-empleados">0</div>
+                                        <div class="employee-kpi-label mb-2">Empleados totales</div>
+                                        <div class="employee-kpi-value mb-0" id="kpi-total-empleados">0</div>
                                     </div>
-                                    <div class="avatar-sm">
-                                        <span class="avatar-title rounded-circle bg-primary-subtle text-primary fs-4">
+                                    <div>
+                                        <span class="employee-icon">
                                             <i class="ri-team-line"></i>
                                         </span>
                                     </div>
@@ -87,33 +307,33 @@
                         </div>
                     </div>
                     <div class="col-md-6 col-xl-3">
-                        <div class="card border-0 shadow-sm h-100">
+                        <div class="employee-panel employee-kpi is-teal h-100">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-3">
                                     <div>
-                                        <div class="text-muted text-uppercase small fw-semibold">Activos</div>
-                                        <div class="display-6 fw-semibold text-success mb-0" id="kpi-activos">0</div>
+                                        <div class="employee-kpi-label mb-2">Activos</div>
+                                        <div class="employee-kpi-value mb-0" id="kpi-activos">0</div>
                                     </div>
-                                    <div class="avatar-sm">
-                                        <span class="avatar-title rounded-circle bg-success-subtle text-success fs-4">
+                                    <div>
+                                        <span class="employee-icon">
                                             <i class="ri-user-follow-line"></i>
                                         </span>
                                     </div>
                                 </div>
-                                <div class="text-muted small">Fecha de salida vacía = empleado activo.</div>
+                                <div class="text-muted small"><span id="kpi-tasa-actividad">0%</span> de la plantilla está activa.</div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-6 col-xl-3">
-                        <div class="card border-0 shadow-sm h-100">
+                        <div class="employee-panel employee-kpi is-coral h-100">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-3">
                                     <div>
-                                        <div class="text-muted text-uppercase small fw-semibold">Inactivos</div>
-                                        <div class="display-6 fw-semibold text-danger mb-0" id="kpi-inactivos">0</div>
+                                        <div class="employee-kpi-label mb-2">Inactivos</div>
+                                        <div class="employee-kpi-value mb-0" id="kpi-inactivos">0</div>
                                     </div>
-                                    <div class="avatar-sm">
-                                        <span class="avatar-title rounded-circle bg-danger-subtle text-danger fs-4">
+                                    <div>
+                                        <span class="employee-icon">
                                             <i class="ri-user-unfollow-line"></i>
                                         </span>
                                     </div>
@@ -123,15 +343,15 @@
                         </div>
                     </div>
                     <div class="col-md-6 col-xl-3">
-                        <div class="card border-0 shadow-sm h-100">
+                        <div class="employee-panel employee-kpi is-gold h-100">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-3">
                                     <div>
-                                        <div class="text-muted text-uppercase small fw-semibold">Salario mensual</div>
-                                        <div class="fs-2 fw-semibold text-info mb-0" id="kpi-salario-total">0.00</div>
+                                        <div class="employee-kpi-label mb-2">Masa salarial mensual</div>
+                                        <div class="employee-kpi-value mb-0" id="kpi-salario-total">0.00</div>
                                     </div>
-                                    <div class="avatar-sm">
-                                        <span class="avatar-title rounded-circle bg-info-subtle text-info fs-4">
+                                    <div>
+                                        <span class="employee-icon">
                                             <i class="ri-money-dollar-circle-line"></i>
                                         </span>
                                     </div>
@@ -142,62 +362,77 @@
                     </div>
                 </div>
 
-                <div class="row g-3 mb-3">
+                <div class="mb-3">
+                    <div class="employee-section-label">Análisis visual</div>
+                    <h2 class="employee-section-title">Distribución de la plantilla</h2>
+                </div>
+
+                <div class="row g-3 mb-4">
                     <div class="col-xl-4">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header bg-transparent border-0">
-                                <h5 class="card-title mb-0">Estado de empleados</h5>
+                        <div class="employee-panel h-100">
+                            <div class="employee-panel-header">
+                                <div><h3>Estado de empleados</h3><p>Activos e inactivos de la empresa seleccionada</p></div>
+                                <span class="employee-icon"><i class="ri-pie-chart-2-line"></i></span>
                             </div>
                             <div class="card-body">
-                                <div id="chartEstadoEmpleados" style="min-height: 320px;"></div>
+                                <div id="chartEstadoEmpleados" class="employee-chart"></div>
                             </div>
                         </div>
                     </div>
                     <div class="col-xl-8">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header bg-transparent border-0">
-                                <h5 class="card-title mb-0">Salario mensual por ciudad de usuarios activos</h5>
+                        <div class="employee-panel h-100">
+                            <div class="employee-panel-header">
+                                <div><h3>Masa salarial por ciudad</h3><p>Salario mensual de empleados activos · 10 ciudades principales</p></div>
+                                <span class="employee-icon"><i class="ri-bar-chart-grouped-line"></i></span>
                             </div>
                             <div class="card-body">
-                                <div id="chartSalarioCiudad" style="min-height: 320px;"></div>
+                                <div id="chartSalarioCiudad" class="employee-chart"></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row g-3 mb-3">
+                <div class="row g-3 mb-4">
                     <div class="col-xl-6">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header bg-transparent border-0">
-                                <h5 class="card-title mb-0">Cantidad de empleados por ciudad</h5>
+                        <div class="employee-panel h-100">
+                            <div class="employee-panel-header">
+                                <div><h3>Empleados por ciudad</h3><p>Volumen de personas en las ciudades principales</p></div>
+                                <span class="employee-icon"><i class="ri-map-pin-user-line"></i></span>
                             </div>
                             <div class="card-body">
-                                <div id="chartEmpleadosCiudad" style="min-height: 320px;"></div>
+                                <div id="chartEmpleadosCiudad" class="employee-chart"></div>
                             </div>
                         </div>
                     </div>
                     <div class="col-xl-6">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header bg-transparent border-0">
-                                <h5 class="card-title mb-0">Participacion salarial por empresa</h5>
+                        <div class="employee-panel h-100">
+                            <div class="employee-panel-header">
+                                <div><h3>Participación salarial</h3><p>Distribución de la masa salarial activa por empresa</p></div>
+                                <span class="employee-icon"><i class="ri-donut-chart-line"></i></span>
                             </div>
                             <div class="card-body">
-                                <div id="chartSalarioEmpresa" style="min-height: 320px;"></div>
+                                <div id="chartSalarioEmpresa" class="employee-chart"></div>
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="employee-section-label">Detalle operativo</div>
+                    <h2 class="employee-section-title">Ciudades y maestra de empleados</h2>
                 </div>
 
                 <div class="row g-3">
-                    <div class="col-xl-5">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header bg-transparent border-0">
-                                <h5 class="card-title mb-0">Top ciudades</h5>
+                    <div class="col-12">
+                        <div class="employee-panel h-100">
+                            <div class="employee-panel-header">
+                                <div><h3>Ciudades principales</h3><p>Empleados, activos y masa salarial mensual</p></div>
+                                <span class="employee-icon"><i class="ri-map-2-line"></i></span>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
-                                    <table class="table table-borderless align-middle mb-0">
-                                        <thead class="table-light">
+                                    <table class="table employee-table table-hover align-middle mb-0">
+                                        <thead>
                                             <tr>
                                                 <th>Ciudad</th>
                                                 <th class="text-center">Empleados</th>
@@ -212,14 +447,14 @@
                         </div>
                     </div>
 
-                    <div class="col-xl-7">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-header d-flex align-items-center justify-content-between">
-                                <h5 class="card-title mb-0">Empleados</h5>
-                                <span class="badge bg-primary-subtle text-primary" id="badgeEmpresaActual">Todas las empresas</span>
+                    <div class="col-12">
+                        <div class="employee-panel">
+                            <div class="employee-panel-header">
+                                <div><h3>Directorio de empleados</h3><p>Busca, ordena y exporta el listado según la empresa seleccionada</p></div>
+                                <span class="employee-icon"><i class="ri-team-line"></i></span>
                             </div>
                             <div class="card-body">
-                                <table id="tableEmpleados" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
+                                <table id="tableEmpleados" class="table employee-table table-hover dt-responsive nowrap align-middle" style="width:100%">
                                     <thead>
                                         <tr>
                                             <th>Empresa</th>
@@ -270,6 +505,7 @@
         let chartEmpleadosCiudad = null;
         let chartSalarioEmpresa = null;
         let empleadosTable = null;
+        let dashboardRequestId = 0;
         const empleadosExportUrl = @json(route('empleados.export'));
 
         function formatoMonto(valor) {
@@ -283,6 +519,12 @@
             if (String(valor) === '168') return 'Grupo Joselito';
             if (String(valor) === '169') return 'Negosur';
             return 'Todas las empresas';
+        }
+
+        function escaparHtml(valor) {
+            return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            })[caracter]);
         }
 
         function obtenerEmpresaActual() {
@@ -329,6 +571,9 @@
             const salarioCiudad = payload?.charts?.salario_ciudad || { labels: [], series: [] };
             const empleadosCiudad = payload?.charts?.empleados_ciudad || { labels: [], series: [] };
             const salarioEmpresa = payload?.charts?.salario_empresa || { labels: [], series: [] };
+            const chartFont = 'inherit';
+            const chartText = document.documentElement.getAttribute('data-layout-mode') === 'dark' ? '#b5c1d2' : '#64748b';
+            const noData = { text: 'No hay datos para la selección actual' };
 
             destruirChart(chartEstado);
             destruirChart(chartSalarioCiudad);
@@ -336,29 +581,31 @@
             destruirChart(chartSalarioEmpresa);
 
             chartEstado = new ApexCharts(document.querySelector('#chartEstadoEmpleados'), {
-                chart: { type: 'donut', height: 320, toolbar: { show: false } },
+                chart: { type: 'donut', height: 320, fontFamily: chartFont, toolbar: { show: false } },
                 series: estado.series || [],
                 labels: estado.labels || [],
-                colors: ['#22c55e', '#ef4444'],
-                legend: { position: 'bottom' },
-                dataLabels: { enabled: true },
-                plotOptions: { pie: { donut: { size: '68%' } } }
+                colors: ['#0f9d92', '#e98b74'],
+                legend: { position: 'bottom', fontSize: '13px', labels: { colors: chartText } },
+                dataLabels: { enabled: false },
+                stroke: { width: 3, colors: ['#ffffff'] },
+                noData,
+                plotOptions: { pie: { donut: { size: '72%', labels: {
+                    show: true,
+                    name: { show: true, color: chartText },
+                    value: { show: true, fontSize: '24px', fontWeight: 700, formatter: value => Number(value || 0).toLocaleString('en-US') },
+                    total: { show: true, label: 'Empleados', formatter: () => Number(payload?.resumen?.total_empleados || 0).toLocaleString('en-US') }
+                } } } }
             });
 
             chartSalarioCiudad = new ApexCharts(document.querySelector('#chartSalarioCiudad'), {
-                chart: { type: 'bar', height: 320, toolbar: { show: false } },
-                series: [{ name: 'Salario mensual de usuarios activos', data: salarioCiudad.series || [] }],
-                xaxis: { categories: salarioCiudad.labels || [] },
-                colors: ['#3b82f6'],
-                plotOptions: { bar: { borderRadius: 6, horizontal: false, columnWidth: '45%' } },
+                chart: { type: 'bar', height: 320, fontFamily: chartFont, toolbar: { show: false } },
+                series: [{ name: 'Salario mensual', data: salarioCiudad.series || [] }],
+                colors: ['#405189'],
+                plotOptions: { bar: { borderRadius: 5, horizontal: true, barHeight: '55%', distributed: false } },
                 dataLabels: { enabled: false },
-                yaxis: {
-                    labels: {
-                        formatter: function (value) {
-                            return formatoMonto(value);
-                        }
-                    }
-                },
+                grid: { borderColor: '#e9eef5', strokeDashArray: 4 },
+                noData,
+                xaxis: { categories: salarioCiudad.labels || [], labels: { formatter: value => '$' + Number(value || 0).toLocaleString('en-US', { notation: 'compact' }) } },
                 tooltip: {
                     y: {
                         formatter: function (value) {
@@ -369,12 +616,14 @@
             });
 
             chartEmpleadosCiudad = new ApexCharts(document.querySelector('#chartEmpleadosCiudad'), {
-                chart: { type: 'bar', height: 320, toolbar: { show: false } },
+                chart: { type: 'bar', height: 320, fontFamily: chartFont, toolbar: { show: false } },
                 series: [{ name: 'Empleados', data: empleadosCiudad.series || [] }],
                 xaxis: { categories: empleadosCiudad.labels || [] },
-                colors: ['#14b8a6'],
-                plotOptions: { bar: { borderRadius: 6, horizontal: true, barHeight: '55%' } },
-                dataLabels: { enabled: false }
+                colors: ['#0f9d92'],
+                plotOptions: { bar: { borderRadius: 5, horizontal: true, barHeight: '55%' } },
+                grid: { borderColor: '#e9eef5', strokeDashArray: 4 },
+                dataLabels: { enabled: false },
+                noData
             });
 
             const salarioEmpresaSeries = salarioEmpresa.series || [];
@@ -390,10 +639,12 @@
             });
 
             chartSalarioEmpresa = new ApexCharts(document.querySelector('#chartSalarioEmpresa'), {
-                chart: { type: 'donut', height: 320, toolbar: { show: false } },
+                chart: { type: 'donut', height: 320, fontFamily: chartFont, toolbar: { show: false } },
                 series: salarioEmpresaPorcentaje,
                 labels: salarioEmpresa.labels || [],
-                colors: ['#6366f1', '#f59e0b'],
+                colors: ['#405189', '#e9ad50'],
+                stroke: { width: 3, colors: ['#ffffff'] },
+                noData,
                 legend: {
                     show: true,
                     position: 'bottom',
@@ -457,10 +708,13 @@
 
         function renderResumen(payload) {
             const resumen = payload?.resumen || {};
-            document.getElementById('kpi-total-empleados').textContent = Number(resumen.total_empleados || 0).toLocaleString('en-US');
-            document.getElementById('kpi-activos').textContent = Number(resumen.activos || 0).toLocaleString('en-US');
+            const total = Number(resumen.total_empleados || 0);
+            const activos = Number(resumen.activos || 0);
+            document.getElementById('kpi-total-empleados').textContent = total.toLocaleString('en-US');
+            document.getElementById('kpi-activos').textContent = activos.toLocaleString('en-US');
             document.getElementById('kpi-inactivos').textContent = Number(resumen.inactivos || 0).toLocaleString('en-US');
             document.getElementById('kpi-salario-total').textContent = '$' + formatoMonto(resumen.salario_mensual_activos || 0);
+            document.getElementById('kpi-tasa-actividad').textContent = total > 0 ? ((activos / total) * 100).toFixed(1) + '%' : '0%';
         }
 
         function renderTablaCiudades(payload) {
@@ -468,10 +722,14 @@
             const filas = Array.isArray(payload?.detalle_ciudad) ? payload.detalle_ciudad : [];
 
             tbody.innerHTML = '';
+            if (!filas.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">No hay ciudades para este filtro.</td></tr>';
+                return;
+            }
             filas.forEach(function (fila) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><div class="fw-semibold">${fila.ciudad || 'Sin ciudad'}</div></td>
+                    <td><div class="fw-semibold">${escaparHtml(fila.ciudad || 'Sin ciudad')}</div></td>
                     <td class="text-center">${Number(fila.empleados || 0).toLocaleString('en-US')}</td>
                     <td class="text-center">${Number(fila.activos || 0).toLocaleString('en-US')}</td>
                     <td class="text-end fw-semibold">$${formatoMonto(fila.salario || 0)}</td>
@@ -485,8 +743,10 @@
         }
 
         function cargarDashboard(refresh = false) {
+            const requestId = ++dashboardRequestId;
             const empresa = obtenerEmpresaActual();
             actualizarBadgeEmpresa();
+            document.getElementById('dashboardActualizado').textContent = 'Actualizando indicadores';
             const params = new URLSearchParams({ empresa });
 
             if (refresh) {
@@ -500,12 +760,17 @@
             })
                 .then(response => parsearRespuestaJson(response, 'Error al cargar dashboard de empleados'))
                 .then(payload => {
+                    if (requestId !== dashboardRequestId) return;
                     renderResumen(payload);
                     renderCharts(payload);
                     renderTablaCiudades(payload);
+                    document.getElementById('dashboardActualizado').textContent =
+                        'Actualizado a las ' + new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
                 })
                 .catch(error => {
+                    if (requestId !== dashboardRequestId) return;
                     console.error('Error dashboard empleados:', error);
+                    document.getElementById('dashboardActualizado').textContent = 'No se pudieron actualizar los indicadores';
                     Swal.fire('Error', 'No se pudo cargar el dashboard de Recursos Humanos.', 'error');
                 });
         }
@@ -515,6 +780,7 @@
                 empleadosTable = $('#tableEmpleados').DataTable({
                     processing: true,
                     serverSide: true,
+                    deferRender: true,
                     responsive: true,
                     scrollX: true,
                     searchDelay: 450,
