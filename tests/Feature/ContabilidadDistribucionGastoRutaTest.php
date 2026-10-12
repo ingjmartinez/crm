@@ -488,7 +488,6 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
             ['fecha' => '2026-08-10', 'ruta_key' => 'RUTA NORTE NG', 'ruta' => 'Ruta Norte NG', 'banco' => 'Ban Reservas', 'cuenta_banco' => null, 'monto' => 200, 'estado' => 'aplicado'],
         ]);
 
-        $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()->assertSee('Depósitos de ruta');
         $payload = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
             'fecha_ini' => '2026-08-01', 'fecha_fin' => '2026-08-31', 'empresa' => 'GJ',
         ]))->assertOk()->json();
@@ -502,9 +501,43 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         $this->assertNull($payload['depositos_ruta'][1]['debito']);
         $this->assertSame(87051.0, (float) $payload['depositos_ruta'][1]['credito']);
         $this->assertSame('Deposito', $payload['depositos_ruta'][0]['movimiento']);
-        $this->assertSame('', $payload['depositos_ruta'][1]['movimiento']);
+        $this->assertSame('Validar cuenta de ruta', $payload['depositos_ruta'][1]['cuenta']);
+        $this->assertSame('Movimiento', $payload['depositos_ruta'][1]['movimiento']);
         $this->assertSame('100210003', $payload['depositos_ruta'][2]['cuenta']);
         $this->assertSame(125.0, (float) $payload['depositos_ruta'][2]['debito']);
+    }
+
+    public function test_el_credito_del_deposito_usa_la_cuenta_contable_de_la_ruta_y_empresa(): void
+    {
+        Cache::put('cuentas_ruta_empresa:168', [
+            ['cuenta' => '10013010', 'descripcion' => 'Ruta Villa Mella'],
+        ], now()->addMinute());
+
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            ['ruta_key' => 'RUTA VILLA MELLA', 'ruta_nombre' => 'Ruta Villa Mella', 'company_id' => '168',
+                'id_grupo' => '1294', 'nombre_grupo' => '05 - GJ Ruta Villa Mella', 'id_sub_grupo' => '1',
+                'nombre_socio' => 'Socio', 'created_at' => now(), 'updated_at' => now()],
+            ['ruta_key' => 'RUTA SAN CRISTOBAL', 'ruta_nombre' => 'Ruta San Cristobal', 'company_id' => '169',
+                'id_grupo' => '2694', 'nombre_grupo' => '05 - NG Ruta San Cristobal', 'id_sub_grupo' => '2',
+                'nombre_socio' => 'Socio', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        DB::table('movimientos_rutas_v2_depositos')->insert([
+            ['fecha' => '2026-10-08', 'ruta_key' => 'RUTA VILLA MELLA', 'ruta' => 'GJ Ruta Villa Mella',
+                'banco' => 'Santa Cruz', 'cuenta_banco' => '100210001', 'empresa_id' => '168', 'monto' => 578024, 'estado' => 'aplicado'],
+            ['fecha' => '2026-10-08', 'ruta_key' => 'RUTA SAN CRISTOBAL', 'ruta' => 'NG Ruta San Cristobal',
+                'banco' => 'Coopcentral', 'cuenta_banco' => '100210003', 'empresa_id' => '169', 'monto' => 162040, 'estado' => 'aplicado'],
+        ]);
+
+        $depositos = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
+            'fecha_ini' => '2026-10-08', 'fecha_fin' => '2026-10-08', 'empresa' => 'todas',
+        ]))->assertOk()->json('depositos_ruta');
+
+        $this->assertCount(4, $depositos);
+        $this->assertSame('10013010', $depositos[1]['cuenta']);
+        $this->assertSame(578024.0, (float) $depositos[1]['credito']);
+        $this->assertSame('Movimiento', $depositos[1]['movimiento']);
+        $this->assertSame('Validar cuenta de ruta', $depositos[3]['cuenta']);
+        $this->assertSame('Movimiento', $depositos[3]['movimiento']);
     }
 
     public function test_selector_busca_rutas_unicas_importadas_y_con_gastos_aplicados(): void

@@ -10,12 +10,17 @@ use App\Models\MovimientoRutaV2Deposito;
 use App\Models\MovimientoRutaV2Gasto;
 use App\Models\MovimientoRutaV2Transaccion;
 use App\Models\Ruta;
+use App\Services\Operaciones\CatalogoCuentasRutaEmpresa;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class DistribucionGastoRutaService
 {
+    public function __construct(private readonly CatalogoCuentasRutaEmpresa $catalogoCuentasRuta) {}
+
     /** @return Collection<int, MovimientoRutaV2Transaccion|MovimientoRutaV2Gasto> */
     public function rutasDisponibles(): Collection
     {
@@ -234,6 +239,7 @@ class DistribucionGastoRutaService
         $mapeosPorRuta = DistribucionGastoRutaMapeo::query()->get()
             ->groupBy(fn (DistribucionGastoRutaMapeo $mapeo): string => $this->normalizarRuta($mapeo->ruta_key));
         $centrosCostoRutaPorMapeo = $this->centrosCostoRutaPorMapeo($mapeosPorRuta->flatten());
+        $cuentasCreditoRuta = [];
         $depositosRuta = $depositos->filter(function (MovimientoRutaV2Deposito $deposito) use ($empresa, $mapeosPorRuta): bool {
             $mapeos = $mapeosPorRuta->get($this->normalizarRuta($deposito->ruta_key), collect());
             $empresaDeposito = match ($deposito->empresa_id) {
@@ -241,7 +247,7 @@ class DistribucionGastoRutaService
             };
 
             return $empresa === null || $empresaDeposito === $empresa;
-        })->flatMap(function (MovimientoRutaV2Deposito $deposito) use ($mapeosPorRuta, $centrosCostoRutaPorMapeo, $cuentasPorBanco): array {
+        })->flatMap(function (MovimientoRutaV2Deposito $deposito) use ($mapeosPorRuta, $centrosCostoRutaPorMapeo, $cuentasPorBanco, &$cuentasCreditoRuta): array {
             $mapeos = $mapeosPorRuta->get($this->normalizarRuta($deposito->ruta_key), collect());
             $empresasMapeo = $mapeos->pluck('company_id')->unique();
             $empresaId = $deposito->empresa_id ?: ($empresasMapeo->count() === 1 ? $empresasMapeo->first() : null);
@@ -251,6 +257,8 @@ class DistribucionGastoRutaService
             $centroCosto = $centros->count() === 1 ? str_pad((string) $centros->first(), 6, '0', STR_PAD_LEFT) : '';
             $monto = (float) $deposito->monto;
             $cuentaBanco = (string) ($deposito->cuenta_banco ?: $cuentasPorBanco->get($empresaId.'|'.$deposito->banco, ''));
+            $claveCuentaRuta = $this->normalizarRuta($deposito->ruta_key).'|'.$empresaId;
+            $cuentaRuta = $cuentasCreditoRuta[$claveCuentaRuta] ??= $this->cuentaCreditoRuta($mapeos, $empresaId);
 
             return [
                 [
@@ -258,8 +266,8 @@ class DistribucionGastoRutaService
                     'credito' => null, 'centro_costo' => $centroCosto, 'movimiento' => 'Deposito',
                 ],
                 [
-                    'cuenta' => '', 'descripcion' => $descripcion, 'debito' => null,
-                    'credito' => $monto, 'centro_costo' => $centroCosto, 'movimiento' => '',
+                    'cuenta' => $cuentaRuta !== '' ? $cuentaRuta : 'Validar cuenta de ruta', 'descripcion' => $descripcion, 'debito' => null,
+                    'credito' => $monto, 'centro_costo' => $centroCosto, 'movimiento' => 'Movimiento',
                 ],
             ];
         })->values();
@@ -839,6 +847,29 @@ class DistribucionGastoRutaService
         })->filter()->unique()->values();
 
         return $empresas->count() === 1 ? $empresas->first() : null;
+    }
+
+    /** @param Collection<int, DistribucionGastoRutaMapeo> $mapeos */
+    private function cuentaCreditoRuta(Collection $mapeos, ?string $empresaId): string
+    {
+        if ($empresaId === null) {
+            return '';
+        }
+
+        $grupos = $mapeos->where('company_id', $empresaId)->pluck('nombre_grupo')->unique()->values();
+        if ($grupos->isEmpty()) {
+            return '';
+        }
+
+        $cuentas = $grupos->map(function (string $nombreGrupo) use ($empresaId): ?string {
+            try {
+                return $this->catalogoCuentasRuta->resolver($empresaId, $nombreGrupo)['cuenta'] ?? null;
+            } catch (ConnectionException|RuntimeException) {
+                return null;
+            }
+        })->filter()->values();
+
+        return $cuentas->count() === $grupos->count() && $cuentas->unique()->count() === 1 ? $cuentas->first() : '';
     }
 
     private function empresaDesdeNombre(string $nombre): ?string

@@ -319,7 +319,7 @@
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="tabDepositosRuta">
-                                <p class="text-muted small mb-2">El débito usa la cuenta configurada en Banco. La cuenta de crédito de cada ruta sigue pendiente de asignación.</p>
+                                <p class="text-muted small mb-2">El débito usa la cuenta configurada en Banco. El crédito usa la cuenta contable de ruta cuando existe una coincidencia única para la empresa.</p>
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-striped align-middle w-100" id="tablaDepositosRuta">
                                         <thead><tr><th>Cuenta</th><th>Descripción</th><th class="text-end">Débito</th><th class="text-end">Crédito</th><th>Centro de costo</th><th>Movimiento</th></tr></thead>

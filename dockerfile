@@ -24,7 +24,6 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 COPY . .
-COPY --from=node-build /app/public/build /var/www/public/build
 COPY --from=node-build /app/public/build /opt/crm-build
 COPY docker/entrypoint.sh /usr/local/bin/crm-entrypoint
 
