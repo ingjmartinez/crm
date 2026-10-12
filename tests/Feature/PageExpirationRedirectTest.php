@@ -7,13 +7,13 @@ use Tests\TestCase;
 
 class PageExpirationRedirectTest extends TestCase
 {
-    public function test_expired_browser_page_redirects_to_inicio(): void
+    public function test_expired_browser_page_redirects_guest_to_login(): void
     {
         Route::middleware('web')->get('/test-page-expired', function (): void {
             abort(419);
         });
 
-        $this->get('/test-page-expired')->assertRedirect(route('inicio.index'));
+        $this->get('/test-page-expired')->assertRedirect('/login');
     }
 
     public function test_expired_json_request_preserves_419_response(): void

@@ -30,7 +30,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->respond(function (Response $response): Response {
             if ($response->getStatusCode() === 419 && ! request()->expectsJson()) {
-                return redirect()->route('inicio.index');
+                $user = auth()->user();
+                $home = $user ? app(\App\ViewPermissionCatalog::class)->firstAllowedPathFor($user) : null;
+
+                return redirect($home ?? '/login');
             }
 
             return $response;

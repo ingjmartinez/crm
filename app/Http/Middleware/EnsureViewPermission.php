@@ -25,9 +25,19 @@ class EnsureViewPermission
         if ($matches->isNotEmpty()) {
             $length = $matches->max(fn (array $item): int => strlen($item['path']));
             $user = $request->user();
-            abort_unless($user && $matches->contains(fn (array $item): bool => strlen($item['path']) === $length
+            $allowed = $user && $matches->contains(fn (array $item): bool => strlen($item['path']) === $length
                 && $user->can($item['permission'])
-                && ($item['role'] === null || $user->hasRole($item['role']))), 403);
+                && ($item['role'] === null || $user->hasRole($item['role'])));
+
+            if (! $allowed && $path === '/' && $user) {
+                $home = $this->catalog->firstAllowedPathFor($user);
+
+                if ($home !== null && $home !== '/') {
+                    return redirect($home);
+                }
+            }
+
+            abort_unless($allowed, 403);
         }
 
         return $next($request);

@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Bi\DashboardController as BiDashboardController;
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\ForcePasswordChange;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Inertia\Inertia;
+use Mockery\MockInterface;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -176,6 +179,81 @@ class UserViewPermissionTest extends TestCase
             'email' => 'invalido@example.com',
             'view_permissions' => [['permission' => 'inventado.view', 'access' => 'allow']],
         ])->assertInvalid(['view_permissions.0.permission']);
+    }
+
+    public function test_user_with_only_bi_access_reaches_bi_and_other_pages_remain_forbidden(): void
+    {
+        Permission::findOrCreate('dashboard.bi.view', 'web');
+        Permission::findOrCreate('dashboard.tablero_principal.view', 'web');
+        Permission::findOrCreate('dashboard.lotobet_ventas.view', 'web');
+        $user = $this->user('pantalla@example.com');
+        $role = Role::findOrCreate('pantalla', 'web');
+        $role->givePermissionTo('dashboard.bi.view');
+        $user->assignRole($role);
+        $this->assertFalse(app(\App\ViewPermissionCatalog::class)->allowsPath($user, '/bi-tv'));
+
+        $this->partialMock(BiDashboardController::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('index')->once()->andReturn(Inertia::render('Bi/Dashboard'));
+        });
+
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertRedirect('/bi');
+        $this->get('/bi')->assertOk();
+        $this->get('/')->assertRedirect('/bi');
+        $this->get('/ventas-lotobet-dashboard')->assertForbidden();
+
+        $this->get('/login')->assertRedirect('/bi');
+    }
+
+    public function test_login_uses_allowed_intended_path_and_rejects_forbidden_one(): void
+    {
+        Permission::findOrCreate('dashboard.bi.view', 'web');
+        $user = $this->user('intended@example.com');
+        $user->givePermissionTo('dashboard.bi.view');
+
+        $this->withSession(['url.intended' => url('/ventas-lotobet-dashboard')])
+            ->post('/login', ['email' => $user->email, 'password' => 'password'])->assertRedirect('/bi');
+
+        auth()->logout();
+        $this->withSession(['url.intended' => url('/bi')])
+            ->post('/login', ['email' => $user->email, 'password' => 'password'])->assertRedirect('/bi');
+    }
+
+    public function test_user_with_dashboard_access_still_reaches_root_and_user_without_views_is_logged_out(): void
+    {
+        Permission::findOrCreate('dashboard.tablero_principal.view', 'web');
+        $dashboardUser = $this->user('dashboard@example.com');
+        $dashboardUser->givePermissionTo('dashboard.tablero_principal.view');
+
+        $this->post('/login', ['email' => $dashboardUser->email, 'password' => 'password'])->assertRedirect('/');
+
+        auth()->logout();
+        $emptyUser = $this->user('empty@example.com');
+        $this->post('/login', ['email' => $emptyUser->email, 'password' => 'password'])
+            ->assertRedirect('/login')
+            ->assertSessionHas('error', 'Tu usuario no tiene vistas asignadas. Contacta al administrador.');
+        $this->assertGuest();
+    }
+
+    public function test_eight_digit_password_is_accepted_when_editing_a_user(): void
+    {
+        $target = $this->user('numeric@example.com');
+        $this->actingAs($this->administrator());
+
+        $this->put(route('usuarios.update', $target), [
+            'name' => $target->name,
+            'email' => $target->email,
+            'password' => '12345678',
+            'password_confirmation' => '12345678',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('12345678', $target->fresh()->password));
+
+        $this->put(route('usuarios.update', $target), [
+            'name' => $target->name,
+            'email' => $target->email,
+            'password' => '1234',
+            'password_confirmation' => '1234',
+        ])->assertInvalid(['password']);
     }
 
     private function user(string $email): User

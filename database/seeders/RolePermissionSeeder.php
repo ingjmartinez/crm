@@ -144,6 +144,7 @@ class RolePermissionSeeder extends Seeder
         }
 
         $this->call(MissingViewPermissionsSeeder::class);
+        $this->call(BiTvRoleSeeder::class);
 
         $superAdminEmail = env('SUPERADMIN_EMAIL', 'admin@joselitogroud.com');
         $superAdmin = User::where('email', $superAdminEmail)->first();

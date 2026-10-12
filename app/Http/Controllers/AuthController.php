@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\ViewPermissionCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -21,7 +22,9 @@ class AuthController extends Controller
     public function showLogin()
     {
         if (Auth::check()) {
-            return redirect('/');
+            $home = app(ViewPermissionCatalog::class)->firstAllowedPathFor(Auth::user());
+
+            return $home === null ? $this->logout(request())->with('error', 'Tu usuario no tiene vistas asignadas. Contacta al administrador.') : redirect($home);
         }
 
         return view('auth.login');
@@ -56,7 +59,19 @@ class AuthController extends Controller
                 return redirect()->route('password.force.form');
             }
 
-            return redirect()->intended('/');
+            $catalog = app(ViewPermissionCatalog::class);
+            $home = $catalog->firstAllowedPathFor($user);
+
+            if ($home === null) {
+                return $this->logout($request)->with('error', 'Tu usuario no tiene vistas asignadas. Contacta al administrador.');
+            }
+
+            $intended = $request->session()->pull('url.intended');
+            $intendedPath = $intended ? parse_url($intended, PHP_URL_PATH) : null;
+            $intendedHost = $intended ? parse_url($intended, PHP_URL_HOST) : null;
+            $isLocalIntended = $intendedHost === null || $intendedHost === parse_url(url('/'), PHP_URL_HOST);
+
+            return redirect($isLocalIntended && $intendedPath && $catalog->allowsPath($user, $intendedPath) ? $intended : $home);
         }
 
         return back()->withErrors([
@@ -96,8 +111,9 @@ class AuthController extends Controller
         $user->must_change_password = false;
         $user->save();
 
-        return redirect()
-            ->route('inicio.index')
+        $home = app(ViewPermissionCatalog::class)->firstAllowedPathFor($user);
+
+        return redirect($home ?? '/login')
             ->with('status', 'Contrasena actualizada correctamente.');
     }
 
@@ -115,7 +131,7 @@ class AuthController extends Controller
 
         $email = strtolower(trim($data['email_reset']));
         $cacheStore = Cache::store('file');
-        $rateKey = 'reset-password:' . sha1($email);
+        $rateKey = 'reset-password:'.sha1($email);
 
         $nextAllowedAt = (int) $cacheStore->get($rateKey, 0);
 
@@ -133,7 +149,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $email)->first();
 
-        if (!$user) {
+        if (! $user) {
             return back()
                 ->withErrors(['email_reset' => 'No existe un usuario registrado con ese correo.'])
                 ->withInput();
@@ -142,7 +158,7 @@ class AuthController extends Controller
         $codigo = strtoupper(Str::random(8));
 
         $cacheStore->put(
-            'password-reset-code:' . sha1($email),
+            'password-reset-code:'.sha1($email),
             [
                 'code_hash' => Hash::make($codigo),
             ],
@@ -151,12 +167,12 @@ class AuthController extends Controller
 
         try {
             Mail::raw(
-                "Hola {$user->name},\n\n" .
-                "Se solicitó un reseteo de contraseña para tu cuenta.\n" .
-                "Tu código de verificación es: {$codigo}\n\n" .
-                "Este código expira en 15 minutos.\n" .
-                "Luego de ingresarlo podrás definir una nueva contraseña.\n\n" .
-                "CRM Grupo Joselito",
+                "Hola {$user->name},\n\n".
+                "Se solicitó un reseteo de contraseña para tu cuenta.\n".
+                "Tu código de verificación es: {$codigo}\n\n".
+                "Este código expira en 15 minutos.\n".
+                "Luego de ingresarlo podrás definir una nueva contraseña.\n\n".
+                'CRM Grupo Joselito',
                 function ($message) use ($user) {
                     $message->to($user->email)
                         ->subject('Código para resetear contraseña - CRM Grupo Joselito');
@@ -201,17 +217,17 @@ class AuthController extends Controller
         ]);
 
         $email = strtolower(trim($data['email']));
-        $cacheKey = 'password-reset-code:' . sha1($email);
+        $cacheKey = 'password-reset-code:'.sha1($email);
         $cacheStore = Cache::store('file');
         $payload = $cacheStore->get($cacheKey);
 
-        if (!$payload) {
+        if (! $payload) {
             return back()->withErrors([
                 'codigo' => 'El código es inválido o ha expirado. Solicite uno nuevo.',
             ])->withInput();
         }
 
-        if (!Hash::check($data['codigo'], $payload['code_hash'])) {
+        if (! Hash::check($data['codigo'], $payload['code_hash'])) {
             return back()->withErrors([
                 'codigo' => 'El código ingresado no es correcto.',
             ])->withInput();
@@ -219,7 +235,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $email)->first();
 
-        if (!$user) {
+        if (! $user) {
             return back()->withErrors([
                 'email' => 'No existe un usuario registrado con ese correo.',
             ])->withInput();
@@ -230,7 +246,7 @@ class AuthController extends Controller
         $user->save();
 
         $cacheStore->forget($cacheKey);
-        $cacheStore->forget('reset-password:' . sha1($email));
+        $cacheStore->forget('reset-password:'.sha1($email));
 
         return redirect()
             ->route('login')

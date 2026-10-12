@@ -15,6 +15,16 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'BI para TV',
+                'descripcion' => 'Ventas del día en HTML compatible con navegadores antiguos.',
+                'url' => '/bi-tv',
+                'icono' => 'ri-tv-line',
+                'categoria' => 'Principal',
+                'tags' => ['bi', 'tv', 'ventas'],
+                'permission' => 'dashboard.bi_tv.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Tablero Principal',
                 'descripcion' => 'Consulta indicadores claves, ventas por tipo, agencias y balance mensual.',
                 'url' => '/',

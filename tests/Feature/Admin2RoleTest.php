@@ -88,6 +88,37 @@ class Admin2RoleTest extends TestCase
         $this->assertFalse($permissions->contains('permissions.delete'));
     }
 
+    public function test_bi_tv_role_only_grants_the_tv_view(): void
+    {
+        $role = Role::findByName('bi-tv', 'web');
+        $this->assertSame(['dashboard.bi_tv.view'], $role->permissions->pluck('name')->all());
+
+        $user = User::query()->create(['name' => 'Pantalla TV', 'email' => 'tv@example.com', 'password' => 'password']);
+        $user->assignRole($role);
+        $catalog = app(ViewPermissionCatalog::class);
+
+        $this->assertSame('/bi-tv', $catalog->firstAllowedPathFor($user));
+        $this->assertTrue($catalog->allowsPath($user, '/bi-tv'));
+        $this->assertFalse($catalog->allowsPath($user, '/bi'));
+        $this->assertFalse($catalog->allowsPath($user, '/'));
+
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertRedirect('/bi-tv');
+        $this->get('/bi')->assertForbidden();
+    }
+
+    public function test_bi_tv_migration_creates_role_and_permission_on_deploy(): void
+    {
+        Role::findByName('bi-tv', 'web')->delete();
+        \Spatie\Permission\Models\Permission::findByName('dashboard.bi_tv.view', 'web')->delete();
+        $migration = require database_path('migrations/2026_10_12_100522_create_bi_tv_role_and_permission.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, Role::query()->where('name', 'bi-tv')->count());
+        $this->assertTrue(Role::findByName('bi-tv', 'web')->hasPermissionTo('dashboard.bi_tv.view'));
+    }
+
     public function test_catalog_pages_have_permissions_and_roles_receive_their_module_pages(): void
     {
         $catalog = app(ViewPermissionCatalog::class);

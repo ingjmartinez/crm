@@ -21,6 +21,10 @@ class MissingViewPermissionsSeeder extends Seeder
         }
 
         foreach (Role::query()->with('permissions')->get() as $role) {
+            if ($role->name === 'bi-tv') {
+                continue;
+            }
+
             $modules = match ($role->name) {
                 'superadmin', 'admin', 'admin2' => $items->pluck('module')->unique()->all(),
                 'rh' => ['recursos_humanos', 'reportes'],

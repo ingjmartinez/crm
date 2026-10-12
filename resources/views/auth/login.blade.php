@@ -104,6 +104,9 @@
                                             <p class="text-muted">Inicia sesion para continuar en el CRM de Grupo Joselito.</p>
                                         </div>
 
+                                        @if (session('error'))
+                                            <div class="alert alert-danger mt-3" role="alert">{{ session('error') }}</div>
+                                        @endif
                                         @if ($errors->any())
                                             <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
                                                 <div class="d-flex align-items-center">

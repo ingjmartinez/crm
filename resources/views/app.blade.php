@@ -1,3 +1,6 @@
+@php
+    $homePath = auth()->user() ? app(\App\ViewPermissionCatalog::class)->firstAllowedPathFor(auth()->user()) : '/login';
+@endphp
 <!doctype html>
 <html lang="en" data-layout="vertical" data-topbar="light" data-sidebar="dark" data-sidebar-size="lg"
     data-sidebar-image="none">
@@ -211,7 +214,7 @@
                     <div class="d-flex">
                         <!-- LOGO -->
                         <div class="navbar-brand-box horizontal-logo">
-                            <a href="index.html" class="logo logo-dark">
+                            <a href="{{ url($homePath ?? '/login') }}" class="logo logo-dark">
                                 <span class="logo-sm">
                                     {{-- <img src="images/logo-sm.png" alt="" height="22"> --}}
                                 </span>
@@ -220,7 +223,7 @@
                                 </span>
                             </a>
 
-                            <a href="index.html" class="logo logo-light">
+                            <a href="{{ url($homePath ?? '/login') }}" class="logo logo-light">
                                 <span class="logo-sm">
                                     {{-- <img src="images/logo-sm.png" alt="" height="22"> --}}
                                 </span>
@@ -803,7 +806,7 @@
             <!-- LOGO -->
             <div class="navbar-brand-box">
                 <!-- Dark Logo-->
-                <a href="index.html" class="logo logo-dark">
+                <a href="{{ url($homePath ?? '/login') }}" class="logo logo-dark">
                     <span class="logo-sm">
                         {{-- <img src="images/logo-sm.png" alt="" height="22"> --}}
                     </span>
@@ -812,7 +815,7 @@
                     </span>
                 </a>
                 <!-- Light Logo-->
-                <a href="index.html" class="logo logo-light">
+                <a href="{{ url($homePath ?? '/login') }}" class="logo logo-light">
                     <span class="logo-sm">
                         {{-- <img src="images/logo-sm.png" alt="" height="22"> --}}
                     </span>
@@ -860,27 +863,27 @@
                             ? $sidebarUser->viewPermissions->filter(fn ($permission) => (bool) $permission->pivot->allowed)->pluck('name')
                             : collect();
                         $allowedViewModules = app(\App\ViewPermissionCatalog::class)->items()
-                            ->whereIn('permission', $allowedViewPermissions)
+                            ->filter(fn ($item) => $sidebarUser && $sidebarUser->can($item['permission']) && ($item['role'] === null || $sidebarUser->hasRole($item['role'])))
                             ->pluck('module')
                             ->unique();
                     @endphp
                     <ul class="navbar-nav" id="navbar-nav">
                         <li class="menu-title">
-                            <a href="{{ url('/') }}" class="text-reset text-decoration-none">
+                            <a href="{{ url($homePath ?? '/login') }}" class="text-reset text-decoration-none">
                                 <span data-key="t-menu">Inicio</span>
                             </a>
                         </li>
 
-                        @if(!($isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('dashboard'))
+                        @if($sidebarUser && $sidebarUser->can('dashboard.tablero_principal.view') || $allowedViewModules->contains('dashboard'))
                             <li class="nav-item">
-                                <a href="{{ route('dashboard.index') }}"
+                                <a href="{{ url($sidebarUser->can('dashboard.tablero_principal.view') ? '/dashboard' : ($homePath ?? '/login')) }}"
                                     class="nav-link menu-link {{ request()->routeIs('inicio.index') || request()->is('dashboard*') || request()->is('ventas-lotobet-dashboard*') || request()->is('ventas-lotonet-dashboard*') || request()->is('ventas-lotobet-flash-dashboard*') || request()->is('ventas-mar-dashboard*') || request()->is('kpi-lotobet*') ? 'active' : '' }}">
                                     <i class="ri-apps-2-line"></i> <span data-key="t-apps">Dashboard</span>
                                 </a>
                             </li>
                         @endif
 
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('procesos'))
+                        @if($sidebarUser->can('procesos.view') || $allowedViewModules->contains('procesos'))
                             <li class="nav-item">
                                 <a href="{{ route('procesos.index') }}"
                                     class="nav-link menu-link {{ request()->is('procesos*') ? 'active' : '' }}">
@@ -896,7 +899,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if(!$isRecursosHumanosOnlyRole || $allowedViewModules->contains('contabilidad'))
+                        @if($sidebarUser->can('contabilidad.view') || $allowedViewModules->contains('contabilidad'))
                             <li class="nav-item">
                                 <a href="{{ route('contabilidad.index') }}"
                                     class="nav-link menu-link {{ request()->is('contabilidad*') ? 'active' : '' }}">
@@ -904,7 +907,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('tareas'))
+                        @if($sidebarUser->can('tareas.view') || $allowedViewModules->contains('tareas'))
                             <li class="nav-item">
                                 <a href="{{ url('/tareas') }}" class="nav-link menu-link">
                                     <i class="ri-task-line"></i> <span data-key="t-tareas">Tareas</span>
@@ -917,7 +920,7 @@
                             </li>
                         @endif
                         @can('servicios_generales.view')
-                            @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole) || $allowedViewModules->contains('servicios_generales'))
+                            @if($sidebarUser->can('servicios_generales.view') || $allowedViewModules->contains('servicios_generales'))
                             <li class="nav-item">
                                 <a href="{{ route('servicios-generales.index') }}"
                                     class="nav-link menu-link {{ request()->is('servicios-generales*') ? 'active' : '' }}">
@@ -926,7 +929,7 @@
                             </li>
                             @endif
                         @endcan
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('tecnologia'))
+                        @if($sidebarUser->can('tecnologia.view') || $allowedViewModules->contains('tecnologia'))
                             <li class="nav-item">
                                 <a href="{{ route('tecnologia.index') }}"
                                     class="nav-link menu-link {{ request()->is('tecnologia*') ? 'active' : '' }}">
@@ -934,7 +937,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('mantenimiento'))
+                        @if($sidebarUser->can('mantenimiento.view') || $allowedViewModules->contains('mantenimiento'))
                             <li class="nav-item">
                                 <a href="{{ route('mantenimiento.index') }}"
                                     class="nav-link menu-link {{ request()->is('mantenimiento*') || request()->is('agencias*') || request()->is('usuarios*') || request()->is('coordinador-operador*') || request()->is('roles*') || request()->is('permissions*') ? 'active' : '' }}">
@@ -1157,7 +1160,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('incentivos'))
+                        @if($sidebarUser->can('incentivos.view') || $allowedViewModules->contains('incentivos'))
                             <li class="nav-item">
                                 <a href="{{ route('incentivos.index') }}"
                                     class="nav-link menu-link {{ request()->is('incentivos*') ? 'active' : '' }}">
@@ -1165,7 +1168,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('operaciones'))
+                        @if($sidebarUser->can('operaciones.view') || $allowedViewModules->contains('operaciones'))
                             <li class="nav-item">
                                 <a href="{{ route('operaciones.index') }}"
                                     class="nav-link menu-link {{ request()->is('operaciones*') ? 'active' : '' }}">
@@ -1173,7 +1176,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('legal'))
+                        @if($sidebarUser->can('legal.view') || $allowedViewModules->contains('legal'))
                             <li class="nav-item">
                                 <a href="{{ route('legal.index') }}"
                                     class="nav-link menu-link {{ request()->is('legal*') ? 'active' : '' }}">
@@ -1181,7 +1184,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('comercial'))
+                        @if($sidebarUser->can('comercial.view') || $allowedViewModules->contains('comercial'))
                             <li class="nav-item">
                                 <a href="{{ route('comercial.index') }}"
                                     class="nav-link menu-link {{ request()->is('comercial*') ? 'active' : '' }}">
@@ -1189,7 +1192,7 @@
                                 </a>
                             </li>
                         @endif
-                        @if(!($isContabilidadOnlyRole || $isRecursosHumanosOnlyRole || $isContaRepOnlyRole) || $allowedViewModules->contains('gerencia'))
+                        @if($sidebarUser->can('gerencia.view') || $allowedViewModules->contains('gerencia'))
                             <li class="nav-item">
                                 <a href="{{ route('gerencia.index') }}"
                                     class="nav-link menu-link {{ request()->is('gerencia*') ? 'active' : '' }}">
@@ -1926,7 +1929,7 @@
                 fail(({ status, preventDefault }) => {
                     if (status === 419) {
                         preventDefault();
-                        window.location.assign(@json(route('inicio.index')));
+                        window.location.assign(@json(url($homePath ?? '/login')));
                     }
                 });
             });
@@ -1934,7 +1937,7 @@
 
         $(document).ajaxError((event, xhr) => {
             if (xhr.status === 419) {
-                window.location.assign(@json(route('inicio.index')));
+                window.location.assign(@json(url($homePath ?? '/login')));
             }
         });
     </script>

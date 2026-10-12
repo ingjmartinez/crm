@@ -136,6 +136,49 @@ class BiModuleTest extends TestCase
 
         $this->assertNotNull($item);
         $this->assertSame('/bi', $item['url']);
+        $this->assertTrue(Route::has('bi.tv'));
+        $this->get(route('bi.tv'))->assertRedirect(route('login'));
+        $tvItem = collect(config('module_hubs.dashboard.items'))->firstWhere('nombre', 'BI para TV');
+        $this->assertSame('/bi-tv', $tvItem['url']);
+        $this->assertSame('dashboard.bi_tv.view', $tvItem['permission']);
+    }
+
+    public function test_bi_tv_renders_the_two_daily_sections_without_vite_or_javascript(): void
+    {
+        $this->withoutMiddleware()->get(route('bi.tv'))
+            ->assertOk()
+            ->assertSee('DÍA EN CURSO')
+            ->assertSee('VENTAS POR TIPO')
+            ->assertDontSee('@vite', false)
+            ->assertDontSee('<script', false);
+
+        BiVentaHora::factory()->create([
+            'fecha' => today()->subDays(7)->toDateString(),
+            'hora' => 9,
+            'tradicional_acumulado' => 100,
+            'no_tradicional_acumulado' => 100,
+        ]);
+        BiVentaHora::factory()->create([
+            'fecha' => today()->toDateString(),
+            'hora' => 9,
+            'tradicional_acumulado' => 120,
+            'no_tradicional_acumulado' => 120,
+            'terminales_categoria' => ['tradicional' => 2, 'no_tradicional' => 3],
+        ]);
+        BiVentaSnapshot::query()->create([
+            'fecha' => today()->toDateString(),
+            'hora' => 9,
+            'capturado_en' => now(),
+            'rutas' => [['nombre' => 'RUTA TV', 'monto' => 50]],
+        ]);
+
+        $this->get(route('bi.tv'))
+            ->assertOk()
+            ->assertSee('DOP 240')
+            ->assertSee('+20.0%')
+            ->assertSee('RUTA TV')
+            ->assertSee('120')
+            ->assertSee('http-equiv="refresh"', false);
     }
 
     public function test_bi_controller_renders_its_inertia_page(): void

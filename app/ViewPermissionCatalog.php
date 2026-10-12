@@ -32,6 +32,30 @@ class ViewPermissionCatalog
             ->values();
     }
 
+    public function firstAllowedPathFor(User $user): ?string
+    {
+        $items = $this->items();
+
+        if ($user->can('dashboard.tablero_principal.view')) {
+            return '/';
+        }
+
+        return $items->first(fn (array $item): bool => $user->can($item['permission'])
+            && ($item['role'] === null || $user->hasRole($item['role'])))['path'] ?? null;
+    }
+
+    public function allowsPath(User $user, string $path): bool
+    {
+        $path = '/'.trim($path, '/');
+        $matches = $this->items()->filter(fn (array $item): bool => $item['path'] === $path
+            || ($item['path'] !== '/' && str_starts_with($path, $item['path'].'/')));
+        $length = $matches->max(fn (array $item): int => strlen($item['path']));
+
+        return $length !== null && $matches->contains(fn (array $item): bool => strlen($item['path']) === $length
+            && $user->can($item['permission'])
+            && ($item['role'] === null || $user->hasRole($item['role'])));
+    }
+
     /** @param array<string, mixed> $item */
     public function permission(string $module, array $item): string
     {
