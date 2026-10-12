@@ -267,7 +267,7 @@ class DistribucionGastoRutaService
                 ],
                 [
                     'cuenta' => $cuentaRuta !== '' ? $cuentaRuta : 'Validar cuenta de ruta', 'descripcion' => $descripcion, 'debito' => null,
-                    'credito' => $monto, 'centro_costo' => $centroCosto, 'movimiento' => 'Movimiento',
+                    'credito' => $monto, 'centro_costo' => $centroCosto, 'movimiento' => 'Deposito',
                 ],
             ];
         })->values();

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\IncentivoTerminalTipoPago;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -17,6 +18,20 @@ class ReporteNuevoIncentivoV6Request extends FormRequest
         return auth()->check();
     }
 
+    protected function prepareForValidation(): void
+    {
+        $mes = $this->input('mes');
+        if (! is_string($mes) || preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mes) !== 1) {
+            return;
+        }
+
+        $fecha = CarbonImmutable::createFromFormat('!Y-m', $mes);
+        $this->merge([
+            'fecha_ini' => $fecha->startOfMonth()->toDateString(),
+            'fecha_fin' => $fecha->endOfMonth()->toDateString(),
+        ]);
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -25,6 +40,7 @@ class ReporteNuevoIncentivoV6Request extends FormRequest
     public function rules(): array
     {
         return [
+            'mes' => ['required', 'date_format:Y-m'],
             'fecha_ini' => ['required', 'date_format:Y-m-d'],
             'fecha_fin' => ['required', 'date_format:Y-m-d', 'after_or_equal:fecha_ini'],
             'sistema' => ['nullable', Rule::in(['Todos', 'Lotobet', 'Lotonet'])],

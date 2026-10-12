@@ -502,7 +502,7 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         $this->assertSame(87051.0, (float) $payload['depositos_ruta'][1]['credito']);
         $this->assertSame('Deposito', $payload['depositos_ruta'][0]['movimiento']);
         $this->assertSame('Validar cuenta de ruta', $payload['depositos_ruta'][1]['cuenta']);
-        $this->assertSame('Movimiento', $payload['depositos_ruta'][1]['movimiento']);
+        $this->assertSame('Deposito', $payload['depositos_ruta'][1]['movimiento']);
         $this->assertSame('100210003', $payload['depositos_ruta'][2]['cuenta']);
         $this->assertSame(125.0, (float) $payload['depositos_ruta'][2]['debito']);
     }
@@ -535,9 +535,9 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         $this->assertCount(4, $depositos);
         $this->assertSame('10013010', $depositos[1]['cuenta']);
         $this->assertSame(578024.0, (float) $depositos[1]['credito']);
-        $this->assertSame('Movimiento', $depositos[1]['movimiento']);
+        $this->assertSame('Deposito', $depositos[1]['movimiento']);
         $this->assertSame('Validar cuenta de ruta', $depositos[3]['cuenta']);
-        $this->assertSame('Movimiento', $depositos[3]['movimiento']);
+        $this->assertSame('Deposito', $depositos[3]['movimiento']);
     }
 
     public function test_selector_busca_rutas_unicas_importadas_y_con_gastos_aplicados(): void

@@ -541,7 +541,7 @@
                                         <span class="ni-panel-heading-icon"><i class="ri-equalizer-2-line"></i></span>
                                         <div>
                                             <h6 id="niParametrosTitulo">Parámetros de cálculo</h6>
-                                            <p>Selecciona el alcance y período que deseas evaluar.</p>
+                                            <p>Selecciona el alcance y el mes completo que deseas evaluar.</p>
                                         </div>
                                     </div>
                                     <div class="row g-3 align-items-end">
@@ -575,12 +575,10 @@
                                         </select>
                                     </div>
                                     <div class="col-sm-6 col-xl-3">
-                                        <label class="ni-field-label" for="ni_fecha_ini">Fecha de inicio</label>
-                                        <input type="date" id="ni_fecha_ini" class="form-control">
-                                    </div>
-                                    <div class="col-sm-6 col-xl-3">
-                                        <label class="ni-field-label" for="ni_fecha_fin">Fecha de fin</label>
-                                        <input type="date" id="ni_fecha_fin" class="form-control">
+                                        <label class="ni-field-label" for="ni_mes">Mes del reporte</label>
+                                        <input type="month" id="ni_mes" class="form-control" value="{{ today()->format('Y-m') }}">
+                                        <input type="hidden" id="ni_fecha_ini" value="{{ today()->startOfMonth()->toDateString() }}">
+                                        <input type="hidden" id="ni_fecha_fin" value="{{ today()->endOfMonth()->toDateString() }}">
                                     </div>
                                     <div class="col-sm-6 col-xl-3">
                                         <label class="ni-field-label" for="ni_min_dias">Mínimo de días con venta</label>
@@ -7485,14 +7483,19 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const fechaHoy = new Date();
-        const yyyy = fechaHoy.getFullYear();
-        const mm = String(fechaHoy.getMonth() + 1).padStart(2, '0');
-        const dd = String(fechaHoy.getDate()).padStart(2, '0');
+    function actualizarMesReporte() {
+        const mes = document.getElementById('ni_mes').value;
+        const coincidencia = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(mes);
+        document.getElementById('ni_fecha_ini').value = coincidencia ? `${mes}-01` : '';
+        document.getElementById('ni_fecha_fin').value = coincidencia
+            ? `${mes}-${String(new Date(Number(coincidencia[1]), Number(coincidencia[2]), 0).getDate()).padStart(2, '0')}`
+            : '';
+    }
 
-        document.getElementById('ni_fecha_fin').value = `${yyyy}-${mm}-${dd}`;
-        document.getElementById('ni_fecha_ini').value = `${yyyy}-${mm}-01`;
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('ni_mes').addEventListener('input', actualizarMesReporte);
+        document.getElementById('ni_mes').addEventListener('change', actualizarMesReporte);
+        actualizarMesReporte();
         updatePuestoPctSummaryCard();
         populateEmpresaFilterOptions([]);
         updateExcludedTerminalesCount();
@@ -7999,6 +8002,7 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         const params = new URLSearchParams({
             sistema: sistema,
             filtro_cumplimiento: 'todos',
+            mes: document.getElementById('ni_mes').value,
             fecha_ini: fechaIni,
             fecha_fin: fechaFin,
             min_dias_venta: minDias,
