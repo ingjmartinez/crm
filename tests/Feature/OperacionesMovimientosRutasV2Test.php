@@ -11,6 +11,7 @@ use App\Models\BancoOperacion;
 use App\Models\MovimientoRutaV2Deposito;
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
+use App\Models\MovimientoRutaV2Transferencia;
 use App\Services\Operaciones\MovimientosRutasV2ImportService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
@@ -141,10 +142,23 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             $table->timestamp('clasificado_at')->nullable();
             $table->timestamps();
         });
+        Schema::create('movimiento_ruta_v2_transferencias', function (Blueprint $table): void {
+            $table->id();
+            $table->date('fecha');
+            $table->string('ruta_origen_key');
+            $table->string('ruta_origen');
+            $table->string('ruta_destino_key');
+            $table->string('ruta_destino');
+            $table->decimal('monto', 15, 2);
+            $table->string('recibo_path');
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->timestamps();
+        });
     }
 
     protected function tearDown(): void
     {
+        Schema::dropIfExists('movimiento_ruta_v2_transferencias');
         Schema::dropIfExists('movimientos_rutas_v2_gastos');
         Schema::dropIfExists('movimientos_rutas_v2_depositos');
         Schema::dropIfExists('movimientos_rutas_v2_transacciones');
@@ -448,6 +462,93 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertStringNotContainsString('if (confirmado) formulario.submit();', $vista);
     }
 
+    public function test_transfiere_solo_el_excedente_a_otra_ruta_con_pendiente_y_guarda_el_recibo(): void
+    {
+        Storage::fake('local');
+        $this->crearRutasParaTransferencia();
+
+        $respuesta = $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.transferencias.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_origen_key' => '05 - GJ ORIGEN',
+            'ruta_destino_key' => '05 - GJ DESTINO',
+            'monto' => '40.00',
+            'recibo' => UploadedFile::fake()->image('recibo.png'),
+        ])->assertOk();
+
+        $this->assertSame('Fondos transferidos correctamente entre las rutas.', $respuesta->json('message'));
+        $transferencia = MovimientoRutaV2Transferencia::query()->sole();
+        Storage::disk('local')->assertExists($transferencia->recibo_path);
+        $recibo = app(OperacionesMovimientosRutasV2Controller::class)->reciboTransferencia($transferencia);
+        $this->assertSame(Storage::disk('local')->path($transferencia->recibo_path), $recibo->getFile()->getPathname());
+        $metodo = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'resumenPorRutas');
+        $rutas = $metodo->invoke(app(OperacionesMovimientosRutasV2Controller::class), '2026-08-03')->keyBy('ruta_key');
+        $this->assertSame(-10.0, $rutas['05 - GJ ORIGEN']['pendiente']);
+        $this->assertSame(60.0, $rutas['05 - GJ DESTINO']['pendiente']);
+        $this->assertSame(-10.0, $rutas['05 - GJ ORIGEN']['balance_pendiente']);
+        $this->getJson(route('operaciones.movimientos-rutas-v2.detalle', [
+            'fecha' => '2026-08-03', 'ruta_key' => '05 - GJ DESTINO',
+        ]))->assertOk()->assertJsonPath('transferencias.0.tipo', 'Recibida');
+        $vista = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2.blade.php'));
+        $this->assertStringContainsString("\$ruta['estado'] === 'excedida'", $vista);
+        $this->assertStringContainsString('id="form-transferir-fondos"', $vista);
+    }
+
+    public function test_rechaza_transferencias_superiores_al_excedente_o_al_pendiente_del_destino(): void
+    {
+        Storage::fake('local');
+        $this->crearRutasParaTransferencia();
+        $datos = [
+            'fecha' => '2026-08-03',
+            'ruta_origen_key' => '05 - GJ ORIGEN',
+            'ruta_destino_key' => '05 - GJ DESTINO',
+            'recibo' => UploadedFile::fake()->image('recibo.png'),
+        ];
+
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.transferencias.guardar'), [
+            ...$datos, 'monto' => '50.01',
+        ])->assertUnprocessable()->assertJsonValidationErrors('monto');
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.transferencias.guardar'), [
+            ...$datos, 'monto' => '10.00', 'recibo' => null,
+        ])->assertUnprocessable()->assertJsonValidationErrors('recibo');
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.transferencias.guardar'), [
+            ...$datos, 'monto' => '10.00', 'ruta_origen_key' => '05 - GJ DESTINO', 'ruta_destino_key' => '05 - GJ ORIGEN',
+        ])->assertUnprocessable()->assertJsonValidationErrors('monto');
+
+        MovimientoRutaV2Transaccion::query()->create([
+            'importacion_id' => 1, 'fecha' => '2026-08-03', 'ruta_key' => '05 - NG DESTINO', 'ruta' => '05 - NG DESTINO',
+            'id_trans' => 'TRANSFERENCIA-NG', 'tipo' => 'retiro', 'tipo_etiqueta' => 'Retiro',
+            'monto' => 100, 'monto_original' => 100,
+        ]);
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.transferencias.guardar'), [
+            ...$datos, 'monto' => '10.00', 'ruta_destino_key' => '05 - NG DESTINO',
+        ])->assertUnprocessable()->assertJsonValidationErrors('ruta_destino_key');
+
+        MovimientoRutaV2Transferencia::query()->create([
+            'fecha' => '2026-08-03', 'ruta_origen_key' => '05 - GJ OTRA', 'ruta_origen' => '05 - GJ OTRA',
+            'ruta_destino_key' => '05 - GJ DESTINO', 'ruta_destino' => '05 - GJ DESTINO',
+            'monto' => 80, 'recibo_path' => 'recibo-existente.png',
+        ]);
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.transferencias.guardar'), [
+            ...$datos, 'monto' => '30.00',
+        ])->assertUnprocessable()->assertJsonValidationErrors('monto');
+        $this->assertDatabaseCount('movimiento_ruta_v2_transferencias', 1);
+    }
+
+    private function crearRutasParaTransferencia(): void
+    {
+        foreach (['05 - GJ ORIGEN', '05 - GJ DESTINO', '05 - GJ OTRA'] as $indice => $ruta) {
+            MovimientoRutaV2Transaccion::query()->create([
+                'importacion_id' => 1, 'fecha' => '2026-08-03', 'ruta_key' => $ruta, 'ruta' => $ruta,
+                'id_trans' => 'TRANSFERENCIA-'.$indice, 'tipo' => 'retiro', 'tipo_etiqueta' => 'Retiro',
+                'monto' => 100, 'monto_original' => 100,
+            ]);
+        }
+        MovimientoRutaV2Deposito::query()->create([
+            'fecha' => '2026-08-03', 'ruta_key' => '05 - GJ ORIGEN', 'ruta' => '05 - GJ ORIGEN',
+            'monto' => 150, 'banco' => 'Banreservas', 'estado' => 'aplicado',
+        ]);
+    }
+
     public function test_no_aplica_depositos_con_bancos_sin_cuenta_contable(): void
     {
         $banco = BancoOperacion::query()->create(['nombre' => 'Banco sin cuenta', 'empresa_id' => '168']);
@@ -620,6 +721,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
     {
         Storage::fake('local');
         Storage::disk('local')->put('comprobantes/deposito-carga.png', 'deposito');
+        Storage::disk('local')->put('comprobantes/transferencia-carga.png', 'recibo');
         $resultadoImportacion = app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
             $this->retiro('T-CARGA-ELIMINAR', '02/08/2026', '05 - HAINA', -5000000),
         ]), null, '2026-08-02');
@@ -648,6 +750,11 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             'banco' => 'Popular',
             'estado' => 'aplicado',
         ]);
+        MovimientoRutaV2Transferencia::query()->create([
+            'fecha' => '2026-08-02', 'ruta_origen_key' => 'RUTA ANTIGUA', 'ruta_origen' => 'RUTA ANTIGUA',
+            'ruta_destino_key' => 'OTRA RUTA', 'ruta_destino' => 'OTRA RUTA', 'monto' => 25,
+            'recibo_path' => 'comprobantes/transferencia-carga.png',
+        ]);
         DB::table('movimientos_rutas_v2_gastos')->insert([
             'fecha' => '2026-08-02',
             'ruta_key' => 'RUTA ANTIGUA',
@@ -669,6 +776,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             ->assertJsonPath('data.importacionesEliminadas', 2)
             ->assertJsonPath('data.transaccionesEliminadas', 1)
             ->assertJsonPath('data.depositosEliminados', 1);
+        $this->assertDatabaseCount('movimiento_ruta_v2_transferencias', 0);
 
         $this->assertDatabaseMissing('movimientos_rutas_v2_importaciones', ['fecha_desde' => '2026-08-02']);
         $this->assertDatabaseMissing('movimientos_rutas_v2_transacciones', ['fecha' => '2026-08-02']);
@@ -676,6 +784,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $this->assertDatabaseHas('movimientos_rutas_v2_depositos', ['id' => $depositoOtraFecha->id, 'monto' => 200]);
         $this->assertDatabaseHas('movimientos_rutas_v2_gastos', ['ruta_key' => 'RUTA ANTIGUA', 'monto' => 50]);
         Storage::disk('local')->assertMissing('comprobantes/deposito-carga.png');
+        Storage::disk('local')->assertMissing('comprobantes/transferencia-carga.png');
     }
 
     public function test_muestra_comprobantes_del_disco_actual_y_de_la_ruta_heredada_del_vps(): void

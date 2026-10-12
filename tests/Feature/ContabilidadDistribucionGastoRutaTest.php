@@ -141,6 +141,9 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         $this->assertSame(50.0, (float) $payload['meta']['total_pendiente']);
         $this->assertSame(1, $payload['meta']['total_incidencias']);
         $this->assertSame('sin_socio', $payload['incidencias'][0]['tipo']);
+        $this->assertCount(2, $payload['gastos_ruta']);
+        $this->assertEqualsWithDelta(50.0, collect($payload['gastos_ruta'])->sum('debito'), 0.001);
+        $this->assertEqualsWithDelta(50.0, collect($payload['gastos_ruta'])->sum('credito'), 0.001);
     }
 
     public function test_ajusta_los_centavos_para_que_el_detalle_cuadre_con_el_gasto(): void
@@ -505,6 +508,45 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         $this->assertSame('Deposito', $payload['depositos_ruta'][1]['movimiento']);
         $this->assertSame('100210003', $payload['depositos_ruta'][2]['cuenta']);
         $this->assertSame(125.0, (float) $payload['depositos_ruta'][2]['debito']);
+    }
+
+    public function test_gasto_ruta_genera_un_asiento_balanceado_por_agencia_asignada(): void
+    {
+        Cache::put('cuentas_ruta_empresa:168', [
+            ['cuenta' => '100130010', 'descripcion' => 'Ruta Tamayo'],
+        ], now()->addMinute());
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            'ruta_key' => 'TAMAYO', 'ruta_nombre' => 'Tamayo', 'company_id' => '168',
+            'id_grupo' => '61', 'nombre_grupo' => 'Ruta Tamayo', 'id_sub_grupo' => '45',
+            'nombre_socio' => 'Socio A', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        foreach ([5001 => 101, 5002 => 102] as $terminal => $centroId) {
+            DB::table('centros_de_costo')->insert([
+                'id_centro_costo' => $centroId, 'company_id' => '168', 'id_grupo' => '61',
+                'id_sub_grupo' => '45', 'id_viejo' => (string) $terminal,
+                'descripcion' => "Agencia {$terminal}", 'inactivo' => false, 'ocultar' => false,
+            ]);
+        }
+        DB::table('movimientos_rutas_v2_gastos')->insert([
+            'fecha' => '2026-08-11', 'ruta_key' => 'TAMAYO', 'ruta' => 'Tamayo',
+            'monto' => 100.01, 'concepto' => 'Combustible', 'cuenta_codigo' => '600120005',
+            'cuenta_descripcion' => 'Combustibles Y Lubricantes', 'distribucion_tipo' => 'ruta', 'estado' => 'aplicado',
+        ]);
+
+        $response = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
+            'fecha_ini' => '2026-08-01', 'fecha_fin' => '2026-08-31', 'empresa' => 'GJ',
+        ]))->assertOk();
+        $asiento = collect($response->json('gastos_ruta'));
+
+        $this->assertCount(4, $asiento);
+        $this->assertEqualsWithDelta(100.01, $asiento->sum('debito'), 0.001);
+        $this->assertEqualsWithDelta(100.01, $asiento->sum('credito'), 0.001);
+        $this->assertSame(['000101', '000102'], $asiento->pluck('centro_costo')->unique()->values()->all());
+        $this->assertSame(['600120005', '100130010'], $asiento->take(2)->pluck('cuenta')->all());
+        $this->assertSame('2026-08-11', $asiento->first()['fecha']);
+        $plantilla = file_get_contents(resource_path('views/contabilidad/reportes/distribucion-gastos-ruta.blade.php'));
+        $this->assertStringContainsString('Gasto ruta</button>', $plantilla);
+        $this->assertStringContainsString('id="tablaGastosRuta"', $plantilla);
     }
 
     public function test_el_credito_del_deposito_usa_la_cuenta_contable_de_la_ruta_y_empresa(): void

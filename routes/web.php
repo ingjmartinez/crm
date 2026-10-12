@@ -626,6 +626,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     Route::post('/operaciones/movimientos-rutas-v2/procesar', [OperacionesMovimientosRutasV2Controller::class, 'procesar'])->name('operaciones.movimientos-rutas-v2.procesar');
     Route::delete('/operaciones/movimientos-rutas-v2/importaciones/{importacion}', [OperacionesMovimientosRutasV2Controller::class, 'eliminarImportacion'])->name('operaciones.movimientos-rutas-v2.importaciones.eliminar');
     Route::post('/operaciones/movimientos-rutas-v2/depositos', [OperacionesMovimientosRutasV2Controller::class, 'guardarDeposito'])->name('operaciones.movimientos-rutas-v2.depositos.guardar');
+    Route::post('/operaciones/movimientos-rutas-v2/transferencias', [OperacionesMovimientosRutasV2Controller::class, 'guardarTransferencia'])->name('operaciones.movimientos-rutas-v2.transferencias.guardar');
+    Route::get('/operaciones/movimientos-rutas-v2/transferencias/{transferencia}/recibo', [OperacionesMovimientosRutasV2Controller::class, 'reciboTransferencia'])->name('operaciones.movimientos-rutas-v2.transferencias.recibo');
     Route::delete('/operaciones/movimientos-rutas-v2/depositos/{deposito}', [OperacionesMovimientosRutasV2Controller::class, 'eliminarDeposito'])->name('operaciones.movimientos-rutas-v2.depositos.eliminar');
     Route::post('/operaciones/movimientos-rutas-v2/gastos', [OperacionesMovimientosRutasV2Controller::class, 'guardarGasto'])->name('operaciones.movimientos-rutas-v2.gastos.guardar');
     Route::get('/operaciones/movimientos-rutas-v2/token', [OperacionesMovimientosRutasV2Controller::class, 'tokenCsrf'])->name('operaciones.movimientos-rutas-v2.token');

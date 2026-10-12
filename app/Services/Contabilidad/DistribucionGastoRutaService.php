@@ -322,6 +322,9 @@ class DistribucionGastoRutaService
                     'estado' => 'asignado',
                     'cuenta_codigo' => (string) $gasto['cuenta_codigo'],
                     'cuenta_descripcion' => (string) $gasto['cuenta_descripcion'],
+                    'fecha' => (string) $gasto['fecha'],
+                    'concepto' => (string) $gasto['concepto'],
+                    'centro_costo_id' => $gasto['centro_costo_id'],
                     'gasto_ruta' => $montoRutaCentavos / 100,
                     'total_agencias_ruta' => 1,
                     'participacion' => 100,
@@ -436,6 +439,9 @@ class DistribucionGastoRutaService
                     'estado' => $estado,
                     'cuenta_codigo' => (string) $gasto['cuenta_codigo'],
                     'cuenta_descripcion' => (string) $gasto['cuenta_descripcion'],
+                    'fecha' => (string) $gasto['fecha'],
+                    'concepto' => (string) $gasto['concepto'],
+                    'centro_costo_id' => $gasto['centro_costo_id'],
                     'gasto_ruta' => $montoRutaCentavos / 100,
                     'total_agencias_ruta' => $agencias->count(),
                     'participacion' => round(100 / $agencias->count(), 6),
@@ -529,10 +535,40 @@ class DistribucionGastoRutaService
         $totalAsignado = (float) $detalle->where('estado', 'asignado')->sum('gasto_agencia');
         $totalDistribuidoAgencias = (float) $detalle->sum('gasto_agencia');
         $totalGastos = $totalGastosCentavos / 100;
+        $gastosRuta = $detalle->where('estado', 'asignado')->flatMap(function (array $fila) use ($centrosPorTerminal, $mapeosPorRuta, &$cuentasCreditoRuta): array {
+            $empresaId = match ($fila['empresa']) {
+                'Grupo Joselito' => '168', 'Negosur' => '169', default => null,
+            };
+            $centros = $centrosPorTerminal->get($this->normalizarTerminal($fila['terminal']), collect())
+                ->filter(fn (CentroDeCosto $centro): bool => $empresaId !== null && $this->codigoCampo($centro->company_id) === $empresaId)
+                ->unique('id_centro_costo');
+            $centro = $centros->count() === 1 ? $centros->first() : null;
+            $centroId = $fila['centro_costo_id'] ?: $centro?->id_centro_costo;
+            $centroCodigo = $centroId ? str_pad((string) $centroId, 6, '0', STR_PAD_LEFT) : '';
+            $descripcion = trim($fila['concepto']) ?: 'Gasto de ruta '.$fila['ruta'];
+            $descripcion .= ' - '.$fila['agencia'];
+            $mapeos = $mapeosPorRuta->get($this->normalizarRuta($fila['ruta_key']), collect());
+            $claveCuentaRuta = $this->normalizarRuta($fila['ruta_key']).'|'.$empresaId;
+            $cuentaRuta = $cuentasCreditoRuta[$claveCuentaRuta] ??= $this->cuentaCreditoRuta($mapeos, $empresaId);
+            $base = [
+                'descripcion' => $descripcion,
+                'centro_costo' => $centroCodigo,
+                'nombre_centro_costo' => (string) ($centro?->descripcion ?: $fila['agencia']),
+                'fecha' => $fila['fecha'],
+                'ruta' => $fila['ruta'],
+                'terminal' => $fila['terminal'],
+            ];
+
+            return [
+                [...$base, 'cuenta' => $fila['cuenta_codigo'], 'nombre' => $fila['cuenta_descripcion'], 'debito' => $fila['gasto_agencia'], 'credito' => null],
+                [...$base, 'cuenta' => $cuentaRuta ?: 'Validar cuenta de ruta', 'nombre' => 'Cuenta de ruta', 'debito' => null, 'credito' => $fila['gasto_agencia']],
+            ];
+        })->values();
 
         return [
             'data' => $resumenSocios->all(),
             'depositos_ruta' => $depositosRuta->all(),
+            'gastos_ruta' => $gastosRuta->all(),
             'detalle' => $detalle->sortBy([['ruta', 'asc'], ['socio', 'asc'], ['terminal', 'asc']])->values()->all(),
             'rutas' => $resumenRutas->sortBy('ruta')->values()->all(),
             'incidencias' => $incidencias->sortBy([['ruta', 'asc'], ['terminal', 'asc']])->values()->all(),
@@ -627,6 +663,9 @@ class DistribucionGastoRutaService
                 'estado' => $estado,
                 'cuenta_codigo' => (string) $gasto['cuenta_codigo'],
                 'cuenta_descripcion' => (string) $gasto['cuenta_descripcion'],
+                'fecha' => (string) $gasto['fecha'],
+                'concepto' => (string) $gasto['concepto'],
+                'centro_costo_id' => $gasto['centro_costo_id'],
                 'gasto_ruta' => $montoRutaCentavos / 100,
                 'total_agencias_ruta' => $terminales->count(),
                 'participacion' => round(100 / $terminales->count(), 6),
@@ -666,11 +705,12 @@ class DistribucionGastoRutaService
             ->when($rutaKey !== null, fn ($query) => $query->where('ruta_key', $rutaKey))
             ->get([
                 'ruta_key', 'ruta', 'monto', 'cuenta_codigo', 'cuenta_descripcion', 'distribucion_tipo',
-                'terminal_destino', 'agencia_destino', 'socio_codigo', 'socio_nombre',
+                'terminal_destino', 'agencia_destino', 'socio_codigo', 'socio_nombre', 'fecha', 'concepto', 'centro_costo_id',
             ])
             ->map(fn (MovimientoRutaV2Gasto $gasto): array => [
                 ...$gasto->toArray(),
                 'ruta_key' => $this->normalizarRuta($gasto->ruta_key ?: $gasto->ruta),
+                'fecha' => $gasto->fecha->toDateString(),
                 'monto' => round((float) $gasto->monto, 2),
                 'cantidad_gastos' => 1,
             ]);
@@ -697,7 +737,7 @@ class DistribucionGastoRutaService
             ->where('ocultar', false)
             ->whereNotNull('id_viejo')
             ->whereNotNull('id_sub_grupo')
-            ->get(['id_viejo', 'id_grupo', 'id_sub_grupo', 'company_id', 'descripcion'])
+            ->get(['id_centro_costo', 'id_viejo', 'id_grupo', 'id_sub_grupo', 'company_id', 'descripcion'])
             ->filter(fn (CentroDeCosto $centro): bool => $this->normalizarTerminal($centro->id_viejo) !== '' && trim((string) $centro->id_sub_grupo) !== '')
             ->values();
     }

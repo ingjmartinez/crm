@@ -283,6 +283,7 @@
                             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRutas" type="button">Control por ruta</button></li>
                             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIncidencias" type="button">Incidencias <span class="badge bg-danger ms-1" id="cantidadIncidencias">0</span></button></li>
                             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDepositosRuta" type="button">Depósitos de ruta</button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabGastosRuta" type="button">Gasto ruta</button></li>
                         </ul>
 
                         <div class="tab-content">
@@ -323,6 +324,15 @@
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-striped align-middle w-100" id="tablaDepositosRuta">
                                         <thead><tr><th>Cuenta</th><th>Descripción</th><th class="text-end">Débito</th><th class="text-end">Crédito</th><th>Centro de costo</th><th>Movimiento</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="tabGastosRuta">
+                                <p class="text-muted small mb-2">Cada gasto asignado genera un débito a la cuenta del gasto y un crédito a la cuenta de ruta. Los importes pendientes de asignación no se incluyen en el asiento.</p>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-striped align-middle w-100" id="tablaGastosRuta">
+                                        <thead><tr><th>Fecha</th><th>Ruta</th><th>Terminal</th><th>Cuenta</th><th>Nombre</th><th>Descripción</th><th class="text-end">Débito</th><th class="text-end">Crédito</th><th>IdCentroCosto</th><th>Centro de Costo</th></tr></thead>
                                         <tbody></tbody>
                                     </table>
                                 </div>
@@ -711,6 +721,13 @@
                 { data: 'credito', className: 'text-end', render: montoAsiento },
                 { data: 'centro_costo', render: texto }, { data: 'movimiento', render: texto },
             ], null);
+            tablasDistribucion.gastos = crearTabla('#tablaGastosRuta', payload.gastos_ruta || [], [
+                { data: 'fecha', render: texto }, { data: 'ruta', render: texto }, { data: 'terminal', render: texto },
+                { data: 'cuenta', render: texto }, { data: 'nombre', render: texto }, { data: 'descripcion', render: texto },
+                { data: 'debito', className: 'text-end', render: montoAsiento },
+                { data: 'credito', className: 'text-end', render: montoAsiento },
+                { data: 'centro_costo', render: texto }, { data: 'nombre_centro_costo', render: texto },
+            ], 'gasto_ruta_asiento');
 
             document.getElementById('btnExcel').disabled = !(payload.data || []).length;
         }

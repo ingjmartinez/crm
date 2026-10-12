@@ -223,6 +223,12 @@
                                                     data-ruta-key="{{ $ruta['ruta_key'] }}" data-ruta="{{ $ruta['ruta'] }}">
                                                     <i class="ri-eye-line"></i> Ver
                                                 </button>
+                                                @if ($ruta['estado'] === 'excedida')
+                                                    <button type="button" class="btn btn-sm btn-soft-info btn-transferir-fondos"
+                                                        data-ruta-key="{{ $ruta['ruta_key'] }}" data-ruta="{{ $ruta['ruta'] }}" data-excedente="{{ round(-$ruta['pendiente'], 2) }}">
+                                                        <i class="ri-exchange-funds-line"></i> Transferir fondos
+                                                    </button>
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
@@ -474,6 +480,49 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modal-transferir-fondos" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.transferencias.guardar') }}" enctype="multipart/form-data" class="modal-content" id="form-transferir-fondos">
+                @csrf
+                <div class="modal-header">
+                    <div><h5 class="modal-title">Transferir fondos</h5><p class="text-muted mb-0" id="transferencia-origen-titulo"></p></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="fecha" value="{{ $fecha }}">
+                    <input type="hidden" name="empresa" value="{{ $empresa }}">
+                    <input type="hidden" name="ruta_origen_key" id="transferencia-origen-key">
+                    <div class="alert alert-info" id="transferencia-excedente"></div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="transferencia-destino-key" class="form-label">Ruta de destino</label>
+                            <select name="ruta_destino_key" id="transferencia-destino-key" class="form-select" required></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="transferencia-monto-visible" class="form-label">Monto a transferir</label>
+                            <div class="input-group">
+                                <span class="input-group-text fw-semibold">RD$</span>
+                                <input type="text" id="transferencia-monto-visible" class="form-control text-end fs-5 fw-semibold" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
+                                <input type="hidden" name="monto" id="transferencia-monto">
+                            </div>
+                            <div class="form-text" id="transferencia-limite"></div>
+                        </div>
+                        <div class="col-md-6"><label for="recibo-transferencia" class="form-label">Recibo</label><input type="file" name="recibo" id="recibo-transferencia" class="form-control" accept="image/*" required></div>
+                        <div class="col-12">
+                            <div class="border border-2 rounded p-3 text-center bg-light" id="zona-pegar-transferencia" tabindex="0" role="button" style="border-style: dashed !important; cursor: pointer;">
+                                <i class="ri-clipboard-line fs-4 text-info"></i>
+                                <div class="fw-semibold" id="texto-pegar-transferencia">Haz clic aquí y presiona Ctrl+V para pegar una captura</div>
+                                <small class="text-muted">También puedes seleccionar el recibo arriba.</small>
+                                <img class="img-fluid rounded mt-2 d-none mx-auto" id="vista-previa-transferencia" alt="Vista previa del recibo" style="max-height: 180px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-info">Transferir fondos</button></div>
+            </form>
+        </div>
+    </div>
+
     <div class="modal fade" id="modal-detalle-ruta-v2" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
@@ -483,6 +532,8 @@
                     <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Banco</th><th>Referencia</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th><th class="text-center">Acciones</th></tr></thead><tbody id="detalle-depositos-body"></tbody></table></div>
                     <h6>Gastos de ruta aplicados</h6>
                     <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Concepto original</th><th>Cuenta</th><th>Destino</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th><th class="text-center">Acciones</th></tr></thead><tbody id="detalle-gastos-body"></tbody></table></div>
+                    <h6>Transferencias de fondos</h6>
+                    <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Tipo</th><th>Otra ruta</th><th class="text-end">Monto</th><th>Recibo</th></tr></thead><tbody id="detalle-transferencias-body"></tbody></table></div>
                     <h6>Transacciones del CSV</h6>
                     <div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Transacción</th><th>Terminal</th><th>Agencia</th><th>Tipo</th><th class="text-end">Monto</th></tr></thead><tbody id="detalle-transacciones-body"></tbody></table></div>
                 </div>
@@ -549,6 +600,8 @@
             }
             empresaDeposito.addEventListener('change', filtrarBancosDeposito);
             const modalGasto = new bootstrap.Modal(document.getElementById('modal-aplicar-gasto'));
+            const modalTransferencia = new bootstrap.Modal(document.getElementById('modal-transferir-fondos'));
+            const rutasTransferencia = @json($rutas->map(fn (array $ruta): array => ['ruta_key' => $ruta['ruta_key'], 'ruta' => $ruta['ruta'], 'pendiente' => $ruta['pendiente']])->all());
             const modalDetalle = new bootstrap.Modal(document.getElementById('modal-detalle-ruta-v2'));
             const modalClasificarGasto = new bootstrap.Modal(document.getElementById('modal-clasificar-gasto'));
             const tarjetaDepositadoBanco = document.getElementById('tarjeta-depositado-banco');
@@ -729,6 +782,71 @@
 
             configurarPegadoComprobante('modal-aplicar-deposito', 'zona-pegar-deposito', 'comprobante-deposito', 'vista-previa-deposito', 'texto-pegar-deposito', 'deposito');
             configurarPegadoComprobante('modal-aplicar-gasto', 'zona-pegar-gasto', 'comprobante-gasto', 'vista-previa-gasto', 'texto-pegar-gasto', 'gasto');
+            configurarPegadoComprobante('modal-transferir-fondos', 'zona-pegar-transferencia', 'recibo-transferencia', 'vista-previa-transferencia', 'texto-pegar-transferencia', 'transferencia');
+
+            let excedenteTransferencia = 0;
+            const formularioTransferencia = document.getElementById('form-transferir-fondos');
+            const destinoTransferencia = document.getElementById('transferencia-destino-key');
+            const montoTransferenciaVisible = document.getElementById('transferencia-monto-visible');
+            const montoTransferencia = document.getElementById('transferencia-monto');
+            const empresaRuta = ruta => String(ruta).match(/(?:^|[\s-])(GJ|NG)(?=$|[\s-])/i)?.[1]?.toUpperCase() || null;
+            const limiteTransferencia = () => Math.min(excedenteTransferencia, Number(destinoTransferencia.selectedOptions[0]?.dataset.pendiente || 0));
+            destinoTransferencia.addEventListener('change', () => {
+                document.getElementById('transferencia-limite').textContent = `Máximo para este destino: ${moneda(limiteTransferencia())}`;
+            });
+            montoTransferenciaVisible.addEventListener('input', () => {
+                let valor = montoTransferenciaVisible.value.replace(/,/g, '').replace(/[^\d.]/g, '');
+                const punto = valor.indexOf('.');
+                if (punto >= 0) valor = valor.slice(0, punto + 1) + valor.slice(punto + 1).replace(/\./g, '').slice(0, 2);
+                const [entero = '', decimales] = valor.split('.');
+                montoTransferenciaVisible.value = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (decimales !== undefined ? `.${decimales}` : '');
+                montoTransferencia.value = valor ? Number(valor).toFixed(2) : '';
+                montoTransferenciaVisible.setCustomValidity('');
+            });
+            montoTransferenciaVisible.addEventListener('blur', () => {
+                if (montoTransferencia.value) montoTransferenciaVisible.value = Number(montoTransferencia.value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            });
+            formularioTransferencia.addEventListener('submit', async event => {
+                event.preventDefault();
+                const monto = Number(montoTransferencia.value);
+                if (!formularioTransferencia.checkValidity()) {
+                    formularioTransferencia.reportValidity();
+                    return;
+                }
+                if (!Number.isFinite(monto) || monto <= 0 || monto > limiteTransferencia() + 0.001) {
+                    montoTransferenciaVisible.setCustomValidity('El monto debe ser mayor que cero y no superar el excedente ni el pendiente del destino.');
+                    montoTransferenciaVisible.reportValidity();
+                    return;
+                }
+                const confirmado = typeof Swal !== 'undefined'
+                    ? (await Swal.fire({ title: 'Confirmar transferencia', html: `<strong>${moneda(monto)}</strong> a ${escapar(destinoTransferencia.selectedOptions[0]?.textContent)}`, icon: 'question', showCancelButton: true, confirmButtonText: 'Transferir', cancelButtonText: 'Cancelar' })).isConfirmed
+                    : confirm(`¿Transferir ${moneda(monto)}?`);
+                if (!confirmado) return;
+
+                const boton = formularioTransferencia.querySelector('button[type="submit"]');
+                boton.disabled = true;
+                try {
+                    const enviar = () => fetch(formularioTransferencia.action, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken }, body: new FormData(formularioTransferencia) });
+                    let response = await enviar();
+                    if (response.status === 419) {
+                        const tokenResponse = await fetch(@json(route('operaciones.movimientos-rutas-v2.token')), { headers: { Accept: 'application/json' } });
+                        const tokenPayload = await tokenResponse.json().catch(() => ({}));
+                        if (tokenPayload.token) {
+                            csrfToken = tokenPayload.token;
+                            response = await enviar();
+                        }
+                    }
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(payload.errors ? Object.values(payload.errors).flat().join(' ') : payload.message || 'No se pudo transferir.');
+                    if (typeof Swal !== 'undefined') await Swal.fire('Transferencia aplicada', payload.message, 'success');
+                    else alert(payload.message);
+                    window.location.reload();
+                } catch (error) {
+                    boton.disabled = false;
+                    if (typeof Swal !== 'undefined') Swal.fire('No se pudo transferir', error.message, 'error');
+                    else alert(error.message);
+                }
+            });
 
             function actualizarFilaRuta(ruta) {
                 if (!tablaMovimientos) return;
@@ -766,6 +884,13 @@
                     botonAplicar.dataset.depositado = ruta.depositado_banco;
                     botonAplicar.dataset.gastos = ruta.gastos_ruta;
                     botonAplicar.dataset.pendiente = ruta.pendiente;
+                }
+                const botonTransferencia = fila.querySelector('.btn-transferir-fondos');
+                if (ruta.estado === 'excedida' && !botonTransferencia) {
+                    fila.querySelector('.btn-ver-detalle')?.insertAdjacentHTML('afterend', ` <button type="button" class="btn btn-sm btn-soft-info btn-transferir-fondos" data-ruta-key="${escapar(ruta.ruta_key)}" data-ruta="${escapar(ruta.ruta)}" data-excedente="${Math.max(0, -Number(ruta.pendiente))}"><i class="ri-exchange-funds-line"></i> Transferir fondos</button>`);
+                } else if (botonTransferencia) {
+                    if (ruta.estado !== 'excedida') botonTransferencia.remove();
+                    else botonTransferencia.dataset.excedente = Math.max(0, -Number(ruta.pendiente));
                 }
 
                 if (aplicacionActual?.rutaKey === ruta.ruta_key) {
@@ -1019,13 +1144,30 @@
             });
 
             document.addEventListener('click', async function (event) {
+                const botonTransferencia = event.target.closest('.btn-transferir-fondos');
+                if (botonTransferencia) {
+                    formularioTransferencia.reset();
+                    document.getElementById('recibo-transferencia').dispatchEvent(new Event('change'));
+                    montoTransferenciaVisible.value = '';
+                    montoTransferencia.value = '';
+                    excedenteTransferencia = Number(botonTransferencia.dataset.excedente);
+                    document.getElementById('transferencia-origen-key').value = botonTransferencia.dataset.rutaKey;
+                    document.getElementById('transferencia-origen-titulo').textContent = botonTransferencia.dataset.ruta;
+                    document.getElementById('transferencia-excedente').textContent = `Excedente disponible: ${moneda(excedenteTransferencia)}`;
+                    const empresaOrigen = empresaRuta(botonTransferencia.dataset.ruta);
+                    const destinos = rutasTransferencia.filter(ruta => ruta.ruta_key !== botonTransferencia.dataset.rutaKey && empresaRuta(ruta.ruta) === empresaOrigen && Number(ruta.pendiente) > 0);
+                    destinoTransferencia.innerHTML = '<option value="">Selecciona una ruta con saldo pendiente</option>' + destinos.map(ruta => `<option value="${escapar(ruta.ruta_key)}" data-pendiente="${Number(ruta.pendiente)}">${escapar(ruta.ruta)} · pendiente ${moneda(ruta.pendiente)}</option>`).join('');
+                    document.getElementById('transferencia-limite').textContent = destinos.length ? 'Selecciona una ruta de destino.' : 'No hay rutas de la misma empresa con saldo pendiente.';
+                    modalTransferencia.show();
+                    return;
+                }
                 const botonEliminarImportacion = event.target.closest('.btn-eliminar-importacion');
                 if (botonEliminarImportacion) {
                     const confirmado = typeof Swal !== 'undefined'
                         ? await Swal.fire({
                             icon: 'warning',
                             title: 'Eliminar carga completa',
-                            html: `Se eliminará <strong>${escapar(botonEliminarImportacion.dataset.archivo)}</strong>, las transacciones, todos los depósitos y las cargas históricas del <strong>${escapar(botonEliminarImportacion.dataset.periodo)}</strong>.<br><br>Los gastos se conservarán. Esta acción no se puede deshacer.`,
+                            html: `Se eliminará <strong>${escapar(botonEliminarImportacion.dataset.archivo)}</strong>, las transacciones, los depósitos, las transferencias y las cargas históricas del <strong>${escapar(botonEliminarImportacion.dataset.periodo)}</strong>.<br><br>Los gastos se conservarán. Esta acción no se puede deshacer.`,
                             showCancelButton: true,
                             confirmButtonText: 'Sí, eliminar carga',
                             cancelButtonText: 'Cancelar',
@@ -1181,6 +1323,7 @@
                 document.getElementById('detalle-ruta-titulo').textContent = `Detalle · ${botonDetalle.dataset.ruta}`;
                 document.getElementById('detalle-depositos-body').innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-gastos-body').innerHTML = '<tr><td colspan="8" class="text-center">Cargando...</td></tr>';
+                document.getElementById('detalle-transferencias-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-transacciones-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
                 modalDetalle.show();
 
@@ -1191,10 +1334,14 @@
                     const payload = await response.json();
                     document.getElementById('detalle-depositos-body').innerHTML = payload.depositos.length ? payload.depositos.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.banco)}</td><td>${escapar(item.referencia || '-')}</td><td class="text-end">${moneda(item.monto)}</td><td>${escapar(item.usuario)}</td><td>${item.comprobante_url ? `<a class="btn btn-sm btn-soft-primary" href="${escapar(item.comprobante_url)}" target="_blank">Ver</a>` : '-'}</td><td class="text-center"><button type="button" class="btn btn-sm btn-soft-danger btn-eliminar-aplicacion" data-tipo="depósito" data-url="${escapar(item.eliminar_url)}"><i class="ri-delete-bin-line"></i> Eliminar</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted">No hay depósitos aplicados.</td></tr>';
                     renderizarGastos(payload.gastos || []);
+                    document.getElementById('detalle-transferencias-body').innerHTML = payload.transferencias?.length
+                        ? payload.transferencias.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.tipo)}</td><td>${escapar(item.otra_ruta)}</td><td class="text-end">${moneda(item.monto)}</td><td><a class="btn btn-sm btn-soft-primary" href="${escapar(item.recibo_url)}" target="_blank">Ver recibo</a></td></tr>`).join('')
+                        : '<tr><td colspan="5" class="text-center text-muted">No hay transferencias.</td></tr>';
                     document.getElementById('detalle-transacciones-body').innerHTML = payload.transacciones.length ? payload.transacciones.map(item => `<tr><td>${escapar(item.id_trans)}</td><td>${escapar(item.terminal || '-')}</td><td>${escapar(item.nombre_agencia || '-')}</td><td>${escapar(item.tipo_etiqueta)}</td><td class="text-end">${moneda(item.monto_original)}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted">No hay transacciones.</td></tr>';
                 } catch (error) {
                     document.getElementById('detalle-depositos-body').innerHTML = `<tr><td colspan="7" class="text-center text-danger">${escapar(error.message)}</td></tr>`;
                     document.getElementById('detalle-gastos-body').innerHTML = '';
+                    document.getElementById('detalle-transferencias-body').innerHTML = '';
                     document.getElementById('detalle-transacciones-body').innerHTML = '';
                 }
             });

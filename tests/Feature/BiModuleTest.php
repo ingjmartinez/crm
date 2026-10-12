@@ -183,6 +183,40 @@ class BiModuleTest extends TestCase
             ->assertSee('http-equiv="refresh"', false);
     }
 
+    public function test_bi_tv_progress_rings_follow_the_latest_sales(): void
+    {
+        DB::table('ventas_online_promedios_historicos')->insert([
+            ['tipo_categoria' => 'tradicional', 'monto_promedio' => 200, 'meses_incluidos' => '[]'],
+            ['tipo_categoria' => 'no_tradicional', 'monto_promedio' => 200, 'meses_incluidos' => '[]'],
+        ]);
+
+        $lectura = BiVentaHora::factory()->create([
+            'fecha' => today()->toDateString(),
+            'hora' => 9,
+            'tradicional_acumulado' => 120,
+            'no_tradicional_acumulado' => 80,
+        ]);
+
+        $this->withoutMiddleware()->get(route('bi.tv'))
+            ->assertOk()
+            ->assertSee('conic-gradient(var(--ring-color, #00a8cc) var(--progress)', false)
+            ->assertSee('style="--progress: 50%;"', false)
+            ->assertSee('style="--progress: 60%;"', false)
+            ->assertSee('style="--progress: 40%;"', false);
+
+        $lectura->update([
+            'tradicional_acumulado' => 160,
+            'no_tradicional_acumulado' => 120,
+        ]);
+
+        $this->get(route('bi.tv'))
+            ->assertOk()
+            ->assertSee('style="--progress: 70%;"', false)
+            ->assertSee('style="--progress: 80%;"', false)
+            ->assertSee('style="--progress: 60%;"', false)
+            ->assertDontSee('style="--progress: 50%;"', false);
+    }
+
     public function test_bi_controller_renders_its_inertia_page(): void
     {
         $this->assertSame('bi', app(\App\Http\Middleware\HandleBiInertiaRequests::class)->rootView(request()));

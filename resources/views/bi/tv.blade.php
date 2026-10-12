@@ -18,14 +18,16 @@
         .caption, .metric small { display: block; color: #7095aa; font-size: 12px; }
         .metric strong { display: block; margin: 9px 0; color: #008db6; font-size: 28px; }
         .metric .small-value { font-size: 20px; } .divider { margin: 12px 0; border-top: 1px solid #dae8ed; }
-        .ring { display: inline-block; margin-top: 12px; padding: 16px 13px; border: 8px solid #dfe7ee; border-top-color: #00a8cc; border-radius: 50%; font-size: 18px; font-weight: bold; }
+        .ring { display: inline-grid; place-items: center; width: 78px; height: 78px; margin-top: 12px; border-radius: 50%; background: conic-gradient(var(--ring-color, #00a8cc) var(--progress), #dfe7ee 0); font-size: 18px; font-weight: bold; position: relative; }
+        .ring::before { content: ''; position: absolute; inset: 8px; border-radius: 50%; background: #fff; }
+        .ring b { position: relative; }
         .legend { margin: 10px 0; font-size: 12px; color: #008db6; } .legend span { margin-left: 16px; color: #d78b0a; }
         svg { display: block; width: 100%; height: 235px; }
         .routes table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .routes td { padding: 9px 2px; border-bottom: 1px solid #d6e5ed; } .routes td:last-child { text-align: right; font-weight: bold; white-space: nowrap; }
         .type { padding: 22px; border: 1px solid #a7e3f5; border-radius: 15px; } .type.pink { border-color: #f6aed8; }
         .type h3 { margin: 0 0 18px; font-size: 13px; color: #5b7690; } .type h3 span { float: right; color: #008db6; }
-        .type.pink h3 span, .type.pink strong { color: #dc0a83; } .type.pink .ring { border-top-color: #dc0a83; } .type strong { display: block; color: #008db6; font-size: 30px; }
+        .type.pink h3 span, .type.pink strong { color: #dc0a83; } .type.pink .ring { --ring-color: #dc0a83; } .type strong { display: block; color: #008db6; font-size: 30px; }
         .type .details { display: block; margin-top: 7px; color: #5b7690; font-size: 13px; }
         .type .average { margin-top: 18px; padding-top: 18px; border-top: 1px solid #dce8ee; } .type .average b { display: block; margin: 7px 0; font-size: 18px; }
         .below { color: #d7263d; } .above { color: #159447; }
@@ -65,7 +67,8 @@
                     @php $metaDiaria = (float) ($promedios['tradicional'] ?? 0) + (float) ($promedios['no_tradicional'] ?? 0); @endphp
                     @if($ultima && $metaDiaria > 0)
                         <div class="divider"></div><small>META DIARIA</small><strong class="small-value">DOP {{ number_format($metaDiaria, 0) }}</strong>
-                        <span class="ring">{{ number_format(min(100, (($ultima->tradicional_acumulado + $ultima->no_tradicional_acumulado) / $metaDiaria) * 100), 0) }}%</span>
+                        @php $avanceMeta = min(100, max(0, (($ultima->tradicional_acumulado + $ultima->no_tradicional_acumulado) / $metaDiaria) * 100)); @endphp
+                        <span class="ring" style="--progress: {{ $avanceMeta }}%;" role="img" aria-label="Meta diaria alcanzada: {{ number_format($avanceMeta, 0) }}%"><b>{{ number_format($avanceMeta, 0) }}%</b></span>
                     @endif
                 </div>
             </td>
@@ -105,7 +108,11 @@
                         <h3>{{ $datos[0] }} <span>{{ $total > 0 ? number_format($monto / $total * 100, 1) : '0.0' }}% del total</span></h3>
                         <strong>DOP {{ number_format($monto, 0) }}</strong><span class="details">{{ number_format($agencias) }} agencias · Promedio: DOP {{ number_format($agencias > 0 ? $monto / $agencias : 0, 0) }}</span>
                         <div class="average"><small>PROMEDIO DE VENTA DIARIO · ÚLTIMOS 3 MESES CALCULADOS</small><b>{{ $promedio !== null ? 'DOP '.number_format($promedio, 0) : 'Sin calcular' }}</b>
-                            @if($promedio > 0)<span class="{{ $monto >= $promedio ? 'above' : 'below' }}">{{ $monto >= $promedio ? 'Meta diaria superada por DOP '.number_format($monto - $promedio, 0) : 'Faltan DOP '.number_format($promedio - $monto, 0).' para llegar al 100%' }}</span><br><span class="ring">{{ number_format(min(100, $monto / $promedio * 100), 0) }}%</span>@endif
+                            @if($promedio > 0)
+                                @php $avanceTipo = min(100, max(0, $monto / $promedio * 100)); @endphp
+                                <span class="{{ $monto >= $promedio ? 'above' : 'below' }}">{{ $monto >= $promedio ? 'Meta diaria superada por DOP '.number_format($monto - $promedio, 0) : 'Faltan DOP '.number_format($promedio - $monto, 0).' para llegar al 100%' }}</span><br>
+                                <span class="ring" style="--progress: {{ $avanceTipo }}%;" role="img" aria-label="Promedio diario alcanzado: {{ number_format($avanceTipo, 0) }}%"><b>{{ number_format($avanceTipo, 0) }}%</b></span>
+                            @endif
                         </div>
                     </div></td>
                 @endforeach
