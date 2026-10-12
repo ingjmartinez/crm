@@ -176,6 +176,7 @@ class BiModuleTest extends TestCase
             ->assertOk()
             ->assertSee('DOP 240')
             ->assertSee('+20.0%')
+            ->assertSee('width="900" height="235" viewBox="0 0 900 235"', false)
             ->assertSee('RUTA TV')
             ->assertSee('120')
             ->assertSee('http-equiv="refresh"', false);

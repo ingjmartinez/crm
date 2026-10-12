@@ -20,7 +20,7 @@
         .metric .small-value { font-size: 20px; } .divider { margin: 12px 0; border-top: 1px solid #dae8ed; }
         .ring { display: inline-block; margin-top: 12px; padding: 16px 13px; border: 8px solid #dfe7ee; border-top-color: #00a8cc; border-radius: 50%; font-size: 18px; font-weight: bold; }
         .legend { margin: 10px 0; font-size: 12px; color: #008db6; } .legend span { margin-left: 16px; color: #d78b0a; }
-        svg { display: block; width: 100%; height: auto; }
+        svg { display: block; width: 100%; height: 235px; }
         .routes table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .routes td { padding: 9px 2px; border-bottom: 1px solid #d6e5ed; } .routes td:last-child { text-align: right; font-weight: bold; white-space: nowrap; }
         .type { padding: 22px; border: 1px solid #a7e3f5; border-radius: 15px; } .type.pink { border-color: #f6aed8; }
@@ -29,7 +29,29 @@
         .type .details { display: block; margin-top: 7px; color: #5b7690; font-size: 13px; }
         .type .average { margin-top: 18px; padding-top: 18px; border-top: 1px solid #dce8ee; } .type .average b { display: block; margin: 7px 0; font-size: 18px; }
         .below { color: #d7263d; } .above { color: #159447; }
-        @media (max-width: 850px) { .layout, .types, .layout tbody, .types tbody, .layout tr, .types tr, .layout td, .types td { display: block; width: auto !important; } .layout td, .types td { margin-bottom: 16px; } h2 small { float: none; display: block; margin-top: 12px; } }
+        @media (max-width: 1100px) {
+            body { padding: 10px; }
+            h1 { margin-bottom: 10px; font-size: 21px; }
+            section { margin-bottom: 10px; padding: 12px; border-radius: 12px; }
+            h2 { margin-bottom: 10px; }
+            .layout, .types { border-spacing: 8px 0; }
+            .layout .left { width: 26%; }
+            .layout .chart { width: 74%; }
+            .layout .routes { display: none; }
+            .metric { padding: 10px; margin-bottom: 7px; }
+            .metric strong { font-size: 21px; margin: 5px 0; }
+            .metric .small-value { font-size: 16px; }
+            .type { padding: 12px; }
+            .type h3 { margin-bottom: 8px; }
+            .type strong { font-size: 23px; }
+            .type .average { margin-top: 10px; padding-top: 10px; }
+        }
+        @media (max-width: 600px) {
+            .layout, .types, .layout tbody, .types tbody, .layout tr, .types tr, .layout td, .types td { display: block; width: auto !important; }
+            .layout .routes { display: block; }
+            .layout td, .types td { margin-bottom: 10px; }
+            h2 small { float: none; display: block; margin-top: 8px; }
+        }
     </style>
 </head>
 <body>
@@ -51,7 +73,7 @@
                 <span class="caption">VENTAS ACUMULADAS POR HORA</span>
                 <div class="legend">● Ventas totales <span>● Mismo día semana anterior ({{ $fechaAnterior }})</span></div>
                 @if($ultima)
-                    <svg viewBox="0 0 900 235" role="img" aria-label="Ventas acumuladas por hora">
+                    <svg width="900" height="235" viewBox="0 0 900 235" preserveAspectRatio="none" role="img" aria-label="Ventas acumuladas por hora">
                         @for($i = 0; $i <= 4; $i++)
                             @php $y = 190 - $i * 40; @endphp
                             <line x1="70" y1="{{ $y }}" x2="865" y2="{{ $y }}" stroke="#d9eaf0" />
