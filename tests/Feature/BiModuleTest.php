@@ -137,6 +137,7 @@ class BiModuleTest extends TestCase
         $this->assertNotNull($item);
         $this->assertSame('/bi', $item['url']);
         $this->assertTrue(Route::has('bi.tv'));
+        $this->assertSame(\App\Http\Controllers\Bi\TvDashboardController::class.'@index', Route::getRoutes()->getByName('bi.tv')->getActionName());
         $this->get(route('bi.tv'))->assertRedirect(route('login'));
         $tvItem = collect(config('module_hubs.dashboard.items'))->firstWhere('nombre', 'BI para TV');
         $this->assertSame('/bi-tv', $tvItem['url']);
@@ -185,6 +186,8 @@ class BiModuleTest extends TestCase
     public function test_bi_controller_renders_its_inertia_page(): void
     {
         $this->assertSame('bi', app(\App\Http\Middleware\HandleBiInertiaRequests::class)->rootView(request()));
+
+        $this->assertStringContainsString('Cargando BI...', view('bi', ['page' => ['component' => 'Bi/Dashboard', 'props' => [], 'url' => '/bi', 'version' => 'test']])->render());
 
         $this->withoutMiddleware()
             ->withHeader('X-Inertia', 'true')

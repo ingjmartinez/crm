@@ -113,7 +113,7 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     Route::get('/bi', [BiDashboardController::class, 'index'])
         ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
         ->name('bi.index');
-    Route::get('/bi-tv', [BiDashboardController::class, 'tv'])->name('bi.tv');
+    Route::get('/bi-tv', [\App\Http\Controllers\Bi\TvDashboardController::class, 'index'])->name('bi.tv');
     Route::post('/bi/recalcular', [BiDashboardController::class, 'recalcular'])
         ->middleware([\App\Http\Middleware\HandleBiInertiaRequests::class, 'throttle:2,1'])
         ->name('bi.recalcular');
