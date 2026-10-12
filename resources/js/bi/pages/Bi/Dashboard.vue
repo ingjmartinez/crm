@@ -3,7 +3,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import { currencyInputCaret, formatCurrencyInput, normalizeCurrencyInput } from '../../currency-input.js';
 import { cantidadTerminalesAl80, limitesTerminalesAl80 } from '../../terminales-limites.js';
-import { compareHourlySales } from '../../hourly-comparison.js';
 
 const props = defineProps({
     modulo: { type: String, required: true },
@@ -334,12 +333,10 @@ const hourlyChart = computed(() => {
         : amount >= 1_000 ? `DOP ${Math.round(amount / 1_000)}K` : formatDop(amount);
     const ticks = Array.from({ length: intervals + 1 }, (_, index) => ({ y: 180 - index * (160 / intervals), label: formatAxis(index * step) }));
     const hours = Array.from({ length: 17 }, (_, index) => ({ hour: index + 6, x: 72 + index * 34.5 }));
-    const previousByHour = new Map(previousValues.map((reading) => [reading.hora, reading.total]));
     const points = values.map((reading) => ({
         ...reading,
         x: 72 + (reading.hora - 6) * 34.5,
         y: 180 - (reading.total / maximum) * 160,
-        comparison: compareHourlySales(reading.total, previousByHour.get(reading.hora)),
     }));
     const line = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
     const area = points.length > 1 ? `${line} L ${points.at(-1).x} 180 L ${points[0].x} 180 Z` : '';
@@ -549,12 +546,9 @@ function recalcularVentas() {
                                 <g v-for="tick in hourlyChart.ticks" :key="tick.y"><line x1="72" :y1="tick.y" x2="624" :y2="tick.y" stroke="#d9eaf0"/><text x="65" :y="tick.y + 4" text-anchor="end" fill="#789bab" font-size="10">{{ tick.label }}</text></g>
                                 <path v-if="hourlyChart.area" :d="hourlyChart.area" fill="#bce9f6" fill-opacity="0.65"/>
                                 <path :d="hourlyChart.line" fill="none" stroke="#0092bf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path v-if="hourlyChart.previousPoints.length" :d="hourlyChart.previousLine" fill="none" stroke="#f59e0b" stroke-opacity="0.65" stroke-width="2.5" stroke-dasharray="6 4" stroke-linecap="round" stroke-linejoin="round" style="filter: blur(.4px)"/>
-                                <circle v-for="point in hourlyChart.previousPoints" :key="`prev-${point.hora}`" :cx="point.x" :cy="point.y" r="2.5" fill="#f59e0b" fill-opacity="0.65" stroke="white" stroke-width="1"><title>Semana anterior · {{ String(point.hora).padStart(2, '0') }}:00 · {{ formatDop(point.total) }}</title></circle>
-                                <g v-for="point in hourlyChart.points" :key="point.hora">
-                                    <circle :cx="point.x" :cy="point.y" r="4" :fill="point.comparison?.direction === 'above' ? '#159447' : point.comparison?.direction === 'below' ? '#dc3545' : '#0092bf'" stroke="white" stroke-width="1.5"><title>{{ String(point.hora).padStart(2, '0') }}:00 · {{ formatDop(point.total) }}{{ point.comparison ? ` · ${point.comparison.label} frente a la misma hora de la semana anterior` : '' }}</title></circle>
-                                    <text v-if="point.comparison && point.comparison.direction !== 'equal'" :x="point.x" :y="Math.max(14, point.y - 10)" text-anchor="middle" :fill="point.comparison.direction === 'above' ? '#159447' : '#dc3545'" font-size="9" font-weight="700">{{ point.comparison.label }}</text>
-                                </g>
+                                <path v-if="hourlyChart.previousPoints.length" :d="hourlyChart.previousLine" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="6 4" stroke-linecap="round" stroke-linejoin="round"/>
+                                <circle v-for="point in hourlyChart.previousPoints" :key="`prev-${point.hora}`" :cx="point.x" :cy="point.y" r="2.5" fill="#f59e0b" stroke="white" stroke-width="1"><title>Semana anterior · {{ String(point.hora).padStart(2, '0') }}:00 · {{ formatDop(point.total) }}</title></circle>
+                                <circle v-for="point in hourlyChart.points":key="point.hora" :cx="point.x" :cy="point.y" r="3.5" fill="#0092bf" stroke="white" stroke-width="1.5"><title>{{ String(point.hora).padStart(2, '0') }}:00 · {{ formatDop(point.total) }}</title></circle>
                                 <text v-for="hour in hourlyChart.hours" :key="hour.hour" :x="hour.x" y="208" text-anchor="middle" fill="#789bab" font-size="9">{{ String(hour.hour).padStart(2, '0') }}:00</text>
                             </svg>
                             <p v-else class="bi-hour-empty">Esperando la primera captura horaria.</p>
