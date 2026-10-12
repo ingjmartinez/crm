@@ -933,6 +933,22 @@ class IncentivoV6CalendarTest extends TestCase
         $this->assertStringContainsString('setTimeout(() => {', substr($view, $applyStart, 1300));
     }
 
+    public function test_horario_revisa_el_reporte_completo_y_la_base_al_guardar(): void
+    {
+        $plantilla = file_get_contents(resource_path('views/incentivos/reporte-nuevo-incentivo-v6.blade.php'));
+        $inicioDetalle = strpos($plantilla, 'function buildPeriodoDetalles(baselineRows)');
+        $finDetalle = strpos($plantilla, 'function updatePeriodoValidationState()', $inicioDetalle);
+        $inicioHorario = strpos($plantilla, 'function evaluarHorarioIncentivo()');
+        $finHorario = strpos($plantilla, 'function aplicarHorarioIncentivo()', $inicioHorario);
+
+        $this->assertNotFalse($inicioDetalle);
+        $this->assertNotFalse($finDetalle);
+        $this->assertNotFalse($inicioHorario);
+        $this->assertNotFalse($finHorario);
+        $this->assertStringContainsString('toNumber(baselineRow?.horas_total) < horasTotalMinimo', substr($plantilla, $inicioDetalle, $finDetalle - $inicioDetalle));
+        $this->assertStringContainsString('const rows = cachedRows.filter((row) =>', substr($plantilla, $inicioHorario, $finHorario - $inicioHorario));
+    }
+
     public function test_payment_excel_can_combine_administrators_and_coordinators_into_two_company_sheets(): void
     {
         $view = view('incentivos.reporte-nuevo-incentivo-v6', [

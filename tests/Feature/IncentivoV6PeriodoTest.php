@@ -238,6 +238,22 @@ class IncentivoV6PeriodoTest extends TestCase
         $this->assertDatabaseHas('incentivo_periodos', ['horas_minimas' => 40]);
     }
 
+    public function test_insufficient_hours_with_excluded_agency_are_saved_with_both_reasons(): void
+    {
+        $detalle = $this->detail('40211111111', 1000, 0, ['agencia_excluida', 'horario']);
+        $detalle['horas_total'] = 39;
+        $payload = $this->payload([$detalle]);
+        $payload['horas_minimas'] = 40;
+
+        $this->actingAs($this->userWithId(7))
+            ->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->postJson(route('incentivos.reporte-nuevo-incentivo-v6.periodo.guardar'), $payload)
+            ->assertOk()
+            ->assertJsonPath('resumen.no_pagados', 1);
+
+        $this->assertSame(['agencia_excluida', 'horario'], IncentivoPeriodoDetalle::query()->firstOrFail()->motivos);
+    }
+
     public function test_person_below_goal_is_saved_as_not_qualified(): void
     {
         $response = $this->actingAs($this->userWithId(7))

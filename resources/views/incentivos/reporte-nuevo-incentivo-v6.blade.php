@@ -2508,7 +2508,10 @@
                     ) {
                         motivos.push('desvinculado');
                     }
-                    if (cedula && excludedHorarioCedulas.has(cedula)) {
+                    if (
+                        (cedula && excludedHorarioCedulas.has(cedula))
+                        || toNumber(baselineRow?.horas_total) < horasTotalMinimo
+                    ) {
                         motivos.push('horario');
                     }
                 }
@@ -7013,9 +7016,8 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
         }
 
         horarioMinimoConsultado = minimo;
-        const rows = getBaseFilteredRows().filter((row) =>
-            getCedulaKey(row?.cedula)
-            && toIntegerAmount(row?.nuevo_incentivo) > 0
+        const rows = cachedRows.filter((row) =>
+            toIntegerAmount(row?.nuevo_incentivo) > 0
             && toNumber(row?.horas_total) < minimo
         );
         lastHorarioCedulas = new Set(rows.map((row) => getCedulaKey(row.cedula)));
