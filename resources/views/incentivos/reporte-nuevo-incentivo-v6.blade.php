@@ -2659,6 +2659,7 @@
                 const baselineParams = new URLSearchParams({
                     sistema,
                     filtro_cumplimiento: 'todos',
+                    mes: document.getElementById('ni_mes').value,
                     fecha_ini: fechaInicio,
                     fecha_fin: fechaFin,
                     min_dias_venta: minDias,

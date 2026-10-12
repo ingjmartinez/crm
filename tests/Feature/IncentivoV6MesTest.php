@@ -61,4 +61,14 @@ class IncentivoV6MesTest extends TestCase
         $this->expectException(ValidationException::class);
         $request->validateResolved();
     }
+
+    public function test_el_calculo_base_al_guardar_envia_el_mes_del_reporte(): void
+    {
+        $plantilla = file_get_contents(resource_path('views/incentivos/reporte-nuevo-incentivo-v6.blade.php'));
+
+        $this->assertMatchesRegularExpression(
+            '/const baselineParams = new URLSearchParams\(\{[^}]*mes: document\.getElementById\(\'ni_mes\'\)\.value,[^}]*terminales_excluidas: JSON\.stringify\(\[\]\)/s',
+            $plantilla
+        );
+    }
 }
