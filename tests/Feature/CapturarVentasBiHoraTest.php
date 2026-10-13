@@ -8,7 +8,9 @@ use App\Services\Bi\CapturarVentasHora;
 use App\Services\Lotobet\LotobetSessionService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
@@ -18,6 +20,7 @@ class CapturarVentasBiHoraTest extends TestCase
     protected function tearDown(): void
     {
         CarbonImmutable::setTestNow();
+        Carbon::setTestNow();
 
         parent::tearDown();
     }
@@ -256,7 +259,7 @@ class CapturarVentasBiHoraTest extends TestCase
         $this->mock(LotobetSessionService::class)
             ->shouldNotReceive('getVentasProducto');
 
-        foreach (['2026-09-30 05:59:00', '2026-09-30 22:01:00'] as $momento) {
+        foreach (['2026-09-30 05:59:00', '2026-09-30 22:05:00'] as $momento) {
             CarbonImmutable::setTestNow($momento);
             $this->artisan('bi:capturar-ventas-hora')->assertSuccessful();
         }
@@ -266,7 +269,7 @@ class CapturarVentasBiHoraTest extends TestCase
 
     public function test_command_captures_at_the_final_scheduled_hour(): void
     {
-        CarbonImmutable::setTestNow('2026-09-30 22:00:00');
+        CarbonImmutable::setTestNow('2026-09-30 22:00:02');
 
         $this->mock(LotobetSessionService::class)
             ->shouldReceive('getVentasProducto')
@@ -277,6 +280,33 @@ class CapturarVentasBiHoraTest extends TestCase
         $this->artisan('bi:capturar-ventas-hora')->assertSuccessful();
 
         $this->assertSame(22, BiVentaHora::query()->firstOrFail()->hora);
+    }
+
+    public function test_command_accepts_a_delayed_capture_before_2205(): void
+    {
+        CarbonImmutable::setTestNow('2026-09-30 22:04:00');
+
+        $this->mock(LotobetSessionService::class)
+            ->shouldReceive('getVentasProducto')
+            ->once()
+            ->with('2026-09-30')
+            ->andReturn(['Content' => []]);
+
+        $this->artisan('bi:capturar-ventas-hora')->assertSuccessful();
+
+        $this->assertSame(22, BiVentaHora::query()->firstOrFail()->hora);
+    }
+
+    public function test_scheduler_allows_final_capture_at_2200_but_not_at_2205(): void
+    {
+        foreach (['2026-09-30 22:00:02' => true, '2026-09-30 22:05:00' => false] as $momento => $debeEjecutar) {
+            Carbon::setTestNow($momento);
+            require base_path('routes/console.php');
+            $event = collect(Schedule::events())->last(fn ($event): bool => str_contains($event->command ?? '', 'bi:capturar-ventas-hora'));
+
+            $this->assertNotNull($event);
+            $this->assertSame($debeEjecutar, $event->isDue($this->app) && $event->filtersPass($this->app));
+        }
     }
 
     public function test_command_skips_an_existing_hour_unless_forced(): void

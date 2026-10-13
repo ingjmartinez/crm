@@ -46,7 +46,7 @@ class CapturarVentasBiHora extends Command
             }
         });
 
-        if ($momento->hour < 6 || $momento->hour > 22 || ($momento->hour === 22 && $momento->minute > 0)) {
+        if ($momento->hour < 6 || $momento->hour > 22 || ($momento->hour === 22 && $momento->minute >= 5)) {
             $this->info('Captura omitida: horario permitido de 06:00 a 22:00.');
 
             return self::SUCCESS;
