@@ -61,6 +61,7 @@ use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\RecargasController;
 use App\Http\Controllers\RecursosHumanos\AgenciasCerradasDomingosController;
 use App\Http\Controllers\RecursosHumanos\NominaDomingoController;
+use App\Http\Controllers\RecursosHumanos\PonchePorCedulaController;
 use App\Http\Controllers\RecursosHumanosController;
 use App\Http\Controllers\RegistroEmpleadoController;
 use App\Http\Controllers\RendimientoCoordinadorController;
@@ -371,6 +372,12 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
 
     Route::middleware('role_or_permission:superadmin|admin|rh|recursos_humanos.view')->group(function () {
         Route::get('/recursos-humanos', [RecursosHumanosController::class, 'index'])->name('recursos-humanos.index');
+        Route::get('/recursos-humanos/ponche-por-cedula', [PonchePorCedulaController::class, 'index'])
+            ->middleware('permission:recursos_humanos.ponche_por_cedula.view')
+            ->name('recursos-humanos.ponche-por-cedula.index');
+        Route::get('/recursos-humanos/ponche-por-cedula/list', [PonchePorCedulaController::class, 'list'])
+            ->middleware('permission:recursos_humanos.ponche_por_cedula.view')
+            ->name('recursos-humanos.ponche-por-cedula.list');
         Route::get('/recursos-humanos/validador-incentivos', [ValidadorIncentivoController::class, 'index'])
             ->name('recursos-humanos.validador-incentivos.index');
         Route::get('/recursos-humanos/validador-incentivos/exportar', [ValidadorIncentivoController::class, 'export'])

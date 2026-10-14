@@ -29,6 +29,16 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Ponche por Cédula',
+        'descripcion' => 'Consulta el primer y último login y las horas por día y sistema.',
+        'url' => '/recursos-humanos/ponche-por-cedula',
+        'icono' => 'ri-fingerprint-line',
+        'categoria' => 'Asistencia',
+        'tags' => ['ponche', 'cedula', 'asistencia', 'horas'],
+        'permission' => 'recursos_humanos.ponche_por_cedula.view',
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Seguimiento Cruce de Usuarios',
         'descripcion' => 'Gestiona los casos generados desde el reporte de cruce de usuarios.',
         'url' => '/recursos-humanos/seguimiento-cruce-usuarios',
