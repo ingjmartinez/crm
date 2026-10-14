@@ -68,6 +68,7 @@ class MovimientosRutasV2ImportService
                 'nombre_agencia' => $transaccion['nombre_agencia'] ?? null,
                 'tipo' => $transaccion['tipo'],
                 'tipo_etiqueta' => $transaccion['tipo_etiqueta'],
+                'origen' => $transaccion['origen'] ?: null,
                 'monto' => $transaccion['monto'],
                 'monto_original' => $transaccion['monto_original'],
                 'created_at' => $now,

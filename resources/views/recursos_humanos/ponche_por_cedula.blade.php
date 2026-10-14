@@ -16,6 +16,27 @@
                     </ol>
                 </div>
 
+                @if ($errors->any())
+                    <div class="alert alert-danger"><ul class="mb-0">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+                @endif
+
+                <div class="card">
+                    <div class="card-header"><h5 class="card-title mb-0">Cargar ventas del día</h5></div>
+                    <div class="card-body">
+                        <form id="formCargarPoncheVentas" method="POST" action="{{ route('recursos-humanos.ponche-por-cedula.cargar-ventas') }}" enctype="multipart/form-data">
+                            @csrf
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-2"><label for="fecha_carga" class="form-label">Fecha</label><input type="date" id="fecha_carga" name="fecha" class="form-control" value="{{ old('fecha', today()->toDateString()) }}" required></div>
+                                <div class="col-md-2"><label for="tradicional" class="form-label">Tradicional</label><input type="file" id="tradicional" name="tradicional" class="form-control" accept=".xlsx,.csv,.txt" required></div>
+                                <div class="col-md-2"><label for="no_tradicional" class="form-label">No Tradicional</label><input type="file" id="no_tradicional" name="no_tradicional" class="form-control" accept=".xlsx,.csv,.txt" required></div>
+                                <div class="col-md-2"><label for="recargas" class="form-label">Recargas</label><input type="file" id="recargas" name="recargas" class="form-control" accept=".xlsx" required></div>
+                                <div class="col-md-2"><button type="submit" class="btn btn-success w-100">Cargar archivos</button></div>
+                            </div>
+                        </form>
+                        <small class="text-muted">La nueva carga reemplaza las ventas de esta fecha solo en Ponche por Cédula.</small>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header"><h5 class="card-title mb-0">Filtros</h5></div>
                     <div class="card-body">
@@ -52,12 +73,13 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table id="tablePoncheCedula" class="table table-bordered table-striped align-middle" style="width: 100%;">
-                                <thead><tr><th>Cédula</th><th>Nombre</th><th>Día</th><th>Sistema</th><th>Primer login</th><th>Último login</th><th class="text-end">Total de horas</th></tr></thead>
+                                <thead><tr><th>Cédula</th><th>Nombre</th><th>Día</th><th>Sistema</th><th>Primer login</th><th>Último login</th><th>Salida calculada</th><th class="text-end">Total de horas</th></tr></thead>
                                 <tbody></tbody>
-                                <tfoot><tr><th colspan="6" class="text-end">Total de horas</th><th id="totalHoras" class="text-end">0,00</th></tr></tfoot>
+                                <tfoot><tr><th colspan="7" class="text-end">Total de horas</th><th id="totalHoras" class="text-end">0,00</th></tr></tfoot>
                             </table>
                         </div>
                         <small class="text-muted">Total de registros: <span id="totalRegistros" class="fw-semibold">0</span></small>
+                        <p class="text-muted small mt-2 mb-0">Si hay una venta posterior al último login, la salida calculada será la última venta más cinco minutos.</p>
                     </div>
                 </div>
             </div>
@@ -68,6 +90,29 @@
 @section('script')
     <script>
         let table;
+
+        const mensajeCargaExitosa = @json(session('success'));
+        if (mensajeCargaExitosa) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Archivos cargados',
+                text: mensajeCargaExitosa,
+                confirmButtonText: 'Aceptar'
+            });
+        }
+
+        document.getElementById('formCargarPoncheVentas').addEventListener('submit', function() {
+            this.querySelector('button[type="submit"]').disabled = true;
+            Swal.fire({
+                title: 'Cargando datos...',
+                text: 'Espere mientras se insertan las ventas.',
+                width: '20rem',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
+        });
 
         function cargarDatos() {
             const cedula = document.getElementById('cedula').value.trim();
@@ -105,7 +150,8 @@
                     {data: 'sistema'},
                     {data: 'primer_login', defaultContent: '—', render: data => data || '—'},
                     {data: 'ultimo_login', defaultContent: '—', render: data => data || '—'},
-                    {data: 'total_horas', className: 'text-end', render: data => Number(data || 0).toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    {data: 'salida_calculada', defaultContent: '—', render: data => data || '—'},
+                    {data: 'total_horas', className: 'text-end', render: data => data === null ? '—' : Number(data).toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                 ],
                 autoWidth: false,
                 dom: 'Bfrtip',

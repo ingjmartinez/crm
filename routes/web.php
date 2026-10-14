@@ -378,6 +378,9 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         Route::get('/recursos-humanos/ponche-por-cedula/list', [PonchePorCedulaController::class, 'list'])
             ->middleware('permission:recursos_humanos.ponche_por_cedula.view')
             ->name('recursos-humanos.ponche-por-cedula.list');
+        Route::post('/recursos-humanos/ponche-por-cedula/cargar-ventas', [PonchePorCedulaController::class, 'cargarVentas'])
+            ->middleware('permission:recursos_humanos.ponche_por_cedula.view')
+            ->name('recursos-humanos.ponche-por-cedula.cargar-ventas');
         Route::get('/recursos-humanos/validador-incentivos', [ValidadorIncentivoController::class, 'index'])
             ->name('recursos-humanos.validador-incentivos.index');
         Route::get('/recursos-humanos/validador-incentivos/exportar', [ValidadorIncentivoController::class, 'export'])
@@ -634,6 +637,9 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     Route::delete('/operaciones/movimientos-rutas-v2/importaciones/{importacion}', [OperacionesMovimientosRutasV2Controller::class, 'eliminarImportacion'])->name('operaciones.movimientos-rutas-v2.importaciones.eliminar');
     Route::post('/operaciones/movimientos-rutas-v2/depositos', [OperacionesMovimientosRutasV2Controller::class, 'guardarDeposito'])->name('operaciones.movimientos-rutas-v2.depositos.guardar');
     Route::post('/operaciones/movimientos-rutas-v2/transferencias', [OperacionesMovimientosRutasV2Controller::class, 'guardarTransferencia'])->name('operaciones.movimientos-rutas-v2.transferencias.guardar');
+    Route::post('/operaciones/movimientos-rutas-v2/depositos-central', [OperacionesMovimientosRutasV2Controller::class, 'guardarDepositoCentral'])->name('operaciones.movimientos-rutas-v2.depositos-central.guardar');
+    Route::get('/operaciones/movimientos-rutas-v2/depositos-central/{deposito_central}/recibo', [OperacionesMovimientosRutasV2Controller::class, 'reciboDepositoCentral'])->name('operaciones.movimientos-rutas-v2.depositos-central.recibo');
+    Route::delete('/operaciones/movimientos-rutas-v2/depositos-central/{deposito_central}', [OperacionesMovimientosRutasV2Controller::class, 'eliminarDepositoCentral'])->name('operaciones.movimientos-rutas-v2.depositos-central.eliminar');
     Route::get('/operaciones/movimientos-rutas-v2/transferencias/{transferencia}/recibo', [OperacionesMovimientosRutasV2Controller::class, 'reciboTransferencia'])->name('operaciones.movimientos-rutas-v2.transferencias.recibo');
     Route::delete('/operaciones/movimientos-rutas-v2/depositos/{deposito}', [OperacionesMovimientosRutasV2Controller::class, 'eliminarDeposito'])->name('operaciones.movimientos-rutas-v2.depositos.eliminar');
     Route::post('/operaciones/movimientos-rutas-v2/gastos', [OperacionesMovimientosRutasV2Controller::class, 'guardarGasto'])->name('operaciones.movimientos-rutas-v2.gastos.guardar');

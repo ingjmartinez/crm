@@ -15,16 +15,36 @@ class NominaDomingoVentasImportService
 {
     private const IMPORT_CHUNK_SIZE = 1000;
 
+    private const PONCHE_IMPORT_CHUNK_SIZE = 2000;
+
     private string $fechaNomina;
 
+    private string $tablaVentas = 'nomina_domingo_ventas';
+
+    private int $importChunkSize = self::IMPORT_CHUNK_SIZE;
+
     public function importar(UploadedFile $tradicional, UploadedFile $noTradicional, Carbon $fecha, ?UploadedFile $recargas = null): void
+    {
+        $this->importarEnTabla($tradicional, $noTradicional, $fecha, $recargas, 'nomina_domingo_ventas');
+    }
+
+    public function importarPonchePorCedula(UploadedFile $tradicional, UploadedFile $noTradicional, UploadedFile $recargas, Carbon $fecha): void
+    {
+        $this->importarEnTabla($tradicional, $noTradicional, $fecha, $recargas, 'ponche_por_cedula_ventas');
+    }
+
+    private function importarEnTabla(UploadedFile $tradicional, UploadedFile $noTradicional, Carbon $fecha, ?UploadedFile $recargas, string $tablaVentas): void
     {
         set_time_limit(300);
         DB::connection()->disableQueryLog();
         $this->fechaNomina = $fecha->toDateString();
+        $this->tablaVentas = $tablaVentas;
+        $this->importChunkSize = $tablaVentas === 'ponche_por_cedula_ventas'
+            ? self::PONCHE_IMPORT_CHUNK_SIZE
+            : self::IMPORT_CHUNK_SIZE;
 
         DB::transaction(function () use ($tradicional, $noTradicional, $recargas): void {
-            $ventasAnteriores = DB::table('nomina_domingo_ventas')->whereDate('fecha_transaccion', $this->fechaNomina);
+            $ventasAnteriores = DB::table($this->tablaVentas)->whereDate('fecha_transaccion', $this->fechaNomina);
 
             if ($recargas === null) {
                 $ventasAnteriores->whereIn('tipo', ['Tradicional', 'No Tradicional']);
@@ -81,7 +101,7 @@ class NominaDomingoVentasImportService
             }
 
             $sharedStrings = $this->leerSharedStrings($zip);
-            $ventasProductos = DB::table('nomina_domingo_ventas')
+            $ventasProductos = DB::table($this->tablaVentas)
                 ->whereDate('fecha_transaccion', $this->fechaNomina)
                 ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
                 ->whereNotNull('terminal')
@@ -140,7 +160,7 @@ class NominaDomingoVentasImportService
                 $fechaSql = $this->fechaSql($fecha['orden'] ?? null);
 
                 if ($fechaSql === null || substr($fechaSql, 0, 10) !== $this->fechaNomina) {
-                    throw ValidationException::withMessages(['recargas' => 'La fila '.$numeroFila.' de Recargas tiene una fecha fuera del domingo '.$this->fechaNomina.'.']);
+                    throw ValidationException::withMessages(['recargas' => 'La fila '.$numeroFila.' de Recargas tiene una fecha fuera de la fecha seleccionada '.$this->fechaNomina.'.']);
                 }
 
                 $usuarioVenta = $this->limpiarTexto($row[$columnas['usuario_venta']] ?? '');
@@ -245,14 +265,14 @@ class NominaDomingoVentasImportService
 
     private function verificarVentas(string $tipo): void
     {
-        $tieneVentas = DB::table('nomina_domingo_ventas')
+        $tieneVentas = DB::table($this->tablaVentas)
             ->whereDate('fecha_transaccion', $this->fechaNomina)
             ->where('tipo', $tipo)
             ->exists();
 
         if (! $tieneVentas) {
             throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'El archivo '.$tipo.' no contiene ventas válidas para el domingo '.$this->fechaNomina.'.',
+                $this->campoArchivo($tipo) => 'El archivo '.$tipo.' no contiene ventas válidas para la fecha '.$this->fechaNomina.'.',
             ]);
         }
     }
@@ -405,7 +425,7 @@ class NominaDomingoVentasImportService
         if ($fechaArchivo === null || substr($fechaArchivo, 0, 10) !== $this->fechaNomina) {
             $fechaEncontrada = $fechaArchivo === null ? 'inválida' : substr($fechaArchivo, 0, 10);
             throw ValidationException::withMessages([
-                $this->campoArchivo($tipo) => 'El archivo '.$tipo.' contiene una venta válida con fecha '.$fechaEncontrada.'; solo se permite el domingo '.$this->fechaNomina.'.',
+                $this->campoArchivo($tipo) => 'El archivo '.$tipo.' contiene una venta válida con fecha '.$fechaEncontrada.'; solo se permite la fecha '.$this->fechaNomina.'.',
             ]);
         }
 
@@ -439,7 +459,7 @@ class NominaDomingoVentasImportService
 
         $filas[] = $fila;
 
-        if (count($filas) >= self::IMPORT_CHUNK_SIZE) {
+        if (count($filas) >= $this->importChunkSize) {
             $this->insertarFilasReporte($filas);
             $filas = [];
         }
@@ -459,7 +479,7 @@ class NominaDomingoVentasImportService
             return $fila;
         }, $filas);
 
-        DB::table('nomina_domingo_ventas')->insert($rows);
+        DB::table($this->tablaVentas)->insert($rows);
     }
 
     private function formatearTerminalConsulta($valor): string

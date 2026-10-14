@@ -99,7 +99,7 @@ class NominaDomingoService
             $ultimaTransaccion = $this->instante($venta['ultima_transaccion'] ?? null);
             $primeraTransaccion = $this->instante($venta['primera_transaccion'] ?? null);
             $salidaAjustada = $salidaPonche !== null && $ultimaTransaccion !== null && $ultimaTransaccion->greaterThan($salidaPonche);
-            $salidaEfectiva = $salidaAjustada ? $ultimaTransaccion->copy()->addMinutes(5) : $salidaPonche;
+            $salidaEfectiva = $this->salidaEfectiva($salidaPonche, $ultimaTransaccion);
             $incidencia = match (true) {
                 $entrada === null => 'Sin primer login',
                 $salidaPonche === null => 'Sin último login',
@@ -157,6 +157,13 @@ class NominaDomingoService
         return $minutosRestantes === 0
             ? "{$horas} h"
             : "{$horas} h {$minutosRestantes} min";
+    }
+
+    public function salidaEfectiva(?Carbon $salidaPonche, ?Carbon $ultimaTransaccion): ?Carbon
+    {
+        return $salidaPonche !== null && $ultimaTransaccion !== null && $ultimaTransaccion->greaterThan($salidaPonche)
+            ? $ultimaTransaccion->copy()->addMinutes(5)
+            : $salidaPonche;
     }
 
     /** @return Collection<int, string> */

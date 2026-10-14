@@ -83,6 +83,7 @@ class MovimientosRutasCsvService
                 $terminal = $this->limpiarTexto($row[$columnas['terminal']] ?? '');
                 $fecha = $this->parsearFecha($row[$columnas['fecha']] ?? '');
                 $referencia = $this->limpiarTexto($row[$columnas['referencia']] ?? '');
+                $origen = $this->limpiarTexto($row[$columnas['origen'] ?? -1] ?? '');
                 $montoOriginal = $this->limpiarMonto($row[$columnas['monto']] ?? '');
                 $esDeposito = $tipoNormalizado === self::TIPO_DEPOSITO;
                 $esRetiroEgreso = ! $esDeposito && Str::contains($referencia, 'egreso', ignoreCase: true);
@@ -122,6 +123,7 @@ class MovimientosRutasCsvService
                     'fecha' => $fecha->format('d/m/Y'),
                     'fecha_iso' => $fecha->format('Y-m-d'),
                     'tipo' => $tipo,
+                    'origen' => $origen,
                     'tipo_etiqueta' => $esDeposito
                         ? 'Depósito'
                         : ($esRetiroEgreso ? 'Retiro - Egreso' : 'Retiro'),
@@ -204,7 +206,7 @@ class MovimientosRutasCsvService
 
     /**
      * @param  array<int, string|null>  $headers
-     * @return array{tipo_transaccion: int, ruta: int, id_trans: int, terminal: int, fecha: int, referencia: int, monto: int}
+     * @return array{tipo_transaccion: int, ruta: int, id_trans: int, terminal: int, fecha: int, referencia: int, monto: int, origen?: int}
      */
     private function mapearColumnas(array $headers): array
     {
@@ -248,7 +250,11 @@ class MovimientosRutasCsvService
             $this->fallar('No se encontraron estas columnas requeridas: '.implode(', ', $faltantes).'.');
         }
 
-        /** @var array{tipo_transaccion: int, ruta: int, id_trans: int, terminal: int, fecha: int, referencia: int, monto: int} $columnas */
+        if (array_key_exists('origen', $normalizados)) {
+            $columnas['origen'] = $normalizados['origen'];
+        }
+
+        /** @var array{tipo_transaccion: int, ruta: int, id_trans: int, terminal: int, fecha: int, referencia: int, monto: int, origen?: int} $columnas */
         return $columnas;
     }
 

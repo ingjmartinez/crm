@@ -97,7 +97,7 @@
                         <div class="card h-100 mb-0">
                             <div class="card-header">
                                 <h5 class="card-title mb-1">Rendimiento de ruta</h5>
-                                <p class="text-muted mb-0">Cumplimiento del neto esperado depositado en banco.</p>
+                                <p class="text-muted mb-0">Cumplimiento del neto esperado según el pendiente ajustado.</p>
                             </div>
                             <div class="card-body d-flex flex-column justify-content-center">
                                 @php
@@ -208,7 +208,7 @@
                                             <td class="text-end fw-semibold">RD$ {{ number_format($ruta['neto_esperado'], 2) }}</td>
                                             <td class="text-end text-success">RD$ {{ number_format($ruta['depositado_banco'], 2) }}</td>
                                             <td class="text-end text-primary">RD$ {{ number_format($ruta['gastos_ruta'], 2) }}</td>
-                                            <td class="text-end {{ $ruta['pendiente'] > 0 ? 'text-danger' : 'text-success' }}">RD$ {{ number_format($ruta['pendiente'], 2) }}</td>
+                                            <td class="text-end {{ $ruta['pendiente'] > 0 ? 'text-danger' : 'text-success' }}">RD$ {{ number_format($ruta['pendiente'], 2) }}@if ($ruta['depositos_central'] > 0)<div class="small text-info">Ajuste central: +RD$ {{ number_format($ruta['depositos_central'], 2) }}</div>@endif</td>
                                             <td class="text-end fw-bold {{ $ruta['balance_pendiente'] > 0 ? 'text-danger' : 'text-success' }}">RD$ {{ number_format($ruta['balance_pendiente'], 2) }}</td>
                                             <td class="text-end">{{ number_format($ruta['cumplimiento'], 1) }}%</td>
                                             <td><span class="badge bg-{{ $estadoConfig[0] }}-subtle text-{{ $estadoConfig[0] }}" style="font-size: inherit;">{{ $estadoConfig[1] }}</span></td>
@@ -222,6 +222,10 @@
                                                 <button type="button" class="btn btn-sm btn-soft-primary btn-ver-detalle"
                                                     data-ruta-key="{{ $ruta['ruta_key'] }}" data-ruta="{{ $ruta['ruta'] }}">
                                                     <i class="ri-eye-line"></i> Ver
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-soft-info btn-deposito-central"
+                                                    data-ruta-key="{{ $ruta['ruta_key'] }}" data-ruta="{{ $ruta['ruta'] }}">
+                                                    <i class="ri-add-circle-line"></i> Depósito por central
                                                 </button>
                                                 @if ($ruta['estado'] === 'excedida')
                                                     <button type="button" class="btn btn-sm btn-soft-info btn-transferir-fondos"
@@ -480,6 +484,38 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modal-deposito-central" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.depositos-central.guardar') }}" enctype="multipart/form-data" class="modal-content" id="form-deposito-central">
+                @csrf
+                <div class="modal-header"><div><h5 class="modal-title">Depósito por central</h5><p class="text-muted mb-0" id="deposito-central-ruta-titulo"></p></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" name="fecha" value="{{ $fecha }}">
+                    <input type="hidden" name="empresa" value="{{ $empresa }}">
+                    <input type="hidden" name="ruta_key" id="deposito-central-ruta-key">
+                    <p class="small text-muted">Ajuste temporal que solo modifica el Pendiente del día. Retiros, Neto esperado y Balance pendiente conservan sus valores.</p>
+                    <label for="deposito-central-transaccion" class="form-label">Transacción de depósito</label>
+                    <select name="id_trans" id="deposito-central-transaccion" class="form-select mb-3" required>
+                        <option value="">Selecciona la transacción</option>
+                    </select>
+                    <label for="deposito-central-monto-visible" class="form-label">Monto recibido</label>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">RD$</span>
+                        <input type="text" id="deposito-central-monto-visible" class="form-control text-end fs-5 fw-semibold" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
+                        <input type="hidden" name="monto" id="deposito-central-monto">
+                    </div>
+                    <label for="recibo-deposito-central" class="form-label">Foto del recibo</label>
+                    <input type="file" name="recibo" id="recibo-deposito-central" class="form-control" accept="image/*" required>
+                    <div class="border border-2 rounded p-2 text-center bg-light mt-3" id="zona-pegar-deposito-central" tabindex="0" role="button" style="border-style: dashed !important; cursor: pointer;">
+                        <div id="texto-pegar-deposito-central">Clic aquí y Ctrl+V para pegar una captura</div>
+                        <img class="img-fluid rounded mt-2 d-none mx-auto" id="vista-previa-deposito-central" alt="Vista previa del recibo" style="max-height: 150px;">
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-info">Aplicar al cuadre</button></div>
+            </form>
+        </div>
+    </div>
+
     <div class="modal fade" id="modal-transferir-fondos" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <form method="POST" action="{{ route('operaciones.movimientos-rutas-v2.transferencias.guardar') }}" enctype="multipart/form-data" class="modal-content" id="form-transferir-fondos">
@@ -534,6 +570,8 @@
                     <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Concepto original</th><th>Cuenta</th><th>Destino</th><th class="text-end">Monto</th><th>Usuario</th><th>Comprobante</th><th class="text-center">Acciones</th></tr></thead><tbody id="detalle-gastos-body"></tbody></table></div>
                     <h6>Transferencias de fondos</h6>
                     <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Tipo</th><th>Otra ruta</th><th class="text-end">Monto</th><th>Recibo</th></tr></thead><tbody id="detalle-transferencias-body"></tbody></table></div>
+                    <h6>Depósitos por central aplicados al cuadre</h6>
+                    <div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Registrado</th><th>Transacción</th><th class="text-end">Monto</th><th>Recibo</th><th>Acciones</th></tr></thead><tbody id="detalle-central-body"></tbody></table></div>
                     <h6>Transacciones del CSV</h6>
                     <div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>Transacción</th><th>Terminal</th><th>Agencia</th><th>Tipo</th><th class="text-end">Monto</th></tr></thead><tbody id="detalle-transacciones-body"></tbody></table></div>
                 </div>
@@ -601,6 +639,7 @@
             empresaDeposito.addEventListener('change', filtrarBancosDeposito);
             const modalGasto = new bootstrap.Modal(document.getElementById('modal-aplicar-gasto'));
             const modalTransferencia = new bootstrap.Modal(document.getElementById('modal-transferir-fondos'));
+            const modalDepositoCentral = new bootstrap.Modal(document.getElementById('modal-deposito-central'));
             const rutasTransferencia = @json($rutas->map(fn (array $ruta): array => ['ruta_key' => $ruta['ruta_key'], 'ruta' => $ruta['ruta'], 'pendiente' => $ruta['pendiente']])->all());
             const modalDetalle = new bootstrap.Modal(document.getElementById('modal-detalle-ruta-v2'));
             const modalClasificarGasto = new bootstrap.Modal(document.getElementById('modal-clasificar-gasto'));
@@ -783,6 +822,50 @@
             configurarPegadoComprobante('modal-aplicar-deposito', 'zona-pegar-deposito', 'comprobante-deposito', 'vista-previa-deposito', 'texto-pegar-deposito', 'deposito');
             configurarPegadoComprobante('modal-aplicar-gasto', 'zona-pegar-gasto', 'comprobante-gasto', 'vista-previa-gasto', 'texto-pegar-gasto', 'gasto');
             configurarPegadoComprobante('modal-transferir-fondos', 'zona-pegar-transferencia', 'recibo-transferencia', 'vista-previa-transferencia', 'texto-pegar-transferencia', 'transferencia');
+            configurarPegadoComprobante('modal-deposito-central', 'zona-pegar-deposito-central', 'recibo-deposito-central', 'vista-previa-deposito-central', 'texto-pegar-deposito-central', 'central');
+
+            const formularioDepositoCentral = document.getElementById('form-deposito-central');
+            const montoCentralVisible = document.getElementById('deposito-central-monto-visible');
+            const montoCentral = document.getElementById('deposito-central-monto');
+            const transaccionCentral = document.getElementById('deposito-central-transaccion');
+            transaccionCentral.addEventListener('change', () => montoCentralVisible.setCustomValidity(''));
+            montoCentralVisible.addEventListener('input', () => {
+                let valor = montoCentralVisible.value.replace(/,/g, '').replace(/[^\d.]/g, '');
+                const punto = valor.indexOf('.');
+                if (punto >= 0) valor = valor.slice(0, punto + 1) + valor.slice(punto + 1).replace(/\./g, '').slice(0, 2);
+                const [entero = '', decimales] = valor.split('.');
+                montoCentralVisible.value = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (decimales !== undefined ? `.${decimales}` : '');
+                montoCentral.value = valor ? Number(valor).toFixed(2) : '';
+                montoCentralVisible.setCustomValidity('');
+            });
+            montoCentralVisible.addEventListener('blur', () => {
+                if (montoCentral.value) montoCentralVisible.value = Number(montoCentral.value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            });
+            formularioDepositoCentral.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (!formularioDepositoCentral.checkValidity()) {
+                    formularioDepositoCentral.reportValidity();
+                    return;
+                }
+                const monto = Number(montoCentral.value);
+                if (!Number.isFinite(monto) || monto <= 0 || monto > 9999999999999.99) {
+                    montoCentralVisible.setCustomValidity('Escribe un monto válido mayor que cero.');
+                    montoCentralVisible.reportValidity();
+                    return;
+                }
+                const montoTransaccion = Number(transaccionCentral.selectedOptions[0]?.dataset.monto);
+                if (Math.round(monto * 100) !== Math.round(montoTransaccion * 100)) {
+                    montoCentralVisible.setCustomValidity(`El monto debe coincidir con la transacción seleccionada: ${moneda(montoTransaccion)}.`);
+                    montoCentralVisible.reportValidity();
+                    return;
+                }
+                const confirmado = typeof Swal !== 'undefined'
+                    ? (await Swal.fire({ title: 'Confirmar depósito por central', html: `${moneda(monto)} se sumará solo al Pendiente del día.`, icon: 'question', showCancelButton: true, confirmButtonText: 'Aplicar', cancelButtonText: 'Cancelar' })).isConfirmed
+                    : confirm(`¿Aplicar ${moneda(monto)} como depósito por central?`);
+                if (confirmado) {
+                    await guardarAplicacion(formularioDepositoCentral, 'depósito por central');
+                }
+            });
 
             let excedenteTransferencia = 0;
             const formularioTransferencia = document.getElementById('form-transferir-fondos');
@@ -867,7 +950,7 @@
 
                 datos[5] = moneda(ruta.depositado_banco);
                 datos[6] = moneda(ruta.gastos_ruta);
-                datos[7] = moneda(ruta.pendiente);
+                datos[7] = `${moneda(ruta.pendiente)}${Number(ruta.depositos_central) > 0 ? `<div class="small text-info">Ajuste central: +${moneda(ruta.depositos_central)}</div>` : ''}`;
                 datos[8] = moneda(ruta.balance_pendiente);
                 datos[9] = `${Number(ruta.cumplimiento || 0).toFixed(1)}%`;
                 datos[10] = `<span class="badge bg-${estado[0]}-subtle text-${estado[0]}" style="font-size: inherit;">${estado[1]}</span>`;
@@ -973,7 +1056,7 @@
                     actualizarFilaRuta(payload.ruta);
                     actualizarResumen(payload.resumen);
                     actualizarDepositosPorBanco(payload.depositos_por_banco || []);
-                    (formulario.id === 'form-aplicar-deposito' ? modalDeposito : modalGasto).hide();
+                    (formulario.id === 'form-aplicar-deposito' ? modalDeposito : formulario.id === 'form-deposito-central' ? modalDepositoCentral : modalGasto).hide();
                     formulario.reset();
                     formulario.querySelectorAll('input[type="file"]').forEach(input => input.dispatchEvent(new Event('change')));
 
@@ -1144,6 +1227,31 @@
             });
 
             document.addEventListener('click', async function (event) {
+                const botonCentral = event.target.closest('.btn-deposito-central');
+                if (botonCentral) {
+                    formularioDepositoCentral.reset();
+                    montoCentralVisible.value = '';
+                    montoCentral.value = '';
+                    montoCentralVisible.setCustomValidity('');
+                    document.getElementById('recibo-deposito-central').dispatchEvent(new Event('change'));
+                    document.getElementById('deposito-central-ruta-key').value = botonCentral.dataset.rutaKey;
+                    document.getElementById('deposito-central-ruta-titulo').textContent = botonCentral.dataset.ruta;
+                    transaccionCentral.innerHTML = '<option value="">Cargando depósitos...</option>';
+                    modalDepositoCentral.show();
+                    try {
+                        const params = new URLSearchParams({ fecha, ruta_key: botonCentral.dataset.rutaKey });
+                        const response = await fetch(`${detalleUrl}?${params.toString()}`, { headers: { Accept: 'application/json' } });
+                        if (!response.ok) throw new Error('No se pudieron consultar los depósitos de la ruta.');
+                        const detalle = await response.json();
+                        const aplicadas = new Set((detalle.depositos_central || []).map(item => item.id_trans));
+                        const depositos = (detalle.transacciones || []).filter(item => item.tipo_etiqueta === 'Depósito - Central' && !aplicadas.has(item.id_trans));
+                        transaccionCentral.innerHTML = '<option value="">Selecciona la transacción</option>' + depositos.map(item => `<option value="${escapar(item.id_trans)}" data-monto="${Number(item.monto_original)}">${escapar(item.id_trans)} · ${escapar(item.nombre_agencia || item.terminal || 'Agencia sin nombre')} · ${escapar(item.tipo_etiqueta)} · ${moneda(item.monto_original)}</option>`).join('');
+                        if (!depositos.length) transaccionCentral.innerHTML = '<option value="">No hay depósitos por central disponibles</option>';
+                    } catch (error) {
+                        transaccionCentral.innerHTML = `<option value="">${escapar(error.message)}</option>`;
+                    }
+                    return;
+                }
                 const botonTransferencia = event.target.closest('.btn-transferir-fondos');
                 if (botonTransferencia) {
                     formularioTransferencia.reset();
@@ -1324,6 +1432,7 @@
                 document.getElementById('detalle-depositos-body').innerHTML = '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-gastos-body').innerHTML = '<tr><td colspan="8" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-transferencias-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
+                document.getElementById('detalle-central-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
                 document.getElementById('detalle-transacciones-body').innerHTML = '<tr><td colspan="5" class="text-center">Cargando...</td></tr>';
                 modalDetalle.show();
 
@@ -1337,11 +1446,15 @@
                     document.getElementById('detalle-transferencias-body').innerHTML = payload.transferencias?.length
                         ? payload.transferencias.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.tipo)}</td><td>${escapar(item.otra_ruta)}</td><td class="text-end">${moneda(item.monto)}</td><td><a class="btn btn-sm btn-soft-primary" href="${escapar(item.recibo_url)}" target="_blank">Ver recibo</a></td></tr>`).join('')
                         : '<tr><td colspan="5" class="text-center text-muted">No hay transferencias.</td></tr>';
+                    document.getElementById('detalle-central-body').innerHTML = payload.depositos_central?.length
+                        ? payload.depositos_central.map(item => `<tr><td>${escapar(item.fecha_registro)}</td><td>${escapar(item.id_trans || '-')}</td><td class="text-end">${moneda(item.monto)}</td><td><a class="btn btn-sm btn-soft-primary" href="${escapar(item.recibo_url)}" target="_blank">Ver recibo</a></td><td><button type="button" class="btn btn-sm btn-soft-danger btn-eliminar-aplicacion" data-tipo="depósito por central" data-url="${escapar(item.eliminar_url)}">Eliminar</button></td></tr>`).join('')
+                        : '<tr><td colspan="5" class="text-center text-muted">No hay depósitos por central.</td></tr>';
                     document.getElementById('detalle-transacciones-body').innerHTML = payload.transacciones.length ? payload.transacciones.map(item => `<tr><td>${escapar(item.id_trans)}</td><td>${escapar(item.terminal || '-')}</td><td>${escapar(item.nombre_agencia || '-')}</td><td>${escapar(item.tipo_etiqueta)}</td><td class="text-end">${moneda(item.monto_original)}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted">No hay transacciones.</td></tr>';
                 } catch (error) {
                     document.getElementById('detalle-depositos-body').innerHTML = `<tr><td colspan="7" class="text-center text-danger">${escapar(error.message)}</td></tr>`;
                     document.getElementById('detalle-gastos-body').innerHTML = '';
                     document.getElementById('detalle-transferencias-body').innerHTML = '';
+                    document.getElementById('detalle-central-body').innerHTML = '';
                     document.getElementById('detalle-transacciones-body').innerHTML = '';
                 }
             });

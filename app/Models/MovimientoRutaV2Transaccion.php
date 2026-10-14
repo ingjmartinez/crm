@@ -11,7 +11,7 @@ class MovimientoRutaV2Transaccion extends Model
 
     protected $fillable = [
         'importacion_id', 'fecha', 'ruta_key', 'ruta', 'id_trans', 'terminal',
-        'nombre_agencia', 'tipo', 'tipo_etiqueta', 'monto', 'monto_original',
+        'nombre_agencia', 'tipo', 'tipo_etiqueta', 'origen', 'monto', 'monto_original',
     ];
 
     protected function casts(): array

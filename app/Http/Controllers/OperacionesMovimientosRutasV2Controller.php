@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Operaciones\ClasificarMovimientoRutaV2GastoRequest;
 use App\Http\Requests\Operaciones\ConsultarOpcionesMovimientoRutaV2GastoRequest;
 use App\Http\Requests\Operaciones\FiltrarMovimientosRutasV2Request;
+use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2DepositoCentralRequest;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2DepositoRequest;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2GastoRequest;
 use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2TransferenciaRequest;
@@ -12,6 +13,7 @@ use App\Http\Requests\Operaciones\ProcesarMovimientosRutasV2Request;
 use App\Http\Requests\Operaciones\ReporteMovimientoRutaV2PdfRequest;
 use App\Models\BancoOperacion;
 use App\Models\MovimientoRutaV2Deposito;
+use App\Models\MovimientoRutaV2DepositoCentral;
 use App\Models\MovimientoRutaV2Gasto;
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
@@ -19,6 +21,7 @@ use App\Models\MovimientoRutaV2Transferencia;
 use App\Services\Operaciones\ClasificacionGastoRutaService;
 use App\Services\Operaciones\MovimientosRutasV2ImportService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -289,6 +292,85 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         ])->with('success', $message);
     }
 
+    public function guardarDepositoCentral(GuardarMovimientoRutaV2DepositoCentralRequest $request): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validated();
+        $movimiento = MovimientoRutaV2Transaccion::query()
+            ->whereDate('fecha', $validated['fecha'])
+            ->where('ruta_key', $validated['ruta_key'])
+            ->where('id_trans', $validated['id_trans'])
+            ->where('tipo', 'deposito')
+            ->first();
+
+        if ($movimiento === null || ! $this->esDepositoCentral($movimiento)) {
+            throw ValidationException::withMessages(['id_trans' => 'Selecciona un depósito por central de esta ruta y fecha.']);
+        }
+
+        if ((int) round((float) $validated['monto'] * 100) !== (int) round((float) $movimiento->monto * 100)) {
+            throw ValidationException::withMessages([
+                'monto' => 'El monto debe coincidir exactamente con el depósito de la transacción seleccionada: RD$ '.number_format((float) $movimiento->monto, 2).'.',
+            ]);
+        }
+
+        $reciboPath = $request->file('recibo')->store('operaciones/movimientos-rutas-v2/depositos-central', 'local');
+
+        try {
+            MovimientoRutaV2DepositoCentral::query()->create([
+                'fecha' => $validated['fecha'],
+                'ruta_key' => $movimiento->ruta_key,
+                'ruta' => $movimiento->ruta,
+                'id_trans' => $movimiento->id_trans,
+                'monto' => $validated['monto'],
+                'recibo_path' => $reciboPath,
+                'user_id' => $request->user()?->id,
+            ]);
+        } catch (QueryException $exception) {
+            Storage::disk('local')->delete($reciboPath);
+
+            if ((string) $exception->getCode() === '23000') {
+                throw ValidationException::withMessages(['id_trans' => 'Esta transacción de depósito ya fue aplicada por central.']);
+            }
+
+            throw $exception;
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($reciboPath);
+
+            throw $exception;
+        }
+
+        $message = 'Depósito por central aplicado al cuadre de la ruta '.$movimiento->ruta.'.';
+
+        if ($request->expectsJson()) {
+            return $this->respuestaAplicacion($message, $validated['fecha'], $movimiento->ruta_key, $validated['empresa'] ?? null);
+        }
+
+        return redirect()->route('operaciones.movimientos-rutas-v2', [
+            'fecha' => $validated['fecha'], 'empresa' => $validated['empresa'] ?? null,
+        ])->with('success', $message);
+    }
+
+    public function reciboDepositoCentral(int $deposito_central): BinaryFileResponse
+    {
+        $depositoCentral = MovimientoRutaV2DepositoCentral::query()->findOrFail($deposito_central);
+        $rutaRecibo = $this->resolverRutaComprobante($depositoCentral->recibo_path);
+        abort_if($rutaRecibo === null, 404, 'El recibo no está disponible.');
+
+        return response()->file($rutaRecibo);
+    }
+
+    public function eliminarDepositoCentral(int $deposito_central): JsonResponse
+    {
+        $depositoCentral = MovimientoRutaV2DepositoCentral::query()->findOrFail($deposito_central);
+        $rutaRecibo = $this->resolverRutaComprobante($depositoCentral->recibo_path);
+        $depositoCentral->delete();
+
+        if ($rutaRecibo !== null) {
+            File::delete($rutaRecibo);
+        }
+
+        return response()->json(['message' => 'Depósito por central eliminado del cuadre.']);
+    }
+
     public function reciboTransferencia(MovimientoRutaV2Transferencia $transferencia): BinaryFileResponse
     {
         $rutaRecibo = $this->resolverRutaComprobante($transferencia->recibo_path);
@@ -352,10 +434,19 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->whereDate('fecha', '>=', $fechaDesde)
             ->whereDate('fecha', '<=', $fechaHasta)
             ->get(['id', 'recibo_path']);
+        $depositosCentral = MovimientoRutaV2DepositoCentral::query()
+            ->whereDate('fecha', '>=', $fechaDesde)
+            ->whereDate('fecha', '<=', $fechaHasta)
+            ->get(['id', 'recibo_path']);
 
-        $resultado = DB::transaction(function () use ($fechaDesde, $fechaHasta, $depositos, $transferencias): array {
+        $resultado = DB::transaction(function () use ($fechaDesde, $fechaHasta, $depositos, $transferencias, $depositosCentral): array {
             $depositosEliminados = $depositos->count();
             $transferenciasEliminadas = $transferencias->count();
+            $depositosCentralEliminados = $depositosCentral->count();
+            MovimientoRutaV2DepositoCentral::query()
+                ->whereDate('fecha', '>=', $fechaDesde)
+                ->whereDate('fecha', '<=', $fechaHasta)
+                ->delete();
             MovimientoRutaV2Transferencia::query()
                 ->whereDate('fecha', '>=', $fechaDesde)
                 ->whereDate('fecha', '<=', $fechaHasta)
@@ -372,7 +463,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 ->whereDate('fecha_hasta', $fechaHasta)
                 ->delete();
 
-            return compact('transaccionesEliminadas', 'depositosEliminados', 'transferenciasEliminadas', 'importacionesEliminadas');
+            return compact('transaccionesEliminadas', 'depositosEliminados', 'transferenciasEliminadas', 'depositosCentralEliminados', 'importacionesEliminadas');
         });
 
         $depositos
@@ -393,13 +484,20 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 File::delete($rutaRecibo);
             }
         });
+        $depositosCentral->pluck('recibo_path')->filter()->unique()->each(function (string $reciboPath): void {
+            $rutaRecibo = $this->resolverRutaComprobante($reciboPath);
+            if ($rutaRecibo !== null) {
+                File::delete($rutaRecibo);
+            }
+        });
 
         return response()->json([
             'message' => sprintf(
-                'Carga eliminada correctamente: %d transacciones, %d depósitos y %d transferencias eliminadas. Ya puedes subir el documento corregido.',
+                'Carga eliminada correctamente: %d transacciones, %d depósitos, %d transferencias y %d depósitos por central eliminados. Ya puedes subir el documento corregido.',
                 $resultado['transaccionesEliminadas'],
                 $resultado['depositosEliminados'],
                 $resultado['transferenciasEliminadas'],
+                $resultado['depositosCentralEliminados'],
             ),
             'data' => $resultado,
         ]);
@@ -430,7 +528,12 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->whereDate('fecha', $validated['fecha'])
             ->where('ruta_key', $validated['ruta_key'])
             ->orderBy('id_trans')
-            ->get(['id_trans', 'terminal', 'nombre_agencia', 'tipo', 'tipo_etiqueta', 'monto_original']);
+            ->get(['id_trans', 'terminal', 'nombre_agencia', 'tipo', 'tipo_etiqueta', 'origen', 'monto_original']);
+        $transacciones->each(function (MovimientoRutaV2Transaccion $transaccion): void {
+            if ($this->esDepositoCentral($transaccion)) {
+                $transaccion->tipo_etiqueta = 'Depósito - Central';
+            }
+        });
         $depositos = MovimientoRutaV2Deposito::query()
             ->with('usuario:id,name')
             ->whereDate('fecha', $validated['fecha'])
@@ -476,7 +579,20 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'recibo_url' => route('operaciones.movimientos-rutas-v2.transferencias.recibo', $transferencia),
             ]);
 
-        return response()->json(['transacciones' => $transacciones, 'depositos' => $depositos, 'gastos' => $gastos, 'transferencias' => $transferencias]);
+        $depositosCentral = MovimientoRutaV2DepositoCentral::query()
+            ->whereDate('fecha', $validated['fecha'])
+            ->where('ruta_key', $validated['ruta_key'])
+            ->latest()
+            ->get()
+            ->map(fn (MovimientoRutaV2DepositoCentral $depositoCentral): array => [
+                'fecha_registro' => $depositoCentral->created_at?->format('d/m/Y h:i A'),
+                'id_trans' => $depositoCentral->id_trans,
+                'monto' => (float) $depositoCentral->monto,
+                'recibo_url' => route('operaciones.movimientos-rutas-v2.depositos-central.recibo', $depositoCentral),
+                'eliminar_url' => route('operaciones.movimientos-rutas-v2.depositos-central.eliminar', $depositoCentral),
+            ]);
+
+        return response()->json(['transacciones' => $transacciones, 'depositos' => $depositos, 'gastos' => $gastos, 'transferencias' => $transferencias, 'depositos_central' => $depositosCentral]);
     }
 
     /** @return array<string, mixed> */
@@ -650,7 +766,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             'depositado_banco' => $depositadoBanco,
             'gastos_ruta' => (float) $rutas->sum('gastos_ruta'),
             'pendiente' => (float) $rutas->sum('pendiente'),
-            'cumplimiento_depositos' => $netoEsperado > 0 ? ($depositadoBanco / $netoEsperado) * 100 : 0,
+            'cumplimiento_depositos' => $netoEsperado > 0 ? max(0, (($netoEsperado - (float) $rutas->sum('pendiente')) / $netoEsperado) * 100) : 0,
         ];
     }
 
@@ -733,6 +849,13 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         $transferencias = MovimientoRutaV2Transferencia::query()
             ->whereDate('fecha', $fecha)
             ->get(['ruta_origen_key', 'ruta_destino_key', 'monto']);
+        $depositosCentral = MovimientoRutaV2DepositoCentral::query()
+            ->whereDate('fecha', $fecha)
+            ->select('ruta_key')
+            ->selectRaw('SUM(monto) as monto_total')
+            ->groupBy('ruta_key')
+            ->get()
+            ->keyBy('ruta_key');
 
         $movimientosHistoricos = MovimientoRutaV2Transaccion::query()
             ->whereDate('fecha', '<=', $fecha)
@@ -761,17 +884,21 @@ class OperacionesMovimientosRutasV2Controller extends Controller
             ->whereDate('fecha', '<=', $fecha)
             ->get(['ruta_origen_key', 'ruta_destino_key', 'monto']);
 
-        return $movimientos->map(function (MovimientoRutaV2Transaccion $movimiento) use ($depositos, $gastos, $transferencias, $movimientosHistoricos, $depositosHistoricos, $gastosHistoricos, $transferenciasHistoricas): array {
+        return $movimientos->map(function (MovimientoRutaV2Transaccion $movimiento) use ($depositos, $gastos, $transferencias, $depositosCentral, $movimientosHistoricos, $depositosHistoricos, $gastosHistoricos, $transferenciasHistoricas): array {
             $deposito = $depositos->get($movimiento->ruta_key);
             $gasto = $gastos->get($movimiento->ruta_key);
             $depositosCsv = (float) $movimiento->depositos_csv;
+            $montoCentral = (float) ($depositosCentral->get($movimiento->ruta_key)?->monto_total ?? 0);
             $retiros = (float) $movimiento->retiros;
             $neto = $retiros - $depositosCsv;
             $depositadoBanco = (float) ($deposito?->depositado_banco ?? 0);
             $gastosRuta = (float) ($gasto?->gastos_ruta ?? 0);
             $transferido = (float) $transferencias->where('ruta_origen_key', $movimiento->ruta_key)->sum('monto');
             $recibido = (float) $transferencias->where('ruta_destino_key', $movimiento->ruta_key)->sum('monto');
-            $pendiente = $neto - $depositadoBanco - $gastosRuta + $transferido - $recibido;
+            $pendiente = $neto - $depositadoBanco - $gastosRuta + $transferido - $recibido + $montoCentral;
+            $estado = $montoCentral > 0
+                ? ($pendiente < -0.009 ? 'excedida' : ($pendiente > 0.009 ? 'pendiente' : 'conciliada'))
+                : $this->estadoConciliacion($neto, $depositadoBanco + $gastosRuta - $transferido + $recibido);
             $balancePendiente = (float) ($movimientosHistoricos->get($movimiento->ruta_key)?->neto_esperado ?? 0)
                 - (float) ($depositosHistoricos->get($movimiento->ruta_key)?->depositado_banco ?? 0)
                 - (float) ($gastosHistoricos->get($movimiento->ruta_key)?->gastos_ruta ?? 0)
@@ -784,6 +911,7 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'transacciones' => (int) $movimiento->transacciones,
                 'depositos_csv' => $depositosCsv,
                 'retiros' => $retiros,
+                'depositos_central' => $montoCentral,
                 'neto_esperado' => $neto,
                 'depositado_banco' => $depositadoBanco,
                 'cantidad_depositos' => (int) ($deposito?->cantidad_depositos ?? 0),
@@ -793,8 +921,8 @@ class OperacionesMovimientosRutasV2Controller extends Controller
                 'cantidad_gastos' => (int) ($gasto?->cantidad_gastos ?? 0),
                 'pendiente' => $pendiente,
                 'balance_pendiente' => $balancePendiente,
-                'cumplimiento' => $neto > 0 ? (($depositadoBanco + $gastosRuta - $transferido + $recibido) / $neto) * 100 : 0,
-                'estado' => $this->estadoConciliacion($neto, $depositadoBanco + $gastosRuta - $transferido + $recibido),
+                'cumplimiento' => $neto > 0 ? max(0, (($neto - $pendiente) / $neto) * 100) : 0,
+                'estado' => $estado,
             ];
         })->when(
             $empresa !== null,
@@ -811,6 +939,12 @@ class OperacionesMovimientosRutasV2Controller extends Controller
         }
 
         return strtoupper($coincidencia[1]);
+    }
+
+    private function esDepositoCentral(MovimientoRutaV2Transaccion $transaccion): bool
+    {
+        return $transaccion->tipo === 'deposito'
+            && strcasecmp(trim($transaccion->origen ?? ''), 'CAJA DE PREMIOS RECAUDO') === 0;
     }
 
     private function estadoConciliacion(float $neto, float $depositado): string

@@ -9,6 +9,7 @@ use App\Http\Requests\Operaciones\GuardarMovimientoRutaV2GastoRequest;
 use App\Http\Requests\Operaciones\ReporteMovimientoRutaV2PdfRequest;
 use App\Models\BancoOperacion;
 use App\Models\MovimientoRutaV2Deposito;
+use App\Models\MovimientoRutaV2DepositoCentral;
 use App\Models\MovimientoRutaV2Importacion;
 use App\Models\MovimientoRutaV2Transaccion;
 use App\Models\MovimientoRutaV2Transferencia;
@@ -98,6 +99,7 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             $table->string('nombre_agencia')->nullable();
             $table->string('tipo');
             $table->string('tipo_etiqueta');
+            $table->string('origen')->nullable();
             $table->decimal('monto', 15, 2);
             $table->decimal('monto_original', 15, 2);
             $table->timestamps();
@@ -154,10 +156,23 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             $table->unsignedBigInteger('user_id')->nullable();
             $table->timestamps();
         });
+        Schema::create('movimiento_ruta_v2_deposito_centrals', function (Blueprint $table): void {
+            $table->id();
+            $table->date('fecha');
+            $table->string('ruta_key');
+            $table->string('ruta');
+            $table->string('id_trans')->nullable();
+            $table->decimal('monto', 15, 2);
+            $table->string('recibo_path');
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->timestamps();
+            $table->unique(['fecha', 'id_trans']);
+        });
     }
 
     protected function tearDown(): void
     {
+        Schema::dropIfExists('movimiento_ruta_v2_deposito_centrals');
         Schema::dropIfExists('movimiento_ruta_v2_transferencias');
         Schema::dropIfExists('movimientos_rutas_v2_gastos');
         Schema::dropIfExists('movimientos_rutas_v2_depositos');
@@ -491,6 +506,185 @@ class OperacionesMovimientosRutasV2Test extends TestCase
         $vista = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2.blade.php'));
         $this->assertStringContainsString("\$ruta['estado'] === 'excedida'", $vista);
         $this->assertStringContainsString('id="form-transferir-fondos"', $vista);
+    }
+
+    public function test_deposito_por_central_solo_ajusta_el_pendiente_y_se_puede_eliminar_con_su_recibo(): void
+    {
+        Storage::fake('local');
+        app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-CENTRAL', '03/08/2026', '05 - GJ CENTRAL', -50000),
+            $this->deposito('D-CENTRAL', '03/08/2026', '05 - GJ CENTRAL', 104),
+        ]), null, '2026-08-03');
+        MovimientoRutaV2Transaccion::query()->where('id_trans', 'D-CENTRAL')->update(['origen' => 'CAJA DE PREMIOS RECAUDO']);
+
+        $datos = ['fecha' => '2026-08-03', 'ruta_key' => '05 - GJ CENTRAL', 'id_trans' => 'D-CENTRAL', 'monto' => '104.00'];
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), $datos)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('recibo');
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), [
+            ...$datos,
+            'ruta_key' => 'RUTA INEXISTENTE',
+            'recibo' => UploadedFile::fake()->image('sin-ruta.png'),
+        ])->assertUnprocessable()->assertJsonValidationErrors('id_trans');
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), [
+            ...$datos,
+            'monto' => '103.99',
+            'recibo' => UploadedFile::fake()->image('monto-incorrecto.png'),
+        ])->assertUnprocessable()->assertJsonValidationErrors('monto');
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), [
+            ...$datos,
+            'id_trans' => 'T-CENTRAL',
+            'recibo' => UploadedFile::fake()->image('retiro.png'),
+        ])->assertUnprocessable()->assertJsonValidationErrors('id_trans');
+        $this->assertDatabaseCount('movimiento_ruta_v2_deposito_centrals', 0);
+
+        $respuesta = $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), [
+            ...$datos,
+            'recibo' => UploadedFile::fake()->image('central.png'),
+        ])->assertOk();
+
+        $respuesta->assertJsonPath('ruta.depositos_central', 104)
+            ->assertJsonPath('ruta.retiros', 50000)
+            ->assertJsonPath('ruta.neto_esperado', 49896)
+            ->assertJsonPath('ruta.pendiente', 50000)
+            ->assertJsonPath('ruta.balance_pendiente', 49896);
+
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), [
+            ...$datos,
+            'recibo' => UploadedFile::fake()->image('duplicado.png'),
+        ])->assertUnprocessable()->assertJsonValidationErrors('id_trans');
+
+        $depositoCentral = MovimientoRutaV2DepositoCentral::query()->sole();
+        $this->assertSame('D-CENTRAL', $depositoCentral->id_trans);
+        Storage::disk('local')->assertExists($depositoCentral->recibo_path);
+        $this->withoutMiddleware()->get(route('operaciones.movimientos-rutas-v2.depositos-central.recibo', $depositoCentral))->assertOk();
+        $this->withoutMiddleware()->getJson(route('operaciones.movimientos-rutas-v2.detalle', [
+            'fecha' => '2026-08-03', 'ruta_key' => '05 - GJ CENTRAL',
+        ]))->assertOk()->assertJsonPath('depositos_central.0.monto', 104)
+            ->assertJsonPath('depositos_central.0.id_trans', 'D-CENTRAL');
+        $vista = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2.blade.php'));
+        $this->assertStringContainsString('id="deposito-central-monto-visible"', $vista);
+        $this->assertStringContainsString('montoCentralVisible.value = entero.replace(', $vista);
+        $this->assertStringContainsString('name="monto" id="deposito-central-monto"', $vista);
+
+        $this->withoutMiddleware([
+            \Illuminate\Auth\Middleware\Authenticate::class,
+            \App\Http\Middleware\ForcePasswordChange::class,
+        ])->deleteJson(route('operaciones.movimientos-rutas-v2.depositos-central.eliminar', $depositoCentral))->assertOk();
+        $this->assertDatabaseCount('movimiento_ruta_v2_deposito_centrals', 0);
+        Storage::disk('local')->assertMissing($depositoCentral->recibo_path);
+    }
+
+    public function test_ruta_excedida_pasa_a_pendiente_si_el_deposito_central_deja_dinero_por_cuadrar(): void
+    {
+        Storage::fake('local');
+        app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-ESTADO', '03/08/2026', '05 - GJ CENTRAL', -50),
+            $this->deposito('D-ESTADO', '03/08/2026', '05 - GJ CENTRAL', 150),
+        ]), null, '2026-08-03');
+        MovimientoRutaV2Transaccion::query()->where('id_trans', 'D-ESTADO')->update(['origen' => 'CAJA DE PREMIOS RECAUDO']);
+
+        $metodo = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'resumenPorRutas');
+        $rutaAntes = $metodo->invoke(app(OperacionesMovimientosRutasV2Controller::class), '2026-08-03')->first();
+        $this->assertSame(-100.0, $rutaAntes['pendiente']);
+        $this->assertSame('excedida', $rutaAntes['estado']);
+
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - GJ CENTRAL',
+            'id_trans' => 'D-ESTADO',
+            'monto' => '150.00',
+            'recibo' => UploadedFile::fake()->image('estado.png'),
+        ])->assertOk()
+            ->assertJsonPath('ruta.pendiente', 50)
+            ->assertJsonPath('ruta.estado', 'pendiente')
+            ->assertJsonPath('ruta.retiros', 50)
+            ->assertJsonPath('ruta.neto_esperado', -100);
+    }
+
+    public function test_cumplimiento_descuenta_el_deposito_central_igual_que_el_pendiente(): void
+    {
+        Storage::fake('local');
+        app(MovimientosRutasV2ImportService::class)->importar($this->archivoCsv([
+            $this->retiro('T-CUMPLIMIENTO', '03/08/2026', '05 - GJ CENTRAL', -329),
+            $this->deposito('D-CUMPLIMIENTO', '03/08/2026', '05 - GJ CENTRAL', 104),
+        ]), null, '2026-08-03');
+        MovimientoRutaV2Transaccion::query()->where('id_trans', 'D-CUMPLIMIENTO')->update(['origen' => 'CAJA DE PREMIOS RECAUDO']);
+        MovimientoRutaV2Deposito::query()->create([
+            'fecha' => '2026-08-03', 'ruta_key' => '05 - GJ CENTRAL', 'ruta' => '05 - GJ CENTRAL',
+            'monto' => 300, 'banco' => 'Banreservas', 'estado' => 'aplicado',
+        ]);
+
+        $respuesta = $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - GJ CENTRAL',
+            'id_trans' => 'D-CUMPLIMIENTO',
+            'monto' => '104.00',
+            'recibo' => UploadedFile::fake()->image('cumplimiento.png'),
+        ])->assertOk()
+            ->assertJsonPath('ruta.neto_esperado', 225)
+            ->assertJsonPath('ruta.pendiente', 29)
+            ->assertJsonPath('ruta.estado', 'pendiente');
+
+        $this->assertEqualsWithDelta(87.1111, $respuesta->json('ruta.cumplimiento'), 0.001);
+        $this->assertEqualsWithDelta(87.1111, $respuesta->json('resumen.cumplimiento_depositos'), 0.001);
+    }
+
+    public function test_identifica_como_central_solo_el_deposito_con_el_origen_correspondiente(): void
+    {
+        Storage::fake('local');
+        $archivo = UploadedFile::fake()->createWithContent('movimientos-con-origen.csv', implode("\n", [
+            'TipoTransaccion,NumeroExterno,Ruta,IdTrans,FecTransaccion,Referencia,DMonto2,Origen',
+            'DEPOSITO DE EFECTIVO DEL COLECTOR/CAJA A LA AGENCIA,,05 - GJ CENTRAL,D-ORIGEN,03/08/2026,,104000.00,CAJA DE PREMIOS RECAUDO',
+            'DEPOSITO DE EFECTIVO DEL COLECTOR/CAJA A LA AGENCIA,,05 - GJ CENTRAL,E-ORIGEN,03/08/2026,,38580.00,AGENCIA',
+        ]));
+
+        app(MovimientosRutasV2ImportService::class)->importar($archivo, null, '2026-08-03');
+
+        $this->assertDatabaseHas('movimientos_rutas_v2_transacciones', [
+            'id_trans' => 'D-ORIGEN',
+            'origen' => 'CAJA DE PREMIOS RECAUDO',
+            'monto' => 104000,
+        ]);
+        $this->withoutMiddleware()->getJson(route('operaciones.movimientos-rutas-v2.detalle', [
+            'fecha' => '2026-08-03', 'ruta_key' => '05 - GJ CENTRAL',
+        ]))->assertOk()
+            ->assertJsonPath('transacciones.0.tipo_etiqueta', 'Depósito - Central')
+            ->assertJsonPath('transacciones.1.tipo_etiqueta', 'Depósito');
+        $this->withoutMiddleware()->postJson(route('operaciones.movimientos-rutas-v2.depositos-central.guardar'), [
+            'fecha' => '2026-08-03',
+            'ruta_key' => '05 - GJ CENTRAL',
+            'id_trans' => 'E-ORIGEN',
+            'monto' => '38580.00',
+            'recibo' => UploadedFile::fake()->image('recibo-normal.png'),
+        ])->assertUnprocessable()->assertJsonValidationErrors('id_trans');
+        $this->assertDatabaseCount('movimiento_ruta_v2_deposito_centrals', 0);
+        $vista = file_get_contents(resource_path('views/operaciones/movimientos-rutas-v2.blade.php'));
+        $this->assertStringNotContainsString('<th>Origen</th>', $vista);
+        $this->assertStringContainsString("item.tipo_etiqueta === 'Depósito - Central'", $vista);
+    }
+
+    public function test_deposito_por_central_de_un_dia_anterior_no_modifica_otros_valores(): void
+    {
+        $servicio = app(MovimientosRutasV2ImportService::class);
+        $servicio->importar($this->archivoCsv([
+            $this->retiro('T-CENTRAL-ANTERIOR', '02/08/2026', '05 - GJ CENTRAL', -100),
+        ]), null, '2026-08-02');
+        $servicio->importar($this->archivoCsv([
+            $this->retiro('T-CENTRAL-ACTUAL', '03/08/2026', '05 - GJ CENTRAL', -200),
+        ]), null, '2026-08-03');
+        MovimientoRutaV2DepositoCentral::query()->create([
+            'fecha' => '2026-08-02', 'ruta_key' => '05 - GJ CENTRAL', 'ruta' => '05 - GJ CENTRAL',
+            'monto' => '50.00', 'recibo_path' => 'recibos/central.png',
+        ]);
+
+        $metodo = new \ReflectionMethod(OperacionesMovimientosRutasV2Controller::class, 'resumenPorRutas');
+        $ruta = $metodo->invoke(app(OperacionesMovimientosRutasV2Controller::class), '2026-08-03')->first();
+
+        $this->assertSame(200.0, $ruta['retiros']);
+        $this->assertSame(0.0, $ruta['depositos_central']);
+        $this->assertSame(200.0, $ruta['pendiente']);
+        $this->assertSame(300.0, $ruta['balance_pendiente']);
     }
 
     public function test_rechaza_transferencias_superiores_al_excedente_o_al_pendiente_del_destino(): void
@@ -926,6 +1120,14 @@ class OperacionesMovimientosRutasV2Test extends TestCase
     {
         return implode(',', [
             'RETIRO DE EFECTIVO DE LA AGENCIA E INGRESO A LA CAJA',
+            '', $ruta, $id, $fecha, '', number_format($monto, 2, '.', ''),
+        ]);
+    }
+
+    private function deposito(string $id, string $fecha, string $ruta, float $monto): string
+    {
+        return implode(',', [
+            'DEPOSITO DE EFECTIVO DEL COLECTOR/CAJA A LA AGENCIA',
             '', $ruta, $id, $fecha, '', number_format($monto, 2, '.', ''),
         ]);
     }
