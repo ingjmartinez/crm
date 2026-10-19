@@ -161,9 +161,13 @@ class NominaDomingoService
 
     public function salidaEfectiva(?Carbon $salidaPonche, ?Carbon $ultimaTransaccion): ?Carbon
     {
-        return $salidaPonche !== null && $ultimaTransaccion !== null && $ultimaTransaccion->greaterThan($salidaPonche)
-            ? $ultimaTransaccion->copy()->addMinutes(5)
-            : $salidaPonche;
+        if ($salidaPonche === null || $ultimaTransaccion === null) {
+            return $salidaPonche;
+        }
+
+        $salidaPorVenta = $ultimaTransaccion->copy()->addMinutes(5);
+
+        return $salidaPorVenta->greaterThan($salidaPonche) ? $salidaPorVenta : $salidaPonche;
     }
 
     /** @return Collection<int, string> */
