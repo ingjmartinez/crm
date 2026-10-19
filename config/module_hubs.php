@@ -420,6 +420,16 @@ return [
         'breadcrumb' => 'Mantenimiento',
         'items' => [
             [
+                'nombre' => 'Carga de ponche por cédula',
+                'descripcion' => 'Carga las ventas diarias de Tradicional, No Tradicional y Recargas para el cálculo del ponche por cédula.',
+                'url' => '/mantenimiento/ponche-por-cedula-ventas',
+                'icono' => 'ri-upload-cloud-2-line',
+                'categoria' => 'Recursos Humanos',
+                'tags' => ['ponche', 'ventas', 'cédula', 'recargas'],
+                'permission' => 'mantenimiento.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Tipo Pago',
                 'descripcion' => 'Carga y consulta el tipo de pago diario de cada terminal desde LTKBancas.csv.',
                 'url' => '/mantenimiento/tipo-pago',

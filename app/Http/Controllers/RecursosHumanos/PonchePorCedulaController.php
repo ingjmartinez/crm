@@ -3,20 +3,30 @@
 namespace App\Http\Controllers\RecursosHumanos;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RecursosHumanos\CargarPonchePorCedulaLoteRequest;
+use App\Http\Requests\RecursosHumanos\CargarPonchePorCedulaPoolRequest;
 use App\Http\Requests\RecursosHumanos\CargarPonchePorCedulaVentasRequest;
 use App\Http\Requests\RecursosHumanos\ConsultarPonchePorCedulaRequest;
+use App\Http\Requests\RecursosHumanos\FinalizarPonchePorCedulaLoteRequest;
+use App\Http\Requests\RecursosHumanos\SubirPonchePorCedulaFragmentoRequest;
 use App\Models\Asistencia;
 use App\Models\AsistenciaNet;
 use App\Models\Empleado;
 use App\Services\RecursosHumanos\NominaDomingoService;
 use App\Services\RecursosHumanos\NominaDomingoVentasImportService;
+use App\Services\RecursosHumanos\PonchePorCedulaCargaTemporal;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Throwable;
 
 class PonchePorCedulaController extends Controller
 {
@@ -30,6 +40,11 @@ class PonchePorCedulaController extends Controller
         return view('recursos_humanos.ponche_por_cedula');
     }
 
+    public function cargarVentasIndex(): View
+    {
+        return view('mantenimiento.ponche_por_cedula_ventas');
+    }
+
     public function cargarVentas(CargarPonchePorCedulaVentasRequest $request): RedirectResponse
     {
         $data = $request->validated();
@@ -40,8 +55,131 @@ class PonchePorCedulaController extends Controller
             Carbon::parse($data['fecha'])
         );
 
-        return redirect()->route('recursos-humanos.ponche-por-cedula.index')
+        return redirect()->route('mantenimiento.ponche-por-cedula-ventas.index')
             ->with('success', 'Ventas de '.$data['fecha'].' cargadas correctamente para Ponche por Cédula.');
+    }
+
+    public function cargarVentasLote(CargarPonchePorCedulaLoteRequest $request): RedirectResponse
+    {
+        $lotes = $request->validated()['lotes'];
+        $this->importarLotes($lotes);
+
+        return redirect()->route('mantenimiento.ponche-por-cedula-ventas.index')
+            ->with('success', count($lotes).' fechas cargadas correctamente para Ponche por Cédula.');
+    }
+
+    public function cargarVentasPool(CargarPonchePorCedulaPoolRequest $request): RedirectResponse|JsonResponse
+    {
+        $lotes = $request->lotes();
+        $this->importarLotes($lotes, $request->validated()['progress_token'] ?? null);
+        $message = count($lotes).' fechas cargadas correctamente para Ponche por Cédula.';
+
+        return $request->expectsJson()
+            ? response()->json(['message' => $message])
+            : redirect()->route('mantenimiento.ponche-por-cedula-ventas.index')->with('success', $message);
+    }
+
+    public function subirFragmento(SubirPonchePorCedulaFragmentoRequest $request, PonchePorCedulaCargaTemporal $cargaTemporal): JsonResponse
+    {
+        $cargaTemporal->guardarFragmento($request->validated());
+
+        return response()->json(['guardado' => true]);
+    }
+
+    public function finalizarLote(FinalizarPonchePorCedulaLoteRequest $request, PonchePorCedulaCargaTemporal $cargaTemporal): JsonResponse
+    {
+        $datos = $request->validated();
+
+        try {
+            $archivos = $cargaTemporal->archivos($datos['token'], $datos['documentos']);
+            $reglas = new CargarPonchePorCedulaPoolRequest;
+            Validator::make(['archivos' => $archivos], $reglas->rules(), $reglas->messages())->validate();
+            $lotes = CargarPonchePorCedulaPoolRequest::agruparArchivos($archivos);
+            $this->importarLotes($lotes, $datos['token']);
+
+            return response()->json(['message' => count($lotes).' '.(count($lotes) === 1 ? 'fecha cargada' : 'fechas cargadas').' correctamente para Ponche por Cédula.']);
+        } finally {
+            $cargaTemporal->limpiar($datos['token']);
+        }
+    }
+
+    public function progresoCargaVentas(string $token): JsonResponse
+    {
+        abort_unless(Str::isUuid($token), 404);
+        $progreso = Cache::store('file')->get($this->claveProgreso($token));
+        abort_if($progreso === null, 404);
+
+        return response()->json($progreso);
+    }
+
+    /** @param array<int, array<string, mixed>> $lotes */
+    private function importarLotes(array $lotes, ?string $token = null): void
+    {
+        $total = count($lotes);
+        $this->guardarProgreso($token, 'procesando', 0, $total, $lotes[0]['fecha'], 'tradicional', 0);
+
+        try {
+            DB::transaction(function () use ($lotes, $token, $total): void {
+                foreach ($lotes as $indice => $lote) {
+                    $this->guardarProgreso($token, 'procesando', $indice, $total, $lote['fecha'], 'tradicional', $indice * 3);
+                    try {
+                        $this->ventasImport->importarPonchePorCedula(
+                            $lote['tradicional'],
+                            $lote['no_tradicional'],
+                            $lote['recargas'],
+                            Carbon::parse($lote['fecha']),
+                            function (string $categoria) use ($token, $indice, $total, $lote): void {
+                                $posicion = match ($categoria) {
+                                    'tradicional' => 0,
+                                    'no_tradicional' => 1,
+                                    'recargas' => 2,
+                                };
+                                $this->guardarProgreso($token, 'procesando', $indice, $total, $lote['fecha'], $categoria, $indice * 3 + $posicion);
+                            }
+                        );
+                    } catch (ValidationException $exception) {
+                        $errores = [];
+                        foreach ($exception->errors() as $campo => $mensajes) {
+                            $errores['lotes.'.$indice.'.'.$campo] = array_map(
+                                fn (string $mensaje): string => 'Fecha '.$lote['fecha'].': '.$mensaje,
+                                $mensajes
+                            );
+                        }
+
+                        throw ValidationException::withMessages($errores);
+                    }
+                    $this->guardarProgreso($token, 'procesando', $indice + 1, $total, $lotes[$indice + 1]['fecha'] ?? null, isset($lotes[$indice + 1]) ? 'tradicional' : null, ($indice + 1) * 3);
+                }
+            });
+        } catch (Throwable $exception) {
+            $this->guardarProgreso($token, 'error', 0, $total, null, null, 0);
+
+            throw $exception;
+        }
+
+        $this->guardarProgreso($token, 'completo', $total, $total, null, null, $total * 3);
+
+    }
+
+    private function guardarProgreso(?string $token, string $estado, int $completadas, int $total, ?string $fecha, ?string $categoria, int $pasosCompletados): void
+    {
+        if ($token === null) {
+            return;
+        }
+
+        Cache::store('file')->put($this->claveProgreso($token), [
+            'estado' => $estado,
+            'completadas' => $completadas,
+            'total' => $total,
+            'fecha' => $fecha,
+            'categoria' => $categoria,
+            'pasos_completados' => $pasosCompletados,
+        ], now()->addMinutes(30));
+    }
+
+    private function claveProgreso(string $token): string
+    {
+        return 'ponche_por_cedula_carga:'.session()->getId().':'.$token;
     }
 
     public function list(ConsultarPonchePorCedulaRequest $request): JsonResponse

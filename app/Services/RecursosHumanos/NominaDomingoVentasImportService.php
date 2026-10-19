@@ -9,13 +9,16 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use XMLReader;
 use ZipArchive;
 
 class NominaDomingoVentasImportService
 {
     private const IMPORT_CHUNK_SIZE = 1000;
 
-    private const PONCHE_IMPORT_CHUNK_SIZE = 2000;
+    private const PONCHE_IMPORT_CHUNK_SIZE = 5000;
+
+    private const PONCHE_SQLITE_IMPORT_CHUNK_SIZE = 2500;
 
     private string $fechaNomina;
 
@@ -28,22 +31,22 @@ class NominaDomingoVentasImportService
         $this->importarEnTabla($tradicional, $noTradicional, $fecha, $recargas, 'nomina_domingo_ventas');
     }
 
-    public function importarPonchePorCedula(UploadedFile $tradicional, UploadedFile $noTradicional, UploadedFile $recargas, Carbon $fecha): void
+    public function importarPonchePorCedula(UploadedFile $tradicional, UploadedFile $noTradicional, UploadedFile $recargas, Carbon $fecha, ?callable $alIniciarCategoria = null): void
     {
-        $this->importarEnTabla($tradicional, $noTradicional, $fecha, $recargas, 'ponche_por_cedula_ventas');
+        $this->importarEnTabla($tradicional, $noTradicional, $fecha, $recargas, 'ponche_por_cedula_ventas', $alIniciarCategoria);
     }
 
-    private function importarEnTabla(UploadedFile $tradicional, UploadedFile $noTradicional, Carbon $fecha, ?UploadedFile $recargas, string $tablaVentas): void
+    private function importarEnTabla(UploadedFile $tradicional, UploadedFile $noTradicional, Carbon $fecha, ?UploadedFile $recargas, string $tablaVentas, ?callable $alIniciarCategoria = null): void
     {
         set_time_limit(300);
         DB::connection()->disableQueryLog();
         $this->fechaNomina = $fecha->toDateString();
         $this->tablaVentas = $tablaVentas;
         $this->importChunkSize = $tablaVentas === 'ponche_por_cedula_ventas'
-            ? self::PONCHE_IMPORT_CHUNK_SIZE
+            ? (DB::connection()->getDriverName() === 'sqlite' ? self::PONCHE_SQLITE_IMPORT_CHUNK_SIZE : self::PONCHE_IMPORT_CHUNK_SIZE)
             : self::IMPORT_CHUNK_SIZE;
 
-        DB::transaction(function () use ($tradicional, $noTradicional, $recargas): void {
+        DB::transaction(function () use ($tradicional, $noTradicional, $recargas, $alIniciarCategoria): void {
             $ventasAnteriores = DB::table($this->tablaVentas)->whereDate('fecha_transaccion', $this->fechaNomina);
 
             if ($recargas === null) {
@@ -52,6 +55,9 @@ class NominaDomingoVentasImportService
 
             $ventasAnteriores->delete();
 
+            if ($alIniciarCategoria !== null) {
+                $alIniciarCategoria('tradicional');
+            }
             $this->limpiarArchivo($tradicional, 'Tradicional', [
                 'fecha' => 'Fecha',
                 'agencia' => 'Agencia',
@@ -62,6 +68,9 @@ class NominaDomingoVentasImportService
             ]);
             $this->verificarVentas('Tradicional');
 
+            if ($alIniciarCategoria !== null) {
+                $alIniciarCategoria('no_tradicional');
+            }
             $this->limpiarArchivo($noTradicional, 'No Tradicional', [
                 'agencia' => 'Agencia',
                 'estatus' => 'Estatus',
@@ -73,6 +82,9 @@ class NominaDomingoVentasImportService
             $this->verificarVentas('No Tradicional');
 
             if ($recargas !== null) {
+                if ($alIniciarCategoria !== null) {
+                    $alIniciarCategoria('recargas');
+                }
                 $this->importarRecargas($recargas);
                 $this->verificarVentas('Recargas');
             }
@@ -94,42 +106,33 @@ class NominaDomingoVentasImportService
         }
 
         try {
-            $sheetXml = $zip->getFromName($this->obtenerPrimeraHoja($zip));
-
-            if ($sheetXml === false) {
-                throw ValidationException::withMessages(['recargas' => 'No se pudo leer la hoja de Recargas.']);
-            }
+            $sheetPath = $this->obtenerPrimeraHoja($zip);
 
             $sharedStrings = $this->leerSharedStrings($zip);
             $ventasProductos = DB::table($this->tablaVentas)
                 ->whereDate('fecha_transaccion', $this->fechaNomina)
                 ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
                 ->whereNotNull('terminal')
-                ->get(['usuario_venta', 'terminal', 'fecha_transaccion']);
-            $terminalesPorCedula = $ventasProductos
-                ->groupBy(fn (object $venta): string => $this->normalizarCedula($venta->usuario_venta))
-                ->map(fn ($ventas): array => $ventas
-                    ->groupBy(fn (object $venta): string => $this->claveAgenciaReporte((string) $venta->terminal, ''))
-                    ->map(fn ($terminal): string => (string) $terminal->first()->terminal)
-                    ->values()
-                    ->all())
-                ->all();
+                ->cursor(['usuario_venta', 'terminal', 'fecha_transaccion']);
+            $terminalesPorCedula = [];
             $ultimasVentasPorCedulaYTerminal = [];
             foreach ($ventasProductos as $ventaProducto) {
                 $cedulaVenta = $this->normalizarCedula($ventaProducto->usuario_venta);
                 $terminalVenta = $this->claveAgenciaReporte((string) $ventaProducto->terminal, '');
                 $fechaVenta = (string) $ventaProducto->fecha_transaccion;
+                $terminalesPorCedula[$cedulaVenta][$terminalVenta] ??= (string) $ventaProducto->terminal;
                 $ultimasVentasPorCedulaYTerminal[$cedulaVenta][$terminalVenta] = max(
                     $ultimasVentasPorCedulaYTerminal[$cedulaVenta][$terminalVenta] ?? $fechaVenta,
                     $fechaVenta,
                 );
             }
+            $terminalesPorCedula = array_map('array_values', $terminalesPorCedula);
             $cedulasConVariosTerminales = array_filter($terminalesPorCedula, fn (array $terminales): bool => count($terminales) > 1);
             $periodosPorCedula = $this->periodosDeTrabajoPorCedula($cedulasConVariosTerminales, $ultimasVentasPorCedulaYTerminal);
             $columnas = null;
             $filas = [];
 
-            foreach ($this->iterarFilas($sheetXml) as $numeroFila => $rowXml) {
+            foreach ($this->iterarFilasHoja($zip, $sheetPath) as $numeroFila => $rowXml) {
                 $row = $this->parsearFilaXml($rowXml, $sharedStrings);
 
                 if ($numeroFila === 10 && ! str_contains($this->limpiarTexto($row['A'] ?? ''), 'Confirmada')) {
@@ -319,21 +322,16 @@ class NominaDomingoVentasImportService
         try {
             $sheetPath = $this->obtenerPrimeraHoja($zip);
             $sharedStrings = $this->leerSharedStrings($zip);
-            $sheetXml = $zip->getFromName($sheetPath);
-
-            if ($sheetXml === false) {
-                throw ValidationException::withMessages([
-                    $this->campoArchivo($tipo) => 'No se pudo leer la hoja principal del archivo '.$tipo.'.',
-                ]);
-            }
-
-            $headers = $this->leerPrimeraFila($sheetXml, $sharedStrings);
-            $mapa = $this->mapearColumnas($headers, $columnasRequeridas, $tipo);
-            $columnasPermitidas = array_flip(array_map(fn ($column) => $this->indiceColumna($column), array_values($mapa)));
+            $mapa = null;
+            $columnasPermitidas = null;
             $filas = [];
 
-            foreach ($this->iterarFilas($sheetXml) as $rowNumber => $rowXml) {
-                if ($rowNumber <= 1) {
+            foreach ($this->iterarFilasHoja($zip, $sheetPath) as $rowXml) {
+                if ($mapa === null) {
+                    $headers = $this->parsearFilaXml($rowXml, $sharedStrings);
+                    $mapa = $this->mapearColumnas($headers, $columnasRequeridas, $tipo);
+                    $columnasPermitidas = array_flip(array_map(fn ($column) => $this->indiceColumna($column), array_values($mapa)));
+
                     continue;
                 }
 
@@ -346,6 +344,10 @@ class NominaDomingoVentasImportService
                     $this->normalizarFilaReporte($row, $mapa, $tipo),
                     $filas
                 );
+            }
+
+            if ($mapa === null) {
+                throw ValidationException::withMessages([$this->campoArchivo($tipo) => 'El archivo '.$tipo.' no contiene encabezados.']);
             }
 
             $this->insertarFilasReporte($filas);
@@ -646,15 +648,6 @@ class NominaDomingoVentasImportService
         return $sharedStrings;
     }
 
-    private function leerPrimeraFila(string $sheetXml, array $sharedStrings): array
-    {
-        foreach ($this->iterarFilas($sheetXml) as $rowXml) {
-            return $this->parsearFilaXml($rowXml, $sharedStrings);
-        }
-
-        return [];
-    }
-
     private function parsearFilaXml(string $rowXml, array $sharedStrings, ?array $columnasPermitidas = null): array
     {
         $row = [];
@@ -705,13 +698,48 @@ class NominaDomingoVentasImportService
         return $value;
     }
 
-    private function iterarFilas(string $sheetXml): \Generator
+    private function iterarFilasHoja(ZipArchive $zip, string $sheetPath): \Generator
     {
-        $offset = 0;
+        $entrada = $zip->getStream($sheetPath);
+        if ($entrada === false) {
+            throw ValidationException::withMessages(['recargas' => 'No se pudo leer la hoja del archivo Excel.']);
+        }
 
-        while (preg_match('/<row\b[^>]*r="(\d+)"[^>]*>.*?<\/row>/s', $sheetXml, $match, PREG_OFFSET_CAPTURE, $offset)) {
-            yield (int) $match[1][0] => $match[0][0];
-            $offset = $match[0][1] + strlen($match[0][0]);
+        $rutaTemporal = tempnam(sys_get_temp_dir(), 'ponche_hoja_');
+        if ($rutaTemporal === false) {
+            fclose($entrada);
+            throw ValidationException::withMessages(['recargas' => 'No se pudo preparar la hoja del archivo Excel.']);
+        }
+
+        try {
+            $salida = fopen($rutaTemporal, 'wb');
+            if ($salida === false) {
+                throw ValidationException::withMessages(['recargas' => 'No se pudo preparar la hoja del archivo Excel.']);
+            }
+            try {
+                stream_copy_to_stream($entrada, $salida);
+            } finally {
+                fclose($salida);
+            }
+
+            $lector = new XMLReader;
+            if (! $lector->open($rutaTemporal, null, LIBXML_NONET | LIBXML_COMPACT)) {
+                throw ValidationException::withMessages(['recargas' => 'No se pudo abrir la hoja del archivo Excel.']);
+            }
+            try {
+                while ($lector->read()) {
+                    if ($lector->nodeType !== XMLReader::ELEMENT || $lector->localName !== 'row') {
+                        continue;
+                    }
+                    $numeroFila = (int) $lector->getAttribute('r');
+                    yield $numeroFila => $lector->readOuterXml();
+                }
+            } finally {
+                $lector->close();
+            }
+        } finally {
+            fclose($entrada);
+            unlink($rutaTemporal);
         }
     }
 

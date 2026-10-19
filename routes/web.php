@@ -378,9 +378,6 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         Route::get('/recursos-humanos/ponche-por-cedula/list', [PonchePorCedulaController::class, 'list'])
             ->middleware('permission:recursos_humanos.ponche_por_cedula.view')
             ->name('recursos-humanos.ponche-por-cedula.list');
-        Route::post('/recursos-humanos/ponche-por-cedula/cargar-ventas', [PonchePorCedulaController::class, 'cargarVentas'])
-            ->middleware('permission:recursos_humanos.ponche_por_cedula.view')
-            ->name('recursos-humanos.ponche-por-cedula.cargar-ventas');
         Route::get('/recursos-humanos/validador-incentivos', [ValidadorIncentivoController::class, 'index'])
             ->name('recursos-humanos.validador-incentivos.index');
         Route::get('/recursos-humanos/validador-incentivos/exportar', [ValidadorIncentivoController::class, 'export'])
@@ -571,6 +568,20 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
 
     Route::prefix('mantenimiento')->name('mantenimiento.')->group(function () {
         Route::get('/', [ModuleHubController::class, 'mantenimiento'])->name('index');
+        Route::get('/ponche-por-cedula-ventas', [PonchePorCedulaController::class, 'cargarVentasIndex'])
+            ->middleware('permission:mantenimiento.view')->name('ponche-por-cedula-ventas.index');
+        Route::post('/ponche-por-cedula-ventas', [PonchePorCedulaController::class, 'cargarVentas'])
+            ->middleware('permission:mantenimiento.view')->name('ponche-por-cedula-ventas.store');
+        Route::post('/ponche-por-cedula-ventas/lote', [PonchePorCedulaController::class, 'cargarVentasLote'])
+            ->middleware('permission:mantenimiento.view')->name('ponche-por-cedula-ventas.lote');
+        Route::post('/ponche-por-cedula-ventas/pool', [PonchePorCedulaController::class, 'cargarVentasPool'])
+            ->middleware('permission:mantenimiento.view')->name('ponche-por-cedula-ventas.pool');
+        Route::post('/ponche-por-cedula-ventas/fragmento', [PonchePorCedulaController::class, 'subirFragmento'])
+            ->middleware('permission:mantenimiento.view')->name('ponche-por-cedula-ventas.fragmento');
+        Route::post('/ponche-por-cedula-ventas/finalizar', [PonchePorCedulaController::class, 'finalizarLote'])
+            ->middleware('permission:mantenimiento.view')->name('ponche-por-cedula-ventas.finalizar');
+        Route::get('/ponche-por-cedula-ventas/progreso/{token}', [PonchePorCedulaController::class, 'progresoCargaVentas'])
+            ->middleware('permission:mantenimiento.view')->name('ponche-por-cedula-ventas.progreso');
         Route::get('/tipo-pago', [MantenimientoTipoPagoController::class, 'index'])->name('tipo-pago.index');
         Route::get('/tipo-pago/data', [MantenimientoTipoPagoController::class, 'data'])->name('tipo-pago.data');
         Route::post('/tipo-pago', [MantenimientoTipoPagoController::class, 'store'])->name('tipo-pago.store');
