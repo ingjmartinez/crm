@@ -145,6 +145,22 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(1500.0, $filas->sum('monto_pagar'));
     }
 
+    public function test_same_cedula_can_complete_sunday_hours_across_two_terminals_without_double_payment(): void
+    {
+        DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '5500463', 'cedula' => '40225043955', 'usuario' => 'Daniela', 'primer_login' => '2026-09-13 08:29:00', 'ultimo_login' => '2026-09-13 12:48:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '5500555', 'cedula' => '40225043955', 'usuario' => 'Daniela', 'primer_login' => '2026-09-13 13:36:00', 'ultimo_login' => '2026-09-13 19:33:00'],
+        ]);
+
+        $filas = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'));
+
+        $this->assertCount(2, $filas);
+        $this->assertSame(['Cumple', 'Cumple'], $filas->pluck('estatus')->all());
+        $this->assertSame(616, $filas->first()['minutos_totales_cedula']);
+        $this->assertSame(1500.0, $filas->sum('monto_pagar'));
+    }
+
     public function test_terminal_exclusions_can_be_recognized_saved_listed_and_removed(): void
     {
         DB::table('agencias')->insert([

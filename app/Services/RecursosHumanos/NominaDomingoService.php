@@ -89,7 +89,7 @@ class NominaDomingoService
         $empleados = $this->empleados($cedulas);
         $agencias = $this->agencias();
 
-        return $claves->map(function (string $clave) use ($ventasAsociadas, $ponches, $empleados, $agencias, $configuracion, $terminalesDobleTurno): array {
+        $filas = $claves->map(function (string $clave) use ($ventasAsociadas, $ponches, $empleados, $agencias, $configuracion, $terminalesDobleTurno): array {
             $ventaSinPonche = str_starts_with($clave, 'venta:');
             [$terminal, $cedula] = explode('|', $ventaSinPonche ? substr($clave, 6) : $clave, 2);
             $venta = $ventasAsociadas->get($clave);
@@ -146,6 +146,26 @@ class NominaDomingoService
                 'estatus' => $incidencia !== null ? 'Revisar' : ($cumple ? 'Cumple' : 'No cumple'),
                 'monto_pagar' => $cumple ? $configuracion['monto_fijo'] : 0.0,
             ];
+        })->sortBy(['empleado', 'terminal'])->values();
+
+        return $filas->groupBy('cedula')->flatMap(function (Collection $filasCedula) use ($configuracion): Collection {
+            if ($filasCedula->count() === 1) {
+                return $filasCedula;
+            }
+
+            $minutosTotales = $filasCedula->sum('minutos_trabajados');
+            $minutosRequeridos = $filasCedula->max('minutos_requeridos');
+            $tieneIncidencia = $filasCedula->contains(fn (array $fila): bool => $fila['incidencia'] !== null);
+            $cumple = ! $tieneIncidencia && $minutosTotales >= $minutosRequeridos;
+
+            return $filasCedula->values()->map(function (array $fila, int $indice) use ($minutosTotales, $cumple, $tieneIncidencia, $configuracion): array {
+                $fila['minutos_totales_cedula'] = $minutosTotales;
+                $fila['horas_totales_cedula_formato'] = $this->formatearMinutosTrabajados($minutosTotales);
+                $fila['estatus'] = $tieneIncidencia ? 'Revisar' : ($cumple ? 'Cumple' : 'No cumple');
+                $fila['monto_pagar'] = $cumple && $indice === 0 ? $configuracion['monto_fijo'] : 0.0;
+
+                return $fila;
+            });
         })->sortBy(['empleado', 'terminal'])->values();
     }
 
