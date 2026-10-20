@@ -292,6 +292,18 @@ class BiModuleTest extends TestCase
             ->assertJsonPath('props.biUrl', '/bi');
     }
 
+    public function test_bi_filter_navigation_has_loading_feedback_until_the_visit_finishes(): void
+    {
+        $dashboard = file_get_contents(resource_path('js/bi/pages/Bi/Dashboard.vue'));
+
+        $this->assertStringContainsString('function navigateWithFilters()', $dashboard);
+        $this->assertStringContainsString('filterLoading.value = true', $dashboard);
+        $this->assertStringContainsString('onFinish: () =>', $dashboard);
+        $this->assertStringContainsString('filterLoading.value = false', $dashboard);
+        $this->assertStringContainsString('role="status" aria-live="polite"', $dashboard);
+        $this->assertStringContainsString('Cargando datos…', $dashboard);
+    }
+
     public function test_bi_initial_page_uses_the_script_data_expected_by_vue(): void
     {
         $this->withoutMiddleware([ExpireInactiveSession::class, PreventDeletionForAdmin2::class]);

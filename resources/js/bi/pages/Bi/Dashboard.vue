@@ -177,6 +177,8 @@ const referenceDate = () => new Date(`${props.periodoVentas.ultimaFecha || props
 const from = ref(props.periodoVentas.desde);
 const until = ref(props.periodoVentas.hasta);
 const periodError = ref('');
+const filterLoading = ref(false);
+let filterRequestId = 0;
 const recalculando = ref(false);
 const recalculoError = ref('');
 const comparativoAbierto = ref(false);
@@ -505,11 +507,23 @@ function resetPeriod() {
 }
 
 function searchCatalog() {
-    router.get(props.biUrl, { q: catalogSearch.value || undefined, zona: zone.value || undefined, empresa: company.value || undefined, desde: from.value, hasta: until.value }, { preserveState: true, preserveScroll: true });
+    navigateWithFilters();
 }
 
 function selectZone() {
-    searchCatalog();
+    navigateWithFilters();
+}
+
+function navigateWithFilters() {
+    const requestId = ++filterRequestId;
+    filterLoading.value = true;
+    router.get(props.biUrl, { q: catalogSearch.value || undefined, zona: zone.value || undefined, empresa: company.value || undefined, desde: from.value, hasta: until.value }, {
+        preserveState: true,
+        preserveScroll: true,
+        onFinish: () => {
+            if (requestId === filterRequestId) filterLoading.value = false;
+        },
+    });
 }
 
 function applyPeriod() {
@@ -519,7 +533,7 @@ function applyPeriod() {
     }
 
     periodError.value = '';
-    router.get(props.biUrl, { q: catalogSearch.value || undefined, zona: zone.value || undefined, empresa: company.value || undefined, desde: from.value, hasta: until.value }, { preserveState: true, preserveScroll: true });
+    navigateWithFilters();
 }
 
 function recalcularVentas() {
@@ -535,6 +549,13 @@ function recalcularVentas() {
 
 <template>
     <div class="bi-shell">
+        <div v-if="filterLoading" class="bi-filter-loading" role="status" aria-live="polite">
+            <div class="bi-filter-loading-card">
+                <span class="bi-filter-spinner" aria-hidden="true"></span>
+                <strong>Cargando datos…</strong>
+                <small>Aplicando los filtros seleccionados</small>
+            </div>
+        </div>
         <header class="bi-header">
             <div class="bi-brand"><span class="bi-logo">BI</span><strong>CONSORCIO JOSELITO</strong><small>Portal de KPIs</small></div>
             <div class="bi-header-actions"><span class="bi-updated">LotoBet: {{ periodoVentas.ultimaFecha || 'sin datos' }} · Datos desde {{ periodoVentas.primeraFecha || '—' }}<br>Catálogo actualizado: {{ catalogoActualizado || 'sin fecha' }}</span><a class="bi-back" :href="menuUrl">← Volver al menú</a></div>
@@ -545,7 +566,7 @@ function recalcularVentas() {
             <select v-model="company" class="bi-zone" aria-label="Elegir empresa" @change="selectZone"><option value="">— Ambas empresas —</option><option v-for="empresa in empresas" :key="empresa" :value="empresa">{{ empresa }}</option></select>
         </nav>
 <div class="bi-filters"><strong>FILTRAR POR PERÍODO</strong><input v-model="from" type="date" aria-label="Fecha inicial"><input v-model="until" type="date" aria-label="Fecha final"><button class="bi-primary" type="button" @click="activePeriod = 'Personalizado'; applyPeriod()">Aplicar</button><button class="bi-clear" type="button" @click="resetPeriod">✕ Todo</button><div class="bi-periods"><button v-for="period in periods" :key="period" type="button" :class="{ active: activePeriod === period }" @click="selectPeriod(period)">{{ period }}</button></div><button class="bi-recalculate" type="button" :disabled="recalculando" title="Recalcula hasta 31 días cerrados de ventas y premios" @click="recalcularVentas">{{ recalculando ? 'Recalculando…' : '↻ Recalcular datos' }}</button></div>
-        <main class="bi-main">
+        <main class="bi-main" :aria-busy="filterLoading">
             <div v-if="periodError" class="bi-period-error" role="alert">{{ periodError }}</div>
             <div v-if="recalculoError" class="bi-period-error" role="alert">{{ recalculoError }}</div>
             <div v-if="mensajeRecalculo" class="bi-recalculate-success" role="status">{{ mensajeRecalculo }}</div>
