@@ -18,9 +18,11 @@ class TvDashboardController extends Controller
     {
         $empresa = trim((string) $request->validated('empresa', ''));
         $zona = trim((string) $request->validated('zona', ''));
-        $filtrado = $empresa !== '' || $zona !== '';
+        $ruta = trim((string) $request->validated('ruta', ''));
+        $filtrado = $empresa !== '' || $zona !== '' || $ruta !== '';
         $agencias = $filtrado ? Agencia::query()->when($empresa, fn ($query) => $query->where('empresa', $empresa))
             ->when($zona, fn ($query) => $query->where('zona', $zona))
+            ->when($ruta, fn ($query) => $query->where('ruta', $ruta))
             ->whereNotNull('terminal')->get(['terminal', 'ruta']) : collect();
         $terminales = $agencias->pluck('terminal')->map(fn (string $terminal): string => ltrim(trim($terminal), '0') ?: '0')->unique()->all();
         $fecha = today()->toDateString();
@@ -92,9 +94,11 @@ class TvDashboardController extends Controller
             'promedios' => $promedios,
             'rutas' => $rutas,
             'empresas' => $catalogo->empresas(),
-            'zonas' => $catalogo->zonas(),
+            'zonas' => $catalogo->zonas($empresa),
+            'rutasDisponibles' => $catalogo->rutas($empresa, $zona),
             'empresaSeleccionada' => $empresa,
             'zonaSeleccionada' => $zona,
+            'rutaSeleccionada' => $ruta,
             'filtrado' => $filtrado,
         ]);
     }

@@ -31,6 +31,7 @@ class DashboardController extends Controller
         $busqueda = trim((string) $request->validated('q', ''));
         $zona = trim((string) $request->validated('zona', ''));
         $empresa = trim((string) $request->validated('empresa', ''));
+        $ruta = trim((string) $request->validated('ruta', ''));
         $rangoDisponible = $ventasBet->rangoDisponible();
         $hasta = CarbonImmutable::parse($request->validated('hasta') ?: ($rangoDisponible['hasta'] ?? null) ?: today()->toDateString());
         $desde = CarbonImmutable::parse($request->validated('desde') ?: $hasta->subDays(4)->toDateString());
@@ -48,7 +49,7 @@ class DashboardController extends Controller
             ->whereBetween('hora', [6, 22])
             ->orderBy('hora')
             ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'productos_terminales', 'capturado_en']);
-        $datosZona = $zona !== '' || $empresa !== '' ? $resumenZona->resumir($zona, $empresa, $desde, $hasta, $lecturas) : null;
+        $datosZona = $zona !== '' || $empresa !== '' || $ruta !== '' ? $resumenZona->resumir($zona, $empresa, $ruta, $desde, $hasta, $lecturas) : null;
 
         return Inertia::render('Bi/Dashboard', [
             'modulo' => 'BI',
@@ -59,17 +60,19 @@ class DashboardController extends Controller
                 'producto_id' => $id,
                 'descripcion' => $nombre,
             ])->values()->all(),
-            'terminalesLimites' => fn () => $catalogo->paraAlertas($zona, $empresa),
+            'terminalesLimites' => fn () => $catalogo->paraAlertas($zona, $empresa, $ruta),
             'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last(), $snapshot, $datosZona['terminales'] ?? null),
             'menuUrl' => route('dashboard.index'),
             'biUrl' => route('bi.index', [], false),
             'recalcularUrl' => route('bi.recalcular'),
             'mensajeRecalculo' => session('biRecalculo'),
-            'terminales' => fn () => $catalogo->paginar($busqueda, $zona, $empresa),
-            'zonas' => fn () => $catalogo->zonas(),
+            'terminales' => fn () => $catalogo->paginar($busqueda, $zona, $empresa, $ruta),
+            'zonas' => fn () => $catalogo->zonas($empresa),
             'zonaSeleccionada' => $zona,
             'empresas' => fn () => $catalogo->empresas(),
             'empresaSeleccionada' => $empresa,
+            'rutas' => fn () => $catalogo->rutas($empresa, $zona),
+            'rutaSeleccionada' => $ruta,
             'busquedaTerminal' => $busqueda,
             'catalogoActualizado' => fn () => $catalogo->ultimaActualizacion(),
             'periodoVentas' => [

@@ -9,10 +9,20 @@ use Illuminate\Database\Eloquent\Builder;
 class AgenciaTerminalCatalogo
 {
     /** @return array<int, string> */
-    public function zonas(): array
+    public function zonas(?string $empresa = null): array
     {
-        return Agencia::query()->whereNotNull('zona')->where('zona', '<>', '')
+        return Agencia::query()->when($empresa, fn (Builder $query): Builder => $query->where('empresa', $empresa))
+            ->whereNotNull('zona')->where('zona', '<>', '')
             ->distinct()->orderBy('zona')->pluck('zona')->all();
+    }
+
+    /** @return array<int, string> */
+    public function rutas(?string $empresa = null, ?string $zona = null): array
+    {
+        return Agencia::query()->when($empresa, fn (Builder $query): Builder => $query->where('empresa', $empresa))
+            ->when($zona, fn (Builder $query): Builder => $query->where('zona', $zona))
+            ->whereNotNull('ruta')->where('ruta', '<>', '')
+            ->distinct()->orderBy('ruta')->pluck('ruta')->all();
     }
 
     /** @return array<int, string> */
@@ -23,10 +33,11 @@ class AgenciaTerminalCatalogo
     }
 
     /** @return array<int, array{terminal: string, nombre: string}> */
-    public function paraAlertas(?string $zona = null, ?string $empresa = null): array
+    public function paraAlertas(?string $zona = null, ?string $empresa = null, ?string $ruta = null): array
     {
         return Agencia::lotobet()->when($zona, fn (Builder $query): Builder => $query->where('zona', $zona))
             ->when($empresa, fn (Builder $query): Builder => $query->where('empresa', $empresa))
+            ->when($ruta, fn (Builder $query): Builder => $query->where('ruta', $ruta))
             ->whereNotNull('terminal')->where('terminal', '<>', '')
             ->orderBy('id')->get(['terminal', 'nombre_agencia', 'agencia'])
             ->map(fn (Agencia $agencia): array => [
@@ -42,7 +53,7 @@ class AgenciaTerminalCatalogo
         return $fecha ? substr((string) $fecha, 0, 10) : null;
     }
 
-    public function paginar(?string $busqueda, ?string $zona = null, ?string $empresa = null): LengthAwarePaginator
+    public function paginar(?string $busqueda, ?string $zona = null, ?string $empresa = null, ?string $ruta = null): LengthAwarePaginator
     {
         $query = Agencia::query()
             ->select(['id', 'terminal', 'agencia', 'nombre_agencia', 'empresa', 'ciudad', 'zona', 'estatus'])
@@ -55,6 +66,10 @@ class AgenciaTerminalCatalogo
 
         if ($empresa !== null && $empresa !== '') {
             $query->where('empresa', $empresa);
+        }
+
+        if ($ruta !== null && $ruta !== '') {
+            $query->where('ruta', $ruta);
         }
 
         if ($busqueda !== null && $busqueda !== '') {

@@ -13,10 +13,11 @@ class ResumenZonaBi
     public function __construct(private readonly ClasificarVentaBi $clasificador) {}
 
     /** @return array<string, mixed> */
-    public function resumir(?string $zona, ?string $empresa, CarbonImmutable $desde, CarbonImmutable $hasta, Collection $lecturas): array
+    public function resumir(?string $zona, ?string $empresa, ?string $ruta, CarbonImmutable $desde, CarbonImmutable $hasta, Collection $lecturas): array
     {
         $agencias = Agencia::query()->when($zona, fn ($query) => $query->where('zona', $zona))
             ->when($empresa, fn ($query) => $query->where('empresa', $empresa))
+            ->when($ruta, fn ($query) => $query->where('ruta', $ruta))
             ->whereNotNull('terminal')->get(['terminal', 'ruta', 'estatus']);
         $terminales = $agencias->pluck('terminal')->map(fn (string $terminal): string => ltrim(trim($terminal), '0') ?: '0')->unique()->values()->all();
         $codigos = $agencias->pluck('terminal')->merge($terminales)->unique()->all();
@@ -83,7 +84,8 @@ class ResumenZonaBi
         $totalVentas = array_sum($totales);
         $totalPremios = array_sum(array_column($seriePremios, 'premios'));
         $evaluadas = Agencia::lotobet()->when($zona, fn ($query) => $query->where('zona', $zona))
-            ->when($empresa, fn ($query) => $query->where('empresa', $empresa))->where('estatus', 1)->count();
+            ->when($empresa, fn ($query) => $query->where('empresa', $empresa))
+            ->when($ruta, fn ($query) => $query->where('ruta', $ruta))->where('estatus', 1)->count();
         $conVenta = null;
         $cobertura = array_fill_keys($categorias, 0);
         if ($ultimaHora !== null) {

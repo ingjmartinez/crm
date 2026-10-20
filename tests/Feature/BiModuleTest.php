@@ -251,6 +251,27 @@ class BiModuleTest extends TestCase
             ->assertOk()->assertSee('DOP 300');
     }
 
+    public function test_bi_tv_route_filter_applies_to_today_and_previous_week(): void
+    {
+        Agencia::query()->create(['terminal' => '202', 'empresa' => 'Negosur', 'zona' => 'BONAO', 'ruta' => 'Ruta B']);
+        Agencia::query()->create(['terminal' => '404', 'empresa' => 'Negosur', 'zona' => 'BONAO', 'ruta' => 'Ruta D']);
+
+        foreach ([today(), today()->subDays(7)] as $fecha) {
+            BiVentaHora::factory()->create([
+                'fecha' => $fecha->toDateString(), 'hora' => 10,
+                'tradicional_acumulado' => 600,
+                'productos_terminales' => ['202' => ['43' => 200], '404' => ['43' => 400]],
+            ]);
+        }
+
+        $this->withoutMiddleware()->get(route('bi.tv', ['empresa' => 'Negosur', 'zona' => 'BONAO', 'ruta' => 'Ruta B']))
+            ->assertOk()
+            ->assertSee('name="ruta"', false)
+            ->assertSee('value="Ruta B" selected', false)
+            ->assertSee('DOP 200')
+            ->assertDontSee('DOP 600');
+    }
+
     public function test_bi_controller_renders_its_inertia_page(): void
     {
         $this->assertSame('bi', app(\App\Http\Middleware\HandleBiInertiaRequests::class)->rootView(request()));
@@ -388,8 +409,8 @@ class BiModuleTest extends TestCase
 
     public function test_bi_reads_terminals_from_agencias_and_filters_on_the_server(): void
     {
-        Agencia::query()->create(['terminal' => '50091', 'agencia' => 'A-01', 'nombre_agencia' => 'Agencia Norte', 'empresa' => 'Grupo Joselito', 'ciudad' => 'Santiago', 'zona' => 'ZONA NORTE', 'estatus' => 1]);
-        Agencia::query()->create(['terminal' => '5719', 'agencia' => 'A-02', 'nombre_agencia' => 'Agencia Sur', 'empresa' => 'Negosur', 'ciudad' => 'Santo Domingo', 'zona' => 'ZONA SUR', 'estatus' => 0]);
+        Agencia::query()->create(['terminal' => '50091', 'agencia' => 'A-01', 'nombre_agencia' => 'Agencia Norte', 'empresa' => 'Grupo Joselito', 'ciudad' => 'Santiago', 'zona' => 'ZONA NORTE', 'ruta' => 'RUTA NORTE', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '5719', 'agencia' => 'A-02', 'nombre_agencia' => 'Agencia Sur', 'empresa' => 'Negosur', 'ciudad' => 'Santo Domingo', 'zona' => 'ZONA SUR', 'ruta' => 'RUTA SUR', 'estatus' => 0]);
         Agencia::query()->create(['terminal' => null, 'agencia' => 'A-03', 'nombre_agencia' => 'Sin terminal']);
 
         $this->withoutMiddleware()
@@ -406,6 +427,7 @@ class BiModuleTest extends TestCase
             ->get(route('bi.index'))
             ->assertJsonPath('props.terminales.total', 2)
             ->assertJsonPath('props.zonas', ['ZONA NORTE', 'ZONA SUR'])
+            ->assertJsonPath('props.rutas', ['RUTA NORTE', 'RUTA SUR'])
             ->assertJsonPath('props.empresas', ['Grupo Joselito', 'Negosur']);
 
         $this->get(route('bi.index', ['zona' => 'ZONA SUR']))
@@ -415,6 +437,13 @@ class BiModuleTest extends TestCase
 
         $this->get(route('bi.index', ['empresa' => 'Negosur']))
             ->assertJsonPath('props.empresaSeleccionada', 'Negosur')
+            ->assertJsonPath('props.zonas', ['ZONA SUR'])
+            ->assertJsonPath('props.rutas', ['RUTA SUR'])
+            ->assertJsonPath('props.terminales.total', 1)
+            ->assertJsonPath('props.terminales.data.0.terminal', '5719');
+
+        $this->get(route('bi.index', ['ruta' => 'RUTA SUR']))
+            ->assertJsonPath('props.rutaSeleccionada', 'RUTA SUR')
             ->assertJsonPath('props.terminales.total', 1)
             ->assertJsonPath('props.terminales.data.0.terminal', '5719');
 
@@ -462,27 +491,36 @@ class BiModuleTest extends TestCase
 
     public function test_company_and_zone_filters_apply_together_to_hourly_sales_and_previous_week(): void
     {
-        Agencia::query()->create(['terminal' => '101', 'empresa' => 'Grupo Joselito', 'zona' => 'NORTE', 'estatus' => 1]);
-        Agencia::query()->create(['terminal' => '202', 'empresa' => 'Negosur', 'zona' => 'NORTE', 'estatus' => 1]);
-        Agencia::query()->create(['terminal' => '303', 'empresa' => 'Negosur', 'zona' => 'SUR', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '101', 'empresa' => 'Grupo Joselito', 'zona' => 'NORTE', 'ruta' => 'RUTA A', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '202', 'empresa' => 'Negosur', 'zona' => 'NORTE', 'ruta' => 'RUTA B', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '303', 'empresa' => 'Negosur', 'zona' => 'SUR', 'ruta' => 'RUTA C', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '404', 'empresa' => 'Negosur', 'zona' => 'NORTE', 'ruta' => 'RUTA D', 'estatus' => 1]);
 
         foreach ([today(), today()->subDays(7)] as $fecha) {
             BiVentaHora::factory()->create([
                 'fecha' => $fecha->toDateString(),
                 'hora' => 10,
-                'productos_terminales' => ['101' => ['43' => 100], '202' => ['43' => 200], '303' => ['43' => 300]],
+                'productos_terminales' => ['101' => ['43' => 100], '202' => ['43' => 200], '303' => ['43' => 300], '404' => ['43' => 400]],
             ]);
         }
 
         $this->withoutMiddleware()->withHeader('X-Inertia', 'true')
             ->get(route('bi.index', ['empresa' => 'Negosur', 'zona' => 'NORTE']))
             ->assertOk()
+            ->assertJsonPath('props.lecturasPorHora.0.total', 600)
+            ->assertJsonPath('props.lecturasSemanaAnterior.0.total', 600)
+            ->assertJsonPath('props.indicadores.ventasHoy', 600)
+            ->assertJsonPath('props.rutas', ['RUTA B', 'RUTA D']);
+
+        $this->get(route('bi.index', ['empresa' => 'Negosur', 'zona' => 'NORTE', 'ruta' => 'RUTA B']))
+            ->assertOk()
             ->assertJsonPath('props.lecturasPorHora.0.total', 200)
             ->assertJsonPath('props.lecturasSemanaAnterior.0.total', 200)
-            ->assertJsonPath('props.indicadores.ventasHoy', 200);
+            ->assertJsonPath('props.indicadores.ventasHoy', 200)
+            ->assertJsonPath('props.terminales.total', 1);
 
         $this->get(route('bi.index', ['empresa' => 'Negosur']))
-            ->assertJsonPath('props.lecturasPorHora.0.total', 500);
+            ->assertJsonPath('props.lecturasPorHora.0.total', 900);
     }
 
     public function test_filtered_hourly_sales_decode_terminal_products_once_per_reading(): void

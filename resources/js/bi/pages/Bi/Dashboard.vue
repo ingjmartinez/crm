@@ -16,6 +16,8 @@ const props = defineProps({
     zonaSeleccionada: { type: String, default: '' },
     empresas: { type: Array, default: () => [] },
     empresaSeleccionada: { type: String, default: '' },
+    rutas: { type: Array, default: () => [] },
+    rutaSeleccionada: { type: String, default: '' },
     busquedaTerminal: { type: String, default: '' },
     catalogoActualizado: { type: String, default: null },
     periodoVentas: { type: Object, required: true },
@@ -168,8 +170,9 @@ function guardarLimite() {
 }
 const zone = ref(props.zonaSeleccionada);
 const company = ref(props.empresaSeleccionada);
-const filtroActivo = computed(() => Boolean(zone.value || company.value));
-const alcancePanel = computed(() => [company.value, zone.value].filter(Boolean).join(' · ') || 'Consorcio');
+const routeFilter = ref(props.rutaSeleccionada);
+const filtroActivo = computed(() => Boolean(company.value || zone.value || routeFilter.value));
+const alcancePanel = computed(() => [company.value, zone.value, routeFilter.value].filter(Boolean).join(' · ') || 'Consorcio');
 const search = ref('');
 const catalogSearch = ref(props.busquedaTerminal);
 const toDate = (date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
@@ -212,6 +215,7 @@ onMounted(() => {
                 q: catalogSearch.value || undefined,
                 zona: zone.value || undefined,
                 empresa: company.value || undefined,
+                ruta: routeFilter.value || undefined,
                 desde: from.value,
                 hasta: until.value,
             }, {
@@ -511,13 +515,20 @@ function searchCatalog() {
 }
 
 function selectZone() {
+    routeFilter.value = '';
+    navigateWithFilters();
+}
+
+function selectCompany() {
+    zone.value = '';
+    routeFilter.value = '';
     navigateWithFilters();
 }
 
 function navigateWithFilters() {
     const requestId = ++filterRequestId;
     filterLoading.value = true;
-    router.get(props.biUrl, { q: catalogSearch.value || undefined, zona: zone.value || undefined, empresa: company.value || undefined, desde: from.value, hasta: until.value }, {
+    router.get(props.biUrl, { q: catalogSearch.value || undefined, empresa: company.value || undefined, zona: zone.value || undefined, ruta: routeFilter.value || undefined, desde: from.value, hasta: until.value }, {
         preserveState: true,
         preserveScroll: true,
         onFinish: () => {
@@ -562,8 +573,9 @@ function recalcularVentas() {
         </header>
         <nav class="bi-nav" aria-label="Secciones BI">
             <button v-for="tab in tabs" :key="tab.key" type="button" class="bi-nav-item" :class="{ active: activeTab === tab.key }" @click="selectTab(tab.key)"><span :class="tab.color">■</span>{{ tab.name }}<b v-if="tab.key === 'limites' && cantidadAlertas" class="bi-nav-badge" title="Productos con alerta">{{ cantidadAlertas }}</b></button>
+            <select v-model="company" class="bi-zone" aria-label="Elegir empresa" @change="selectCompany"><option value="">— Ambas empresas —</option><option v-for="empresa in empresas" :key="empresa" :value="empresa">{{ empresa }}</option></select>
             <select v-model="zone" class="bi-zone" aria-label="Elegir zona" @change="selectZone"><option value="">— Todas las zonas —</option><option v-for="zona in zonas" :key="zona" :value="zona">{{ zona }}</option></select>
-            <select v-model="company" class="bi-zone" aria-label="Elegir empresa" @change="selectZone"><option value="">— Ambas empresas —</option><option v-for="empresa in empresas" :key="empresa" :value="empresa">{{ empresa }}</option></select>
+            <select v-model="routeFilter" class="bi-zone" aria-label="Elegir ruta" @change="navigateWithFilters"><option value="">— Todas las rutas —</option><option v-for="ruta in rutas" :key="ruta" :value="ruta">{{ ruta }}</option></select>
         </nav>
 <div class="bi-filters"><strong>FILTRAR POR PERÍODO</strong><input v-model="from" type="date" aria-label="Fecha inicial"><input v-model="until" type="date" aria-label="Fecha final"><button class="bi-primary" type="button" @click="activePeriod = 'Personalizado'; applyPeriod()">Aplicar</button><button class="bi-clear" type="button" @click="resetPeriod">✕ Todo</button><div class="bi-periods"><button v-for="period in periods" :key="period" type="button" :class="{ active: activePeriod === period }" @click="selectPeriod(period)">{{ period }}</button></div><button class="bi-recalculate" type="button" :disabled="recalculando" title="Recalcula hasta 31 días cerrados de ventas y premios" @click="recalcularVentas">{{ recalculando ? 'Recalculando…' : '↻ Recalcular datos' }}</button></div>
         <main class="bi-main" :aria-busy="filterLoading">

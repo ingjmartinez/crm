@@ -36,6 +36,10 @@
         .tv-filter-group strong { color: #5b7690; margin-right: 4px; }
         .tv-filter-group a { display: inline-block; margin: 0; padding: 8px 13px; border: 1px solid #b9d9e5; border-radius: 18px; background: #fff; color: #275973; text-decoration: none; font-weight: bold; }
         .tv-filter-group a.active { background: #008db6; border-color: #008db6; color: #fff; }
+        .tv-route-form { display: flex; align-items: center; gap: 7px; }
+        .tv-route-form label { color: #5b7690; font-weight: bold; }
+        .tv-route-form select, .tv-route-form button { padding: 8px 12px; border: 1px solid #b9d9e5; border-radius: 18px; background: #fff; color: #275973; font: inherit; }
+        .tv-route-form button { background: #008db6; border-color: #008db6; color: #fff; font-weight: bold; cursor: pointer; }
         @media (max-width: 1100px) {
             body { padding: 10px; }
             h1 { margin-bottom: 10px; font-size: 21px; }
@@ -67,15 +71,22 @@
         <div class="tv-filter-group"><a href="{{ route('bi.tv') }}" class="{{ !$filtrado ? 'active' : '' }}" aria-current="{{ !$filtrado ? 'page' : 'false' }}">Todo</a></div>
         <div class="tv-filter-group"><strong>Empresa</strong>
             @foreach($empresas as $empresa)
-                <a href="{{ route('bi.tv', array_filter(['empresa' => $empresa, 'zona' => $zonaSeleccionada])) }}" class="{{ $empresaSeleccionada === $empresa ? 'active' : '' }}" aria-current="{{ $empresaSeleccionada === $empresa ? 'page' : 'false' }}">{{ $empresa === 'Grupo Joselito' ? 'Joselito' : $empresa }}</a>
+                <a href="{{ route('bi.tv', ['empresa' => $empresa], false) }}" class="{{ $empresaSeleccionada === $empresa ? 'active' : '' }}" aria-current="{{ $empresaSeleccionada === $empresa ? 'page' : 'false' }}">{{ $empresa === 'Grupo Joselito' ? 'Joselito' : $empresa }}</a>
             @endforeach
         </div>
         <div class="tv-filter-group"><strong>Zona</strong>
-            <a href="{{ route('bi.tv', array_filter(['empresa' => $empresaSeleccionada])) }}" class="{{ $zonaSeleccionada === '' ? 'active' : '' }}" aria-current="{{ $zonaSeleccionada === '' ? 'page' : 'false' }}">Todas</a>
+            <a href="{{ route('bi.tv', array_filter(['empresa' => $empresaSeleccionada]), false) }}" class="{{ $zonaSeleccionada === '' ? 'active' : '' }}" aria-current="{{ $zonaSeleccionada === '' ? 'page' : 'false' }}">Todas</a>
             @foreach($zonas as $zona)
-                <a href="{{ route('bi.tv', array_filter(['empresa' => $empresaSeleccionada, 'zona' => $zona])) }}" class="{{ $zonaSeleccionada === $zona ? 'active' : '' }}" aria-current="{{ $zonaSeleccionada === $zona ? 'page' : 'false' }}">{{ ucfirst(mb_strtolower($zona)) }}</a>
+                <a href="{{ route('bi.tv', array_filter(['empresa' => $empresaSeleccionada, 'zona' => $zona]), false) }}" class="{{ $zonaSeleccionada === $zona ? 'active' : '' }}" aria-current="{{ $zonaSeleccionada === $zona ? 'page' : 'false' }}">{{ ucfirst(mb_strtolower($zona)) }}</a>
             @endforeach
         </div>
+        <form class="tv-route-form" action="{{ route('bi.tv', [], false) }}" method="get">
+            <label for="tv-ruta">Ruta</label>
+            @if($empresaSeleccionada !== '')<input type="hidden" name="empresa" value="{{ $empresaSeleccionada }}">@endif
+            @if($zonaSeleccionada !== '')<input type="hidden" name="zona" value="{{ $zonaSeleccionada }}">@endif
+            <select id="tv-ruta" name="ruta"><option value="">Todas las rutas</option>@foreach($rutasDisponibles as $ruta)<option value="{{ $ruta }}" @selected($rutaSeleccionada === $ruta)>{{ $ruta }}</option>@endforeach</select>
+            <button type="submit">Aplicar</button>
+        </form>
     </nav>
     <section>
         <h2>DÍA EN CURSO <span class="tag">PARCIAL</span><small>Lecturas horarias de LotoBet · {{ $fecha }} · {{ $lecturas->count() }} lecturas hoy</small></h2>
