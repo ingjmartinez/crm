@@ -8,6 +8,7 @@ use App\Models\Agencia;
 use App\Models\BiVentaHora;
 use App\Models\BiVentaSnapshot;
 use App\Models\User;
+use App\Services\Bi\ResumenZonaBi;
 use App\Services\Bi\ResumirPremiosDia;
 use App\Services\Bi\ResumirVentasDia;
 use Carbon\CarbonImmutable;
@@ -460,6 +461,31 @@ class BiModuleTest extends TestCase
 
         $this->get(route('bi.index', ['empresa' => 'Negosur']))
             ->assertJsonPath('props.lecturasPorHora.0.total', 500);
+    }
+
+    public function test_filtered_hourly_sales_decode_terminal_products_once_per_reading(): void
+    {
+        $lectura = new class extends BiVentaHora
+        {
+            public int $accesosProductosTerminales = 0;
+
+            public function getAttribute($key)
+            {
+                if ($key === 'productos_terminales') {
+                    $this->accesosProductosTerminales++;
+                }
+
+                return parent::getAttribute($key);
+            }
+        };
+        $lectura->hora = 10;
+        $lectura->capturado_en = now();
+        $lectura->productos_terminales = ['101' => ['43' => 100], '202' => ['43' => 200]];
+
+        $resultado = app(ResumenZonaBi::class)->filtrarLecturas(collect([$lectura]), ['101', '202']);
+
+        $this->assertSame(1, $lectura->accesosProductosTerminales);
+        $this->assertSame(300.0, $resultado->first()['total']);
     }
 
     public function test_bi_exposes_hourly_sales_snapshots_for_today(): void

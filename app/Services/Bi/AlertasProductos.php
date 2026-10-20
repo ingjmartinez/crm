@@ -14,12 +14,13 @@ class AlertasProductos
     public function resumir(?BiVentaHora $lectura, ?BiVentaSnapshot $snapshot = null, ?array $terminales = null): array
     {
         $productosTerminales = $snapshot?->productos_terminales;
+        $productosGlobales = $lectura?->productos;
 
         return BiLimiteProducto::query()->with('producto')->orderBy('producto_id')->orderBy('terminal')->get()
             ->filter(fn (BiLimiteProducto $limite): bool => $terminales === null || in_array((string) $limite->terminal, $terminales, true))
-            ->map(function (BiLimiteProducto $limite) use ($lectura, $productosTerminales): array {
+            ->map(function (BiLimiteProducto $limite) use ($lectura, $productosTerminales, $productosGlobales): array {
                 $terminal = (string) $limite->terminal;
-                $productos = $terminal === '' ? $lectura?->productos : ($productosTerminales !== null ? ($productosTerminales[$terminal] ?? []) : null);
+                $productos = $terminal === '' ? $productosGlobales : ($productosTerminales !== null ? ($productosTerminales[$terminal] ?? []) : null);
                 $grupo = BiLimiteProducto::GRUPOS[$limite->producto_id] ?? null;
                 if ($grupo !== null) {
                     $categoria = substr($limite->producto_id, strlen('grupo:'));

@@ -67,10 +67,11 @@ class TvDashboardController extends Controller
                 ltrim(trim((string) $agencia->terminal), '0') ?: '0' => trim((string) $agencia->ruta),
             ]);
             $ventasPorRuta = [];
+            $ultimaPorTerminal = $ultima?->productos_terminales ?? [];
             foreach ($terminales as $terminal) {
                 $ruta = $rutasPorTerminal[$terminal] ?? '';
                 if ($ruta !== '') {
-                    $ventasPorRuta[$ruta] = ($ventasPorRuta[$ruta] ?? 0) + array_sum($ultima?->productos_terminales[$terminal] ?? []);
+                    $ventasPorRuta[$ruta] = ($ventasPorRuta[$ruta] ?? 0) + array_sum($ultimaPorTerminal[$terminal] ?? []);
                 }
             }
             arsort($ventasPorRuta, SORT_NUMERIC);
@@ -101,7 +102,8 @@ class TvDashboardController extends Controller
     /** @param array<int, string> $terminales */
     private function filtrarLectura(BiVentaHora $lectura, array $terminales, ClasificarVentaBi $clasificador): ?BiVentaHora
     {
-        if ($lectura->productos_terminales === null) {
+        $porTerminal = $lectura->productos_terminales;
+        if ($porTerminal === null) {
             return null;
         }
 
@@ -109,7 +111,7 @@ class TvDashboardController extends Controller
         $terminalesCategoria = array_fill_keys(array_keys($totales), 0);
         foreach ($terminales as $terminal) {
             $categoriasConVenta = [];
-            foreach ($lectura->productos_terminales[$terminal] ?? [] as $producto => $monto) {
+            foreach ($porTerminal[$terminal] ?? [] as $producto => $monto) {
                 $categoria = $clasificador->categoria(['producto_id' => (string) $producto]);
                 $totales[$categoria] += (float) $monto;
                 if ($monto > 0) {

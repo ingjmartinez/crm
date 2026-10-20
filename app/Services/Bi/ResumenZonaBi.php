@@ -166,12 +166,13 @@ class ResumenZonaBi
     public function filtrarLecturas(Collection $lecturas, array $terminales): Collection
     {
         return $lecturas->map(function (BiVentaHora $lectura) use ($terminales): ?array {
-            if ($lectura->productos_terminales === null) {
+            $porTerminal = $lectura->productos_terminales;
+            if ($porTerminal === null) {
                 return null;
             }
             $productos = [];
             foreach ($terminales as $terminal) {
-                foreach ($lectura->productos_terminales[$terminal] ?? [] as $producto => $monto) {
+                foreach ($porTerminal[$terminal] ?? [] as $producto => $monto) {
                     $productos[$producto] = ($productos[$producto] ?? 0) + (float) $monto;
                 }
             }
@@ -180,7 +181,7 @@ class ResumenZonaBi
             return [
                 'hora' => $lectura->hora, 'tradicional' => $valores['tradicional'], 'noTradicional' => $valores['no_tradicional'],
                 'total' => array_sum($valores), 'capturadoEn' => $lectura->capturado_en->toDateTimeString(), 'productos' => $productos,
-                'terminales' => $lectura->productos_terminales,
+                'terminales' => $porTerminal,
             ];
         })->filter()->values();
     }
