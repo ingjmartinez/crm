@@ -74,9 +74,9 @@ class ResumenZonaBi
         ]);
         $ventasPorRuta = [];
         foreach ($terminales as $terminal) {
-            $ruta = $rutasPorTerminal[$terminal] ?? '';
-            if ($ruta !== '') {
-                $ventasPorRuta[$ruta] = ($ventasPorRuta[$ruta] ?? 0)
+            $rutaTerminal = $rutasPorTerminal[$terminal] ?? '';
+            if ($rutaTerminal !== '') {
+                $ventasPorRuta[$rutaTerminal] = ($ventasPorRuta[$rutaTerminal] ?? 0)
                     + array_sum($ultimaHora['terminales'][$terminal] ?? []);
             }
         }

@@ -71,9 +71,9 @@ class TvDashboardController extends Controller
             $ventasPorRuta = [];
             $ultimaPorTerminal = $ultima?->productos_terminales ?? [];
             foreach ($terminales as $terminal) {
-                $ruta = $rutasPorTerminal[$terminal] ?? '';
-                if ($ruta !== '') {
-                    $ventasPorRuta[$ruta] = ($ventasPorRuta[$ruta] ?? 0) + array_sum($ultimaPorTerminal[$terminal] ?? []);
+                $rutaTerminal = $rutasPorTerminal[$terminal] ?? '';
+                if ($rutaTerminal !== '') {
+                    $ventasPorRuta[$rutaTerminal] = ($ventasPorRuta[$rutaTerminal] ?? 0) + array_sum($ultimaPorTerminal[$terminal] ?? []);
                 }
             }
             arsort($ventasPorRuta, SORT_NUMERIC);
