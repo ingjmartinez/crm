@@ -81,9 +81,12 @@ class NominaDomingoController extends Controller
             $filas = $filas->where('estatus', 'Revisar')->values();
         }
 
+        $filasReporte = $this->service->agruparPorCedula($filas);
+
         return view('recursos_humanos.nomina-domingo', [
             'fecha' => $fecha->toDateString(),
             'filas' => $filas,
+            'filasReporte' => $filasReporte,
             'configuracion' => $this->service->configuracion(),
             'archivos' => session('nomina_domingo_archivos', []),
             'estatus' => $estatus,

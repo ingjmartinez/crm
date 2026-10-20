@@ -159,6 +159,7 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(['Cumple', 'Cumple'], $filas->pluck('estatus')->all());
         $this->assertSame(616, $filas->first()['minutos_totales_cedula']);
         $this->assertSame(1500.0, $filas->sum('monto_pagar'));
+
     }
 
     public function test_terminal_exclusions_can_be_recognized_saved_listed_and_removed(): void
