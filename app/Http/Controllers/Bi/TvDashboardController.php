@@ -3,19 +3,34 @@
 namespace App\Http\Controllers\Bi;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Bi\IndexAgenciaTerminalRequest;
+use App\Models\Agencia;
 use App\Models\BiVentaHora;
 use App\Models\BiVentaSnapshot;
 use App\Models\VentaOnlinePromedioHistorico;
+use App\Services\Bi\AgenciaTerminalCatalogo;
+use App\Services\Bi\ClasificarVentaBi;
 use Illuminate\View\View;
 
 class TvDashboardController extends Controller
 {
-    public function index(): View
+    public function index(IndexAgenciaTerminalRequest $request, AgenciaTerminalCatalogo $catalogo, ClasificarVentaBi $clasificador): View
     {
+        $empresa = trim((string) $request->validated('empresa', ''));
+        $zona = trim((string) $request->validated('zona', ''));
+        $filtrado = $empresa !== '' || $zona !== '';
+        $agencias = $filtrado ? Agencia::query()->when($empresa, fn ($query) => $query->where('empresa', $empresa))
+            ->when($zona, fn ($query) => $query->where('zona', $zona))
+            ->whereNotNull('terminal')->get(['terminal', 'ruta']) : collect();
+        $terminales = $agencias->pluck('terminal')->map(fn (string $terminal): string => ltrim(trim($terminal), '0') ?: '0')->unique()->all();
         $fecha = today()->toDateString();
         $fechaAnterior = today()->subDays(7)->toDateString();
         $lecturas = BiVentaHora::query()->where('fecha', $fecha)->whereBetween('hora', [6, 22])->orderBy('hora')->get();
         $lecturasAnteriores = BiVentaHora::query()->where('fecha', $fechaAnterior)->whereBetween('hora', [6, 22])->orderBy('hora')->get()->keyBy('hora');
+        if ($filtrado) {
+            $lecturas = $lecturas->map(fn (BiVentaHora $lectura): ?BiVentaHora => $this->filtrarLectura($lectura, $terminales, $clasificador))->filter()->values();
+            $lecturasAnteriores = $lecturasAnteriores->map(fn (BiVentaHora $lectura): ?BiVentaHora => $this->filtrarLectura($lectura, $terminales, $clasificador))->filter()->keyBy('hora');
+        }
         $ultima = $lecturas->last();
         $total = $ultima ? $this->totalHora($ultima) : 0.0;
         $maximo = max(1.0, $total, ...$lecturasAnteriores->map(fn (BiVentaHora $lectura): float => $this->totalHora($lectura))->all());
@@ -46,6 +61,23 @@ class TvDashboardController extends Controller
         $promedios = VentaOnlinePromedioHistorico::query()->whereIn('tipo_categoria', ['tradicional', 'no_tradicional'])
             ->get(['tipo_categoria', 'monto_promedio'])->pluck('monto_promedio', 'tipo_categoria');
         $snapshot = $ultima ? BiVentaSnapshot::query()->where('fecha', $fecha)->first(['rutas']) : null;
+        $rutas = collect($snapshot?->rutas ?? [])->take(10);
+        if ($filtrado) {
+            $rutasPorTerminal = $agencias->mapWithKeys(fn (Agencia $agencia): array => [
+                ltrim(trim((string) $agencia->terminal), '0') ?: '0' => trim((string) $agencia->ruta),
+            ]);
+            $ventasPorRuta = [];
+            foreach ($terminales as $terminal) {
+                $ruta = $rutasPorTerminal[$terminal] ?? '';
+                if ($ruta !== '') {
+                    $ventasPorRuta[$ruta] = ($ventasPorRuta[$ruta] ?? 0) + array_sum($ultima?->productos_terminales[$terminal] ?? []);
+                }
+            }
+            arsort($ventasPorRuta, SORT_NUMERIC);
+            $rutas = collect($ventasPorRuta)->take(10)->map(fn (float|int $monto, string $nombre): array => [
+                'nombre' => $nombre, 'monto' => $monto,
+            ])->values();
+        }
 
         return view('bi.tv', [
             'fecha' => $fecha,
@@ -57,8 +89,44 @@ class TvDashboardController extends Controller
             'puntosHoy' => $puntosHoy,
             'puntosAnteriores' => $puntosAnteriores,
             'promedios' => $promedios,
-            'rutas' => collect($snapshot?->rutas ?? [])->take(10),
+            'rutas' => $rutas,
+            'empresas' => $catalogo->empresas(),
+            'zonas' => $catalogo->zonas(),
+            'empresaSeleccionada' => $empresa,
+            'zonaSeleccionada' => $zona,
+            'filtrado' => $filtrado,
         ]);
+    }
+
+    /** @param array<int, string> $terminales */
+    private function filtrarLectura(BiVentaHora $lectura, array $terminales, ClasificarVentaBi $clasificador): ?BiVentaHora
+    {
+        if ($lectura->productos_terminales === null) {
+            return null;
+        }
+
+        $totales = array_fill_keys(['tradicional', 'no_tradicional', 'externas', 'recargas', 'otros'], 0.0);
+        $terminalesCategoria = array_fill_keys(array_keys($totales), 0);
+        foreach ($terminales as $terminal) {
+            $categoriasConVenta = [];
+            foreach ($lectura->productos_terminales[$terminal] ?? [] as $producto => $monto) {
+                $categoria = $clasificador->categoria(['producto_id' => (string) $producto]);
+                $totales[$categoria] += (float) $monto;
+                if ($monto > 0) {
+                    $categoriasConVenta[$categoria] = true;
+                }
+            }
+            foreach (array_keys($categoriasConVenta) as $categoria) {
+                $terminalesCategoria[$categoria]++;
+            }
+        }
+
+        foreach ($totales as $categoria => $monto) {
+            $lectura->setAttribute($categoria.'_acumulado', $monto);
+        }
+        $lectura->setAttribute('terminales_categoria', $terminalesCategoria);
+
+        return $lectura;
     }
 
     private function totalHora(BiVentaHora $lectura): float

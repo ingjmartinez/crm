@@ -139,6 +139,10 @@ class CapturarVentasHora
             'quiniela_loteka_acumulado' => round($quinielaLoteka, 2),
             'mega_chance_acumulado' => round($megaChance, 2),
             'productos' => array_map(fn (float $monto): float => round($monto, 2), $productos),
+            'productos_terminales' => array_map(
+                fn (array $ventas): array => array_map(fn (float $monto): float => round($monto, 2), $ventas),
+                $productosTerminales,
+            ),
         ]);
 
         DB::transaction(function () use ($lectura, $momento, $rutas, $productosTerminales): void {

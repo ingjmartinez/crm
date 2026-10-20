@@ -24,6 +24,7 @@ class Agencia extends Model
         'sistema',
         'empresa',
         'ciudad',
+        'zona',
         'ruta',
         'operador',
         'coordinador',

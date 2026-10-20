@@ -12,6 +12,10 @@ const props = defineProps({
     recalcularUrl: { type: String, required: true },
     mensajeRecalculo: { type: String, default: null },
     terminales: { type: Object, required: true },
+    zonas: { type: Array, default: () => [] },
+    zonaSeleccionada: { type: String, default: '' },
+    empresas: { type: Array, default: () => [] },
+    empresaSeleccionada: { type: String, default: '' },
     busquedaTerminal: { type: String, default: '' },
     catalogoActualizado: { type: String, default: null },
     periodoVentas: { type: Object, required: true },
@@ -162,7 +166,10 @@ function guardarLimite() {
         onSuccess: () => { limiteForm.reset(); limiteGuardado.value = true; },
     });
 }
-const zone = ref('');
+const zone = ref(props.zonaSeleccionada);
+const company = ref(props.empresaSeleccionada);
+const filtroActivo = computed(() => Boolean(zone.value || company.value));
+const alcancePanel = computed(() => [company.value, zone.value].filter(Boolean).join(' · ') || 'Consorcio');
 const search = ref('');
 const catalogSearch = ref(props.busquedaTerminal);
 const toDate = (date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
@@ -199,7 +206,18 @@ onMounted(() => {
     window.addEventListener('keydown', handleModalKeydown);
     hourlyRefreshTimer = window.setInterval(() => {
         if (!document.hidden) {
-            router.reload({ only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos'], preserveScroll: true });
+            router.get(props.biUrl, {
+                q: catalogSearch.value || undefined,
+                zona: zone.value || undefined,
+                empresa: company.value || undefined,
+                desde: from.value,
+                hasta: until.value,
+            }, {
+                only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos'],
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+            });
         }
     }, 120_000);
 });
@@ -487,7 +505,11 @@ function resetPeriod() {
 }
 
 function searchCatalog() {
-    router.get(props.biUrl, { q: catalogSearch.value || undefined, desde: from.value, hasta: until.value }, { preserveState: true, preserveScroll: true });
+    router.get(props.biUrl, { q: catalogSearch.value || undefined, zona: zone.value || undefined, empresa: company.value || undefined, desde: from.value, hasta: until.value }, { preserveState: true, preserveScroll: true });
+}
+
+function selectZone() {
+    searchCatalog();
 }
 
 function applyPeriod() {
@@ -497,7 +519,7 @@ function applyPeriod() {
     }
 
     periodError.value = '';
-    router.get(props.biUrl, { q: catalogSearch.value || undefined, desde: from.value, hasta: until.value }, { preserveState: true, preserveScroll: true });
+    router.get(props.biUrl, { q: catalogSearch.value || undefined, zona: zone.value || undefined, empresa: company.value || undefined, desde: from.value, hasta: until.value }, { preserveState: true, preserveScroll: true });
 }
 
 function recalcularVentas() {
@@ -519,7 +541,8 @@ function recalcularVentas() {
         </header>
         <nav class="bi-nav" aria-label="Secciones BI">
             <button v-for="tab in tabs" :key="tab.key" type="button" class="bi-nav-item" :class="{ active: activeTab === tab.key }" @click="selectTab(tab.key)"><span :class="tab.color">■</span>{{ tab.name }}<b v-if="tab.key === 'limites' && cantidadAlertas" class="bi-nav-badge" title="Productos con alerta">{{ cantidadAlertas }}</b></button>
-            <select v-model="zone" class="bi-zone" aria-label="Elegir zona"><option value="">— Elegir zona —</option><option>ZONA NORTE</option><option>ZONA SUR</option><option>ZONA ESTE</option><option>ZONA CENTRAL</option></select>
+            <select v-model="zone" class="bi-zone" aria-label="Elegir zona" @change="selectZone"><option value="">— Todas las zonas —</option><option v-for="zona in zonas" :key="zona" :value="zona">{{ zona }}</option></select>
+            <select v-model="company" class="bi-zone" aria-label="Elegir empresa" @change="selectZone"><option value="">— Ambas empresas —</option><option v-for="empresa in empresas" :key="empresa" :value="empresa">{{ empresa }}</option></select>
         </nav>
 <div class="bi-filters"><strong>FILTRAR POR PERÍODO</strong><input v-model="from" type="date" aria-label="Fecha inicial"><input v-model="until" type="date" aria-label="Fecha final"><button class="bi-primary" type="button" @click="activePeriod = 'Personalizado'; applyPeriod()">Aplicar</button><button class="bi-clear" type="button" @click="resetPeriod">✕ Todo</button><div class="bi-periods"><button v-for="period in periods" :key="period" type="button" :class="{ active: activePeriod === period }" @click="selectPeriod(period)">{{ period }}</button></div><button class="bi-recalculate" type="button" :disabled="recalculando" title="Recalcula hasta 31 días cerrados de ventas y premios" @click="recalcularVentas">{{ recalculando ? 'Recalculando…' : '↻ Recalcular datos' }}</button></div>
         <main class="bi-main">
@@ -605,7 +628,7 @@ function recalcularVentas() {
                         </div>
                     </aside>
                     <div class="bi-content-stack">
-                    <section class="bi-panel bi-chart-panel"><div class="bi-title"><h2>VENTAS · PREMIOS — CONSORCIO</h2><div class="bi-toggle"><button :class="{ active: activeSalesView === 'Monto' }" @click="activeSalesView = 'Monto'">Monto</button><button :class="{ active: activeSalesView === 'Tasa de premiación' }" @click="activeSalesView = 'Tasa de premiación'">Tasa de premiación</button></div></div><div class="bi-chips"><span class="blue">● Ventas</span><span class="red">● Premios</span></div><div class="bi-metric-grid"><div v-for="metric in metrics" :key="metric.name" class="bi-metric"><span :class="metric.color">● {{ metric.name }}</span><strong>{{ metric.value }}</strong><small :class="metric.color">{{ metric.change }}</small><svg v-if="metricSparklines[metric.key]" class="bi-metric-sparkline" :class="metric.color" viewBox="0 0 280 46" preserveAspectRatio="none" role="img" :aria-label="`Evolución diaria de ${metric.name.toLowerCase()} entre ${ventasPremios.desde} y ${ventasPremios.hasta}`"><polygon :points="metricSparklines[metric.key].area" fill="currentColor" opacity="0.1"/><polyline :points="metricSparklines[metric.key].line" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/><circle :cx="metricSparklines[metric.key].last.x" :cy="metricSparklines[metric.key].last.y" r="2.5" fill="currentColor"/><title>{{ metric.name }} · {{ ventasPremios.desde }} — {{ ventasPremios.hasta }}</title></svg><div v-else class="bi-metric-sparkline-empty">Sin días cerrados</div></div></div><div v-if="salesPrizeChart.length" class="bi-bars-chart real-series" :class="{ dense: salesPrizeChart.length > 15 }"><div v-for="row in salesPrizeChart" :key="row.fecha" class="bi-bar-set"><div class="bi-bars"><div class="bi-bar sales" :style="{ height: `${row.salesHeight}%` }"><span class="bi-tooltip">{{ row.salesTitle }}</span></div><div class="bi-bar prizes" :style="{ height: `${row.prizesHeight}%` }"><span class="bi-tooltip">{{ row.prizesTitle }}</span></div></div><small>{{ row.etiqueta }}</small></div></div><div v-else class="bi-empty">No hay datos para el período seleccionado.</div></section>
+                    <section class="bi-panel bi-chart-panel"><div class="bi-title"><h2>VENTAS · PREMIOS — {{ alcancePanel.toUpperCase() }}</h2><div class="bi-toggle"><button :class="{ active: activeSalesView === 'Monto' }" @click="activeSalesView = 'Monto'">Monto</button><button :class="{ active: activeSalesView === 'Tasa de premiación' }" @click="activeSalesView = 'Tasa de premiación'">Tasa de premiación</button></div></div><div class="bi-chips"><span class="blue">● Ventas</span><span class="red">● Premios</span></div><div class="bi-metric-grid"><div v-for="metric in metrics" :key="metric.name" class="bi-metric"><span :class="metric.color">● {{ metric.name }}</span><strong>{{ metric.value }}</strong><small :class="metric.color">{{ metric.change }}</small><svg v-if="metricSparklines[metric.key]" class="bi-metric-sparkline" :class="metric.color" viewBox="0 0 280 46" preserveAspectRatio="none" role="img" :aria-label="`Evolución diaria de ${metric.name.toLowerCase()} entre ${ventasPremios.desde} y ${ventasPremios.hasta}`"><polygon :points="metricSparklines[metric.key].area" fill="currentColor" opacity="0.1"/><polyline :points="metricSparklines[metric.key].line" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/><circle :cx="metricSparklines[metric.key].last.x" :cy="metricSparklines[metric.key].last.y" r="2.5" fill="currentColor"/><title>{{ metric.name }} · {{ ventasPremios.desde }} — {{ ventasPremios.hasta }}</title></svg><div v-else class="bi-metric-sparkline-empty">Sin días cerrados</div></div></div><div v-if="salesPrizeChart.length" class="bi-bars-chart real-series" :class="{ dense: salesPrizeChart.length > 15 }"><div v-for="row in salesPrizeChart" :key="row.fecha" class="bi-bar-set"><div class="bi-bars"><div class="bi-bar sales" :style="{ height: `${row.salesHeight}%` }"><span class="bi-tooltip">{{ row.salesTitle }}</span></div><div class="bi-bar prizes" :style="{ height: `${row.prizesHeight}%` }"><span class="bi-tooltip">{{ row.prizesTitle }}</span></div></div><small>{{ row.etiqueta }}</small></div></div><div v-else class="bi-empty">No hay datos para el período seleccionado.</div></section>
 <section class="bi-panel bi-chart-panel">
     <div class="bi-title"><h2>DESGLOSE POR CATEGORÍA — LOTOBET · DATOS REALES</h2><div class="bi-toggle"><button :class="{ active: activeView === 'Monto' }" @click="activeView = 'Monto'">Monto</button><button :class="{ active: activeView === 'Participación %' }" @click="activeView = 'Participación %'">Participación %</button></div></div>
     <div class="bi-category-strip"><span v-for="category in categories" :key="category.key" :class="category.color" :style="{ width: `${category.percentage}%` }"></span><span v-if="ventasPorCategoria.otros" class="other" :style="{ width: `${(ventasPorCategoria.otros / ventasPorCategoria.total) * 100}%` }"></span></div>
@@ -630,9 +653,9 @@ function recalcularVentas() {
                     </article>
                 </section>
             </template>
-            <template v-else-if="activeTab === 'entrada'"><div class="bi-heading"><h1>Control de Entrada — Consorcio</h1><p>Todas las zonas. Usa el filtro de fecha global.</p></div><div class="bi-subnav"><button v-for="view in ['Detalle diario', '🏆 Top Puntualidad', '⚠️ Top Impuntualidad']" :key="view" :class="{ active: activeEntry === view }" @click="activeEntry = view">{{ view }}</button></div><div class="bi-date-buttons"><span>Fecha:</span><button v-for="date in ['09/29', '09/28', '09/27', '09/26', '09/25']" :key="date">{{ date }}</button></div><div class="bi-kpi-grid three"><div v-for="card in [{ name: 'PUNTUALES ENTRADA', value: '270', detail: 'de 1271 terminales', color: 'blue' }, { name: 'TARDANZAS ENTRADA', value: '1,001', detail: 'llegaron tarde', color: 'red' }, { name: 'CIERRES ANTICIPADOS', value: '1,271', detail: 'salieron antes', color: 'gold' }]" :key="card.name" class="bi-panel bi-stat"><span>{{ card.name }}</span><strong :class="card.color">{{ card.value }}</strong><small>{{ card.detail }}</small></div></div><section class="bi-panel bi-table-panel"><div class="bi-title"><h2>CONTROL DE ENTRADA — CONSORCIO · 1,271 TERMINALES</h2><input v-model="search" placeholder="Buscar terminal…" aria-label="Buscar terminal"></div><div class="bi-table-scroll"><table><thead><tr><th>#</th><th>Terminal</th><th>Agencia</th><th>Empleado T1</th><th>Prog.</th><th>Login</th><th>Δ Entrada</th><th>Logout</th><th>Empleado T2</th><th>Cierre</th></tr></thead><tbody><tr v-for="(row, index) in filteredEntries" :key="row.id"><td>{{ index + 1 }}</td><td>{{ row.id }}</td><td>{{ row.name }}</td><td>EMPLEADO EJEMPLO</td><td>07:30–14:30</td><td>{{ row.login }}</td><td :class="row.delta.includes('tarde') ? 'red' : 'green'">{{ row.delta }}</td><td>{{ row.logout }}</td><td>—</td><td>21:30</td></tr><tr v-if="!filteredEntries.length"><td colspan="10" class="bi-empty">Sin resultados</td></tr></tbody></table></div></section></template>
+            <template v-else-if="activeTab === 'entrada'"><div class="bi-heading"><h1>Control de Entrada — {{ alcancePanel }}</h1><p v-if="filtroActivo">El control de entrada para la selección aún no dispone de datos de ponche en este panel.</p><p v-else>Todas las zonas. Usa el filtro de fecha global.</p></div><template v-if="!filtroActivo"><div class="bi-subnav"><button v-for="view in ['Detalle diario', '🏆 Top Puntualidad', '⚠️ Top Impuntualidad']" :key="view" :class="{ active: activeEntry === view }" @click="activeEntry = view">{{ view }}</button></div><div class="bi-date-buttons"><span>Fecha:</span><button v-for="date in ['09/29', '09/28', '09/27', '09/26', '09/25']" :key="date">{{ date }}</button></div><div class="bi-kpi-grid three"><div v-for="card in [{ name: 'PUNTUALES ENTRADA', value: '270', detail: 'de 1271 terminales', color: 'blue' }, { name: 'TARDANZAS ENTRADA', value: '1,001', detail: 'llegaron tarde', color: 'red' }, { name: 'CIERRES ANTICIPADOS', value: '1,271', detail: 'salieron antes', color: 'gold' }]" :key="card.name" class="bi-panel bi-stat"><span>{{ card.name }}</span><strong :class="card.color">{{ card.value }}</strong><small>{{ card.detail }}</small></div></div><section class="bi-panel bi-table-panel"><div class="bi-title"><h2>CONTROL DE ENTRADA — CONSORCIO · 1,271 TERMINALES</h2><input v-model="search" placeholder="Buscar terminal…" aria-label="Buscar terminal"></div><div class="bi-table-scroll"><table><thead><tr><th>#</th><th>Terminal</th><th>Agencia</th><th>Empleado T1</th><th>Prog.</th><th>Login</th><th>Δ Entrada</th><th>Logout</th><th>Empleado T2</th><th>Cierre</th></tr></thead><tbody><tr v-for="(row, index) in filteredEntries" :key="row.id"><td>{{ index + 1 }}</td><td>{{ row.id }}</td><td>{{ row.name }}</td><td>EMPLEADO EJEMPLO</td><td>07:30–14:30</td><td>{{ row.login }}</td><td :class="row.delta.includes('tarde') ? 'red' : 'green'">{{ row.delta }}</td><td>{{ row.logout }}</td><td>—</td><td>21:30</td></tr><tr v-if="!filteredEntries.length"><td colspan="10" class="bi-empty">Sin resultados</td></tr></tbody></table></div></section></template></template>
 <template v-else-if="activeTab === 'limites'">
-                <div class="bi-heading"><h1>Límite de Ventas — Consorcio</h1><p>Alertas diarias por producto · Globales y por terminal · {{ fechaLecturas }}.</p></div>
+                <div class="bi-heading"><h1>Límite de Ventas — {{ alcancePanel }}</h1><p>Alertas diarias por producto · {{ filtroActivo ? 'Terminales de la selección' : 'Globales y por terminal' }} · {{ fechaLecturas }}.</p></div>
                 <div class="bi-kpi-grid four">
                     <div class="bi-panel bi-stat"><span>LÍMITES ACTIVOS</span><strong>{{ productosVigilados }}</strong><small>Globales y por terminal</small></div>
                     <button ref="abrirTerminalesAl80Button" type="button" class="bi-panel bi-stat bi-limit-card" aria-haspopup="dialog" @click="abrirTerminalesAl80"><span>TERMINALES AL 80 %</span><strong class="gold">{{ totalTerminalesAl80 }}</strong><small>Del límite diario configurado · Ver terminales</small></button>
@@ -685,7 +708,7 @@ function recalcularVentas() {
                     <p class="bi-caption">La venta se actualiza con las capturas del día. Sin una lectura nueva por producto, se muestra “Sin lectura”.</p>
                 </section>
             </template>
-            <template v-else><div class="bi-heading"><h1>Métricas — Consorcio</h1><p>Indicadores comparativos del período seleccionado.</p></div><div class="bi-kpi-grid four"><div v-for="metric in metrics" :key="metric.name" class="bi-panel bi-stat"><span>{{ metric.name.toUpperCase() }}</span><strong :class="metric.color">{{ metric.value }}</strong><small>{{ metric.change }}</small></div></div><section class="bi-panel bi-chart-panel"><div class="bi-title"><h2>EVOLUCIÓN DE INDICADORES</h2></div><span class="bi-demo-label">Gráfico ilustrativo pendiente de datos comparativos</span><div class="bi-bars-chart"><div v-for="(height, index) in sales" :key="index" class="bi-bar-set"><div class="bi-bars"><div class="bi-bar sales" :style="{ height: `${height}%` }"></div><div class="bi-bar prizes" :style="{ height: `${prizes[index]}%` }"></div></div><small>{{ dates[index] }}</small></div></div></section></template>
+            <template v-else><div class="bi-heading"><h1>Métricas — {{ alcancePanel }}</h1><p>Indicadores comparativos del período seleccionado.</p></div><div class="bi-kpi-grid four"><div v-for="metric in metrics" :key="metric.name" class="bi-panel bi-stat"><span>{{ metric.name.toUpperCase() }}</span><strong :class="metric.color">{{ metric.value }}</strong><small>{{ metric.change }}</small></div></div><section class="bi-panel bi-chart-panel"><div class="bi-title"><h2>EVOLUCIÓN DE INDICADORES</h2></div><span v-if="!filtroActivo" class="bi-demo-label">Gráfico ilustrativo pendiente de datos comparativos</span><div v-if="!filtroActivo" class="bi-bars-chart"><div v-for="(height, index) in sales" :key="index" class="bi-bar-set"><div class="bi-bars"><div class="bi-bar sales" :style="{ height: `${height}%` }"></div><div class="bi-bar prizes" :style="{ height: `${prizes[index]}%` }"></div></div><small>{{ dates[index] }}</small></div></div></section></template>
         </main>
         <div v-if="terminalesAl80Abierto" class="bi-modal-backdrop" @click.self="cerrarTerminalesAl80">
             <section class="bi-comparison-modal" role="dialog" aria-modal="true" aria-labelledby="bi-terminales-limites-title">
@@ -697,7 +720,7 @@ function recalcularVentas() {
         </div>
         <div v-if="comparativoAbierto" class="bi-modal-backdrop" @click.self="cerrarComparativo">
             <section class="bi-comparison-modal" role="dialog" aria-modal="true" aria-labelledby="bi-comparison-title">
-                <div class="bi-comparison-header"><h2 id="bi-comparison-title">Comparativo — Consorcio · {{ indicadores.comparativoDia.hoy.fecha }}</h2><button ref="cerrarComparativoButton" type="button" aria-label="Cerrar comparativo" @click="cerrarComparativo">×</button></div>
+                <div class="bi-comparison-header"><h2 id="bi-comparison-title">Comparativo — {{ alcancePanel }} · {{ indicadores.comparativoDia.hoy.fecha }}</h2><button ref="cerrarComparativoButton" type="button" aria-label="Cerrar comparativo" @click="cerrarComparativo">×</button></div>
                 <p class="bi-comparison-note">Ventas de hoy: lectura parcial {{ indicadores.horaLectura === null ? 'pendiente' : `${String(indicadores.horaLectura).padStart(2, '0')}:00` }}. Los días anteriores usan resúmenes cerrados.</p>
                 <div class="bi-comparison-scroll"><table><thead><tr><th>Métrica</th><th>{{ shortDate(indicadores.comparativoDia.hoy.fecha) }}</th><th>{{ shortDate(indicadores.comparativoDia.ayer.fecha) }}</th><th>{{ shortDate(indicadores.comparativoDia.mesAnterior.fecha) }} (mes ant.)</th></tr></thead><tbody><tr v-for="row in comparisonRows" :key="row.key"><td>{{ row.label }}</td><td v-for="period in ['hoy', 'ayer', 'mesAnterior']" :key="period" :class="row.color" :title="indicadores.comparativoDia[period][row.key] === null ? 'Dato no disponible' : undefined">{{ row.format(indicadores.comparativoDia[period][row.key]) }}</td></tr></tbody></table></div>
                 <p class="bi-comparison-note">— indica que aún no hay datos de esa métrica. Las agencias activas de fechas anteriores no tienen histórico disponible.</p>

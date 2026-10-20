@@ -31,6 +31,11 @@
         .type .details { display: block; margin-top: 7px; color: #5b7690; font-size: 13px; }
         .type .average { margin-top: 18px; padding-top: 18px; border-top: 1px solid #dce8ee; } .type .average b { display: block; margin: 7px 0; font-size: 18px; }
         .below { color: #d7263d; } .above { color: #159447; }
+        .tv-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 18px; }
+        .tv-filter-group { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+        .tv-filter-group strong { color: #5b7690; margin-right: 4px; }
+        .tv-filter-group a { display: inline-block; margin: 0; padding: 8px 13px; border: 1px solid #b9d9e5; border-radius: 18px; background: #fff; color: #275973; text-decoration: none; font-weight: bold; }
+        .tv-filter-group a.active { background: #008db6; border-color: #008db6; color: #fff; }
         @media (max-width: 1100px) {
             body { padding: 10px; }
             h1 { margin-bottom: 10px; font-size: 21px; }
@@ -58,6 +63,20 @@
 </head>
 <body>
     <h1>BI para TV</h1><a href="{{ route('bi.index') }}">BI completo</a><a href="{{ route('dashboard.index') }}">Dashboard</a>
+    <nav class="tv-filters" aria-label="Filtrar ventas por hora">
+        <div class="tv-filter-group"><a href="{{ route('bi.tv') }}" class="{{ !$filtrado ? 'active' : '' }}" aria-current="{{ !$filtrado ? 'page' : 'false' }}">Todo</a></div>
+        <div class="tv-filter-group"><strong>Empresa</strong>
+            @foreach($empresas as $empresa)
+                <a href="{{ route('bi.tv', array_filter(['empresa' => $empresa, 'zona' => $zonaSeleccionada])) }}" class="{{ $empresaSeleccionada === $empresa ? 'active' : '' }}" aria-current="{{ $empresaSeleccionada === $empresa ? 'page' : 'false' }}">{{ $empresa === 'Grupo Joselito' ? 'Joselito' : $empresa }}</a>
+            @endforeach
+        </div>
+        <div class="tv-filter-group"><strong>Zona</strong>
+            <a href="{{ route('bi.tv', array_filter(['empresa' => $empresaSeleccionada])) }}" class="{{ $zonaSeleccionada === '' ? 'active' : '' }}" aria-current="{{ $zonaSeleccionada === '' ? 'page' : 'false' }}">Todas</a>
+            @foreach($zonas as $zona)
+                <a href="{{ route('bi.tv', array_filter(['empresa' => $empresaSeleccionada, 'zona' => $zona])) }}" class="{{ $zonaSeleccionada === $zona ? 'active' : '' }}" aria-current="{{ $zonaSeleccionada === $zona ? 'page' : 'false' }}">{{ ucfirst(mb_strtolower($zona)) }}</a>
+            @endforeach
+        </div>
+    </nav>
     <section>
         <h2>DÍA EN CURSO <span class="tag">PARCIAL</span><small>Lecturas horarias de LotoBet · {{ $fecha }} · {{ $lecturas->count() }} lecturas hoy</small></h2>
         <table class="layout"><tr>
@@ -65,7 +84,7 @@
                 <div class="metric"><small>VENTAS ACUMULADAS</small><strong>{{ $ultima ? 'DOP '.number_format($total, 0) : '—' }}</strong><small>Todas las categorías disponibles</small></div>
                 <div class="metric"><small>PROMEDIO POR HORA</small><strong>{{ $ultima ? 'DOP '.number_format($total / ($ultima->hora - 5), 0) : '—' }}</strong><small>{{ $ultima ? 'Desde las 06:00 · '.($ultima->hora - 5).' horas' : 'Esperando captura' }}</small>
                     @php $metaDiaria = (float) ($promedios['tradicional'] ?? 0) + (float) ($promedios['no_tradicional'] ?? 0); @endphp
-                    @if($ultima && $metaDiaria > 0)
+                    @if(!$filtrado && $ultima && $metaDiaria > 0)
                         <div class="divider"></div><small>META DIARIA</small><strong class="small-value">DOP {{ number_format($metaDiaria, 0) }}</strong>
                         @php $avanceMeta = min(100, max(0, (($ultima->tradicional_acumulado + $ultima->no_tradicional_acumulado) / $metaDiaria) * 100)); @endphp
                         <span class="ring" style="--progress: {{ $avanceMeta }}%;" role="img" aria-label="Meta diaria alcanzada: {{ number_format($avanceMeta, 0) }}%"><b>{{ number_format($avanceMeta, 0) }}%</b></span>
@@ -107,13 +126,13 @@
                     <td><div class="type {{ $tipo === 'no_tradicional' ? 'pink' : '' }}">
                         <h3>{{ $datos[0] }} <span>{{ $total > 0 ? number_format($monto / $total * 100, 1) : '0.0' }}% del total</span></h3>
                         <strong>DOP {{ number_format($monto, 0) }}</strong><span class="details">{{ number_format($agencias) }} agencias · Promedio: DOP {{ number_format($agencias > 0 ? $monto / $agencias : 0, 0) }}</span>
-                        <div class="average"><small>PROMEDIO DE VENTA DIARIO · ÚLTIMOS 3 MESES CALCULADOS</small><b>{{ $promedio !== null ? 'DOP '.number_format($promedio, 0) : 'Sin calcular' }}</b>
+                        @if(!$filtrado)<div class="average"><small>PROMEDIO DE VENTA DIARIO · ÚLTIMOS 3 MESES CALCULADOS</small><b>{{ $promedio !== null ? 'DOP '.number_format($promedio, 0) : 'Sin calcular' }}</b>
                             @if($promedio > 0)
                                 @php $avanceTipo = min(100, max(0, $monto / $promedio * 100)); @endphp
                                 <span class="{{ $monto >= $promedio ? 'above' : 'below' }}">{{ $monto >= $promedio ? 'Meta diaria superada por DOP '.number_format($monto - $promedio, 0) : 'Faltan DOP '.number_format($promedio - $monto, 0).' para llegar al 100%' }}</span><br>
                                 <span class="ring" style="--progress: {{ $avanceTipo }}%;" role="img" aria-label="Promedio diario alcanzado: {{ number_format($avanceTipo, 0) }}%"><b>{{ number_format($avanceTipo, 0) }}%</b></span>
                             @endif
-                        </div>
+                        </div>@endif
                     </div></td>
                 @endforeach
             </tr></table>

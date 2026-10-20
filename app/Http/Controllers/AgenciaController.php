@@ -70,6 +70,7 @@ class AgenciaController extends Controller
             'horario_am' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'horario_pm' => ['nullable', 'string', 'max:35', 'regex:/^([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)\s*\/\s*([1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i'],
             'ciudad' => 'nullable|string|max:55',
+            'zona' => 'nullable|string|max:100',
             'ruta' => 'nullable|string|max:55',
             'empresa' => 'nullable|string|max:60',
             'operador' => ['nullable', 'string', 'max:55', Rule::in($operadores)],
@@ -140,6 +141,7 @@ class AgenciaController extends Controller
             'sistema' => 'nullable|string|max:255',
             'empresa' => 'nullable|string|max:60',
             'ciudad' => 'nullable|string|max:255',
+            'zona' => 'nullable|string|max:100',
             'ruta' => 'nullable|string|max:255',
             'estatus' => 'required|integer|in:0,1',
             'aplica_incentivo' => 'required|boolean',
@@ -303,6 +305,7 @@ class AgenciaController extends Controller
                         ->orWhere('sistema', 'like', "%{$search}%")
                         ->orWhere('empresa', 'like', "%{$search}%")
                         ->orWhere('ciudad', 'like', "%{$search}%")
+                        ->orWhere('zona', 'like', "%{$search}%")
                         ->orWhere('ruta', 'like', "%{$search}%")
                         ->orWhere('operador', 'like', "%{$search}%")
                         ->orWhere('coordinador', 'like', "%{$search}%")
@@ -1966,12 +1969,12 @@ class AgenciaController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,xls,csv|max:2048',
+            'file' => 'required|mimes:xlsx,xls,csv,txt|max:2048',
         ]);
 
         try {
             $import = new AgenciasImport;
-            Excel::import($import, $request->file('file'));
+            Excel::import($import, $request->file('file'), null, $request->file('file')->getClientOriginalExtension() === 'txt' ? \Maatwebsite\Excel\Excel::CSV : null);
 
             $resultado = [
                 'importadas' => $import->importadas,
@@ -1999,12 +2002,12 @@ class AgenciaController extends Controller
     public function massUpdate(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,xls,csv|max:4096',
+            'file' => 'required|mimes:xlsx,xls,csv,txt|max:4096',
         ]);
 
         try {
             $import = new AgenciasActualizacionMasivaImport;
-            Excel::import($import, $request->file('file'));
+            Excel::import($import, $request->file('file'), null, $request->file('file')->getClientOriginalExtension() === 'txt' ? \Maatwebsite\Excel\Excel::CSV : null);
 
             $rows = $import->rows ?? collect();
             if ($rows->isEmpty()) {
@@ -2055,6 +2058,7 @@ class AgenciaController extends Controller
 
                 if (
                     array_key_exists('terminal', $updates)
+                    && (string) $updates['terminal'] !== (string) $agencia->terminal
                     && $this->terminalExisteEnOtraAgencia((string) $updates['terminal'], (int) $agencia->id)
                 ) {
                     $filasInvalidas++;
@@ -2099,12 +2103,12 @@ class AgenciaController extends Controller
     public function massUpdatePreview(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,xls,csv|max:4096',
+            'file' => 'required|mimes:xlsx,xls,csv,txt|max:4096',
         ]);
 
         try {
             $import = new AgenciasActualizacionMasivaImport;
-            Excel::import($import, $request->file('file'));
+            Excel::import($import, $request->file('file'), null, $request->file('file')->getClientOriginalExtension() === 'txt' ? \Maatwebsite\Excel\Excel::CSV : null);
 
             $rows = $import->rows ?? collect();
             if ($rows->isEmpty()) {
@@ -2188,6 +2192,7 @@ class AgenciaController extends Controller
             'sistema' => ['sistema'],
             'empresa' => ['empresa'],
             'ciudad' => ['ciudad'],
+            'zona' => ['zona'],
             'ruta' => ['ruta'],
             'operador' => ['operador'],
             'coordinador' => ['coordinador'],
@@ -2290,6 +2295,7 @@ class AgenciaController extends Controller
             'Sistema',
             'Empresa',
             'Ciudad',
+            'Zona',
             'Ruta',
             'Operador',
             'Coordinador',
@@ -2299,7 +2305,7 @@ class AgenciaController extends Controller
 
         $data = [
             $headers,
-            ['20907', '5546', '7:00 AM / 2:00 PM', '2:00 PM / 9:00 PM', 'Agencia Ejemplo', 'Lotobet', 'Grupo A', 'San Pedro', 'Ruta 0501', 'Jose Ruby', 'Aramis', '1', 'SI'],
+            ['20907', '5546', '7:00 AM / 2:00 PM', '2:00 PM / 9:00 PM', 'Agencia Ejemplo', 'Lotobet', 'Grupo A', 'San Pedro', 'Zona Este', 'Ruta 0501', 'Jose Ruby', 'Aramis', '1', 'SI'],
         ];
 
         $filename = 'plantilla_agencias.xlsx';
@@ -2339,6 +2345,7 @@ class AgenciaController extends Controller
             'Nombre Agencia',
             'Empresa',
             'Ciudad',
+            'Zona',
             'Ruta',
             'Operador',
             'Coordinador',

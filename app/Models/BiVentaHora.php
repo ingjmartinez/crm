@@ -28,6 +28,7 @@ class BiVentaHora extends Model
         'quiniela_loteka_acumulado',
         'mega_chance_acumulado',
         'productos',
+        'productos_terminales',
     ];
 
     protected function fecha(): Attribute
@@ -55,6 +56,7 @@ class BiVentaHora extends Model
             'quiniela_loteka_acumulado' => 'decimal:2',
             'mega_chance_acumulado' => 'decimal:2',
             'productos' => 'array',
+            'productos_terminales' => 'array',
         ];
     }
 }

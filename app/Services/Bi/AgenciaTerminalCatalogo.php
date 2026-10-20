@@ -8,10 +8,26 @@ use Illuminate\Database\Eloquent\Builder;
 
 class AgenciaTerminalCatalogo
 {
-    /** @return array<int, array{terminal: string, nombre: string}> */
-    public function paraAlertas(): array
+    /** @return array<int, string> */
+    public function zonas(): array
     {
-        return Agencia::lotobet()->whereNotNull('terminal')->where('terminal', '<>', '')
+        return Agencia::query()->whereNotNull('zona')->where('zona', '<>', '')
+            ->distinct()->orderBy('zona')->pluck('zona')->all();
+    }
+
+    /** @return array<int, string> */
+    public function empresas(): array
+    {
+        return Agencia::query()->whereNotNull('empresa')->where('empresa', '<>', '')
+            ->distinct()->orderBy('empresa')->pluck('empresa')->all();
+    }
+
+    /** @return array<int, array{terminal: string, nombre: string}> */
+    public function paraAlertas(?string $zona = null, ?string $empresa = null): array
+    {
+        return Agencia::lotobet()->when($zona, fn (Builder $query): Builder => $query->where('zona', $zona))
+            ->when($empresa, fn (Builder $query): Builder => $query->where('empresa', $empresa))
+            ->whereNotNull('terminal')->where('terminal', '<>', '')
             ->orderBy('id')->get(['terminal', 'nombre_agencia', 'agencia'])
             ->map(fn (Agencia $agencia): array => [
                 'terminal' => ltrim(trim((string) $agencia->terminal), '0') ?: '0',
@@ -26,12 +42,20 @@ class AgenciaTerminalCatalogo
         return $fecha ? substr((string) $fecha, 0, 10) : null;
     }
 
-    public function paginar(?string $busqueda): LengthAwarePaginator
+    public function paginar(?string $busqueda, ?string $zona = null, ?string $empresa = null): LengthAwarePaginator
     {
         $query = Agencia::query()
-            ->select(['id', 'terminal', 'agencia', 'nombre_agencia', 'empresa', 'ciudad', 'estatus'])
+            ->select(['id', 'terminal', 'agencia', 'nombre_agencia', 'empresa', 'ciudad', 'zona', 'estatus'])
             ->whereNotNull('terminal')
             ->where('terminal', '<>', '');
+
+        if ($zona !== null && $zona !== '') {
+            $query->where('zona', $zona);
+        }
+
+        if ($empresa !== null && $empresa !== '') {
+            $query->where('empresa', $empresa);
+        }
 
         if ($busqueda !== null && $busqueda !== '') {
             $query->where(function (Builder $agencias) use ($busqueda): void {

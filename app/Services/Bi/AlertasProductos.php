@@ -11,11 +11,12 @@ class AlertasProductos
     public function __construct(private ClasificarVentaBi $clasificador) {}
 
     /** @return array<int, array<string, mixed>> */
-    public function resumir(?BiVentaHora $lectura, ?BiVentaSnapshot $snapshot = null): array
+    public function resumir(?BiVentaHora $lectura, ?BiVentaSnapshot $snapshot = null, ?array $terminales = null): array
     {
         $productosTerminales = $snapshot?->productos_terminales;
 
         return BiLimiteProducto::query()->with('producto')->orderBy('producto_id')->orderBy('terminal')->get()
+            ->filter(fn (BiLimiteProducto $limite): bool => $terminales === null || in_array((string) $limite->terminal, $terminales, true))
             ->map(function (BiLimiteProducto $limite) use ($lectura, $productosTerminales): array {
                 $terminal = (string) $limite->terminal;
                 $productos = $terminal === '' ? $lectura?->productos : ($productosTerminales !== null ? ($productosTerminales[$terminal] ?? []) : null);

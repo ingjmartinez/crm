@@ -124,6 +124,7 @@
                                                 <th style="min-width: 80px;">Sistema</th>
                                                 <th style="min-width: 110px;">Empresa</th>
                                                 <th style="min-width: 100px;">Ciudad</th>
+                                                <th style="min-width: 100px;">Zona</th>
                                                 <th style="min-width: 100px;">Ruta</th>
                                                 <th style="min-width: 100px;">Operador</th>
                                                 <th style="min-width: 100px;">Coordinador</th>
@@ -251,14 +252,14 @@
                 <form action="{{ route('agencias.import') }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <div class="modal-header">
-                        <h5 class="modal-title" id="importModalLabel">Importar Agencias desde Excel</h5>
+                        <h5 class="modal-title" id="importModalLabel">Importar Agencias</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label for="file" class="form-label">Seleccione el archivo Excel</label>
-                            <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls,.csv" required>
-                            <div class="form-text">Formatos aceptados: .xlsx, .xls, .csv</div>
+                            <label for="file" class="form-label">Seleccione el archivo</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls,.csv,.txt" required>
+                            <div class="form-text">Formatos aceptados: .xlsx, .xls, .csv, .txt (delimitado).</div>
                         </div>
                         <div class="alert alert-info mb-0">
                             <strong class="d-block mb-2">Formato del archivo:</strong>
@@ -271,11 +272,12 @@
                                 <li>Columna F: Sistema</li>
                                 <li>Columna G: Empresa</li>
                                 <li>Columna H: Ciudad</li>
-                                <li>Columna I: Ruta</li>
-                                <li>Columna J: Operador</li>
-                                <li>Columna K: Coordinador</li>
-                                <li>Columna L: Estatus (1 Activo / 0 Inactivo)</li>
-                                <li>Columna M: Aplica Incentivo (SI/NO)</li>
+                                <li>Columna I: Zona</li>
+                                <li>Columna J: Ruta</li>
+                                <li>Columna K: Operador</li>
+                                <li>Columna L: Coordinador</li>
+                                <li>Columna M: Estatus (1 Activo / 0 Inactivo)</li>
+                                <li>Columna N: Aplica Incentivo (SI/NO)</li>
                                 <li>Si la terminal ya existe, la fila se omite. Para modificarla use Actualizar masiva.</li>
                             </ul>
                         </div>
@@ -306,9 +308,9 @@
                     </div>
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label for="mass_update_file" class="form-label">Seleccione el archivo Excel</label>
-                            <input type="file" class="form-control" id="mass_update_file" name="file" accept=".xlsx,.xls,.csv" required>
-                            <div class="form-text">Formatos aceptados: .xlsx, .xls, .csv</div>
+                            <label for="mass_update_file" class="form-label">Seleccione el archivo</label>
+                            <input type="file" class="form-control" id="mass_update_file" name="file" accept=".xlsx,.xls,.csv,.txt" required>
+                            <div class="form-text">Formatos aceptados: .xlsx, .xls, .csv, .txt (delimitado).</div>
                             <div class="d-flex flex-wrap gap-2 mt-2">
                                 <button type="button" class="btn btn-outline-info btn-sm" id="btnPreviewTerminalesMasivo">
                                     <i class="ri-search-eye-line me-1"></i>Reconocer terminales
@@ -333,7 +335,7 @@
                                 <li>Si una celda viene vac&iacute;a, ese campo no se modifica.</li>
                                 <li>Puede actualizar 1, 2 o m&aacute;s campos en el mismo archivo.</li>
                             </ul>
-                            <small class="text-muted">Campos soportados: Agencia, Terminal, Horario AM, Horario PM, Nombre Agencia, Sistema, Empresa, Ciudad, Ruta, Operador, Coordinador, Estatus, Aplica Incentivo.</small>
+                            <small class="text-muted">Campos soportados: Agencia, Terminal, Horario AM, Horario PM, Nombre Agencia, Sistema, Empresa, Ciudad, Zona, Ruta, Operador, Coordinador, Estatus, Aplica Incentivo.</small>
                         </div>
                     </div>
                     <div class="modal-footer d-flex gap-2">
@@ -1578,8 +1580,9 @@
         var responsiveColumns = [
             { targets: 3, visible: false },  // Horario AM (oculta para ganar espacio)
             { targets: 4, visible: false },  // Horario PM
-            { targets: 10, visible: false },  // Operador
-            { targets: 11, visible: false }  // Coordinador
+            { targets: 6, visible: false },  // Sistema
+            { targets: 11, visible: false }, // Operador
+            { targets: 12, visible: false }  // Coordinador
         ];
 
         // En movil, ocultar mas columnas
@@ -1588,9 +1591,9 @@
                 { targets: 3, visible: false },  // Horario AM
                 { targets: 4, visible: false },  // Horario PM
                 { targets: 6, visible: false },  // Sistema
-                { targets: 9, visible: false },  // Ruta
-                { targets: 10, visible: false },  // Operador
-                { targets: 11, visible: false }  // Coordinador
+                { targets: 10, visible: false }, // Ruta
+                { targets: 11, visible: false }, // Operador
+                { targets: 12, visible: false }  // Coordinador
             ];
         }
 
@@ -1632,6 +1635,7 @@
                 { data: 'sistema', name: 'sistema', defaultContent: '-' },
                 { data: 'empresa', name: 'empresa', defaultContent: '-' },
                 { data: 'ciudad', name: 'ciudad', defaultContent: '-' },
+                { data: 'zona', name: 'zona', defaultContent: '-' },
                 { data: 'ruta', name: 'ruta', defaultContent: '-' },
                 { data: 'operador', name: 'operador', defaultContent: '-' },
                 { data: 'coordinador', name: 'coordinador', defaultContent: '-' },

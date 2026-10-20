@@ -142,6 +142,14 @@
                                             @enderror
                                         </div>
 
+                                        <div class="col-12 col-md-6 mb-3">
+                                            <label for="zona" class="form-label">Zona</label>
+                                            <input type="text" class="form-control @error('zona') is-invalid @enderror" id="zona" name="zona" maxlength="100" value="{{ old('zona') }}">
+                                            @error('zona')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
                                         <div class="col-12 col-12 col-md-6 mb-3">
                                             <label for="ruta" class="form-label">Ruta</label>
                                             <input type="text" class="form-control @error('ruta') is-invalid @enderror" 

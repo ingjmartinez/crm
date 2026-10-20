@@ -33,6 +33,8 @@ class BiModuleTest extends TestCase
             $table->string('empresa')->nullable();
             $table->string('sistema')->nullable();
             $table->string('ciudad')->nullable();
+            $table->string('zona')->nullable();
+            $table->string('ruta')->nullable();
             $table->integer('estatus')->default(1);
             $table->timestamps();
         });
@@ -47,6 +49,7 @@ class BiModuleTest extends TestCase
         Schema::create('vt_usuarios_bet', function (Blueprint $table): void {
             $table->id();
             $table->string('producto_id');
+            $table->string('agencia_id')->nullable();
             $table->string('tipo')->nullable();
             $table->decimal('monto', 14, 2);
             $table->dateTime('fecha');
@@ -55,6 +58,7 @@ class BiModuleTest extends TestCase
         Schema::create('premios_bet', function (Blueprint $table): void {
             $table->id('premio_id');
             $table->decimal('monto', 14, 2);
+            $table->string('agencia_id')->nullable();
             $table->date('fecha');
         });
 
@@ -125,6 +129,7 @@ class BiModuleTest extends TestCase
         });
         (require database_path('migrations/2026_10_01_125650_add_terminal_scope_to_bi_limits.php'))->up();
         (require database_path('migrations/2026_10_03_130148_create_bi_venta_snapshots_table.php'))->up();
+        (require database_path('migrations/2026_10_20_170729_add_productos_terminales_to_bi_venta_horas_table.php'))->up();
     }
 
     public function test_bi_route_is_protected_and_listed_in_dashboard_hub(): void
@@ -217,6 +222,34 @@ class BiModuleTest extends TestCase
             ->assertDontSee('style="--progress: 50%;"', false);
     }
 
+    public function test_bi_tv_buttons_filter_hourly_sales_by_company_and_zone(): void
+    {
+        Agencia::query()->create(['terminal' => '101', 'empresa' => 'Grupo Joselito', 'zona' => 'BONAO', 'ruta' => 'Ruta A']);
+        Agencia::query()->create(['terminal' => '202', 'empresa' => 'Negosur', 'zona' => 'BONAO', 'ruta' => 'Ruta B']);
+        Agencia::query()->create(['terminal' => '303', 'empresa' => 'Negosur', 'zona' => 'ESTE', 'ruta' => 'Ruta C']);
+
+        foreach ([today(), today()->subDays(7)] as $fecha) {
+            BiVentaHora::factory()->create([
+                'fecha' => $fecha->toDateString(), 'hora' => 10,
+                'tradicional_acumulado' => 600,
+                'productos_terminales' => ['101' => ['43' => 100], '202' => ['43' => 200], '303' => ['43' => 300]],
+            ]);
+        }
+
+        $this->withoutMiddleware()->get(route('bi.tv'))
+            ->assertOk()->assertSee('DOP 600')->assertSee('Joselito')->assertSee('Bonao');
+
+        $this->get(route('bi.tv', ['empresa' => 'Negosur']))
+            ->assertOk()->assertSee('DOP 500')->assertSee('aria-current="page">Negosur', false);
+
+        $this->get(route('bi.tv', ['empresa' => 'Negosur', 'zona' => 'BONAO']))
+            ->assertOk()->assertSee('DOP 200')->assertSee('aria-current="page">Bonao', false)
+            ->assertDontSee('DOP 600');
+
+        $this->get(route('bi.tv', ['zona' => 'ESTE']))
+            ->assertOk()->assertSee('DOP 300');
+    }
+
     public function test_bi_controller_renders_its_inertia_page(): void
     {
         $this->assertSame('bi', app(\App\Http\Middleware\HandleBiInertiaRequests::class)->rootView(request()));
@@ -280,7 +313,7 @@ class BiModuleTest extends TestCase
             ->assertSee('"hora":12', false);
 
         $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'bi_venta_horas') && str_contains($sql, '"fecha" = ?') && str_contains($sql, 'order by "hora" asc')));
-        $this->assertFalse(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'bi_venta_horas') && str_contains($sql, 'order by "hora" asc') && (str_contains($sql, 'rutas') || str_contains($sql, 'productos_terminales'))));
+        $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'bi_venta_horas') && str_contains($sql, 'order by "hora" asc') && str_contains($sql, 'productos_terminales')));
     }
 
     public function test_product_list_offers_category_totals_alongside_individual_products(): void
@@ -332,8 +365,8 @@ class BiModuleTest extends TestCase
 
     public function test_bi_reads_terminals_from_agencias_and_filters_on_the_server(): void
     {
-        Agencia::query()->create(['terminal' => '50091', 'agencia' => 'A-01', 'nombre_agencia' => 'Agencia Norte', 'empresa' => 'Grupo Joselito', 'ciudad' => 'Santiago', 'estatus' => 1]);
-        Agencia::query()->create(['terminal' => '5719', 'agencia' => 'A-02', 'nombre_agencia' => 'Agencia Sur', 'empresa' => 'Grupo Joselito', 'ciudad' => 'Santo Domingo', 'estatus' => 0]);
+        Agencia::query()->create(['terminal' => '50091', 'agencia' => 'A-01', 'nombre_agencia' => 'Agencia Norte', 'empresa' => 'Grupo Joselito', 'ciudad' => 'Santiago', 'zona' => 'ZONA NORTE', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '5719', 'agencia' => 'A-02', 'nombre_agencia' => 'Agencia Sur', 'empresa' => 'Negosur', 'ciudad' => 'Santo Domingo', 'zona' => 'ZONA SUR', 'estatus' => 0]);
         Agencia::query()->create(['terminal' => null, 'agencia' => 'A-03', 'nombre_agencia' => 'Sin terminal']);
 
         $this->withoutMiddleware()
@@ -348,7 +381,85 @@ class BiModuleTest extends TestCase
 
         $this->withHeader('X-Inertia', 'true')
             ->get(route('bi.index'))
-            ->assertJsonPath('props.terminales.total', 2);
+            ->assertJsonPath('props.terminales.total', 2)
+            ->assertJsonPath('props.zonas', ['ZONA NORTE', 'ZONA SUR'])
+            ->assertJsonPath('props.empresas', ['Grupo Joselito', 'Negosur']);
+
+        $this->get(route('bi.index', ['zona' => 'ZONA SUR']))
+            ->assertJsonPath('props.zonaSeleccionada', 'ZONA SUR')
+            ->assertJsonPath('props.terminales.total', 1)
+            ->assertJsonPath('props.terminales.data.0.terminal', '5719');
+
+        $this->get(route('bi.index', ['empresa' => 'Negosur']))
+            ->assertJsonPath('props.empresaSeleccionada', 'Negosur')
+            ->assertJsonPath('props.terminales.total', 1)
+            ->assertJsonPath('props.terminales.data.0.terminal', '5719');
+
+        $this->get(route('bi.index', ['empresa' => 'Negosur', 'zona' => 'ZONA NORTE']))
+            ->assertJsonPath('props.terminales.total', 0);
+    }
+
+    public function test_zone_filter_recalculates_sales_prizes_and_hourly_cards(): void
+    {
+        Agencia::query()->create(['terminal' => '50091', 'empresa' => 'Grupo Joselito', 'zona' => 'ZONA NORTE', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '5719', 'empresa' => 'Negosur', 'zona' => 'ZONA SUR', 'estatus' => 1]);
+        $ayer = today()->subDay()->toDateString();
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '50091', 'producto_id' => '43', 'tipo' => 'Tradicional', 'monto' => 100, 'fecha' => $ayer],
+            ['agencia_id' => '5719', 'producto_id' => '43', 'tipo' => 'Tradicional', 'monto' => 300, 'fecha' => $ayer],
+        ]);
+        DB::table('premios_bet')->insert([
+            ['agencia_id' => '50091', 'monto' => 20, 'fecha' => $ayer],
+            ['agencia_id' => '5719', 'monto' => 90, 'fecha' => $ayer],
+        ]);
+        BiVentaHora::factory()->create([
+            'fecha' => today()->toDateString(), 'hora' => 10,
+            'productos_terminales' => ['50091' => ['43' => 50], '5719' => ['43' => 200]],
+        ]);
+
+        $this->withoutMiddleware()->withHeader('X-Inertia', 'true')
+            ->get(route('bi.index', ['zona' => 'ZONA NORTE', 'desde' => $ayer, 'hasta' => $ayer]))
+            ->assertOk()
+            ->assertJsonPath('props.ventasPorCategoria.total', 100)
+            ->assertJsonPath('props.ventasPremios.premios', 20)
+            ->assertJsonPath('props.lecturasPorHora.0.total', 50)
+            ->assertJsonPath('props.indicadores.ventasHoy', 50);
+
+        $this->get(route('bi.index', ['empresa' => 'Negosur', 'desde' => $ayer, 'hasta' => $ayer]))
+            ->assertOk()
+            ->assertJsonPath('props.ventasPorCategoria.total', 300)
+            ->assertJsonPath('props.ventasPremios.premios', 90)
+            ->assertJsonPath('props.lecturasPorHora.0.total', 200)
+            ->assertJsonPath('props.indicadores.ventasHoy', 200);
+
+        $this->get(route('bi.index', ['empresa' => 'Negosur', 'zona' => 'ZONA NORTE', 'desde' => $ayer, 'hasta' => $ayer]))
+            ->assertJsonPath('props.ventasPorCategoria.total', 0)
+            ->assertJsonPath('props.lecturasPorHora.0.total', 0);
+    }
+
+    public function test_company_and_zone_filters_apply_together_to_hourly_sales_and_previous_week(): void
+    {
+        Agencia::query()->create(['terminal' => '101', 'empresa' => 'Grupo Joselito', 'zona' => 'NORTE', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '202', 'empresa' => 'Negosur', 'zona' => 'NORTE', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '303', 'empresa' => 'Negosur', 'zona' => 'SUR', 'estatus' => 1]);
+
+        foreach ([today(), today()->subDays(7)] as $fecha) {
+            BiVentaHora::factory()->create([
+                'fecha' => $fecha->toDateString(),
+                'hora' => 10,
+                'productos_terminales' => ['101' => ['43' => 100], '202' => ['43' => 200], '303' => ['43' => 300]],
+            ]);
+        }
+
+        $this->withoutMiddleware()->withHeader('X-Inertia', 'true')
+            ->get(route('bi.index', ['empresa' => 'Negosur', 'zona' => 'NORTE']))
+            ->assertOk()
+            ->assertJsonPath('props.lecturasPorHora.0.total', 200)
+            ->assertJsonPath('props.lecturasSemanaAnterior.0.total', 200)
+            ->assertJsonPath('props.indicadores.ventasHoy', 200);
+
+        $this->get(route('bi.index', ['empresa' => 'Negosur']))
+            ->assertJsonPath('props.lecturasPorHora.0.total', 500);
     }
 
     public function test_bi_exposes_hourly_sales_snapshots_for_today(): void

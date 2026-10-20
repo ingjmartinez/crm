@@ -13,6 +13,7 @@ use App\Models\VentaOnlinePromedioHistorico;
 use App\Services\Bi\AgenciaTerminalCatalogo;
 use App\Services\Bi\AlertasProductos;
 use App\Services\Bi\IndicadoresBi;
+use App\Services\Bi\ResumenZonaBi;
 use App\Services\Bi\ResumirPremiosDia;
 use App\Services\Bi\ResumirVentasDia;
 use App\Services\Bi\VentasBetPorCategoria;
@@ -25,9 +26,11 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(IndexAgenciaTerminalRequest $request, AgenciaTerminalCatalogo $catalogo, VentasBetPorCategoria $ventasBet, VentasPremiosPeriodo $ventasPremios, IndicadoresBi $indicadores, AlertasProductos $alertasProductos): Response
+    public function index(IndexAgenciaTerminalRequest $request, AgenciaTerminalCatalogo $catalogo, VentasBetPorCategoria $ventasBet, VentasPremiosPeriodo $ventasPremios, IndicadoresBi $indicadores, AlertasProductos $alertasProductos, ResumenZonaBi $resumenZona): Response
     {
         $busqueda = trim((string) $request->validated('q', ''));
+        $zona = trim((string) $request->validated('zona', ''));
+        $empresa = trim((string) $request->validated('empresa', ''));
         $rangoDisponible = $ventasBet->rangoDisponible();
         $hasta = CarbonImmutable::parse($request->validated('hasta') ?: ($rangoDisponible['hasta'] ?? null) ?: today()->toDateString());
         $desde = CarbonImmutable::parse($request->validated('desde') ?: $hasta->subDays(4)->toDateString());
@@ -35,7 +38,7 @@ class DashboardController extends Controller
             ->where('fecha', today()->toDateString())
             ->whereBetween('hora', [6, 22])
             ->orderBy('hora')
-            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'quiniela_loteka_acumulado', 'mega_chance_acumulado', 'capturado_en', 'terminales_evaluadas', 'terminales_con_venta', 'terminales_categoria', 'productos']);
+            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'quiniela_loteka_acumulado', 'mega_chance_acumulado', 'capturado_en', 'terminales_evaluadas', 'terminales_con_venta', 'terminales_categoria', 'productos', 'productos_terminales']);
         $snapshot = $lecturas->isNotEmpty()
             ? BiVentaSnapshot::query()->where('fecha', today()->toDateString())->first(['hora', 'rutas', 'productos_terminales'])
             : null;
@@ -44,7 +47,8 @@ class DashboardController extends Controller
             ->where('fecha', $diaSemanaAnterior->toDateString())
             ->whereBetween('hora', [6, 22])
             ->orderBy('hora')
-            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado']);
+            ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'productos_terminales', 'capturado_en']);
+        $datosZona = $zona !== '' || $empresa !== '' ? $resumenZona->resumir($zona, $empresa, $desde, $hasta, $lecturas) : null;
 
         return Inertia::render('Bi/Dashboard', [
             'modulo' => 'BI',
@@ -55,13 +59,17 @@ class DashboardController extends Controller
                 'producto_id' => $id,
                 'descripcion' => $nombre,
             ])->values()->all(),
-            'terminalesLimites' => fn () => $catalogo->paraAlertas(),
-            'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last(), $snapshot),
+            'terminalesLimites' => fn () => $catalogo->paraAlertas($zona, $empresa),
+            'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last(), $snapshot, $datosZona['terminales'] ?? null),
             'menuUrl' => route('dashboard.index'),
             'biUrl' => route('bi.index'),
             'recalcularUrl' => route('bi.recalcular'),
             'mensajeRecalculo' => session('biRecalculo'),
-            'terminales' => fn () => $catalogo->paginar($busqueda),
+            'terminales' => fn () => $catalogo->paginar($busqueda, $zona, $empresa),
+            'zonas' => fn () => $catalogo->zonas(),
+            'zonaSeleccionada' => $zona,
+            'empresas' => fn () => $catalogo->empresas(),
+            'empresaSeleccionada' => $empresa,
             'busquedaTerminal' => $busqueda,
             'catalogoActualizado' => fn () => $catalogo->ultimaActualizacion(),
             'periodoVentas' => [
@@ -70,11 +78,11 @@ class DashboardController extends Controller
                 'primeraFecha' => $rangoDisponible['desde'],
                 'ultimaFecha' => $rangoDisponible['hasta'],
             ],
-            'ventasPorCategoria' => fn () => $ventasBet->resumir($desde, $hasta),
-            'ventasPremios' => fn () => $ventasPremios->resumir($desde, $hasta),
-            'indicadores' => fn () => $indicadores->resumir($desde, $hasta, $lecturas->last()),
+            'ventasPorCategoria' => fn () => $datosZona['ventasPorCategoria'] ?? $ventasBet->resumir($desde, $hasta),
+            'ventasPremios' => fn () => $datosZona['ventasPremios'] ?? $ventasPremios->resumir($desde, $hasta),
+            'indicadores' => fn () => $datosZona['indicadores'] ?? $indicadores->resumir($desde, $hasta, $lecturas->last()),
             'fechaLecturas' => today()->toDateString(),
-            'lecturasPorHora' => $lecturas->map(fn (BiVentaHora $lectura): array => [
+            'lecturasPorHora' => $datosZona['lecturasPorHora'] ?? $lecturas->map(fn (BiVentaHora $lectura): array => [
                 'hora' => $lectura->hora,
                 'tradicional' => (float) $lectura->tradicional_acumulado,
                 'noTradicional' => (float) $lectura->no_tradicional_acumulado,
@@ -87,26 +95,28 @@ class DashboardController extends Controller
             ])
                 ->all(),
             'fechaLecturasSemanaAnterior' => $diaSemanaAnterior->toDateString(),
-            'lecturasSemanaAnterior' => $lecturasSemanaAnterior->map(fn (BiVentaHora $lectura): array => [
-                'hora' => $lectura->hora,
-                'total' => (float) $lectura->tradicional_acumulado
-                    + (float) $lectura->no_tradicional_acumulado
-                    + (float) $lectura->externas_acumulado
-                    + (float) $lectura->recargas_acumulado
-                    + (float) $lectura->otros_acumulado,
-            ])->all(),
-            'rutasConMasVenta' => collect($snapshot?->rutas ?? [])->take(10)->values()->all(),
-            'quinielaLotekaHoy' => $lecturas->last()?->quiniela_loteka_acumulado !== null
+            'lecturasSemanaAnterior' => $datosZona !== null ? $resumenZona->filtrarLecturas($lecturasSemanaAnterior, $datosZona['terminales'])
+                ->map(fn (array $hora): array => ['hora' => $hora['hora'], 'total' => $hora['total']])->all()
+                : $lecturasSemanaAnterior->map(fn (BiVentaHora $lectura): array => [
+                    'hora' => $lectura->hora,
+                    'total' => (float) $lectura->tradicional_acumulado
+                        + (float) $lectura->no_tradicional_acumulado
+                        + (float) $lectura->externas_acumulado
+                        + (float) $lectura->recargas_acumulado
+                        + (float) $lectura->otros_acumulado,
+                ])->all(),
+            'rutasConMasVenta' => $datosZona['rutasConMasVenta'] ?? collect($snapshot?->rutas ?? [])->take(10)->values()->all(),
+            'quinielaLotekaHoy' => $datosZona !== null ? $datosZona['quinielaLotekaHoy'] : ($lecturas->last()?->quiniela_loteka_acumulado !== null
                 ? (float) $lecturas->last()->quiniela_loteka_acumulado
-                : null,
-            'quinielaLotekaSemanaAnterior' => fn (): ?float => $this->ventaProductoSemanaAnterior('43', $diaSemanaAnterior),
-            'quinielaLotekaRecordAnterior' => fn (): ?float => $this->recordProductoAnterior('43', CarbonImmutable::today()),
-            'megaChanceHoy' => $lecturas->last()?->mega_chance_acumulado !== null
+                : null),
+            'quinielaLotekaSemanaAnterior' => fn (): ?float => $datosZona !== null ? $datosZona['quinielaLotekaSemanaAnterior'] : $this->ventaProductoSemanaAnterior('43', $diaSemanaAnterior),
+            'quinielaLotekaRecordAnterior' => fn (): ?float => $datosZona !== null ? null : $this->recordProductoAnterior('43', CarbonImmutable::today()),
+            'megaChanceHoy' => $datosZona !== null ? $datosZona['megaChanceHoy'] : ($lecturas->last()?->mega_chance_acumulado !== null
                 ? (float) $lecturas->last()->mega_chance_acumulado
-                : null,
-            'megaChanceSemanaAnterior' => fn (): ?float => $this->ventaProductoSemanaAnterior('38', $diaSemanaAnterior),
-            'megaChanceRecordAnterior' => fn (): ?float => $this->recordProductoAnterior('38', CarbonImmutable::today()),
-            'promediosHistoricos' => fn () => VentaOnlinePromedioHistorico::query()
+                : null),
+            'megaChanceSemanaAnterior' => fn (): ?float => $datosZona !== null ? $datosZona['megaChanceSemanaAnterior'] : $this->ventaProductoSemanaAnterior('38', $diaSemanaAnterior),
+            'megaChanceRecordAnterior' => fn (): ?float => $datosZona !== null ? null : $this->recordProductoAnterior('38', CarbonImmutable::today()),
+            'promediosHistoricos' => fn () => $datosZona !== null ? [] : VentaOnlinePromedioHistorico::query()
                 ->whereIn('tipo_categoria', ['tradicional', 'no_tradicional'])
                 ->get(['tipo_categoria', 'monto_promedio', 'meses_incluidos'])
                 ->mapWithKeys(fn (VentaOnlinePromedioHistorico $promedio): array => [
