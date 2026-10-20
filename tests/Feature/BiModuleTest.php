@@ -267,7 +267,7 @@ class BiModuleTest extends TestCase
             ->assertJsonPath('props.alertasProductos', [])
             ->assertJsonPath('props.productosDisponibles', [])
             ->assertJsonPath('props.menuUrl', route('dashboard.index'))
-            ->assertJsonPath('props.biUrl', route('bi.index'))
+            ->assertJsonPath('props.biUrl', '/bi')
             ->assertJsonPath('props.recalcularUrl', route('bi.recalcular'))
             ->assertJsonPath('props.catalogoActualizado', null)
             ->assertJsonPath('props.ventasPorCategoria.total', 0)
@@ -280,6 +280,16 @@ class BiModuleTest extends TestCase
 
         $this->assertStringContainsString("@vite('resources/js/bi/app.js')", $layout);
         $this->assertStringNotContainsString('scrollbar', $layout);
+    }
+
+    public function test_bi_filter_navigation_uses_the_current_origin_behind_a_proxy(): void
+    {
+        $this->withoutMiddleware()
+            ->withServerVariables(['HTTP_HOST' => 'crm.example.test', 'HTTP_X_FORWARDED_PROTO' => 'https'])
+            ->withHeader('X-Inertia', 'true')
+            ->get('/bi')
+            ->assertOk()
+            ->assertJsonPath('props.biUrl', '/bi');
     }
 
     public function test_bi_initial_page_uses_the_script_data_expected_by_vue(): void

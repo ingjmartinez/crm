@@ -62,7 +62,7 @@ class DashboardController extends Controller
             'terminalesLimites' => fn () => $catalogo->paraAlertas($zona, $empresa),
             'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last(), $snapshot, $datosZona['terminales'] ?? null),
             'menuUrl' => route('dashboard.index'),
-            'biUrl' => route('bi.index'),
+            'biUrl' => route('bi.index', [], false),
             'recalcularUrl' => route('bi.recalcular'),
             'mensajeRecalculo' => session('biRecalculo'),
             'terminales' => fn () => $catalogo->paginar($busqueda, $zona, $empresa),
