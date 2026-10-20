@@ -143,6 +143,7 @@ class NominaDomingoTest extends TestCase
         $this->assertCount(1, $filas);
         $this->assertSame('13', $filas->first()['terminal']);
         $this->assertSame(1500.0, $filas->sum('monto_pagar'));
+
     }
 
     public function test_same_cedula_can_complete_sunday_hours_across_two_terminals_without_double_payment(): void
@@ -159,6 +160,12 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(['Cumple', 'Cumple'], $filas->pluck('estatus')->all());
         $this->assertSame(616, $filas->first()['minutos_totales_cedula']);
         $this->assertSame(1500.0, $filas->sum('monto_pagar'));
+
+        $filasReporte = app(NominaDomingoService::class)->agruparPorCedula($filas);
+        $this->assertCount(1, $filasReporte);
+        $this->assertSame(616, $filasReporte->first()['minutos_trabajados']);
+        $this->assertSame('10 h 16 min', $filasReporte->first()['horas_trabajadas_formato']);
+        $this->assertSame(1500.0, $filasReporte->first()['monto_pagar']);
 
     }
 

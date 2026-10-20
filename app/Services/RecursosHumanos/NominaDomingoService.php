@@ -179,6 +179,27 @@ class NominaDomingoService
             : "{$horas} h {$minutosRestantes} min";
     }
 
+    /**
+     * @param  Collection<int, array<string, mixed>>  $filas
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function agruparPorCedula(Collection $filas): Collection
+    {
+        return $filas->groupBy('cedula')->map(function (Collection $filasCedula): array {
+            $fila = $filasCedula->first();
+            $fila['terminales'] = $filasCedula->pluck('terminal')->unique()->implode(', ');
+            $fila['empresa'] = $filasCedula->pluck('empresa')->unique()->implode(', ');
+            $fila['coordinador'] = $filasCedula->pluck('coordinador')->unique()->implode(', ');
+            $fila['entrada'] = $filasCedula->pluck('entrada')->filter()->min();
+            $fila['salida_efectiva'] = $filasCedula->pluck('salida_efectiva')->filter()->max();
+            $fila['minutos_trabajados'] = $filasCedula->sum('minutos_trabajados');
+            $fila['horas_trabajadas_formato'] = $this->formatearMinutosTrabajados($fila['minutos_trabajados']);
+            $fila['monto_pagar'] = $filasCedula->sum('monto_pagar');
+
+            return $fila;
+        })->values();
+    }
+
     public function salidaEfectiva(?Carbon $salidaPonche, ?Carbon $ultimaTransaccion): ?Carbon
     {
         if ($salidaPonche === null || $ultimaTransaccion === null) {
