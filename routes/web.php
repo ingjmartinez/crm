@@ -114,6 +114,14 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     Route::get('/bi', [BiDashboardController::class, 'index'])
         ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
         ->name('bi.index');
+    Route::get('/bi/control-horario', [BiDashboardController::class, 'controlHorario'])
+        ->name('bi.control-horario');
+    Route::post('/bi/horarios', [BiDashboardController::class, 'guardarHorario'])
+        ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
+        ->name('bi.horarios.guardar');
+    Route::delete('/bi/horarios/{biHorario}', [BiDashboardController::class, 'eliminarHorario'])
+        ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
+        ->name('bi.horarios.eliminar');
     Route::get('/bi-tv', [\App\Http\Controllers\Bi\TvDashboardController::class, 'index'])->name('bi.tv');
     Route::post('/bi/recalcular', [BiDashboardController::class, 'recalcular'])
         ->middleware([\App\Http\Middleware\HandleBiInertiaRequests::class, 'throttle:2,1'])

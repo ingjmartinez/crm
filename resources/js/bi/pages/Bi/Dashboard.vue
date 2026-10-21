@@ -1,14 +1,20 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import { currencyInputCaret, formatCurrencyInput, normalizeCurrencyInput } from '../../currency-input.js';
 import { cantidadTerminalesAl80, limitesTerminalesAl80 } from '../../terminales-limites.js';
 import { compareHourlySales } from '../../hourly-comparison.js';
+import { paginateEntries, rankEntries } from '../../entry-rankings.js';
 
 const props = defineProps({
     modulo: { type: String, required: true },
     menuUrl: { type: String, required: true },
     biUrl: { type: String, required: true },
+    controlHorarioUrl: { type: String, required: true },
+    guardarHorarioUrl: { type: String, required: true },
+    eliminarHorarioUrl: { type: String, required: true },
+    horarios: { type: Array, default: () => [] },
+    mensajeHorario: { type: String, default: null },
     recalcularUrl: { type: String, required: true },
     mensajeRecalculo: { type: String, default: null },
     terminales: { type: Object, required: true },
@@ -485,12 +491,60 @@ const salesPrizeChart = computed(() => {
 const sales = [82, 60, 74, 77, 58];
 const prizes = [56, 33, 47, 44, 37];
 const dates = ['09-23', '09-24', '09-25', '09-26', '09-27'];
-const entries = [
-    { id: '5346', name: 'AGENCIA EJEMPLO 01', login: '07:45', delta: '+15 min tarde', logout: '11:57' },
-    { id: '5347', name: 'AGENCIA EJEMPLO 02', login: '07:37', delta: '+7 min tarde', logout: '11:49' },
-    { id: '5357', name: 'AGENCIA EJEMPLO 03', login: '06:57', delta: '33 min antes', logout: '09:38' },
-];
-const filteredEntries = computed(() => entries.filter((row) => `${row.id} ${row.name}`.toLowerCase().includes(search.value.toLowerCase())));
+const entryRows = ref([]);
+const entryLoading = ref(false);
+const entryError = ref('');
+const entrySystem = ref('todos');
+const entryCedula = ref('');
+const scheduledEntry = ref('08:00');
+const scheduledExit = ref('17:00');
+const horarioForm = useForm({ tipo: 'empleado_terminal', cedula: '', terminal: '', entrada: '08:00', salida: '17:00' });
+function guardarHorario() {
+    horarioForm.post(props.guardarHorarioUrl, { preserveScroll: true, preserveState: true, onSuccess: () => { horarioForm.reset(); loadEntries(); } });
+}
+function eliminarHorario(id) {
+    router.delete(props.eliminarHorarioUrl.replace('__ID__', id), { preserveScroll: true, preserveState: true, onSuccess: loadEntries });
+}
+const filteredEntries = computed(() => entryRows.value.filter((row) => `${row.cedula} ${row.nombre} ${row.terminal} ${row.agencia || ''}`.toLowerCase().includes(search.value.toLowerCase())));
+const entryPage = ref(1);
+const entryPagination = computed(() => paginateEntries(filteredEntries.value, entryPage.value));
+const entryPageCount = computed(() => entryPagination.value.pageCount);
+const paginatedEntries = computed(() => entryPagination.value.rows);
+const entryRankings = computed(() => rankEntries(filteredEntries.value));
+const entryTop = computed(() => activeEntry.value === 'Top 25 mejores' ? entryRankings.value.mejores : entryRankings.value.peores);
+watch([search, entryRows], () => { entryPage.value = 1; });
+const earlyCount = computed(() => filteredEntries.value.filter((row) => row.minutos_entrada < 0).length);
+const lateEntryCount = computed(() => filteredEntries.value.filter((row) => row.minutos_entrada > 0).length);
+const lateExitCount = computed(() => filteredEntries.value.filter((row) => row.minutos_salida > 0).length);
+
+async function loadEntries() {
+    entryLoading.value = true;
+    entryError.value = '';
+    try {
+        const params = new URLSearchParams({ desde: from.value, hasta: until.value, entrada: scheduledEntry.value, salida: scheduledExit.value, sistema: entrySystem.value });
+        if (entryCedula.value.trim()) params.set('cedula', entryCedula.value.trim());
+        if (company.value) params.set('empresa', company.value);
+        if (zone.value) params.set('zona', zone.value);
+        if (routeFilter.value) params.set('ruta', routeFilter.value);
+        const response = await fetch(`${props.controlHorarioUrl}?${params}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        if (!response.ok) throw new Error((await response.json()).message || 'No se pudo consultar el control de horario.');
+        entryRows.value = await response.json();
+    } catch (error) {
+        entryError.value = error.message;
+        entryRows.value = [];
+    } finally {
+        entryLoading.value = false;
+    }
+}
+
+function entryDelta(minutes, positive, negative) {
+    if (minutes === null) return '—';
+    if (minutes === 0) return 'A tiempo';
+    return `${Math.abs(minutes)} min ${minutes > 0 ? positive : negative}`;
+}
+watch([activeTab, company, zone, routeFilter, () => props.periodoVentas.desde, () => props.periodoVentas.hasta], () => {
+    if (activeTab.value === 'entrada') loadEntries();
+});
 
 function selectPeriod(period) {
     activePeriod.value = period;
@@ -582,7 +636,7 @@ function recalcularVentas() {
             <div v-if="periodError" class="bi-period-error" role="alert">{{ periodError }}</div>
             <div v-if="recalculoError" class="bi-period-error" role="alert">{{ recalculoError }}</div>
             <div v-if="mensajeRecalculo" class="bi-recalculate-success" role="status">{{ mensajeRecalculo }}</div>
-            <div v-if="activeTab !== 'productos' && activeTab !== 'limites'" class="bi-notice"><b>BI EN CONSTRUCCIÓN</b> Ventas, premios y resúmenes usan datos reales. Control de Entrada y algunas métricas esperan sus fuentes.</div>
+            <div v-if="activeTab === 'metricas'" class="bi-notice"><b>BI EN CONSTRUCCIÓN</b> Algunas métricas esperan sus fuentes.</div>
             <div v-if="activeTab !== 'productos' && activeTab !== 'limites' && ventasPorCategoria.diasSinDatos" class="bi-period-error" role="status">Faltan {{ ventasPorCategoria.diasSinDatos }} día(s) de datos históricos en este período. El total mostrado es parcial.</div>
             <div v-if="activeTab !== 'productos' && activeTab !== 'limites' && includesToday" class="bi-notice">El día en curso se muestra arriba. Los gráficos históricos usan días cerrados hasta ayer.</div>
             <template v-if="activeTab === 'dashboard'">
@@ -686,7 +740,22 @@ function recalcularVentas() {
                     </article>
                 </section>
             </template>
-            <template v-else-if="activeTab === 'entrada'"><div class="bi-heading"><h1>Control de Entrada — {{ alcancePanel }}</h1><p v-if="filtroActivo">El control de entrada para la selección aún no dispone de datos de ponche en este panel.</p><p v-else>Todas las zonas. Usa el filtro de fecha global.</p></div><template v-if="!filtroActivo"><div class="bi-subnav"><button v-for="view in ['Detalle diario', '🏆 Top Puntualidad', '⚠️ Top Impuntualidad']" :key="view" :class="{ active: activeEntry === view }" @click="activeEntry = view">{{ view }}</button></div><div class="bi-date-buttons"><span>Fecha:</span><button v-for="date in ['09/29', '09/28', '09/27', '09/26', '09/25']" :key="date">{{ date }}</button></div><div class="bi-kpi-grid three"><div v-for="card in [{ name: 'PUNTUALES ENTRADA', value: '270', detail: 'de 1271 terminales', color: 'blue' }, { name: 'TARDANZAS ENTRADA', value: '1,001', detail: 'llegaron tarde', color: 'red' }, { name: 'CIERRES ANTICIPADOS', value: '1,271', detail: 'salieron antes', color: 'gold' }]" :key="card.name" class="bi-panel bi-stat"><span>{{ card.name }}</span><strong :class="card.color">{{ card.value }}</strong><small>{{ card.detail }}</small></div></div><section class="bi-panel bi-table-panel"><div class="bi-title"><h2>CONTROL DE ENTRADA — CONSORCIO · 1,271 TERMINALES</h2><input v-model="search" placeholder="Buscar terminal…" aria-label="Buscar terminal"></div><div class="bi-table-scroll"><table><thead><tr><th>#</th><th>Terminal</th><th>Agencia</th><th>Empleado T1</th><th>Prog.</th><th>Login</th><th>Δ Entrada</th><th>Logout</th><th>Empleado T2</th><th>Cierre</th></tr></thead><tbody><tr v-for="(row, index) in filteredEntries" :key="row.id"><td>{{ index + 1 }}</td><td>{{ row.id }}</td><td>{{ row.name }}</td><td>EMPLEADO EJEMPLO</td><td>07:30–14:30</td><td>{{ row.login }}</td><td :class="row.delta.includes('tarde') ? 'red' : 'green'">{{ row.delta }}</td><td>{{ row.logout }}</td><td>—</td><td>21:30</td></tr><tr v-if="!filteredEntries.length"><td colspan="10" class="bi-empty">Sin resultados</td></tr></tbody></table></div></section></template></template>
+            <template v-else-if="activeTab === 'entrada'">
+<div class="bi-heading"><h1>Control de Horario — {{ alcancePanel }}</h1><p>Ponches del período seleccionado.</p></div>
+<section class="bi-panel bi-table-panel"><div class="bi-title"><h2>Filtros y horario general</h2></div><div class="bi-entry-filters"><label>Entrada esperada <input v-model="scheduledEntry" type="time"></label><label>Salida esperada <input v-model="scheduledExit" type="time"></label><label>Sistema <select v-model="entrySystem"><option value="todos">Todos</option><option value="lotobet">Lotobet</option><option value="lotonet">Lotonet</option></select></label><label>Cédula <input v-model="entryCedula" placeholder="Todas"></label><button class="bi-primary" :disabled="entryLoading" @click="loadEntries">{{ entryLoading ? 'Consultando…' : 'Consultar' }}</button></div><p v-if="entryError" class="red" role="alert">{{ entryError }}</p></section>
+<section class="bi-panel bi-table-panel"><div class="bi-title"><h2>Horarios por empleado o terminal</h2></div><p>El horario de empleado y terminal tiene prioridad; luego el de empleado y el de terminal. Los demás usan el horario general de arriba.</p><form class="bi-entry-filters" @submit.prevent="guardarHorario"><label>Asignar a <select v-model="horarioForm.tipo"><option value="empleado_terminal">Empleado en terminal</option><option value="empleado">Empleado</option><option value="terminal">Terminal</option></select></label><label v-if="horarioForm.tipo !== 'terminal'">Cédula <input v-model="horarioForm.cedula" inputmode="numeric" required></label><label v-if="horarioForm.tipo !== 'empleado'">Terminal <input v-model="horarioForm.terminal" inputmode="numeric" required></label><label>Entrada <input v-model="horarioForm.entrada" type="time" required></label><label>Salida <input v-model="horarioForm.salida" type="time" required></label><button class="bi-primary" type="submit" :disabled="horarioForm.processing">Guardar horario</button></form><p v-if="mensajeHorario" class="green">{{ mensajeHorario }}</p><p v-for="(error, field) in horarioForm.errors" :key="field" class="red">{{ error }}</p><div v-if="horarios.length" class="bi-table-scroll"><table><thead><tr><th>Asignación</th><th>Cédula</th><th>Terminal</th><th>Entrada</th><th>Salida</th><th></th></tr></thead><tbody><tr v-for="horario in horarios" :key="horario.id"><td>{{ horario.tipo }}</td><td>{{ horario.cedula || '—' }}</td><td>{{ horario.terminal || '—' }}</td><td>{{ horario.entrada }}</td><td>{{ horario.salida }}</td><td><button type="button" @click="eliminarHorario(horario.id)">Eliminar</button></td></tr></tbody></table></div></section>
+<div class="bi-kpi-grid three"><div v-for="card in [{ name: 'LLEGADAS TEMPRANO', value: earlyCount }, { name: 'LLEGADAS TARDE', value: lateEntryCount }, { name: 'SALIDAS TARDE', value: lateExitCount }]" :key="card.name" class="bi-panel bi-stat"><span>{{ card.name }}</span><strong>{{ card.value }}</strong><small>de {{ filteredEntries.length }} registros</small></div></div>
+<div class="bi-subnav"><button v-for="view in ['Detalle diario', 'Top 25 mejores', 'Top 25 peores']" :key="view" type="button" :class="{ active: activeEntry === view }" @click="activeEntry = view">{{ view }}</button></div>
+<section v-if="activeEntry === 'Detalle diario'" class="bi-panel bi-table-panel">
+    <div class="bi-title"><h2>PONCHES · {{ filteredEntries.length }} REGISTROS</h2><input v-model="search" placeholder="Buscar cédula, nombre o terminal…"></div>
+    <div class="bi-table-scroll"><table><thead><tr><th>Cédula</th><th>Nombre</th><th>Día</th><th>Terminal</th><th>Agencia</th><th>Horario</th><th>Primer login</th><th>Entrada</th><th>Último login</th><th>Salida calculada</th><th>Salida</th><th>Horas</th></tr></thead><tbody>
+        <tr v-for="row in paginatedEntries" :key="row.fecha + row.cedula + row.sistema + row.terminal"><td>{{ row.cedula }}</td><td>{{ row.nombre }}</td><td>{{ row.fecha }}</td><td>{{ row.terminal }}</td><td>{{ row.agencia || '—' }}</td><td>{{ row.horario_entrada }}–{{ row.horario_salida }}</td><td>{{ row.primer_login || '—' }}</td><td :class="row.minutos_entrada > 0 ? 'red' : 'green'">{{ entryDelta(row.minutos_entrada, 'tarde', 'temprano') }}</td><td>{{ row.ultimo_login || '—' }}</td><td>{{ row.salida_calculada || '—' }}</td><td>{{ entryDelta(row.minutos_salida, 'tarde', 'antes') }}</td><td>{{ Number(row.total_horas).toFixed(2) }}</td></tr>
+        <tr v-if="!filteredEntries.length"><td colspan="12" class="bi-empty">{{ entryLoading ? 'Consultando ponches…' : 'Sin resultados para estos filtros.' }}</td></tr>
+    </tbody></table></div>
+    <div v-if="filteredEntries.length" class="bi-entry-pagination"><span>Mostrando {{ (entryPage - 1) * 25 + 1 }}–{{ Math.min(entryPage * 25, filteredEntries.length) }} de {{ filteredEntries.length }}</span><div><button type="button" :disabled="entryPage === 1" @click="entryPage--">Anterior</button><span>Página {{ entryPage }} de {{ entryPageCount }}</span><button type="button" :disabled="entryPage === entryPageCount" @click="entryPage++">Siguiente</button></div></div>
+</section>
+<section v-else class="bi-panel bi-table-panel"><div class="bi-title"><h2>{{ activeEntry.toUpperCase() }} · {{ entryTop.length }} EMPLEADOS</h2><input v-model="search" placeholder="Buscar cédula, nombre o terminal…"></div><p>Clasificación por porcentaje de días puntuales en el período. Si hay dos sistemas el mismo día, cuenta el primer ponche.</p><div class="bi-table-scroll"><table><thead><tr><th>#</th><th>Cédula</th><th>Empleado</th><th>Días</th><th>Puntuales</th><th>Tardanzas</th><th>% puntual</th><th>Prom. temprano</th><th>Prom. tarde</th></tr></thead><tbody><tr v-for="(employee, index) in entryTop" :key="employee.cedula"><td>{{ index + 1 }}</td><td>{{ employee.cedula }}</td><td>{{ employee.nombre }}</td><td>{{ employee.dias }}</td><td>{{ employee.puntuales }}</td><td>{{ employee.tardanzas }}</td><td>{{ Math.round(employee.porcentajePuntual * 100) }} %</td><td>{{ employee.promedioTemprano }} min</td><td>{{ employee.promedioTarde }} min</td></tr><tr v-if="!entryTop.length"><td colspan="9" class="bi-empty">Sin ponches para clasificar.</td></tr></tbody></table></div></section>
+</template>
 <template v-else-if="activeTab === 'limites'">
                 <div class="bi-heading"><h1>Límite de Ventas — {{ alcancePanel }}</h1><p>Alertas diarias por producto · {{ filtroActivo ? 'Terminales de la selección' : 'Globales y por terminal' }} · {{ fechaLecturas }}.</p></div>
                 <div class="bi-kpi-grid four">

@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Bi;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Bi\ConsultarControlHorarioRequest;
+use App\Http\Requests\Bi\GuardarHorarioRequest;
 use App\Http\Requests\Bi\IndexAgenciaTerminalRequest;
 use App\Http\Requests\Bi\RecalcularVentasRequest;
+use App\Models\BiHorario;
 use App\Models\BiLimiteProducto;
 use App\Models\BiVentaHora;
 use App\Models\BiVentaSnapshot;
@@ -12,6 +15,7 @@ use App\Models\CatalogoJuego;
 use App\Models\VentaOnlinePromedioHistorico;
 use App\Services\Bi\AgenciaTerminalCatalogo;
 use App\Services\Bi\AlertasProductos;
+use App\Services\Bi\ControlHorario;
 use App\Services\Bi\IndicadoresBi;
 use App\Services\Bi\ResumenZonaBi;
 use App\Services\Bi\ResumirPremiosDia;
@@ -19,6 +23,7 @@ use App\Services\Bi\ResumirVentasDia;
 use App\Services\Bi\VentasBetPorCategoria;
 use App\Services\Bi\VentasPremiosPeriodo;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -26,6 +31,30 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    public function guardarHorario(GuardarHorarioRequest $request): RedirectResponse
+    {
+        $data = $request->validated();
+        $data['cedula'] = in_array($data['tipo'], ['empleado', 'empleado_terminal'], true) ? $data['cedula'] : null;
+        $data['terminal'] = in_array($data['tipo'], ['terminal', 'empleado_terminal'], true)
+            ? (ltrim($data['terminal'], '0') ?: '0') : null;
+        $data['clave'] = $data['tipo'].':'.($data['cedula'] ?? '').':'.($data['terminal'] ?? '');
+        BiHorario::query()->updateOrCreate(['clave' => $data['clave']], $data);
+
+        return back()->with('biHorarioMensaje', 'Horario guardado.');
+    }
+
+    public function eliminarHorario(int $biHorario): RedirectResponse
+    {
+        BiHorario::query()->findOrFail($biHorario)->delete();
+
+        return back()->with('biHorarioMensaje', 'Horario eliminado.');
+    }
+
+    public function controlHorario(ConsultarControlHorarioRequest $request, ControlHorario $controlHorario): JsonResponse
+    {
+        return response()->json($controlHorario->consultar($request->validated()));
+    }
+
     public function index(IndexAgenciaTerminalRequest $request, AgenciaTerminalCatalogo $catalogo, VentasBetPorCategoria $ventasBet, VentasPremiosPeriodo $ventasPremios, IndicadoresBi $indicadores, AlertasProductos $alertasProductos, ResumenZonaBi $resumenZona): Response
     {
         $busqueda = trim((string) $request->validated('q', ''));
@@ -64,6 +93,11 @@ class DashboardController extends Controller
             'alertasProductos' => fn () => $alertasProductos->resumir($lecturas->last(), $snapshot, $datosZona['terminales'] ?? null),
             'menuUrl' => route('dashboard.index'),
             'biUrl' => route('bi.index', [], false),
+            'controlHorarioUrl' => route('bi.control-horario', [], false),
+            'guardarHorarioUrl' => route('bi.horarios.guardar', [], false),
+            'eliminarHorarioUrl' => route('bi.horarios.eliminar', ['biHorario' => '__ID__'], false),
+            'horarios' => fn () => BiHorario::query()->orderBy('tipo')->orderBy('clave')->get(['id', 'tipo', 'cedula', 'terminal', 'entrada', 'salida']),
+            'mensajeHorario' => session('biHorarioMensaje'),
             'recalcularUrl' => route('bi.recalcular'),
             'mensajeRecalculo' => session('biRecalculo'),
             'terminales' => fn () => $catalogo->paginar($busqueda, $zona, $empresa, $ruta),

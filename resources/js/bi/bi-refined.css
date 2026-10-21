@@ -92,6 +92,13 @@
 .bi-comparison-modal th { background: #e7f4f9; color: #608799; font-weight: 600; }
 .bi-comparison-modal th:not(:first-child), .bi-comparison-modal td:not(:first-child) { text-align: right; }
 .bi-comparison-modal td, .bi-comparison-modal th { padding: 10px 12px; }
+.bi-entry-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.bi-entry-filters label { display: grid; gap: 5px; color: #648da0; font-size: 13px; }
+.bi-entry-filters input, .bi-entry-filters select { min-height: 36px; padding: 7px 10px; border: 1px solid #cbe5ef; border-radius: 8px; background: white; color: #315a70; }
+.bi-entry-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 18px; color: #648da0; font-size: 13px; }
+.bi-entry-pagination > div { display: flex; align-items: center; gap: 10px; }
+.bi-entry-pagination button { border: 1px solid #cce5ef; border-radius: 8px; padding: 7px 12px; background: #e7f5fa; color: #315a70; }
+.bi-entry-pagination button:disabled { opacity: .45; cursor: default; }
 
 @media (min-width: 1251px) {
     .bi-today-body { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr) minmax(300px, .8fr); gap: 18px; }
