@@ -99,6 +99,12 @@
 .bi-entry-pagination > div { display: flex; align-items: center; gap: 10px; }
 .bi-entry-pagination button { border: 1px solid #cce5ef; border-radius: 8px; padding: 7px 12px; background: #e7f5fa; color: #315a70; }
 .bi-entry-pagination button:disabled { opacity: .45; cursor: default; }
+.bi-entry-state { display: inline-block; padding: 5px 9px; border-radius: 12px; font-weight: 700; white-space: nowrap; }
+.bi-entry-state.sin_personal { background: #fbe4e4; color: #b8241c; }
+.bi-entry-state.tarde { background: #fff2cd; color: #9b6900; }
+.bi-entry-state.temprano, .bi-entry-state.a_tiempo { background: #e3f6ef; color: #17845b; }
+.bi-token-button { min-height: 36px; padding: 8px 14px; border: 1px solid #d4a72c; border-radius: 8px; background: #fff1c9; color: #73500a; font-weight: 700; }
+.bi-token-button:disabled { opacity: .55; cursor: default; }
 
 @media (min-width: 1251px) {
     .bi-today-body { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr) minmax(300px, .8fr); gap: 18px; }

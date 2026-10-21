@@ -48,3 +48,16 @@ export function paginateEntries(rows, page, pageSize = 25) {
         rows: rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
     };
 }
+
+export function rankLiveEntries(rows) {
+    const punched = rows.filter((row) => row.minutos_entrada !== null && row.minutos_entrada !== undefined);
+
+    return {
+        mejores: punched.filter((row) => row.minutos_entrada <= 0)
+            .sort((a, b) => a.minutos_entrada - b.minutos_entrada || a.terminal.localeCompare(b.terminal))
+            .slice(0, 25),
+        peores: punched.filter((row) => row.minutos_entrada > 0)
+            .sort((a, b) => b.minutos_entrada - a.minutos_entrada || a.terminal.localeCompare(b.terminal))
+            .slice(0, 25),
+    };
+}

@@ -116,6 +116,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         ->name('bi.index');
     Route::get('/bi/control-horario', [BiDashboardController::class, 'controlHorario'])
         ->name('bi.control-horario');
+    Route::get('/bi/vigilancia-horario', [BiDashboardController::class, 'vigilanciaHorario'])
+        ->name('bi.vigilancia-horario');
     Route::post('/bi/horarios', [BiDashboardController::class, 'guardarHorario'])
         ->middleware(\App\Http\Middleware\HandleBiInertiaRequests::class)
         ->name('bi.horarios.guardar');

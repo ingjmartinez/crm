@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Bi;
 
+use App\Exceptions\LotobetTokenRequiredException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Bi\ConsultarControlHorarioRequest;
+use App\Http\Requests\Bi\ConsultarVigilanciaHorarioRequest;
 use App\Http\Requests\Bi\GuardarHorarioRequest;
 use App\Http\Requests\Bi\IndexAgenciaTerminalRequest;
 use App\Http\Requests\Bi\RecalcularVentasRequest;
@@ -28,6 +30,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
+use Throwable;
 
 class DashboardController extends Controller
 {
@@ -53,6 +57,23 @@ class DashboardController extends Controller
     public function controlHorario(ConsultarControlHorarioRequest $request, ControlHorario $controlHorario): JsonResponse
     {
         return response()->json($controlHorario->consultar($request->validated()));
+    }
+
+    public function vigilanciaHorario(ConsultarVigilanciaHorarioRequest $request, ControlHorario $controlHorario): JsonResponse
+    {
+        try {
+            return response()->json($controlHorario->vigilar($request->validated()));
+        } catch (LotobetTokenRequiredException $exception) {
+            return response()->json(['code' => 'LOTOBET_TOKEN_REQUIRED', 'message' => $exception->getMessage()], 409);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => $exception instanceof RuntimeException
+                    ? $exception->getMessage()
+                    : 'No se pudieron consultar las asistencias en vivo.',
+            ], 422);
+        }
     }
 
     public function index(IndexAgenciaTerminalRequest $request, AgenciaTerminalCatalogo $catalogo, VentasBetPorCategoria $ventasBet, VentasPremiosPeriodo $ventasPremios, IndicadoresBi $indicadores, AlertasProductos $alertasProductos, ResumenZonaBi $resumenZona): Response
@@ -94,6 +115,8 @@ class DashboardController extends Controller
             'menuUrl' => route('dashboard.index'),
             'biUrl' => route('bi.index', [], false),
             'controlHorarioUrl' => route('bi.control-horario', [], false),
+            'vigilanciaHorarioUrl' => route('bi.vigilancia-horario', [], false),
+            'generarTokenLotobetUrl' => route('token.generate', [], false),
             'guardarHorarioUrl' => route('bi.horarios.guardar', [], false),
             'eliminarHorarioUrl' => route('bi.horarios.eliminar', ['biHorario' => '__ID__'], false),
             'horarios' => fn () => BiHorario::query()->orderBy('tipo')->orderBy('clave')->get(['id', 'tipo', 'cedula', 'terminal', 'entrada', 'salida']),

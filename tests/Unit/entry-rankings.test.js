@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { paginateEntries, rankEntries } from '../../resources/js/bi/entry-rankings.js';
+import { paginateEntries, rankEntries, rankLiveEntries } from '../../resources/js/bi/entry-rankings.js';
 
 test('ranks employees across days and counts a day with two systems once', () => {
     const rows = [
@@ -36,4 +36,18 @@ test('pagination shows 25 rows and keeps the last page in range', () => {
     assert.deepEqual(paginateEntries(rows, 2).rows, rows.slice(25, 50));
     assert.deepEqual(paginateEntries(rows, 3).rows, rows.slice(50));
     assert.equal(paginateEntries(rows, 8).currentPage, 3);
+});
+
+test('live ranking separates early and late terminals and excludes those without a punch', () => {
+    const rows = [
+        { terminal: '1', minutos_entrada: -20 },
+        { terminal: '2', minutos_entrada: 0 },
+        { terminal: '3', minutos_entrada: 15 },
+        { terminal: '4', minutos_entrada: null },
+        { terminal: '5', minutos_entrada: -5 },
+        { terminal: '6', minutos_entrada: 30 },
+    ];
+
+    assert.deepEqual(rankLiveEntries(rows).mejores.map((row) => row.terminal), ['1', '5', '2']);
+    assert.deepEqual(rankLiveEntries(rows).peores.map((row) => row.terminal), ['6', '3']);
 });
