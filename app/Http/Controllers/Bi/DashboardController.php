@@ -176,7 +176,7 @@ class DashboardController extends Controller
                 : null),
             'megaChanceSemanaAnterior' => fn (): ?float => $datosZona !== null ? $datosZona['megaChanceSemanaAnterior'] : $this->ventaProductoSemanaAnterior('38', $diaSemanaAnterior),
             'megaChanceRecordAnterior' => fn (): ?float => $datosZona !== null ? null : $this->recordProductoAnterior('38', CarbonImmutable::today()),
-            'promediosHistoricos' => fn () => $datosZona !== null ? [] : VentaOnlinePromedioHistorico::query()
+            'promediosHistoricos' => fn () => $datosZona !== null ? $datosZona['promediosHistoricos'] : VentaOnlinePromedioHistorico::query()
                 ->whereIn('tipo_categoria', ['tradicional', 'no_tradicional'])
                 ->get(['tipo_categoria', 'monto_promedio', 'meses_incluidos'])
                 ->mapWithKeys(fn (VentaOnlinePromedioHistorico $promedio): array => [

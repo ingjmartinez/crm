@@ -523,6 +523,57 @@ class BiModuleTest extends TestCase
             ->assertJsonPath('props.lecturasPorHora.0.total', 900);
     }
 
+    public function test_sales_type_cards_use_the_selected_company_for_hourly_amounts_and_historical_averages(): void
+    {
+        DB::table('catalogo_juegos')->insert([
+            ['producto_id' => '43', 'tipo' => 'Tradicional'],
+            ['producto_id' => '38', 'tipo' => 'No Tradicional'],
+        ]);
+        Agencia::query()->create(['terminal' => '101', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '202', 'empresa' => 'Negosur', 'sistema' => 'LOTOBET', 'estatus' => 1]);
+        BiVentaHora::factory()->create([
+            'fecha' => today()->toDateString(), 'hora' => 15,
+            'productos_terminales' => [
+                '101' => ['43' => 100, '38' => 50],
+                '202' => ['43' => 300, '38' => 150],
+            ],
+        ]);
+
+        $inicio = CarbonImmutable::today()->startOfMonth()->subMonthsNoOverflow(3);
+        $meses = collect(range(0, 2))->map(fn (int $indice): string => $inicio->addMonthsNoOverflow($indice)->format('Y-m'))->all();
+        $dias = $inicio->diffInDays($inicio->addMonthsNoOverflow(3));
+        DB::table('ventas_online_promedios_historicos')->insert([
+            ['tipo_categoria' => 'tradicional', 'monto_promedio' => 999, 'meses_incluidos' => json_encode($meses)],
+            ['tipo_categoria' => 'no_tradicional', 'monto_promedio' => 999, 'meses_incluidos' => json_encode($meses)],
+        ]);
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '101', 'producto_id' => '43', 'tipo' => 'Tradicional', 'monto' => $dias * 10, 'fecha' => $inicio->toDateTimeString()],
+            ['agencia_id' => '101', 'producto_id' => '38', 'tipo' => 'No Tradicional', 'monto' => $dias * 5, 'fecha' => $inicio->toDateTimeString()],
+            ['agencia_id' => '202', 'producto_id' => '43', 'tipo' => 'Tradicional', 'monto' => $dias * 30, 'fecha' => $inicio->toDateTimeString()],
+            ['agencia_id' => '202', 'producto_id' => '38', 'tipo' => 'No Tradicional', 'monto' => $dias * 15, 'fecha' => $inicio->toDateTimeString()],
+        ]);
+
+        $this->withoutMiddleware()
+            ->withHeaders([
+                'X-Inertia' => 'true',
+                'X-Inertia-Partial-Component' => 'Bi/Dashboard',
+                'X-Inertia-Partial-Data' => 'lecturasPorHora,promediosHistoricos',
+            ])
+            ->get(route('bi.index', ['empresa' => 'Grupo Joselito']))
+            ->assertOk()
+            ->assertJsonPath('props.lecturasPorHora.0.tradicional', 100)
+            ->assertJsonPath('props.lecturasPorHora.0.noTradicional', 50)
+            ->assertJsonPath('props.promediosHistoricos.tradicional.monto', 10)
+            ->assertJsonPath('props.promediosHistoricos.no_tradicional.monto', 5);
+
+        $this->get(route('bi.index', ['empresa' => 'Negosur']))
+            ->assertOk()
+            ->assertJsonPath('props.lecturasPorHora.0.tradicional', 300)
+            ->assertJsonPath('props.lecturasPorHora.0.noTradicional', 150)
+            ->assertJsonPath('props.promediosHistoricos.tradicional.monto', 30)
+            ->assertJsonPath('props.promediosHistoricos.no_tradicional.monto', 15);
+    }
+
     public function test_filtered_hourly_sales_decode_terminal_products_once_per_reading(): void
     {
         $lectura = new class extends BiVentaHora

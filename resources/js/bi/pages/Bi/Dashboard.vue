@@ -228,7 +228,7 @@ onMounted(() => {
                 desde: from.value,
                 hasta: until.value,
             }, {
-                only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos'],
+                only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos', 'promediosHistoricos'],
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,

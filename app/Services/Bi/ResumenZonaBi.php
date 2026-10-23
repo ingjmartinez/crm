@@ -4,6 +4,7 @@ namespace App\Services\Bi;
 
 use App\Models\Agencia;
 use App\Models\BiVentaHora;
+use App\Models\VentaOnlinePromedioHistorico;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -145,6 +146,7 @@ class ResumenZonaBi
                 'hasta' => $seriePremios[count($seriePremios) - 1]['fecha'] ?? null, 'serie' => $seriePremios,
             ],
             'lecturasPorHora' => $horas->map(fn (array $hora): array => array_diff_key($hora, ['productos' => true, 'terminales' => true]))->all(),
+            'promediosHistoricos' => $this->promediosHistoricos($codigos),
             'indicadores' => [
                 'ventasHoy' => $ventaHoy, 'horaLectura' => $ultimaHora['hora'] ?? null, 'comparativoDia' => $comparativo,
                 'ventasAyer' => $this->totalDia($ventas[$ayerTexto] ?? null), 'terminalesEvaluadas' => $evaluadas,
@@ -159,6 +161,39 @@ class ResumenZonaBi
             'quinielaLotekaSemanaAnterior' => (float) ($ventas[$hoy->subDays(7)->toDateString()]['productos']['43'] ?? 0),
             'megaChanceSemanaAnterior' => (float) ($ventas[$hoy->subDays(7)->toDateString()]['productos']['38'] ?? 0),
         ];
+    }
+
+    /**
+     * @param  array<int, string>  $terminales
+     * @return array<string, array{monto: float, meses: array<int, string>}>
+     */
+    private function promediosHistoricos(array $terminales): array
+    {
+        $promedios = VentaOnlinePromedioHistorico::query()
+            ->whereIn('tipo_categoria', ['tradicional', 'no_tradicional'])
+            ->get(['tipo_categoria', 'meses_incluidos']);
+        $meses = $promedios->first()?->meses_incluidos ?? [];
+        if ($meses === []) {
+            return [];
+        }
+
+        $inicio = CarbonImmutable::parse($meses[0].'-01')->startOfMonth();
+        $fin = CarbonImmutable::parse(end($meses).'-01')->endOfMonth();
+        $dias = $inicio->diffInDays($fin->addDay()->startOfDay());
+        $totales = $terminales === [] ? null : DB::table('vt_usuarios_bet')
+            ->whereIn('agencia_id', $terminales)
+            ->whereBetween('fecha', [$inicio->toDateTimeString(), $fin->endOfDay()->toDateTimeString()])
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(COALESCE(tipo, ''))) = 'tradicional' THEN monto ELSE 0 END) AS tradicional")
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(COALESCE(tipo, ''))) IN ('no tradicional', 'no_tradicional') THEN monto ELSE 0 END) AS no_tradicional")
+            ->first();
+
+        $resultado = [];
+        foreach ($promedios as $promedio) {
+            $monto = (float) ($totales->{$promedio->tipo_categoria} ?? 0);
+            $resultado[$promedio->tipo_categoria] = ['monto' => round($monto / $dias, 2), 'meses' => $meses];
+        }
+
+        return $resultado;
     }
 
     /** @param Collection<int, BiVentaHora> $lecturas
