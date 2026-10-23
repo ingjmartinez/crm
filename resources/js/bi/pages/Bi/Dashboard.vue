@@ -33,6 +33,7 @@ const props = defineProps({
     ventasPremios: { type: Object, required: true },
     indicadores: { type: Object, required: true },
     fechaLecturas: { type: String, required: true },
+    horaVentasCatalogo: { type: Number, default: null },
     lecturasPorHora: { type: Array, required: true },
     lecturasSemanaAnterior: { type: Array, default: () => [] },
     fechaLecturasSemanaAnterior: { type: String, default: '' },
@@ -225,10 +226,11 @@ onMounted(() => {
                 zona: zone.value || undefined,
                 empresa: company.value || undefined,
                 ruta: routeFilter.value || undefined,
+                page: new URLSearchParams(window.location.search).get('page') || undefined,
                 desde: from.value,
                 hasta: until.value,
             }, {
-                only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos', 'promediosHistoricos'],
+                only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos', 'promediosHistoricos', 'terminales', 'horaVentasCatalogo'],
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
@@ -766,7 +768,12 @@ function recalcularVentas() {
     <div v-if="categoryChart.length" class="bi-bars-chart real-series category-series" :class="{ dense: categoryChart.length > 15 }"><div v-for="row in categoryChart" :key="row.key" class="bi-bar-set"><div class="bi-stack" :style="{ height: `${row.height}%` }"><span v-for="segment in row.segments" :key="segment.key" :class="segment.color" :style="{ height: `${segment.height}%` }" :title="segment.title"></span></div><small>{{ row.label }}</small></div></div><div v-else class="bi-empty">No hay ventas para el período seleccionado.</div>
 </section>
                 </div></div>
-                <section class="bi-panel bi-table-panel"><div class="bi-title"><h2>CATÁLOGO DE TERMINALES — AGENCIAS <small class="bi-real-tag">DATOS REALES · {{ terminales.total }} TERMINALES</small></h2><form class="bi-catalog-search" @submit.prevent="searchCatalog"><input v-model="catalogSearch" placeholder="Buscar terminal o agencia…" aria-label="Buscar terminal o agencia"><button type="submit">Buscar</button></form></div><div class="bi-table-scroll"><table><thead><tr><th>#</th><th>Terminal</th><th>Agencia</th><th>Código</th><th>Empresa</th><th>Ciudad</th><th>Estado</th></tr></thead><tbody><tr v-for="(row, index) in terminales.data" :key="row.id"><td>{{ terminales.from + index }}</td><td><b>{{ row.terminal }}</b></td><td>{{ row.nombre_agencia || 'Sin nombre' }}</td><td>{{ row.agencia || '—' }}</td><td>{{ row.empresa || '—' }}</td><td>{{ row.ciudad || '—' }}</td><td><span :class="row.estatus === 1 ? 'green' : 'red'">{{ row.estatus === 1 ? 'Activa' : 'Inactiva' }}</span></td></tr><tr v-if="!terminales.data.length"><td colspan="7" class="bi-empty">No se encontraron terminales</td></tr></tbody></table></div><div class="bi-pagination"><span>Mostrando {{ terminales.from || 0 }}–{{ terminales.to || 0 }} de {{ terminales.total }}</span><div><a v-if="terminales.prev_page_url" :href="terminales.prev_page_url">← Anterior</a><span>Página {{ terminales.current_page }} de {{ terminales.last_page }}</span><a v-if="terminales.next_page_url" :href="terminales.next_page_url">Siguiente →</a></div></div></section>
+                <section class="bi-panel bi-table-panel bi-catalog-panel">
+                    <div class="bi-title"><h2>CATÁLOGO DE TERMINALES — AGENCIAS <small class="bi-real-tag">DATOS REALES · {{ terminales.total }} TERMINALES</small></h2><form class="bi-catalog-search" @submit.prevent="searchCatalog"><input v-model="catalogSearch" placeholder="Buscar terminal o agencia…" aria-label="Buscar terminal o agencia"><button type="submit">Buscar</button></form></div>
+                    <p class="bi-caption">Ventas acumuladas de hoy · {{ fechaLecturas }} · {{ horaVentasCatalogo === null ? 'Sin lectura por terminal' : `Lectura ${String(horaVentasCatalogo).padStart(2, '0')}:00` }}. El total incluye las demás categorías.</p>
+                    <div class="bi-table-scroll"><table><thead><tr><th>#</th><th>Terminal</th><th>Agencia</th><th>Código</th><th>Empresa</th><th>Ciudad</th><th>Estado</th><th>Tradicional</th><th>No tradicional</th><th>Total</th></tr></thead><tbody><tr v-for="(row, index) in terminales.data" :key="row.id"><td>{{ terminales.from + index }}</td><td><b>{{ row.terminal }}</b></td><td>{{ row.nombre_agencia || 'Sin nombre' }}</td><td>{{ row.agencia || '—' }}</td><td>{{ row.empresa || '—' }}</td><td>{{ row.ciudad || '—' }}</td><td><span :class="row.estatus === 1 ? 'green' : 'red'">{{ row.estatus === 1 ? 'Activa' : 'Inactiva' }}</span></td><td>{{ row.venta_tradicional_hoy === null ? '—' : formatDop(row.venta_tradicional_hoy) }}</td><td>{{ row.venta_no_tradicional_hoy === null ? '—' : formatDop(row.venta_no_tradicional_hoy) }}</td><td><b>{{ row.venta_total_hoy === null ? '—' : formatDop(row.venta_total_hoy) }}</b></td></tr><tr v-if="!terminales.data.length"><td colspan="10" class="bi-empty">No se encontraron terminales</td></tr></tbody></table></div>
+                    <div class="bi-pagination"><span>Mostrando {{ terminales.from || 0 }}–{{ terminales.to || 0 }} de {{ terminales.total }}</span><div><a v-if="terminales.prev_page_url" :href="terminales.prev_page_url">← Anterior</a><span>Página {{ terminales.current_page }} de {{ terminales.last_page }}</span><a v-if="terminales.next_page_url" :href="terminales.next_page_url">Siguiente →</a></div></div>
+                </section>
             </template>
             <template v-else-if="activeTab === 'productos'">
                 <section class="bi-panel bi-products-empty" aria-label="Record de Productos">
@@ -870,6 +877,8 @@ function recalcularVentas() {
 .bi-limit-card { width: 100%; border: 0; text-align: left; cursor: pointer; }
 .bi-limit-card:hover, .bi-limit-card:focus-visible { outline: 2px solid #d69e27; outline-offset: 2px; }
 .bi-catalog-search { display: flex; gap: 8px; flex-wrap: wrap; }
+.bi-catalog-panel table { min-width: 1120px; }
+.bi-catalog-panel th:nth-last-child(-n+3), .bi-catalog-panel td:nth-last-child(-n+3) { text-align: right; white-space: nowrap; }
 .bi-catalog-search button { border: 0; border-radius: 8px; background: #05abc8; color: white; font-weight: 700; padding: 8px 14px; }
 .bi-real-tag { display: inline-block; margin-left: 8px; color: #15904d; font-size: 11px; font-weight: 700; }
 .bi-pagination { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; padding-top: 18px; color: #6a8c9e; font-size: 13px; }

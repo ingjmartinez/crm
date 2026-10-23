@@ -3,11 +3,14 @@
 namespace App\Services\Bi;
 
 use App\Models\Agencia;
+use App\Models\BiVentaSnapshot;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 class AgenciaTerminalCatalogo
 {
+    public function __construct(private readonly ClasificarVentaBi $clasificador) {}
+
     /** @return array<int, string> */
     public function zonas(?string $empresa = null): array
     {
@@ -53,7 +56,7 @@ class AgenciaTerminalCatalogo
         return $fecha ? substr((string) $fecha, 0, 10) : null;
     }
 
-    public function paginar(?string $busqueda, ?string $zona = null, ?string $empresa = null, ?string $ruta = null): LengthAwarePaginator
+    public function paginar(?string $busqueda, ?string $zona = null, ?string $empresa = null, ?string $ruta = null, ?BiVentaSnapshot $snapshot = null): LengthAwarePaginator
     {
         $query = Agencia::query()
             ->select(['id', 'terminal', 'agencia', 'nombre_agencia', 'empresa', 'ciudad', 'zona', 'estatus'])
@@ -80,6 +83,30 @@ class AgenciaTerminalCatalogo
             });
         }
 
-        return $query->orderBy('terminal')->orderBy('id')->paginate(25)->withQueryString();
+        $ventasPorTerminal = $snapshot?->productos_terminales;
+
+        return $query->orderBy('terminal')->orderBy('id')->paginate(25)->withQueryString()
+            ->through(function (Agencia $agencia) use ($ventasPorTerminal): array {
+                $ventas = null;
+                if ($ventasPorTerminal !== null) {
+                    $terminal = ltrim(trim((string) $agencia->terminal), '0') ?: '0';
+                    $ventas = ['tradicional' => 0.0, 'no_tradicional' => 0.0, 'total' => 0.0];
+                    foreach ($ventasPorTerminal[$terminal] ?? [] as $producto => $monto) {
+                        $monto = (float) $monto;
+                        $categoria = $this->clasificador->categoria(['producto_id' => (string) $producto]);
+                        if (isset($ventas[$categoria])) {
+                            $ventas[$categoria] += $monto;
+                        }
+                        $ventas['total'] += $monto;
+                    }
+                }
+
+                return [
+                    ...$agencia->toArray(),
+                    'venta_tradicional_hoy' => $ventas['tradicional'] ?? null,
+                    'venta_no_tradicional_hoy' => $ventas['no_tradicional'] ?? null,
+                    'venta_total_hoy' => $ventas['total'] ?? null,
+                ];
+            });
     }
 }

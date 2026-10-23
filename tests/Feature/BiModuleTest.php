@@ -451,6 +451,43 @@ class BiModuleTest extends TestCase
             ->assertJsonPath('props.terminales.total', 0);
     }
 
+    public function test_catalog_sales_columns_use_todays_snapshot_for_the_visible_company(): void
+    {
+        DB::table('catalogo_juegos')->insert([
+            ['producto_id' => '43', 'tipo' => 'Tradicional'],
+            ['producto_id' => '38', 'tipo' => 'No Tradicional'],
+            ['producto_id' => '99', 'tipo' => 'Recarga'],
+        ]);
+        Agencia::query()->create(['terminal' => '00101', 'empresa' => 'Grupo Joselito']);
+        Agencia::query()->create(['terminal' => '202', 'empresa' => 'Negosur']);
+        BiVentaHora::factory()->create(['fecha' => today()->toDateString(), 'hora' => 15]);
+        $snapshot = BiVentaSnapshot::query()->create([
+            'fecha' => today()->toDateString(), 'hora' => 15, 'capturado_en' => now(),
+            'productos_terminales' => ['101' => ['43' => 100, '38' => 40, '99' => 10], '202' => ['43' => 300]],
+        ]);
+
+        $this->withoutMiddleware()->withHeaders([
+            'X-Inertia' => 'true',
+            'X-Inertia-Partial-Component' => 'Bi/Dashboard',
+            'X-Inertia-Partial-Data' => 'terminales,horaVentasCatalogo',
+        ])->get(route('bi.index', ['empresa' => 'Grupo Joselito']))
+            ->assertOk()
+            ->assertJsonPath('props.horaVentasCatalogo', 15)
+            ->assertJsonPath('props.terminales.total', 1)
+            ->assertJsonPath('props.terminales.data.0.venta_tradicional_hoy', 100)
+            ->assertJsonPath('props.terminales.data.0.venta_no_tradicional_hoy', 40)
+            ->assertJsonPath('props.terminales.data.0.venta_total_hoy', 150);
+
+        $this->get(route('bi.index', ['empresa' => 'Negosur']))
+            ->assertJsonPath('props.terminales.data.0.venta_tradicional_hoy', 300)
+            ->assertJsonPath('props.terminales.data.0.venta_no_tradicional_hoy', 0)
+            ->assertJsonPath('props.terminales.data.0.venta_total_hoy', 300);
+
+        $snapshot->delete();
+        $this->get(route('bi.index', ['empresa' => 'Negosur']))
+            ->assertJsonPath('props.terminales.data.0.venta_total_hoy', null);
+    }
+
     public function test_zone_filter_recalculates_sales_prizes_and_hourly_cards(): void
     {
         Agencia::query()->create(['terminal' => '50091', 'empresa' => 'Grupo Joselito', 'zona' => 'ZONA NORTE', 'estatus' => 1]);
