@@ -372,7 +372,7 @@
 
                 <div class="card">
                     <div class="card-header d-flex flex-wrap align-items-end justify-content-between gap-3">
-                        <div><h5 class="card-title mb-1">Datos limpios</h5><p class="text-muted mb-0">Las horas parten del primer login. Si la última venta supera la salida registrada, se usa esa venta más 5 minutos como salida calculada.</p></div>
+                        <div><h5 class="card-title mb-1">Datos limpios</h5><p class="text-muted mb-0">Las horas parten del primer login. Si la última venta iguala o supera la salida registrada, se usa esa venta más 5 minutos como salida calculada.</p></div>
                         <form method="GET" action="{{ route('recursos-humanos.nomina-domingo.index') }}" class="d-flex flex-wrap align-items-end gap-2" id="formFiltrarNominaDomingo">
                             <input type="hidden" name="fecha" value="{{ $fecha }}">
                             <input type="hidden" name="consultar" value="1">

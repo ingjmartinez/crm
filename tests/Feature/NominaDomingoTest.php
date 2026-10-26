@@ -1038,14 +1038,32 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('10 h', $fila['horas_trabajadas_formato']);
     }
 
-    public function test_exit_adds_five_minutes_only_when_sale_is_after_last_logout(): void
+    public function test_exit_adds_five_minutes_when_sale_matches_or_exceeds_last_logout(): void
     {
         $service = app(NominaDomingoService::class);
         $logout = Carbon::parse('2026-10-25 16:56:45');
 
         $this->assertSame('2026-10-25 16:56:45', $service->salidaEfectiva($logout, Carbon::parse('2026-10-25 16:55:00'))->toDateTimeString());
-        $this->assertSame('2026-10-25 16:56:45', $service->salidaEfectiva($logout, $logout->copy())->toDateTimeString());
+        $this->assertSame('2026-10-25 17:01:45', $service->salidaEfectiva($logout, $logout->copy())->toDateTimeString());
         $this->assertSame('2026-10-25 17:02:00', $service->salidaEfectiva($logout, Carbon::parse('2026-10-25 16:57:00'))->toDateTimeString());
+    }
+
+    public function test_equal_last_sale_and_logout_are_reported_with_five_minute_compensation(): void
+    {
+        DB::table('asistencias_bet')->insert([
+            'fecha' => '2026-09-13', 'agencia_id' => '050179', 'cedula' => '40209951850',
+            'usuario' => 'Ana', 'primer_login' => '2026-09-13 08:45:08', 'ultimo_login' => '2026-09-13 16:56:45',
+        ]);
+        DB::table('ponche_por_cedula_ventas')->insert([
+            'terminal' => '050179', 'usuario_venta' => '40209951850', 'fecha_transaccion' => '2026-09-13 16:56:45',
+            'tipo' => 'Tradicional', 'total_apostado' => 200, 'estatus' => 'Validos',
+        ]);
+
+        $fila = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'))->firstWhere('cedula', '40209951850');
+
+        $this->assertSame('2026-09-13 16:56:45', $fila['salida_ponche']);
+        $this->assertSame('2026-09-13 17:01:45', $fila['salida_efectiva']);
+        $this->assertSame('Última venta + 5 minutos', $fila['fuente_salida']);
     }
 
     public function test_missing_last_login_requires_review_and_does_not_use_last_sale_for_hours(): void
