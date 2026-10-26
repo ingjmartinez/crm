@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Services\RecursosHumanos\NominaDomingoService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
@@ -443,6 +444,9 @@ class NominaDomingoTest extends TestCase
 
         $vista = view('recursos_humanos.nomina-domingo-informe-ejecutivo-pdf', compact('informe'))->render();
 
+        $this->assertStringContainsString('Comportamiento semanal', $vista);
+        $this->assertStringNotContainsString('Resumen del período', $vista);
+        $this->assertStringNotContainsString('class="kpi-table"', $vista);
         $this->assertStringContainsString('sales-bar bar-traditional', $vista);
         $this->assertStringContainsString('sales-bar bar-nontraditional', $vista);
         $this->assertStringContainsString('sales-bar bar-recharges', $vista);
@@ -450,6 +454,8 @@ class NominaDomingoTest extends TestCase
         $this->assertStringContainsString('% cumple', $vista);
         $this->assertStringContainsString('% no cumple', $vista);
         $this->assertStringNotContainsString('class="bar-track"', $vista);
+        $this->assertStringStartsWith('%PDF-', Pdf::loadView('recursos_humanos.nomina-domingo-informe-ejecutivo-pdf', compact('informe'))
+            ->setPaper('letter', 'landscape')->output());
     }
 
     public function test_company_filter_exposes_and_downloads_the_executive_pdf(): void

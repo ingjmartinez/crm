@@ -11,20 +11,11 @@
         * { box-sizing: border-box; }
         body { margin: 0; color: #24324a; font-family: DejaVu Sans, sans-serif; font-size: 10px; }
         .header { background: #13294b; color: #fff; padding: 18px 22px; border-radius: 7px; }
-        .header-table, .kpi-table, .content-table, .weekly-table { width: 100%; border-collapse: collapse; }
+        .header-table, .content-table, .weekly-table { width: 100%; border-collapse: collapse; }
         .header-title { margin: 0 0 5px; font-size: 22px; font-weight: 700; }
         .header-subtitle { color: #cbd8ea; font-size: 10px; }
         .header-meta { text-align: right; line-height: 1.7; }
         .section-title { margin: 18px 0 8px; color: #13294b; font-size: 13px; }
-        .kpi-table td { width: 20%; padding-right: 8px; vertical-align: top; }
-        .kpi-table td:last-child { padding-right: 0; }
-        .kpi { min-height: 67px; padding: 11px 13px; border: 1px solid #dbe3ee; border-top: 4px solid #09aa94; border-radius: 5px; background: #f9fbfd; }
-        .kpi.blue { border-top-color: #3498db; }
-        .kpi.green { border-top-color: #28b463; }
-        .kpi.orange { border-top-color: #f39c12; }
-        .kpi-label { color: #718096; font-size: 8px; text-transform: uppercase; letter-spacing: .5px; }
-        .kpi-value { margin-top: 5px; color: #172b4d; font-size: 14px; font-weight: 700; }
-        .kpi-note { margin-top: 3px; color: #718096; font-size: 8px; }
         .content-table > tbody > tr > td { width: 50%; vertical-align: top; }
         .content-table > tbody > tr > td:first-child { padding-right: 9px; }
         .content-table > tbody > tr > td:last-child { padding-left: 9px; }
@@ -76,17 +67,6 @@
             </tr>
         </table>
     </div>
-
-    <h2 class="section-title">Resumen del período</h2>
-    <table class="kpi-table">
-        <tr>
-            <td><div class="kpi"><div class="kpi-label">Ventas totales</div><div class="kpi-value">RD$ {{ number_format($informe['ventas_total'], 2) }}</div><div class="kpi-note">Acumulado de 4 semanas</div></div></td>
-            <td><div class="kpi blue"><div class="kpi-label">Ventas tradicionales</div><div class="kpi-value">RD$ {{ number_format($informe['ventas_tradicionales'], 2) }}</div><div class="kpi-note">Participación: {{ $informe['ventas_total'] > 0 ? number_format(($informe['ventas_tradicionales'] / $informe['ventas_total']) * 100, 1) : '0.0' }}%</div></div></td>
-            <td><div class="kpi orange"><div class="kpi-label">Ventas no tradicionales</div><div class="kpi-value">RD$ {{ number_format($informe['ventas_no_tradicionales'], 2) }}</div><div class="kpi-note">Participación: {{ $informe['ventas_total'] > 0 ? number_format(($informe['ventas_no_tradicionales'] / $informe['ventas_total']) * 100, 1) : '0.0' }}%</div></div></td>
-            <td><div class="kpi orange"><div class="kpi-label">Recargas</div><div class="kpi-value">RD$ {{ number_format($informe['ventas_recargas'], 2) }}</div><div class="kpi-note">Participación: {{ $informe['ventas_total'] > 0 ? number_format(($informe['ventas_recargas'] / $informe['ventas_total']) * 100, 1) : '0.0' }}%</div></div></td>
-            <td><div class="kpi green"><div class="kpi-label">Cumplimiento de horario</div><div class="kpi-value">{{ $informe['porcentaje_cumplimiento'] !== null ? number_format($informe['porcentaje_cumplimiento'], 1).'%' : 'Sin datos' }}</div><div class="kpi-note">{{ number_format($informe['cumplen']) }} de {{ number_format($informe['evaluados']) }} evaluaciones</div></div></td>
-        </tr>
-    </table>
 
     <h2 class="section-title">Comportamiento semanal</h2>
     <table class="content-table">
