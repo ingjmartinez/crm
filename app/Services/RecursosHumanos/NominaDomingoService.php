@@ -206,9 +206,9 @@ class NominaDomingoService
             return $salidaPonche;
         }
 
-        $salidaPorVenta = $ultimaTransaccion->copy()->addMinutes(5);
-
-        return $salidaPorVenta->greaterThan($salidaPonche) ? $salidaPorVenta : $salidaPonche;
+        return $ultimaTransaccion->greaterThan($salidaPonche)
+            ? $ultimaTransaccion->copy()->addMinutes(5)
+            : $salidaPonche;
     }
 
     /** @return Collection<int, string> */

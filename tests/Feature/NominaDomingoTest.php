@@ -1027,7 +1027,7 @@ class NominaDomingoTest extends TestCase
         DB::table('nomina_domingo_ventas')->insert([
             'terminal' => '12',
             'usuario_venta' => '001-1234567-8',
-            'fecha_transaccion' => '2026-09-13 16:50:00',
+            'fecha_transaccion' => '2026-09-13 16:56:00',
         ]);
 
         $fila = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'))->first();
@@ -1036,6 +1036,16 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('2026-09-13 17:00:00', $fila['salida_efectiva']);
         $this->assertSame(10.0, $fila['horas_trabajadas']);
         $this->assertSame('10 h', $fila['horas_trabajadas_formato']);
+    }
+
+    public function test_exit_adds_five_minutes_only_when_sale_is_after_last_logout(): void
+    {
+        $service = app(NominaDomingoService::class);
+        $logout = Carbon::parse('2026-10-25 16:56:45');
+
+        $this->assertSame('2026-10-25 16:56:45', $service->salidaEfectiva($logout, Carbon::parse('2026-10-25 16:55:00'))->toDateTimeString());
+        $this->assertSame('2026-10-25 16:56:45', $service->salidaEfectiva($logout, $logout->copy())->toDateTimeString());
+        $this->assertSame('2026-10-25 17:02:00', $service->salidaEfectiva($logout, Carbon::parse('2026-10-25 16:57:00'))->toDateTimeString());
     }
 
     public function test_missing_last_login_requires_review_and_does_not_use_last_sale_for_hours(): void
@@ -1367,6 +1377,23 @@ class NominaDomingoTest extends TestCase
             ->assertSee('<td>Empresa Norte</td>', false)
             ->assertSee('Primer login: 08:00 AM | Último login: 04:00 PM')
             ->assertSee('columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]');
+    }
+
+    public function test_excel_export_only_selects_existing_report_columns(): void
+    {
+        $view = file_get_contents(resource_path('views/recursos_humanos/nomina-domingo.blade.php'));
+        preg_match('/<table[^>]+id="tablaNominaDomingo"[^>]*>\s*<thead><tr>(.*?)<\/tr><\/thead>/s', $view, $headers);
+        preg_match('/title: \'Nomina_Domingo_\{\{ \$fecha \}\}\',[\s\S]*?columns: \[([^]]+)\]/', $view, $columns);
+
+        $this->assertNotEmpty($headers);
+        $this->assertNotEmpty($columns);
+        $columnCount = substr_count($headers[1], '<th>');
+        $exportedIndexes = array_map('intval', explode(',', $columns[1]));
+
+        $this->assertSame(range(0, $columnCount - 1), $exportedIndexes);
+
+        $layout = file_get_contents(resource_path('views/app.blade.php'));
+        $this->assertLessThan(strpos($layout, 'buttons.html5.min.js'), strpos($layout, 'jszip.min.js'));
     }
 
     public function test_configuration_can_be_updated(): void
