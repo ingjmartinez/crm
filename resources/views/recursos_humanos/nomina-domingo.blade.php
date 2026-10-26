@@ -63,6 +63,9 @@
                             <p class="text-muted mb-0">Carga Tradicional, No Tradicional y Recargas para obtener la última transacción real.</p>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
+                            @hasanyrole('superadmin|admin2')
+                                <a class="btn btn-outline-secondary" href="{{ route('recursos-humanos.nomina-domingo.auditoria') }}">Historial de cambios</a>
+                            @endhasanyrole
                             @if ($consultar)
                             <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#modalCoordinadores">
                                 <i class="ri-team-line me-1"></i> Coordinador

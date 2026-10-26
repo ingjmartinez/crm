@@ -10,6 +10,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -86,6 +87,60 @@ class Admin2RoleTest extends TestCase
         $this->assertFalse($permissions->contains('usuarios.delete'));
         $this->assertFalse($permissions->contains('roles.delete'));
         $this->assertFalse($permissions->contains('permissions.delete'));
+    }
+
+    public function test_task_assigner_role_can_create_tasks_and_viewers_cannot_assign(): void
+    {
+        $assignerRole = Role::findByName('asignador_tareas', 'web');
+        $this->assertTrue($assignerRole->hasPermissionTo('tareas.assign'));
+        $this->assertTrue($assignerRole->hasPermissionTo('tareas.panel.view'));
+
+        $viewerRole = Role::findOrCreate('visor_tareas', 'web');
+        $viewerRole->givePermissionTo(Permission::findByName('tareas.panel.view', 'web'));
+
+        $viewer = User::query()->create(['name' => 'Visor', 'email' => 'visor@example.com', 'password' => 'password']);
+        $viewer->assignRole($viewerRole);
+        $this->actingAs($viewer)->post(route('tareas.store'), [])->assertForbidden();
+
+        $assigner = User::query()->create(['name' => 'Asignador', 'email' => 'asignador@example.com', 'password' => 'password']);
+        $assigner->assignRole($assignerRole);
+        $this->actingAs($assigner)->postJson(route('tareas.store'), [])->assertUnprocessable();
+    }
+
+    public function test_task_assigner_migration_creates_role_and_permission(): void
+    {
+        Role::findByName('asignador_tareas', 'web')->delete();
+        Permission::findByName('tareas.assign', 'web')->delete();
+
+        $migration = require database_path('migrations/2026_10_25_234400_create_asignador_tareas_role_and_permission.php');
+        $migration->up();
+
+        $role = Role::findByName('asignador_tareas', 'web');
+        $this->assertTrue($role->hasPermissionTo('tareas.assign'));
+        $this->assertTrue(Role::findByName('admin', 'web')->hasPermissionTo('tareas.assign'));
+    }
+
+    public function test_task_viewer_cannot_change_assignee_on_an_existing_task(): void
+    {
+        Schema::create('tareas', function (Blueprint $table): void {
+            $table->id();
+            $table->string('titulo');
+            $table->unsignedBigInteger('asignado_id')->nullable();
+            $table->timestamps();
+        });
+
+        $viewerRole = Role::findOrCreate('visor_tareas', 'web');
+        $viewerRole->givePermissionTo(Permission::findByName('tareas.panel.view', 'web'));
+        $viewer = User::query()->create(['name' => 'Visor', 'email' => 'visor@example.com', 'password' => 'password']);
+        $viewer->assignRole($viewerRole);
+        $task = \App\Models\Tarea::query()->create(['titulo' => 'Tarea', 'asignado_id' => $viewer->id]);
+
+        $this->actingAs($viewer)
+            ->putJson(route('tareas.update', $task), ['asignado_id' => $viewer->id + 1])
+            ->assertForbidden();
+
+        $this->assertSame($viewer->id, $task->fresh()->asignado_id);
+        Schema::dropIfExists('tareas');
     }
 
     public function test_bi_tv_role_only_grants_the_tv_view(): void

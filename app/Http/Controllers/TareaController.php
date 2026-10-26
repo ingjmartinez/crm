@@ -43,7 +43,9 @@ class TareaController extends Controller
             'atrasadas' => Tarea::atrasadas()->count(),
         ];
 
-        return view('tareas.index', compact('departamentos', 'usuarios', 'stats', 'esAdminSuperior'));
+        $puedeAsignarTareas = auth()->user()->can('tareas.assign');
+
+        return view('tareas.index', compact('departamentos', 'usuarios', 'stats', 'esAdminSuperior', 'puedeAsignarTareas'));
     }
 
     /**
@@ -352,6 +354,11 @@ class TareaController extends Controller
      */
     public function update(Request $request, Tarea $tarea)
     {
+        if (! $request->user()->can('tareas.assign') && $request->has('asignado_id')
+            && (int) $request->input('asignado_id') !== (int) $tarea->asignado_id) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'titulo' => 'required|string|max:255',
             'descripcion' => 'nullable|string',
@@ -364,6 +371,10 @@ class TareaController extends Controller
             'fecha_inicio' => 'required|date',
             'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
         ]);
+
+        if (! $request->user()->can('tareas.assign')) {
+            $validated['asignado_id'] = $tarea->asignado_id;
+        }
 
         if ($request->hasFile('adjunto')) {
             if (! empty($tarea->adjunto_path)) {

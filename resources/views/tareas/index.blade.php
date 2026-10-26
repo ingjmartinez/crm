@@ -157,9 +157,11 @@
                                         <button class="btn btn-sm btn-soft-info me-1" data-bs-toggle="modal" data-bs-target="#modalDepartamento">
                                             <i class="ri-building-line me-1"></i>Deptos
                                         </button>
-                                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalTarea" onclick="limpiarFormTarea()">
-                                            <i class="ri-add-line me-1"></i>Nueva Tarea
-                                        </button>
+                                        @if($puedeAsignarTareas)
+                                            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalTarea" onclick="limpiarFormTarea()">
+                                                <i class="ri-add-line me-1"></i>Nueva Tarea
+                                            </button>
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -282,7 +284,7 @@
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Asignar a</label>
-                                <select class="form-select" id="tarea-asignado">
+                                <select class="form-select" id="tarea-asignado" @disabled(!$puedeAsignarTareas)>
                                     <option value="">Sin asignar</option>
                                     @foreach($usuarios as $user)
                                         <option value="{{ $user->id }}">{{ $user->name }}</option>
@@ -432,7 +434,13 @@ let ganttTareas = [];
 
 $(document).ready(function() {
     cargarGantt();
-    initDataTable();
+    document.querySelector('a[href="#tab-lista"]').addEventListener('shown.bs.tab', function() {
+        if (!dataTable) {
+            initDataTable();
+        }
+
+        dataTable.columns.adjust().responsive.recalc();
+    });
     cargarDepartamentosModal();
     aplicarFiltroTareaDesdeUrl();
 });
@@ -451,10 +459,6 @@ function aplicarFiltroTareaDesdeUrl() {
     if (tabLista && window.bootstrap?.Tab) {
         const instance = bootstrap.Tab.getOrCreateInstance(tabLista);
         instance.show();
-    }
-
-    if (dataTable) {
-        dataTable.ajax.reload();
     }
 }
 

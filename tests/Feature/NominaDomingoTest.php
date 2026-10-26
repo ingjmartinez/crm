@@ -30,6 +30,19 @@ class NominaDomingoTest extends TestCase
             $table->decimal('monto_fijo', 12, 2);
             $table->timestamps();
         });
+        Schema::create('nomina_domingo_auditorias', function (Blueprint $table): void {
+            $table->id();
+            $table->string('accion');
+            $table->string('categoria');
+            $table->string('terminal')->nullable();
+            $table->unsignedBigInteger('usuario_id')->nullable();
+            $table->string('usuario_nombre');
+            $table->string('usuario_email');
+            $table->json('antes')->nullable();
+            $table->json('despues')->nullable();
+            $table->string('ip')->nullable();
+            $table->timestamps();
+        });
         Schema::create('nomina_domingo_ventas', function (Blueprint $table): void {
             $table->id();
             $table->string('terminal')->nullable();
@@ -123,7 +136,7 @@ class NominaDomingoTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_doble_turno', 'nomina_domingo_terminales_excluidas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones'] as $tabla) {
+        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_doble_turno', 'nomina_domingo_terminales_excluidas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones', 'nomina_domingo_auditorias'] as $tabla) {
             Schema::dropIfExists($tabla);
         }
         parent::tearDown();
@@ -171,6 +184,8 @@ class NominaDomingoTest extends TestCase
 
     public function test_terminal_exclusions_can_be_recognized_saved_listed_and_removed(): void
     {
+        $usuario = (new \App\Models\User)->forceFill(['id' => 17, 'name' => 'Auditora', 'email' => 'auditora@example.com']);
+        $this->actingAs($usuario);
         DB::table('agencias')->insert([
             ['terminal' => '12', 'empresa' => 'A'],
             ['terminal' => '13', 'empresa' => 'A'],
@@ -193,6 +208,8 @@ class NominaDomingoTest extends TestCase
             'terminales' => ['13'],
         ])->assertOk()->assertJson(['terminales' => ['13'], 'count' => 1]);
         $this->assertDatabaseMissing('nomina_domingo_terminales_excluidas', ['terminal' => '12']);
+        $this->assertDatabaseHas('nomina_domingo_auditorias', ['accion' => 'agregado', 'categoria' => 'excluida', 'terminal' => '12', 'usuario_id' => $usuario->id]);
+        $this->assertDatabaseHas('nomina_domingo_auditorias', ['accion' => 'eliminado', 'categoria' => 'excluida', 'terminal' => '12', 'usuario_id' => $usuario->id]);
     }
 
     public function test_double_shift_terminal_uses_shared_minimum_for_each_user(): void
@@ -215,6 +232,8 @@ class NominaDomingoTest extends TestCase
 
     public function test_double_shift_terminals_can_be_recognized_saved_listed_and_removed(): void
     {
+        $usuario = (new \App\Models\User)->forceFill(['id' => 17, 'name' => 'Auditora', 'email' => 'auditora@example.com']);
+        $this->actingAs($usuario);
         DB::table('agencias')->insert([['terminal' => '12'], ['terminal' => '13']]);
 
         $this->postJson(route('recursos-humanos.nomina-domingo.terminales-doble-turno.reconocer'), ['terminales_manual' => "12\n999"])
@@ -226,6 +245,8 @@ class NominaDomingoTest extends TestCase
         $this->postJson(route('recursos-humanos.nomina-domingo.terminales-doble-turno.store'), ['terminales' => ['13']])
             ->assertOk()->assertJson(['terminales' => ['13']]);
         $this->assertDatabaseMissing('nomina_domingo_terminales_doble_turno', ['terminal' => '12']);
+        $this->assertDatabaseHas('nomina_domingo_auditorias', ['accion' => 'agregado', 'categoria' => 'doble_turno', 'terminal' => '12', 'usuario_id' => $usuario->id]);
+        $this->assertDatabaseHas('nomina_domingo_auditorias', ['accion' => 'eliminado', 'categoria' => 'doble_turno', 'terminal' => '12', 'usuario_id' => $usuario->id]);
     }
 
     public function test_terminal_recognition_requires_a_file_or_manual_values(): void
@@ -1281,6 +1302,8 @@ class NominaDomingoTest extends TestCase
 
     public function test_configuration_can_be_updated(): void
     {
+        $usuario = (new \App\Models\User)->forceFill(['id' => 17, 'name' => 'Auditora', 'email' => 'auditora@example.com']);
+        $this->actingAs($usuario);
         $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
             'horas_requeridas_horas' => 7,
             'horas_requeridas_minutos' => 30,
@@ -1291,6 +1314,7 @@ class NominaDomingoTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('nomina_domingo_configuraciones', ['id' => 1, 'horas_requeridas' => 7.5, 'minutos_requeridos_doble_turno' => 225, 'monto_fijo' => 1200]);
+        $this->assertDatabaseHas('nomina_domingo_auditorias', ['accion' => 'modificado', 'categoria' => 'configuracion', 'usuario_id' => $usuario->id]);
     }
 
     public function test_configuration_rejects_sixty_minutes(): void

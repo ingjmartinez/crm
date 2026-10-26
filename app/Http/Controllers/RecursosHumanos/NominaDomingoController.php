@@ -15,6 +15,7 @@ use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesDobleTurno
 use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesExcluidasRequest;
 use App\Http\Requests\RecursosHumanos\ResolverRecargaPendienteNominaDomingoRequest;
 use App\Imports\AgenciasActualizacionMasivaImport;
+use App\Models\NominaDomingoAuditoria;
 use App\Services\RecursosHumanos\NominaDomingoService;
 use App\Services\RecursosHumanos\NominaDomingoVentasImportService;
 use App\Services\TelegramService;
@@ -110,7 +111,14 @@ class NominaDomingoController extends Controller
     {
         $datos = $request->validated();
         $datos['horas_requeridas'] = (int) $datos['horas_requeridas_horas'] + ((int) $datos['horas_requeridas_minutos'] / 60);
-        $this->service->guardarConfiguracion($datos);
+        DB::transaction(function () use ($request, $datos): void {
+            $antes = $this->service->configuracion();
+            $this->service->guardarConfiguracion($datos);
+            $despues = $this->service->configuracion();
+            if ($antes !== $despues) {
+                $this->registrarAuditoria($request, 'modificado', 'configuracion', null, $antes, $despues);
+            }
+        });
 
         return back()->with('success', 'Configuración de Nómina Domingo actualizada.');
     }
@@ -295,8 +303,9 @@ class NominaDomingoController extends Controller
         $terminales = collect($request->validated('terminales'))->map(fn (mixed $terminal): string => trim((string) $terminal))
             ->filter()->unique()->values();
         $userId = auth()->id();
+        $anteriores = $this->terminalesDobleTurnoGuardadas();
 
-        DB::transaction(function () use ($terminales, $userId): void {
+        DB::transaction(function () use ($request, $terminales, $anteriores, $userId): void {
             DB::table('nomina_domingo_terminales_doble_turno')
                 ->when($terminales->isNotEmpty(), fn ($query) => $query->whereNotIn('terminal', $terminales->all()))->delete();
             foreach ($terminales as $terminal) {
@@ -305,6 +314,7 @@ class NominaDomingoController extends Controller
                     ['created_by' => $userId, 'updated_by' => $userId, 'created_at' => now(), 'updated_at' => now()]
                 );
             }
+            $this->registrarCambiosTerminales($request, 'doble_turno', $anteriores, $terminales);
         });
 
         $guardadas = $this->terminalesDobleTurnoGuardadas();
@@ -329,8 +339,9 @@ class NominaDomingoController extends Controller
         $terminales = collect($request->validated('terminales'))->map(fn (mixed $terminal): string => trim((string) $terminal))
             ->filter()->unique()->values();
         $userId = auth()->id();
+        $anteriores = $this->terminalesExcluidasGuardadas();
 
-        DB::transaction(function () use ($terminales, $userId): void {
+        DB::transaction(function () use ($request, $terminales, $anteriores, $userId): void {
             DB::table('nomina_domingo_terminales_excluidas')
                 ->when($terminales->isNotEmpty(), fn ($query) => $query->whereNotIn('terminal', $terminales->all()))->delete();
             foreach ($terminales as $terminal) {
@@ -339,6 +350,7 @@ class NominaDomingoController extends Controller
                     ['created_by' => $userId, 'updated_by' => $userId, 'created_at' => now(), 'updated_at' => now()]
                 );
             }
+            $this->registrarCambiosTerminales($request, 'excluida', $anteriores, $terminales);
         });
 
         $guardadas = $this->terminalesExcluidasGuardadas();
@@ -366,6 +378,46 @@ class NominaDomingoController extends Controller
     private function extraerTerminales(string $texto): Collection
     {
         return collect(preg_split('/[\s,;]+/', $texto) ?: []);
+    }
+
+    public function auditoria(Request $request): View
+    {
+        $buscar = trim((string) $request->query('buscar', ''));
+        $auditorias = NominaDomingoAuditoria::query()
+            ->when($buscar !== '', fn ($query) => $query->where(function ($query) use ($buscar): void {
+                $query->where('usuario_nombre', 'like', '%'.$buscar.'%')
+                    ->orWhere('usuario_email', 'like', '%'.$buscar.'%')
+                    ->orWhere('terminal', 'like', '%'.$buscar.'%');
+            }))
+            ->latest()->paginate(50)->withQueryString();
+
+        return view('recursos_humanos.nomina-domingo-auditoria', compact('auditorias', 'buscar'));
+    }
+
+    private function registrarCambiosTerminales(Request $request, string $categoria, Collection $anteriores, Collection $terminales): void
+    {
+        foreach ($terminales->diff($anteriores) as $terminal) {
+            $this->registrarAuditoria($request, 'agregado', $categoria, $terminal, null, ['terminal' => $terminal]);
+        }
+        foreach ($anteriores->diff($terminales) as $terminal) {
+            $this->registrarAuditoria($request, 'eliminado', $categoria, $terminal, ['terminal' => $terminal], null);
+        }
+    }
+
+    private function registrarAuditoria(Request $request, string $accion, string $categoria, ?string $terminal, ?array $antes, ?array $despues): void
+    {
+        $usuario = $request->user();
+        NominaDomingoAuditoria::create([
+            'accion' => $accion,
+            'categoria' => $categoria,
+            'terminal' => $terminal,
+            'usuario_id' => $usuario?->id,
+            'usuario_nombre' => $usuario?->name ?? 'Sistema',
+            'usuario_email' => $usuario?->email ?? 'sistema',
+            'antes' => $antes,
+            'despues' => $despues,
+            'ip' => $request->ip(),
+        ]);
     }
 
     /** @return Collection<int, string> */

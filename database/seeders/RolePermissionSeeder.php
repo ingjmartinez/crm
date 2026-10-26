@@ -44,6 +44,7 @@ class RolePermissionSeeder extends Seeder
             'incentivos.view',
             'tecnologia.view',
             'tareas.view',
+            'tareas.assign',
         ];
 
         $viewPermissions = [
@@ -136,6 +137,7 @@ class RolePermissionSeeder extends Seeder
                 'servicios_generales.manage',
                 'servicios_generales.close',
             ],
+            'asignador_tareas' => ['tareas.view', 'tareas.panel.view', 'tareas.assign'],
         ];
 
         foreach ($roles as $roleName => $rolePermissions) {

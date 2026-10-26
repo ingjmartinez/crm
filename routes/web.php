@@ -10,13 +10,16 @@ use App\Http\Controllers\BancoOperacionController;
 use App\Http\Controllers\Bi\DashboardController as BiDashboardController;
 use App\Http\Controllers\CatalogoJuegoController;
 use App\Http\Controllers\ComercialController;
+use App\Http\Controllers\ContabilidadClasificacionCuentaController;
 use App\Http\Controllers\ContabilidadComisionController;
 use App\Http\Controllers\ContabilidadDistribucionGastoRutaController;
 use App\Http\Controllers\ContabilidadElectricidadController;
 use App\Http\Controllers\ContabilidadEstadoResultadoController;
 use App\Http\Controllers\ContabilidadFlujoRutaController;
+use App\Http\Controllers\ContabilidadGastoAgenciaController;
 use App\Http\Controllers\ContabilidadGastoIncentivoAgenciaController;
 use App\Http\Controllers\ContabilidadIngresoLotekaController;
+use App\Http\Controllers\ContabilidadMaestraAgenciaController;
 use App\Http\Controllers\ContabilidadValidadorAgenciaController;
 use App\Http\Controllers\ContabilidadVolantePagoSocioController;
 use App\Http\Controllers\CoordinadorOperadorController;
@@ -184,6 +187,11 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     Route::prefix('contabilidad')->name('contabilidad.')->group(function () {
         Route::get('/', [ModuleHubController::class, 'contabilidad'])->name('index');
         Route::view('/inicio', 'contabilidad.index')->name('inicio');
+        Route::get('/maestra-agencia', [ContabilidadMaestraAgenciaController::class, 'index'])->name('maestra-agencia');
+        Route::get('/gasto-agencia', [ContabilidadGastoAgenciaController::class, 'index'])->name('gasto-agencia');
+        Route::get('/clasificacion-cuentas', [ContabilidadClasificacionCuentaController::class, 'index'])->name('clasificacion-cuentas');
+        Route::post('/clasificacion-cuentas', [ContabilidadClasificacionCuentaController::class, 'store'])->name('clasificacion-cuentas.store');
+        Route::delete('/clasificacion-cuentas/{cuenta}', [ContabilidadClasificacionCuentaController::class, 'destroy'])->name('clasificacion-cuentas.destroy');
         Route::get('/electricidad', [ContabilidadElectricidadController::class, 'index'])->name('electricidad');
         Route::get('/electricidad/data', [ContabilidadElectricidadController::class, 'data'])->name('electricidad.data');
         Route::post('/electricidad', [ContabilidadElectricidadController::class, 'store'])->name('electricidad.store');
@@ -398,6 +406,9 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
             ->name('recursos-humanos.agencias-cerradas-domingos.exportar');
         Route::get('/recursos-humanos/nomina-domingo', [NominaDomingoController::class, 'index'])
             ->name('recursos-humanos.nomina-domingo.index');
+        Route::get('/recursos-humanos/nomina-domingo/auditoria', [NominaDomingoController::class, 'auditoria'])
+            ->middleware('role:superadmin|admin2')
+            ->name('recursos-humanos.nomina-domingo.auditoria');
         Route::get('/recursos-humanos/nomina-domingo/consultar-cedula', [NominaDomingoController::class, 'consultarCedula'])
             ->name('recursos-humanos.nomina-domingo.consultar-cedula');
         Route::get('/recursos-humanos/nomina-domingo/informe-ejecutivo', [NominaDomingoController::class, 'informeEjecutivo'])
@@ -932,7 +943,7 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     Route::post('/tareas/notificaciones/leer-todas', [TareaController::class, 'marcarTodasLeidas'])->name('tareas.notificaciones.leer-todas');
 
     // CRUD Tareas (rutas con parámetro al final)
-    Route::post('/tareas', [TareaController::class, 'store'])->name('tareas.store');
+    Route::post('/tareas', [TareaController::class, 'store'])->middleware('permission:tareas.assign')->name('tareas.store');
     Route::post('/tareas/{tarea}/solicitar-cierre', [TareaController::class, 'solicitarCierre'])->name('tareas.solicitar-cierre');
     Route::post('/tareas/{tarea}/finalizar-admin', [TareaController::class, 'finalizarPorAdmin'])->name('tareas.finalizar-admin');
     Route::get('/tareas/{tarea}', [TareaController::class, 'show'])->name('tareas.show');
