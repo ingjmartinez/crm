@@ -56,6 +56,17 @@ class NominaDomingoTest extends TestCase
             $table->string('estatus')->nullable();
             $table->timestamps();
         });
+        Schema::create('ponche_por_cedula_ventas', function (Blueprint $table): void {
+            $table->id();
+            $table->string('terminal')->nullable();
+            $table->string('terminal_clave')->nullable();
+            $table->string('usuario_venta')->nullable();
+            $table->dateTime('fecha_transaccion')->nullable();
+            $table->string('tipo')->nullable();
+            $table->decimal('total_apostado', 12, 2)->nullable();
+            $table->string('estatus')->nullable();
+            $table->timestamps();
+        });
         Schema::create('nomina_domingo_terminales_excluidas', function (Blueprint $table): void {
             $table->id();
             $table->string('terminal')->unique();
@@ -136,7 +147,7 @@ class NominaDomingoTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_doble_turno', 'nomina_domingo_terminales_excluidas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones', 'nomina_domingo_auditorias'] as $tabla) {
+        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_doble_turno', 'nomina_domingo_terminales_excluidas', 'ponche_por_cedula_ventas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones', 'nomina_domingo_auditorias'] as $tabla) {
             Schema::dropIfExists($tabla);
         }
         parent::tearDown();
@@ -569,6 +580,64 @@ class NominaDomingoTest extends TestCase
             ->assertSee('Conciliación No Tradicional')
             ->assertSee('RD$ 1,000.00')
             ->assertSee('RD$ 350.00');
+    }
+
+    public function test_reconciles_sales_loaded_from_ponche_por_cedula_route_without_double_counting_legacy_upload(): void
+    {
+        DB::table('nomina_domingo_ventas')->insert([
+            'terminal' => '12', 'usuario_venta' => '1', 'fecha_transaccion' => '2026-09-13 12:00:00',
+            'tipo' => 'Tradicional', 'total_apostado' => 999, 'estatus' => 'Validos',
+        ]);
+        DB::table('ponche_por_cedula_ventas')->insert([
+            ['terminal' => '12', 'usuario_venta' => '1', 'fecha_transaccion' => '2026-09-13 12:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 1000, 'estatus' => 'Validos'],
+            ['terminal' => '12', 'usuario_venta' => '1', 'fecha_transaccion' => '2026-09-13 12:30:00', 'tipo' => 'No Tradicional', 'total_apostado' => 400, 'estatus' => 'Validos'],
+        ]);
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '12', 'cedula' => '1', 'fecha' => '2026-09-13', 'tipo' => 'tradicional', 'monto' => 1000],
+            ['agencia_id' => '12', 'cedula' => '1', 'fecha' => '2026-09-13', 'tipo' => 'no_tradicional', 'monto' => 400],
+        ]);
+
+        $service = app(NominaDomingoService::class);
+        $fecha = Carbon::parse('2026-09-13');
+        $conciliacion = $service->conciliacionVentas($fecha);
+
+        $this->assertSame(['archivo' => 1000.0, 'api' => 1000.0, 'diferencia' => 0.0], $conciliacion['tradicional']);
+        $this->assertSame(['archivo' => 400.0, 'api' => 400.0, 'diferencia' => 0.0], $conciliacion['no_tradicional']);
+        $this->assertSame(1000.0, $service->generar($fecha)->sum('tradicional_monto'));
+        $this->assertSame(400.0, $service->generar($fecha)->sum('no_tradicional_monto'));
+    }
+
+    public function test_sunday_payroll_uses_legacy_sales_when_new_route_has_no_sales_for_that_date(): void
+    {
+        DB::table('nomina_domingo_ventas')->insert([
+            'terminal' => '12', 'usuario_venta' => '1', 'fecha_transaccion' => '2026-09-13 12:00:00',
+            'tipo' => 'Tradicional', 'total_apostado' => 1000, 'estatus' => 'Validos',
+        ]);
+        DB::table('ponche_por_cedula_ventas')->insert([
+            'terminal' => '12', 'usuario_venta' => '1', 'fecha_transaccion' => '2026-09-20 12:00:00',
+            'tipo' => 'Tradicional', 'total_apostado' => 2000, 'estatus' => 'Validos',
+        ]);
+
+        $service = app(NominaDomingoService::class);
+
+        $this->assertSame(1000.0, $service->conciliacionVentas(Carbon::parse('2026-09-13'))['tradicional']['archivo']);
+        $this->assertSame(2000.0, $service->conciliacionVentas(Carbon::parse('2026-09-20'))['tradicional']['archivo']);
+    }
+
+    public function test_pending_recharge_from_ponche_por_cedula_can_be_assigned_in_sunday_payroll(): void
+    {
+        DB::table('ponche_por_cedula_ventas')->insert([
+            ['terminal' => '12', 'usuario_venta' => '00112345678', 'fecha_transaccion' => '2026-09-13 10:00:00', 'tipo' => 'Tradicional', 'total_apostado' => 100, 'estatus' => 'Validos'],
+            ['terminal' => null, 'usuario_venta' => '00112345678', 'fecha_transaccion' => '2026-09-13 12:00:00', 'tipo' => 'Recargas', 'total_apostado' => 50, 'estatus' => 'Pendiente'],
+        ]);
+        $recargaId = (int) DB::table('ponche_por_cedula_ventas')->where('tipo', 'Recargas')->value('id');
+
+        $this->assertSame(1, app(NominaDomingoService::class)->recargasPendientes(Carbon::parse('2026-09-13'))['total']);
+        $this->postJson(route('recursos-humanos.nomina-domingo.recargas-pendientes.resolver'), [
+            'venta_id' => $recargaId, 'terminal' => '12', 'fecha' => '2026-09-13',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('ponche_por_cedula_ventas', ['id' => $recargaId, 'terminal' => '12', 'estatus' => 'Validos']);
     }
 
     public function test_uploading_sunday_files_does_not_replace_agency_report_sales(): void

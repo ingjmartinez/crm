@@ -149,7 +149,11 @@ class NominaDomingoController extends Controller
     public function resolverRecargaPendiente(ResolverRecargaPendienteNominaDomingoRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $this->service->resolverRecargaPendiente((int) $validated['venta_id'], $validated['terminal']);
+        $this->service->resolverRecargaPendiente(
+            (int) $validated['venta_id'],
+            $validated['terminal'],
+            isset($validated['fecha']) ? Carbon::parse($validated['fecha']) : null,
+        );
 
         return response()->json(['message' => 'Recarga asignada al terminal seleccionado.']);
     }

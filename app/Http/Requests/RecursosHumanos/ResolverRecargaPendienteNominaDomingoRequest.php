@@ -25,6 +25,7 @@ class ResolverRecargaPendienteNominaDomingoRequest extends FormRequest
         return [
             'venta_id' => ['required', 'integer', 'min:1'],
             'terminal' => ['required', 'string', 'max:50'],
+            'fecha' => ['nullable', 'date_format:Y-m-d'],
         ];
     }
 

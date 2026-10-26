@@ -225,11 +225,12 @@ class NominaDomingoService
     /** @return array{total: int, usuarios: Collection<int, object>, transacciones: Collection<int, array{id: int, usuario_venta: string, fecha: string, monto: float, terminales: array<int, string>}>} */
     public function recargasPendientes(Carbon $fecha): array
     {
-        if (! Schema::hasTable('nomina_domingo_ventas')) {
+        $tablaVentas = $this->tablaVentas($fecha);
+        if ($tablaVentas === null) {
             return ['total' => 0, 'usuarios' => collect(), 'transacciones' => collect()];
         }
 
-        $query = DB::table('nomina_domingo_ventas')
+        $query = DB::table($tablaVentas)
             ->whereDate('fecha_transaccion', $fecha->toDateString())
             ->where('tipo', 'Recargas')
             ->where('estatus', 'Pendiente');
@@ -237,7 +238,7 @@ class NominaDomingoService
         $transacciones = (clone $query)->orderBy('fecha_transaccion')->limit(100)
             ->get(['id', 'usuario_venta', 'fecha_transaccion', 'total_apostado']);
         $cedulasPendientes = $transacciones->map(fn (object $recarga): string => $this->normalizar($recarga->usuario_venta))->unique();
-        $terminalesPorCedula = DB::table('nomina_domingo_ventas')
+        $terminalesPorCedula = DB::table($tablaVentas)
             ->whereDate('fecha_transaccion', $fecha->toDateString())
             ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
             ->whereNotNull('terminal')
@@ -263,18 +264,31 @@ class NominaDomingoService
         ];
     }
 
-    public function resolverRecargaPendiente(int $ventaId, string $terminalSeleccionada): void
+    public function resolverRecargaPendiente(int $ventaId, string $terminalSeleccionada, ?Carbon $fecha = null): void
     {
-        DB::transaction(function () use ($ventaId, $terminalSeleccionada): void {
-            $recarga = DB::table('nomina_domingo_ventas')->where('id', $ventaId)
-                ->where('tipo', 'Recargas')->where('estatus', 'Pendiente')->lockForUpdate()->first();
+        DB::transaction(function () use ($ventaId, $terminalSeleccionada, $fecha): void {
+            $recarga = null;
+            $tablaVentas = null;
+            foreach (['ponche_por_cedula_ventas', 'nomina_domingo_ventas'] as $tabla) {
+                if (! Schema::hasTable($tabla)) {
+                    continue;
+                }
+                $candidata = DB::table($tabla)->where('id', $ventaId)
+                    ->when($fecha !== null, fn ($query) => $query->whereDate('fecha_transaccion', $fecha->toDateString()))
+                    ->where('tipo', 'Recargas')->where('estatus', 'Pendiente')->lockForUpdate()->first();
+                if ($candidata !== null && $this->tablaVentas(Carbon::parse($candidata->fecha_transaccion)) === $tabla) {
+                    $recarga = $candidata;
+                    $tablaVentas = $tabla;
+                    break;
+                }
+            }
 
             if ($recarga === null) {
                 throw ValidationException::withMessages(['venta_id' => 'La recarga ya no está pendiente o no existe.']);
             }
 
             $cedula = $this->normalizar($recarga->usuario_venta);
-            $terminales = DB::table('nomina_domingo_ventas')
+            $terminales = DB::table($tablaVentas)
                 ->whereDate('fecha_transaccion', Carbon::parse($recarga->fecha_transaccion)->toDateString())
                 ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
                 ->whereNotNull('terminal')
@@ -287,7 +301,7 @@ class NominaDomingoService
                 throw ValidationException::withMessages(['terminal' => 'El terminal debe tener ventas de esta cédula en el mismo domingo.']);
             }
 
-            DB::table('nomina_domingo_ventas')->where('id', $ventaId)->update([
+            DB::table($tablaVentas)->where('id', $ventaId)->update([
                 'terminal' => $terminal,
                 'terminal_clave' => $this->normalizar($terminal),
                 'estatus' => 'Validos',
@@ -299,12 +313,13 @@ class NominaDomingoService
     /** @return array{cedula: string, nombre: string, fecha: string, monto_total: float, cantidad: int, transacciones: array<int, array{fecha: string, tipo: string, terminal: ?string, monto: float}>}|null */
     public function consultarCedula(Carbon $fecha, string $cedula): ?array
     {
-        if (! Schema::hasTable('nomina_domingo_ventas')) {
+        $tablaVentas = $this->tablaVentas($fecha);
+        if ($tablaVentas === null) {
             return null;
         }
 
         $cedulaNormalizada = "REPLACE(REPLACE(REPLACE(usuario_venta, '-', ''), ' ', ''), '.', '')";
-        $ventas = DB::table('nomina_domingo_ventas')
+        $ventas = DB::table($tablaVentas)
             ->whereDate('fecha_transaccion', $fecha->toDateString())
             ->whereRaw($cedulaNormalizada.' = ?', [$cedula])
             ->where(function ($query): void {
@@ -456,14 +471,7 @@ class NominaDomingoService
             $domingo->addWeek();
         }
 
-        $fechasConVentas = Schema::hasTable('nomina_domingo_ventas')
-            ? DB::table('nomina_domingo_ventas')
-                ->whereBetween('fecha_transaccion', [$inicioMes->toDateTimeString(), $finMes->copy()->endOfDay()->toDateTimeString()])
-                ->selectRaw('DATE(fecha_transaccion) as fecha')
-                ->distinct()
-                ->pluck('fecha')
-                ->mapWithKeys(fn (string $fechaVenta): array => [$fechaVenta => true])
-            : collect();
+        $fechasConVentas = $this->fechasConVentas($inicioMes, $finMes->copy()->endOfDay());
 
         $puntos = $domingos->map(function (Carbon $domingo) use ($fecha, $empresa, $filasFechaSeleccionada, $fechasConVentas): array {
             $fechaDomingo = $domingo->toDateString();
@@ -554,14 +562,7 @@ class NominaDomingoService
             ->values();
         $inicio = $domingos->first()->copy()->startOfDay();
         $fin = $domingos->last()->copy()->endOfDay();
-        $fechasConVentas = Schema::hasTable('nomina_domingo_ventas')
-            ? DB::table('nomina_domingo_ventas')
-                ->whereBetween('fecha_transaccion', [$inicio->toDateTimeString(), $fin->toDateTimeString()])
-                ->selectRaw('DATE(fecha_transaccion) as fecha')
-                ->distinct()
-                ->pluck('fecha')
-                ->mapWithKeys(fn (string $fechaVenta): array => [$fechaVenta => true])
-            : collect();
+        $fechasConVentas = $this->fechasConVentas($inicio, $fin);
 
         $ventaSemanaAnterior = null;
         $semanas = $domingos->map(function (Carbon $domingo) use ($empresa, $fechasConVentas, &$ventaSemanaAnterior): array {
@@ -634,11 +635,12 @@ class NominaDomingoService
     /** @return Collection<string, array<string, float|int|string>> */
     private function ventas(Carbon $fecha): Collection
     {
-        if (! Schema::hasTable('nomina_domingo_ventas')) {
+        $tablaVentas = $this->tablaVentas($fecha);
+        if ($tablaVentas === null) {
             return collect();
         }
 
-        return DB::table('nomina_domingo_ventas')->whereDate('fecha_transaccion', $fecha->toDateString())
+        return DB::table($tablaVentas)->whereDate('fecha_transaccion', $fecha->toDateString())
             ->whereNotNull('usuario_venta')->where('usuario_venta', '<>', '')
             ->get(['terminal', 'usuario_venta', 'fecha_transaccion', 'tipo', 'total_apostado', 'estatus'])
             ->reject(fn (object $fila): bool => $fila->tipo === 'Recargas' && $fila->estatus === 'Pendiente')
@@ -665,8 +667,9 @@ class NominaDomingoService
     public function conciliacionVentas(Carbon $fecha): array
     {
         $archivo = collect();
-        if (Schema::hasTable('nomina_domingo_ventas')) {
-            $archivo = DB::table('nomina_domingo_ventas')
+        $tablaVentas = $this->tablaVentas($fecha);
+        if ($tablaVentas !== null) {
+            $archivo = DB::table($tablaVentas)
                 ->whereDate('fecha_transaccion', $fecha->toDateString())
                 ->selectRaw('LOWER(TRIM(tipo)) as tipo_normalizado, SUM(COALESCE(total_apostado, 0)) as monto')
                 ->groupByRaw('LOWER(TRIM(tipo))')
@@ -698,6 +701,33 @@ class NominaDomingoService
                 'diferencia' => round($totalesArchivo[$tipo] - $totalesApi[$tipo], 2),
             ],
         ])->all();
+    }
+
+    private function tablaVentas(Carbon $fecha): ?string
+    {
+        if (Schema::hasTable('ponche_por_cedula_ventas')
+            && DB::table('ponche_por_cedula_ventas')->whereDate('fecha_transaccion', $fecha->toDateString())->exists()) {
+            return 'ponche_por_cedula_ventas';
+        }
+
+        return Schema::hasTable('nomina_domingo_ventas') ? 'nomina_domingo_ventas' : null;
+    }
+
+    /** @return Collection<string, bool> */
+    private function fechasConVentas(Carbon $inicio, Carbon $fin): Collection
+    {
+        $fechas = collect();
+        foreach (['ponche_por_cedula_ventas', 'nomina_domingo_ventas'] as $tabla) {
+            if (! Schema::hasTable($tabla)) {
+                continue;
+            }
+            $fechas = $fechas->merge(DB::table($tabla)
+                ->whereBetween('fecha_transaccion', [$inicio->toDateTimeString(), $fin->toDateTimeString()])
+                ->selectRaw('DATE(fecha_transaccion) as fecha')
+                ->distinct()->pluck('fecha'));
+        }
+
+        return $fechas->mapWithKeys(fn (string $fecha): array => [$fecha => true]);
     }
 
     /** @return Collection<string, array{entrada: ?string, salida: ?string, empleado: string, usuarios: array<int, string>}> */

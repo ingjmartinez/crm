@@ -732,7 +732,7 @@
                         const response = await fetch(@json(route('recursos-humanos.nomina-domingo.recargas-pendientes.resolver')), {
                             method: 'POST',
                             headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-                            body: JSON.stringify({ venta_id: Number(boton.dataset.ventaId), terminal }),
+                            body: JSON.stringify({ venta_id: Number(boton.dataset.ventaId), terminal, fecha: @json($fecha) }),
                         });
                         const data = await response.json();
                         if (! response.ok) throw new Error(Object.values(data.errors || {})[0]?.[0] || data.message || 'No se pudo asignar la recarga.');
