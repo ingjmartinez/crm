@@ -23,6 +23,20 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
+                                <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                    <span>Los costos y gastos se calculan exclusivamente con las cuentas activas de Clasificación de cuentas. Revísalas antes de consultar.</span>
+                                    <a href="{{ route('contabilidad.clasificacion-cuentas') }}" class="btn btn-outline-primary btn-sm">Clasificar cuentas</a>
+                                </div>
+                                @if (session('mensaje'))
+                                    <div class="alert alert-success">{{ session('mensaje') }}</div>
+                                @endif
+                                @if ($errors->any())
+                                    <div class="alert alert-danger">{{ $errors->first() }}</div>
+                                @endif
+                                <div class="d-flex align-items-center gap-3 mb-3">
+                                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalR20">R20</button>
+                                    <span class="text-muted small">Monto R20 por terminal para todos los meses: RD$ {{ number_format($montoR20Global, 2) }}</span>
+                                </div>
                                 <form method="GET" action="{{ route('gerencia.rentabilidad-agencia') }}" class="row g-3 align-items-end" id="formConsultarRentabilidadAgencia">
                                     <div class="col-12 col-md-4 col-lg-3">
                                         <label for="mesRentabilidadAgencia" class="form-label">Mes</label>
@@ -92,6 +106,14 @@
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
                                     </div>
+                                    <div class="col-12">
+                                        <div class="form-check">
+                                            <input class="form-check-input @error('ingresos_contables') is-invalid @enderror" type="checkbox" value="1" id="ingresosContablesRentabilidad" name="ingresos_contables" @checked(old('ingresos_contables', $usarIngresosContables))>
+                                            <label class="form-check-label" for="ingresosContablesRentabilidad">Usar ingresos contables de las cinco cuentas seleccionadas en lugar de ventas</label>
+                                            @error('ingresos_contables') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                                        </div>
+                                        <div class="form-text">Cuentas: 400110001, 400120001, 400130001, 400130002 y 400130003.</div>
+                                    </div>
                                     <div class="col-12 col-md-auto">
                                         <button type="submit" class="btn btn-primary" id="btnConsultarRentabilidadAgencia">
                                             <i class="ri-search-line me-1"></i>Consultar
@@ -111,10 +133,10 @@
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between">
                                 <div>
-                                    <h5 class="card-title mb-1">Agencias activas vendiendo</h5>
+                                    <h5 class="card-title mb-1">{{ $usarIngresosContables ? 'Agencias activas con ingresos contables' : 'Agencias activas vendiendo' }}</h5>
                                     <p class="text-muted mb-0">
                                         @if ($consultaRealizada)
-                                            Ventas brutas correspondientes a {{ \Carbon\Carbon::createFromFormat('Y-m', $mesSeleccionado)->translatedFormat('F Y') }}.
+                                            {{ $usarIngresosContables ? 'Ingresos contables' : 'Ventas brutas' }} correspondientes a {{ \Carbon\Carbon::createFromFormat('Y-m', $mesSeleccionado)->translatedFormat('F Y') }}.
                                         @else
                                             Selecciona el mes y presiona Consultar para generar la información.
                                         @endif
@@ -164,8 +186,8 @@
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Agencia</th>
-                                                <th class="text-end">Venta bruta mensual</th>
-                                                <th class="text-end">Costos</th>
+                                                <th class="text-end">{{ $usarIngresosContables ? 'Ingresos contables' : 'Venta bruta mensual' }}</th>
+                                                <th class="text-center">Centro de costo</th>
                                                 <th class="text-end">Gastos</th>
                                                 <th>Cuentas</th>
                                                 <th class="text-end">Balance</th>
@@ -228,7 +250,7 @@
                                                 <tr>
                                                     <th>{{ $tablaResumen['columna'] }}</th>
                                                     <th class="text-center">Agencias</th>
-                                                    <th class="text-end">Venta bruta mensual</th>
+                                                    <th class="text-end">{{ $usarIngresosContables ? 'Ingresos contables' : 'Venta bruta mensual' }}</th>
                                                     <th class="text-end">Costos</th>
                                                     <th class="text-end">Gastos</th>
                                                     <th class="text-end">Balance</th>
@@ -323,6 +345,62 @@
             </div>
         </div>
     </div>
+    <div class="modal fade" id="modalCuentasAgencia" tabindex="-1" aria-labelledby="modalCuentasAgenciaTitulo" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="modalCuentasAgenciaTitulo">Movimientos de cuentas</h5>
+                        <span class="text-muted" id="modalCuentasAgenciaTerminal"></span>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-light">
+                                <tr><th>Cuenta</th><th>Descripción</th><th>Tipo</th><th>Clasificación</th><th class="text-end">Monto</th></tr>
+                            </thead>
+                            <tbody id="modalCuentasAgenciaFilas"></tbody>
+                            <tfoot class="table-light"><tr><th colspan="4">Total</th><th class="text-end" id="modalCuentasAgenciaTotal">RD$ 0.00</th></tr></tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="modalR20" tabindex="-1" aria-labelledby="modalR20Titulo" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ route('gerencia.rentabilidad-agencia.r20.guardar') }}">
+                    @csrf
+                    <input type="hidden" name="mes" id="mesR20" value="{{ $mesSeleccionado }}">
+                    <input type="hidden" name="empresa" value="{{ $empresaSeleccionada }}">
+                    <input type="hidden" name="ciudad" value="{{ $ciudadSeleccionada }}">
+                    <input type="hidden" name="ruta" value="{{ $rutaSeleccionada }}">
+                    @if ($usarIngresosContables)<input type="hidden" name="ingresos_contables" value="1">@endif
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalR20Titulo">R20</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted" id="periodoR20"></p>
+                        <label for="montoR20" class="form-label">Monto R20 por terminal</label>
+                        <input type="number" class="form-control @error('monto') is-invalid @enderror" id="montoR20" name="monto" min="0" step="0.01" value="{{ old('monto', number_format($montoR20Global, 2, '.', '')) }}" required>
+                        @error('monto') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        <div class="form-text">Este monto se agrega a los gastos de todas las terminales en todos los meses. Escribe 0 para quitarlo.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar R20</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('script')
@@ -385,9 +463,9 @@
                         render: (data, type) => type === 'display' ? `RD$ ${formatMoney(data)}` : Number(data || 0),
                     },
                     {
-                        data: 'costos',
-                        className: 'text-end fw-semibold text-warning',
-                        render: (data, type) => type === 'display' ? `RD$ ${formatMoney(data)}` : Number(data || 0),
+                        data: 'centro_costo_id',
+                        className: 'text-center fw-semibold',
+                        render: (data, type) => type === 'display' ? escapeHtml(data ?? 'Sin centro') : String(data ?? ''),
                     },
                     {
                         data: 'gastos',
@@ -397,7 +475,7 @@
                     {
                         data: 'cuentas',
                         orderable: false,
-                        render: function (data, type) {
+                        render: function (data, type, row) {
                             const cuentas = Array.isArray(data) ? data : [];
 
                             if (type !== 'display') {
@@ -406,23 +484,7 @@
                                     .join(' ');
                             }
 
-                            if (cuentas.length === 0) {
-                                return '<span class="text-muted small">Sin costos ni gastos</span>';
-                            }
-
-                            const filas = cuentas.map((cuenta) => {
-                                const esCosto = cuenta.tipo === 'costo';
-                                const clase = esCosto ? 'text-warning' : 'text-danger';
-                                const tipo = esCosto ? 'Costo' : 'Gasto';
-
-                                return `<div class="d-flex justify-content-between gap-3 py-1 border-bottom">`
-                                    + `<div><span class="fw-semibold">${escapeHtml(cuenta.cuenta)}</span>`
-                                    + `<div class="small text-muted">${escapeHtml(cuenta.descripcion)} · ${tipo}</div></div>`
-                                    + `<span class="fw-semibold text-nowrap ${clase}">RD$ ${formatMoney(cuenta.importe)}</span>`
-                                    + `</div>`;
-                            }).join('');
-
-                            return `<div class="small" style="min-width: 280px">${filas}</div>`;
+                            return `<button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCuentasAgencia" data-agencia-id="${Number(row.id)}">Ver</button>`;
                         },
                     },
                     {
@@ -456,6 +518,46 @@
                         },
                     },
                 ],
+            });
+
+            document.getElementById('modalCuentasAgencia')?.addEventListener('show.bs.modal', function (event) {
+                const agenciaId = Number(event.relatedTarget?.dataset.agenciaId);
+                const agencia = agenciasTable.rows().data().toArray().find((fila) => Number(fila.id) === agenciaId);
+                const filas = document.getElementById('modalCuentasAgenciaFilas');
+                const cuentas = Array.isArray(agencia?.cuentas) ? agencia.cuentas : [];
+
+                document.getElementById('modalCuentasAgenciaTitulo').textContent = agencia
+                    ? `Movimientos de ${agencia.nombre}`
+                    : 'Movimientos de cuentas';
+                document.getElementById('modalCuentasAgenciaTerminal').textContent = agencia
+                    ? `Terminal ${agencia.terminal}`
+                    : '';
+                document.getElementById('modalCuentasAgenciaTotal').textContent = `RD$ ${formatMoney(cuentas.reduce((total, cuenta) => total + Number(cuenta.importe || 0), 0))}`;
+                filas.replaceChildren();
+
+                if (cuentas.length === 0) {
+                    const fila = document.createElement('tr');
+                    const celda = document.createElement('td');
+                    celda.colSpan = 5;
+                    celda.className = 'text-center text-muted';
+                    celda.textContent = 'Sin costos ni gastos';
+                    fila.appendChild(celda);
+                    filas.appendChild(fila);
+                    return;
+                }
+
+                cuentas.forEach((cuenta) => {
+                    const fila = document.createElement('tr');
+                    [cuenta.cuenta, cuenta.descripcion, cuenta.tipo === 'costo' ? 'Costo' : 'Gasto', cuenta.clasificacion || 'Sin clasificar', `RD$ ${formatMoney(cuenta.importe)}`].forEach((valor, indice) => {
+                        const celda = document.createElement('td');
+                        celda.textContent = String(valor ?? '');
+                        if (indice === 4) {
+                            celda.className = 'text-end fw-semibold';
+                        }
+                        fila.appendChild(celda);
+                    });
+                    filas.appendChild(fila);
+                });
             });
 
             const agenciaSearchInput = document.getElementById('buscarAgenciaRentabilidad');
@@ -557,6 +659,13 @@
 
         const modalAgenciasGrupo = document.getElementById('modalAgenciasGrupo');
 
+        document.getElementById('modalR20')?.addEventListener('show.bs.modal', function () {
+            const mes = document.getElementById('mesRentabilidadAgencia').value;
+            document.getElementById('mesR20').value = mes;
+            document.getElementById('periodoR20').textContent = 'Todas las terminales activas, todos los meses';
+            document.getElementById('montoR20').value = {{ Illuminate\Support\Js::from(number_format($montoR20Global, 2, '.', '')) }};
+        });
+
         modalAgenciasGrupo?.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
             const tipo = button?.dataset.tipo;
@@ -601,7 +710,9 @@
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     title: 'Consultando datos',
-                    text: 'Calculando las ventas brutas del mes seleccionado...',
+                    text: document.getElementById('ingresosContablesRentabilidad')?.checked
+                        ? 'Calculando los ingresos contables del mes seleccionado...'
+                        : 'Calculando las ventas brutas del mes seleccionado...',
                     allowOutsideClick: false,
                     allowEscapeKey: false,
                     showConfirmButton: false,

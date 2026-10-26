@@ -19,12 +19,7 @@ class ContabilidadGastoAgenciaController extends Controller
         $empresa = $datos['empresa'] ?? '';
         $busqueda = trim($datos['buscar'] ?? '');
 
-        $clasificaciones = config('clasificacion_cuentas.cuentas', []);
-        $guardadas = ClasificacionCuenta::query()->get()->keyBy('cuenta');
-        $cuentas = collect(array_unique(array_merge(array_keys($clasificaciones), $guardadas->keys()->all())))
-            ->filter(fn (string|int $cuenta): bool => $guardadas->get((string) $cuenta)?->activo ?? isset($clasificaciones[$cuenta]))
-            ->map(fn (string|int $cuenta): string => (string) $cuenta)
-            ->values();
+        $cuentas = ClasificacionCuenta::cuentasActivas();
 
         $agencias = CentroDeCosto::query()
             ->select(['id', 'company_id', 'id_centro_costo', 'id_viejo', 'descripcion'])

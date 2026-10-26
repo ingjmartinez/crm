@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\RecursosHumanos\NominaDomingoController;
+use App\Http\Requests\RecursosHumanos\ConsultarNominaDomingoRequest;
 use App\Services\RecursosHumanos\NominaDomingoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -121,6 +123,8 @@ class NominaDomingoTest extends TestCase
             $table->string('cedula');
             $table->string('nombres');
             $table->string('apellidos');
+            $table->string('viapago')->nullable();
+            $table->string('ciudad')->nullable();
             $table->date('fechasalida')->nullable();
         });
         Schema::create('agencias', function (Blueprint $table): void {
@@ -130,6 +134,13 @@ class NominaDomingoTest extends TestCase
             $table->string('empresa')->nullable();
             $table->string('coordinador')->nullable();
             $table->timestamps();
+        });
+        Schema::create('centros_de_costo', function (Blueprint $table): void {
+            $table->id();
+            $table->string('id_viejo');
+            $table->string('company_id');
+            $table->unsignedInteger('id_centro_costo');
+            $table->boolean('inactivo')->default(false);
         });
         Schema::create('coordinador_operador', function (Blueprint $table): void {
             $table->id();
@@ -148,7 +159,7 @@ class NominaDomingoTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_doble_turno', 'nomina_domingo_terminales_excluidas', 'ponche_por_cedula_ventas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones', 'nomina_domingo_auditorias'] as $tabla) {
+        foreach (['coordinador_operador_agencia', 'coordinador_operador', 'centros_de_costo', 'agencias', 'empleados', 'asistencias_net', 'asistencias_bet', 'vt_usuarios_bet', 'gestion_agencias_ventas', 'nomina_domingo_terminales_doble_turno', 'nomina_domingo_terminales_excluidas', 'ponche_por_cedula_ventas', 'nomina_domingo_ventas', 'nomina_domingo_configuraciones', 'nomina_domingo_auditorias'] as $tabla) {
             Schema::dropIfExists($tabla);
         }
         parent::tearDown();
@@ -192,6 +203,41 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('10 h 16 min', $filasReporte->first()['horas_trabajadas_formato']);
         $this->assertSame(1500.0, $filasReporte->first()['monto_pagar']);
 
+    }
+
+    public function test_payment_txt_uses_incentive_columns_and_pays_each_eligible_employee_once(): void
+    {
+        DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);
+        DB::table('empleados')->insert([
+            ['empleadoid' => 'EMP-1', 'cedula' => '00100000001', 'nombres' => 'Ana', 'apellidos' => 'Pérez', 'viapago' => 'Banco', 'ciudad' => 'Santiago'],
+            ['empleadoid' => 'EMP-2', 'cedula' => '00100000002', 'nombres' => 'Berta', 'apellidos' => 'López', 'viapago' => 'Efectivo', 'ciudad' => 'Santo Domingo'],
+        ]);
+        DB::table('agencias')->insert([
+            ['terminal' => '12', 'empresa' => 'Empresa A'],
+            ['terminal' => '13', 'empresa' => 'Empresa A'],
+            ['terminal' => '14', 'empresa' => 'Empresa B'],
+        ]);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 12:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '13', 'cedula' => '00100000001', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 12:00:00', 'ultimo_login' => '2026-09-13 16:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '14', 'cedula' => '00100000002', 'usuario' => 'Berta', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 12:00:00'],
+        ]);
+
+        $response = $this->get(route('recursos-humanos.nomina-domingo.pago-txt', ['fecha' => '2026-09-13', 'empresa' => 'Empresa A']))->assertOk();
+        $this->assertStringContainsString('pago_nomina_domingo_2026-09-13.txt', $response->headers->get('content-disposition'));
+        $this->assertSame(
+            "\xEF\xBB\xBFIdEmpleado,Empresa,ViaPago,Ciudad,IdNovedad,Importe,Aplicar A,IdSucursal,Id Doc,Comentario,IdViejo\r\nEMP-1,Empresa A,Banco,Santiago,INC,1500,,,,pago de nómina domingo 13/09/2026,\r\n",
+            $response->streamedContent()
+        );
+        $this->assertStringContainsString("route('recursos-humanos.nomina-domingo.pago-txt')", file_get_contents(resource_path('views/recursos_humanos/nomina-domingo.blade.php')));
+    }
+
+    public function test_payment_txt_rejects_non_sunday_and_empty_payroll(): void
+    {
+        $this->get(route('recursos-humanos.nomina-domingo.pago-txt', ['fecha' => '2026-09-14']))
+            ->assertSessionHasErrors('fecha');
+        $this->get(route('recursos-humanos.nomina-domingo.pago-txt', ['fecha' => '2026-09-13']))
+            ->assertSessionHasErrors('fecha');
     }
 
     public function test_terminal_exclusions_can_be_recognized_saved_listed_and_removed(): void
@@ -1408,16 +1454,46 @@ class NominaDomingoTest extends TestCase
         $view = file_get_contents(resource_path('views/recursos_humanos/nomina-domingo.blade.php'));
         preg_match('/<table[^>]+id="tablaNominaDomingo"[^>]*>\s*<thead><tr>(.*?)<\/tr><\/thead>/s', $view, $headers);
         preg_match('/title: \'Nomina_Domingo_\{\{ \$fecha \}\}\',[\s\S]*?columns: \[([^]]+)\]/', $view, $columns);
+        preg_match('/title: \'Nomina_Domingo_V2_\{\{ \$fecha \}\}\',[\s\S]*?columns: \[([^]]+)\]/', $view, $columnsV2);
 
         $this->assertNotEmpty($headers);
         $this->assertNotEmpty($columns);
+        $this->assertNotEmpty($columnsV2);
         $columnCount = substr_count($headers[1], '<th>');
         $exportedIndexes = array_map('intval', explode(',', $columns[1]));
+        $exportedIndexesV2 = array_map('intval', explode(',', $columnsV2[1]));
 
-        $this->assertSame(range(0, $columnCount - 1), $exportedIndexes);
+        $this->assertSame(range(0, $columnCount - 2), $exportedIndexes);
+        $this->assertSame(range(0, $columnCount - 1), $exportedIndexesV2);
 
         $layout = file_get_contents(resource_path('views/app.blade.php'));
         $this->assertLessThan(strpos($layout, 'buttons.html5.min.js'), strpos($layout, 'jszip.min.js'));
+    }
+
+    public function test_excel_v2_lists_both_cost_centers_for_an_employee_who_worked_at_two_terminals(): void
+    {
+        DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);
+        DB::table('agencias')->insert([
+            ['terminal' => '12', 'empresa' => 'Grupo Joselito'],
+            ['terminal' => '13', 'empresa' => 'Grupo Joselito'],
+        ]);
+        DB::table('centros_de_costo')->insert([
+            ['id_viejo' => '0012', 'company_id' => '168', 'id_centro_costo' => 5289],
+            ['id_viejo' => '0012', 'company_id' => '169', 'id_centro_costo' => 4014],
+            ['id_viejo' => '0013', 'company_id' => '168', 'id_centro_costo' => 5290],
+        ]);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '12', 'cedula' => '00100000001', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 12:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '13', 'cedula' => '00100000001', 'usuario' => 'Ana', 'primer_login' => '2026-09-13 12:00:00', 'ultimo_login' => '2026-09-13 16:00:00'],
+        ]);
+
+        $request = ConsultarNominaDomingoRequest::create('/recursos-humanos/nomina-domingo', 'GET', ['fecha' => '2026-09-13', 'consultar' => 1]);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $view = app(NominaDomingoController::class)->index($request);
+
+        $this->assertSame('5289, 5290', $view->getData()['filasReporte']->first()['centros_costo']);
+        $this->assertStringContainsString('Descargar Excel V2', file_get_contents(resource_path('views/recursos_humanos/nomina-domingo.blade.php')));
     }
 
     public function test_configuration_can_be_updated(): void

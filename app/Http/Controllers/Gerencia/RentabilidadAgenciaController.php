@@ -5,11 +5,16 @@ namespace App\Http\Controllers\Gerencia;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BuscarRentabilidadAgenciaRequest;
 use App\Http\Requests\ConsultarRentabilidadAgenciaRequest;
+use App\Http\Requests\GuardarRentabilidadAgenciaR20Request;
+use App\Models\CentroDeCosto;
+use App\Models\ClasificacionCuenta;
 use App\Models\EntradaDiario;
 use App\Models\RentabilidadAgencia;
+use App\Models\RentabilidadAgenciaR20;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -20,6 +25,12 @@ class RentabilidadAgenciaController extends Controller
 
     private const AGENCIAS_BUSQUEDA_LIMITE = 100;
 
+    private const CUENTAS_INGRESO = ['400110001', '400120001', '400130001', '400130002', '400130003'];
+
+    private const TERMINAL_R20_GLOBAL = '*';
+
+    private const MES_R20_GLOBAL = 'GLOBAL';
+
     public function index(ConsultarRentabilidadAgenciaRequest $request): View
     {
         $consultaRealizada = $request->filled('mes');
@@ -27,6 +38,8 @@ class RentabilidadAgenciaController extends Controller
         $empresaSeleccionada = trim((string) ($request->validated('empresa') ?? ''));
         $ciudadSeleccionada = trim((string) ($request->validated('ciudad') ?? ''));
         $rutaSeleccionada = trim((string) ($request->validated('ruta') ?? ''));
+        $usarIngresosContables = (bool) ($request->validated('ingresos_contables') ?? false);
+        $montoR20Global = $this->montoR20Global();
         $resumenCumplimiento = ['cumple' => 0, 'no_cumple' => 0];
         $resumenCiudades = ['cumple' => 0, 'no_cumple' => 0];
         $resumenRutas = ['cumple' => 0, 'no_cumple' => 0];
@@ -78,7 +91,9 @@ class RentabilidadAgenciaController extends Controller
                 'agenciasDetalleGrupos',
                 'ciudadesResumen',
                 'rutasResumen',
-                'consultaRealizada'
+                'consultaRealizada',
+                'usarIngresosContables',
+                'montoR20Global'
             ));
         }
 
@@ -92,7 +107,7 @@ class RentabilidadAgenciaController extends Controller
             ->orderBy('nombre_mostrar')
             ->orderBy('terminal')
             ->get();
-        $this->cargarIndicadores($agenciasParaResumen, $fechaInicio, $fechaFin);
+        $this->cargarIndicadores($agenciasParaResumen, $fechaInicio, $fechaFin, $usarIngresosContables);
         $resumenCumplimiento = [
             'cumple' => $agenciasParaResumen->filter(fn (RentabilidadAgencia $agencia): bool => (bool) $agencia->cumple)->count(),
             'no_cumple' => $agenciasParaResumen->filter(fn (RentabilidadAgencia $agencia): bool => ! $agencia->cumple)->count(),
@@ -128,7 +143,9 @@ class RentabilidadAgenciaController extends Controller
             'agenciasDetalleGrupos',
             'ciudadesResumen',
             'rutasResumen',
-            'consultaRealizada'
+            'consultaRealizada',
+            'usarIngresosContables',
+            'montoR20Global'
         ));
     }
 
@@ -139,14 +156,30 @@ class RentabilidadAgenciaController extends Controller
         $buscar = trim((string) $datos['buscar']);
         $fechaInicio = Carbon::createFromFormat('Y-m', $mesSeleccionado)->startOfMonth();
         $fechaFin = $fechaInicio->copy()->endOfMonth();
-        $agenciasQuery = $this->consultaAgencias(
+        $agenciasBase = $this->consultaAgencias(
             trim((string) ($datos['empresa'] ?? '')),
             trim((string) ($datos['ciudad'] ?? '')),
             trim((string) ($datos['ruta'] ?? ''))
-        )->where(function (Builder $query) use ($buscar): void {
+        );
+
+        if (ctype_digit($buscar)) {
+            $agenciaExacta = (clone $agenciasBase)->where('terminal', $buscar)->first();
+            if ($agenciaExacta !== null) {
+                $agencias = collect([$agenciaExacta]);
+                $this->cargarIndicadores($agencias, $fechaInicio, $fechaFin, (bool) ($datos['ingresos_contables'] ?? false));
+
+                return response()->json([
+                    'data' => $this->formatearAgenciasDataTable($agencias)->values(),
+                    'total' => 1,
+                    'limit' => self::AGENCIAS_BUSQUEDA_LIMITE,
+                ]);
+            }
+        }
+
+        $agenciasQuery = $agenciasBase->where(function (Builder $query) use ($buscar): void {
             $patron = '%'.$buscar.'%';
 
-            $query->whereRaw('TRIM(CAST(terminal AS CHAR)) LIKE ?', [$patron])
+            $query->where('terminal', 'like', $patron)
                 ->orWhere('nombre_agencia', 'like', $patron)
                 ->orWhere('agencia', 'like', $patron);
         });
@@ -158,13 +191,31 @@ class RentabilidadAgenciaController extends Controller
             ->limit(self::AGENCIAS_BUSQUEDA_LIMITE)
             ->get();
 
-        $this->cargarIndicadores($agencias, $fechaInicio, $fechaFin);
+        $this->cargarIndicadores($agencias, $fechaInicio, $fechaFin, (bool) ($datos['ingresos_contables'] ?? false));
 
         return response()->json([
             'data' => $this->formatearAgenciasDataTable($agencias)->values(),
             'total' => $total,
             'limit' => self::AGENCIAS_BUSQUEDA_LIMITE,
         ]);
+    }
+
+    public function guardarR20(GuardarRentabilidadAgenciaR20Request $request): RedirectResponse
+    {
+        $datos = $request->validated();
+        RentabilidadAgenciaR20::query()->updateOrCreate(
+            ['terminal' => self::TERMINAL_R20_GLOBAL, 'mes' => self::MES_R20_GLOBAL],
+            ['monto' => $datos['monto'], 'usuario_id' => $request->user()?->getAuthIdentifier()]
+        );
+
+        return to_route('gerencia.rentabilidad-agencia', array_filter([
+            'mes' => $datos['mes'],
+            'empresa' => $datos['empresa'] ?? null,
+            'ciudad' => $datos['ciudad'] ?? null,
+            'ruta' => $datos['ruta'] ?? null,
+            'ingresos_contables' => $datos['ingresos_contables'] ?? null,
+        ], fn (mixed $valor): bool => $valor !== null && $valor !== ''))
+            ->with('mensaje', 'El gasto R20 se guardó para todas las terminales y todos los meses.');
     }
 
     private function consultaAgencias(string $empresa, string $ciudad, string $ruta): Builder
@@ -189,7 +240,7 @@ class RentabilidadAgenciaController extends Controller
         return $query;
     }
 
-    private function cargarIndicadores(Collection $agencias, Carbon $fechaInicio, Carbon $fechaFin): void
+    private function cargarIndicadores(Collection $agencias, Carbon $fechaInicio, Carbon $fechaFin, bool $usarIngresosContables): void
     {
         $terminales = $agencias
             ->pluck('terminal')
@@ -197,16 +248,31 @@ class RentabilidadAgenciaController extends Controller
             ->filter()
             ->unique()
             ->values();
-        $ventasBet = $this->ventasBrutasPorTerminal('vt_usuarios_bet', $fechaInicio, $fechaFin, $terminales);
-        $ventasNet = $this->ventasBrutasPorTerminal('vt_usuarios_net', $fechaInicio, $fechaFin, $terminales);
+        $centrosDeCosto = $terminales->isEmpty()
+            ? collect()
+            : CentroDeCosto::query()
+                ->whereIn('id_viejo', $terminales->all())
+                ->where('inactivo', false)
+                ->get(['id_viejo', 'company_id', 'id_centro_costo'])
+                ->groupBy('id_viejo');
+        $ventasBet = $usarIngresosContables ? collect() : $this->ventasBrutasPorTerminal('vt_usuarios_bet', $fechaInicio, $fechaFin, $terminales);
+        $ventasNet = $usarIngresosContables ? collect() : $this->ventasBrutasPorTerminal('vt_usuarios_net', $fechaInicio, $fechaFin, $terminales);
+        $ingresosContables = $usarIngresosContables ? $this->ingresosContablesPorTerminal($fechaInicio, $fechaFin, $terminales) : collect();
         $costosYGastos = $this->costosYGastosPorTerminal($fechaInicio, $fechaFin, $terminales);
+        $montoR20Global = $terminales->isEmpty()
+            ? 0.0
+            : $this->montoR20Global();
 
         $agencias->transform(
             fn (RentabilidadAgencia $agencia): RentabilidadAgencia => $this->agregarIndicadores(
                 $agencia,
                 $ventasBet,
                 $ventasNet,
-                $costosYGastos
+                $costosYGastos,
+                $usarIngresosContables,
+                $ingresosContables,
+                $montoR20Global,
+                $centrosDeCosto
             )
         );
     }
@@ -214,12 +280,15 @@ class RentabilidadAgenciaController extends Controller
     private function formatearAgenciasDataTable(Collection $agencias): Collection
     {
         return $agencias->map(fn (RentabilidadAgencia $agencia): array => [
+            'id' => (int) $agencia->id,
             'nombre' => (string) $agencia->nombre_mostrar,
             'terminal' => trim((string) $agencia->terminal),
+            'centro_costo_id' => $agencia->centro_costo_id,
             'venta_bruta' => (float) $agencia->venta_bruta_mes,
             'costos' => (float) $agencia->costos_mes,
             'gastos' => (float) $agencia->gastos_mes,
             'cuentas' => $agencia->cuentas_mes,
+            'r20' => (float) $agencia->r20_mes,
             'balance' => (float) $agencia->balance_mes,
             'cumple' => (bool) $agencia->cumple,
         ]);
@@ -276,16 +345,43 @@ class RentabilidadAgenciaController extends Controller
         RentabilidadAgencia $agencia,
         Collection $ventasBet,
         Collection $ventasNet,
-        Collection $costosYGastos
+        Collection $costosYGastos,
+        bool $usarIngresosContables,
+        Collection $ingresosContables,
+        float $montoR20Global,
+        Collection $centrosDeCosto
     ): RentabilidadAgencia {
         $terminal = trim((string) $agencia->terminal);
         $sistema = mb_strtoupper(trim((string) $agencia->sistema));
         $movimientos = $costosYGastos->get($terminal, collect());
-        $ventaBruta = match ($sistema) {
-            'LOTOBET' => (float) $ventasBet->get($terminal, 0),
-            'LOTONET', 'LOTENET' => (float) $ventasNet->get($terminal, 0),
-            default => (float) $ventasBet->get($terminal, 0) + (float) $ventasNet->get($terminal, 0),
+        $centrosTerminal = $centrosDeCosto->get($terminal, collect());
+        $empresa = mb_strtolower(trim((string) $agencia->empresa));
+        $companyId = match (true) {
+            str_contains($empresa, 'negosur') => '169',
+            str_contains($empresa, 'joselito') => '168',
+            default => null,
         };
+        $centro = $companyId === null
+            ? ($centrosTerminal->count() === 1 ? $centrosTerminal->first() : null)
+            : $centrosTerminal->first(fn (CentroDeCosto $item): bool => str_starts_with(trim((string) $item->company_id), $companyId));
+        $montoR20 = $montoR20Global;
+        if ($montoR20 > 0) {
+            $movimientos->push([
+                'terminal' => $terminal,
+                'cuenta' => 'R20',
+                'descripcion' => 'Gasto R20 manual',
+                'tipo' => 'gasto',
+                'clasificacion' => 'FIJO',
+                'importe' => $montoR20,
+            ]);
+        }
+        $ventaBruta = $usarIngresosContables
+            ? (float) $ingresosContables->get($terminal, 0)
+            : match ($sistema) {
+                'LOTOBET' => (float) $ventasBet->get($terminal, 0),
+                'LOTONET', 'LOTENET' => (float) $ventasNet->get($terminal, 0),
+                default => (float) $ventasBet->get($terminal, 0) + (float) $ventasNet->get($terminal, 0),
+            };
         $costos = (float) $movimientos
             ->where('tipo', 'costo')
             ->sum('importe');
@@ -297,6 +393,8 @@ class RentabilidadAgenciaController extends Controller
         $agencia->setAttribute('venta_bruta_mes', $ventaBruta);
         $agencia->setAttribute('costos_mes', $costos);
         $agencia->setAttribute('gastos_mes', $gastos);
+        $agencia->setAttribute('centro_costo_id', $centro?->id_centro_costo);
+        $agencia->setAttribute('r20_mes', $montoR20);
         $agencia->setAttribute('cuentas_mes', $movimientos->values()->all());
         $agencia->setAttribute('balance_mes', $balance);
         $agencia->setAttribute('cumple', $balance >= 0);
@@ -316,7 +414,7 @@ class RentabilidadAgenciaController extends Controller
 
         return DB::table($tabla)
             ->whereBetween('fecha', [$fechaInicio->toDateString(), $fechaFin->toDateString()])
-            ->whereIn(DB::raw('TRIM(CAST(agencia_id AS CHAR))'), $terminales->all())
+            ->whereIn('agencia_id', $terminales->all())
             ->whereNotNull('agencia_id')
             ->selectRaw('TRIM(CAST(agencia_id AS CHAR)) AS terminal, SUM(monto) AS venta_bruta')
             ->groupByRaw('TRIM(CAST(agencia_id AS CHAR))')
@@ -332,12 +430,18 @@ class RentabilidadAgenciaController extends Controller
             return collect();
         }
 
+        $clasificaciones = ClasificacionCuenta::clasificacionesActivas();
+        if ($clasificaciones->isEmpty()) {
+            return collect();
+        }
+
         return EntradaDiario::query()
             ->from('entradas_diario as movimientos')
             ->join('cuentas_contables as cuentas', 'cuentas.cuenta', '=', 'movimientos.cuenta')
             ->whereBetween('movimientos.fecha', [$fechaInicio->toDateString(), $fechaFin->toDateString()])
             ->whereNotNull('movimientos.id_viejo')
-            ->whereIn(DB::raw('TRIM(CAST(movimientos.id_viejo AS CHAR))'), $terminales->all())
+            ->whereIn('movimientos.cuenta', $clasificaciones->keys()->all())
+            ->whereIn('movimientos.id_viejo', $terminales->all())
             ->whereIn(DB::raw('LOWER(TRIM(cuentas.tipo))'), ['costo', 'gasto'])
             ->selectRaw('TRIM(CAST(movimientos.id_viejo AS CHAR)) AS terminal')
             ->selectRaw('TRIM(cuentas.cuenta) AS cuenta')
@@ -352,8 +456,34 @@ class RentabilidadAgenciaController extends Controller
                 'cuenta' => (string) $movimiento->cuenta,
                 'descripcion' => (string) $movimiento->descripcion,
                 'tipo' => (string) $movimiento->tipo,
+                'clasificacion' => $clasificaciones->get((string) $movimiento->cuenta, ''),
                 'importe' => (float) $movimiento->importe,
             ])
             ->groupBy('terminal');
+    }
+
+    private function ingresosContablesPorTerminal(Carbon $fechaInicio, Carbon $fechaFin, Collection $terminales): Collection
+    {
+        if ($terminales->isEmpty()) {
+            return collect();
+        }
+
+        return EntradaDiario::query()
+            ->whereBetween('fecha', [$fechaInicio->toDateString(), $fechaFin->toDateString()])
+            ->whereNotNull('id_viejo')
+            ->whereIn('cuenta', self::CUENTAS_INGRESO)
+            ->whereIn('id_viejo', $terminales->all())
+            ->selectRaw('TRIM(CAST(id_viejo AS CHAR)) AS terminal, SUM(COALESCE(credito, 0) - COALESCE(debito, 0)) AS ingreso')
+            ->groupByRaw('TRIM(CAST(id_viejo AS CHAR))')
+            ->pluck('ingreso', 'terminal');
+    }
+
+    private function montoR20Global(): float
+    {
+        return (float) RentabilidadAgenciaR20::query()
+            ->where('terminal', self::TERMINAL_R20_GLOBAL)
+            ->orderByRaw('CASE WHEN mes = ? THEN 0 ELSE 1 END', [self::MES_R20_GLOBAL])
+            ->orderByDesc('updated_at')
+            ->value('monto');
     }
 }

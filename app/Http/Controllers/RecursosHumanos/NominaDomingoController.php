@@ -8,6 +8,7 @@ use App\Http\Requests\RecursosHumanos\CargarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\ConsultarCedulaNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\ConsultarNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\DescargarInformeEjecutivoNominaDomingoRequest;
+use App\Http\Requests\RecursosHumanos\DescargarPagoNominaDomingoRequest;
 use App\Http\Requests\RecursosHumanos\EnviarNominaDomingoTelegramRequest;
 use App\Http\Requests\RecursosHumanos\GuardarNominaDomingoTerminalesDobleTurnoRequest;
 use App\Http\Requests\RecursosHumanos\GuardarNominaDomingoTerminalesExcluidasRequest;
@@ -15,6 +16,8 @@ use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesDobleTurno
 use App\Http\Requests\RecursosHumanos\ReconocerNominaDomingoTerminalesExcluidasRequest;
 use App\Http\Requests\RecursosHumanos\ResolverRecargaPendienteNominaDomingoRequest;
 use App\Imports\AgenciasActualizacionMasivaImport;
+use App\Models\CentroDeCosto;
+use App\Models\Empleado;
 use App\Models\NominaDomingoAuditoria;
 use App\Services\RecursosHumanos\NominaDomingoService;
 use App\Services\RecursosHumanos\NominaDomingoVentasImportService;
@@ -33,6 +36,7 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class NominaDomingoController extends Controller
 {
@@ -82,7 +86,7 @@ class NominaDomingoController extends Controller
             $filas = $filas->where('estatus', 'Revisar')->values();
         }
 
-        $filasReporte = $this->service->agruparPorCedula($filas);
+        $filasReporte = $this->service->agruparPorCedula($this->agregarCentrosDeCosto($filas));
 
         return view('recursos_humanos.nomina-domingo', [
             'fecha' => $fecha->toDateString(),
@@ -105,6 +109,40 @@ class NominaDomingoController extends Controller
             'filasSinEntrada' => $filasSinEntrada,
             'tendenciaMensual' => $tendenciaMensual,
         ]);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $filas
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function agregarCentrosDeCosto(Collection $filas): Collection
+    {
+        if ($filas->isEmpty()) {
+            return $filas;
+        }
+
+        $terminales = $filas->pluck('terminal')->map(fn (mixed $terminal): string => ltrim((string) $terminal, '0'))->unique();
+        $centros = CentroDeCosto::query()
+            ->where('inactivo', false)
+            ->get(['id_viejo', 'company_id', 'id_centro_costo'])
+            ->filter(fn (CentroDeCosto $centro): bool => $terminales->contains(ltrim(trim((string) $centro->id_viejo), '0')))
+            ->groupBy(fn (CentroDeCosto $centro): string => ltrim(trim((string) $centro->id_viejo), '0'));
+
+        return $filas->map(function (array $fila) use ($centros): array {
+            $empresa = mb_strtolower(trim((string) $fila['empresa']));
+            $companyId = match (true) {
+                str_contains($empresa, 'negosur') => '169',
+                str_contains($empresa, 'joselito') => '168',
+                default => null,
+            };
+            $centrosTerminal = $centros->get((string) $fila['terminal'], collect());
+            $centro = $companyId === null
+                ? ($centrosTerminal->count() === 1 ? $centrosTerminal->first() : null)
+                : $centrosTerminal->first(fn (CentroDeCosto $item): bool => trim((string) $item->company_id) === $companyId);
+            $fila['centro_costo_id'] = $centro?->id_centro_costo;
+
+            return $fila;
+        });
     }
 
     public function actualizarConfiguracion(ActualizarNominaDomingoConfiguracionRequest $request): RedirectResponse
@@ -173,6 +211,66 @@ class NominaDomingoController extends Controller
         return Pdf::loadView('recursos_humanos.nomina-domingo-informe-ejecutivo-pdf', compact('informe'))
             ->setPaper('letter', 'landscape')
             ->download($nombre);
+    }
+
+    public function pagoTxt(DescargarPagoNominaDomingoRequest $request): StreamedResponse
+    {
+        $datos = $request->validated();
+        $fecha = Carbon::createFromFormat('Y-m-d', $datos['fecha'])->startOfDay();
+        if (! $fecha->isSunday()) {
+            throw ValidationException::withMessages(['fecha' => 'La fecha seleccionada debe ser domingo.']);
+        }
+
+        $filas = $this->service->generar($fecha)
+            ->when(filled($datos['empresa'] ?? null), fn (Collection $filas): Collection => $filas->where('empresa', trim($datos['empresa'])));
+        $pagos = $filas->filter(fn (array $fila): bool => (float) $fila['monto_pagar'] > 0)
+            ->groupBy('cedula')
+            ->map(function (Collection $filasCedula): array {
+                $fila = $filasCedula->first();
+                $fila['monto_pagar'] = $filasCedula->sum('monto_pagar');
+
+                return $fila;
+            })
+            ->values();
+
+        if ($pagos->isEmpty()) {
+            throw ValidationException::withMessages(['fecha' => 'No hay pagos con importe mayor a cero para este domingo.']);
+        }
+
+        $empleados = Empleado::query()
+            ->whereIn('empleadoid', $pagos->pluck('empleado_id')->filter()->unique()->all())
+            ->get(['empleadoid', 'viapago', 'ciudad'])
+            ->keyBy('empleadoid');
+        $nombre = 'pago_nomina_domingo_'.$fecha->format('Y-m-d').'.txt';
+
+        return response()->streamDownload(function () use ($pagos, $empleados, $fecha): void {
+            $salida = fopen('php://output', 'w');
+            fwrite($salida, "\xEF\xBB\xBF");
+            $escribirLinea = function (array $valores) use ($salida): void {
+                $limpios = array_map(fn (mixed $valor): string => str_replace([',', "\t", "\r", "\n"], ' ', trim((string) $valor)), $valores);
+                fwrite($salida, implode(',', $limpios)."\r\n");
+            };
+            $escribirLinea(['IdEmpleado', 'Empresa', 'ViaPago', 'Ciudad', 'IdNovedad', 'Importe', 'Aplicar A', 'IdSucursal', 'Id Doc', 'Comentario', 'IdViejo']);
+
+            foreach ($pagos as $fila) {
+                $empleado = $empleados->get($fila['empleado_id']);
+                $escribirLinea([
+                    $fila['empleado_id'] ?? '',
+                    $fila['empresa'],
+                    $empleado?->viapago ?? '',
+                    $empleado?->ciudad ?? '',
+                    'INC',
+                    (string) round((float) $fila['monto_pagar']),
+                    '',
+                    '',
+                    '',
+                    'pago de nómina domingo '.$fecha->format('d/m/Y'),
+                    '',
+                ]);
+            }
+
+            fclose($salida);
+        }, $nombre, ['Content-Type' => 'text/plain; charset=UTF-8']);
     }
 
     public function cargarVentas(CargarNominaDomingoRequest $request): RedirectResponse

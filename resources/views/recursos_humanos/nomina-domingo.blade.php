@@ -67,6 +67,15 @@
                                 <a class="btn btn-outline-secondary" href="{{ route('recursos-humanos.nomina-domingo.auditoria') }}">Historial de cambios</a>
                             @endhasanyrole
                             @if ($consultar)
+                            <form method="GET" action="{{ route('recursos-humanos.nomina-domingo.pago-txt') }}">
+                                <input type="hidden" name="fecha" value="{{ $fecha }}">
+                                @if ($empresa !== '')
+                                    <input type="hidden" name="empresa" value="{{ $empresa }}">
+                                @endif
+                                <button class="btn btn-outline-success text-nowrap" type="submit">
+                                    <i class="ri-file-text-line me-1"></i> TXT de pago
+                                </button>
+                            </form>
                             <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#modalCoordinadores">
                                 <i class="ri-team-line me-1"></i> Coordinador
                             </button>
@@ -399,7 +408,7 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped align-middle w-100" id="tablaNominaDomingo">
-                                <thead><tr><th>Cédula</th><th>ID empleado</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th><th>Horas trabajadas (h/min)</th><th>Estatus</th><th>Monto a pagar</th></tr></thead>
+                                <thead><tr><th>Cédula</th><th>ID empleado</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th><th>Horas trabajadas (h/min)</th><th>Estatus</th><th>Monto a pagar</th><th>Centro de costo</th></tr></thead>
                                 <tbody>
                                     @foreach ($filasReporte as $fila)
                                         <tr title="Terminales: {{ $fila['terminales'] }}">
@@ -407,7 +416,7 @@
                                             <td>{{ $fila['entrada'] ? 'Primer login: '.\Carbon\Carbon::parse($fila['entrada'])->format('h:i A') : 'Sin primer login' }} | {{ $fila['salida_efectiva'] ? 'Último login: '.\Carbon\Carbon::parse($fila['salida_efectiva'])->format('h:i A') : 'Sin último login' }}</td>
                                             <td data-order="{{ $fila['minutos_trabajados'] }}">{{ $fila['horas_trabajadas_formato'] }}</td>
                                             <td><span class="badge {{ $fila['estatus'] === 'Cumple' ? 'bg-success' : ($fila['estatus'] === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger') }}">{{ $fila['estatus'] }}</span>@if ($fila['incidencia'])<br><small class="text-muted">{{ $fila['incidencia'] }}</small>@endif</td>
-                                            <td data-order="{{ $fila['monto_pagar'] }}">RD$ {{ number_format($fila['monto_pagar'], 2) }}</td>
+                                            <td data-order="{{ $fila['monto_pagar'] }}">RD$ {{ number_format($fila['monto_pagar'], 2) }}</td><td>{{ $fila['centros_costo'] }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -1207,6 +1216,7 @@
                     $('#tablaNominaDomingo').DataTable({
                         pageLength: 25,
                         order: [[7, 'desc']],
+                        columnDefs: [{ targets: 9, visible: false }],
                         dom: 'Bfrtip',
                         buttons: [
                             {
@@ -1216,6 +1226,16 @@
                                 title: 'Nomina_Domingo_{{ $fecha }}',
                                 exportOptions: {
                                     columns: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                    modifier: { search: 'applied', order: 'applied', page: 'all' },
+                                },
+                            },
+                            {
+                                extend: 'excelHtml5',
+                                text: '<i class="ri-file-excel-2-line me-1"></i> Descargar Excel V2',
+                                className: 'btn btn-success mb-3',
+                                title: 'Nomina_Domingo_V2_{{ $fecha }}',
+                                exportOptions: {
+                                    columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
                                     modifier: { search: 'applied', order: 'applied', page: 'all' },
                                 },
                             },

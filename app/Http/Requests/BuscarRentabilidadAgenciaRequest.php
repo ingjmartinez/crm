@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
 
 class BuscarRentabilidadAgenciaRequest extends FormRequest
 {
@@ -12,7 +13,7 @@ class BuscarRentabilidadAgenciaRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return auth()->check();
+        return Auth::check();
     }
 
     /**
@@ -27,6 +28,7 @@ class BuscarRentabilidadAgenciaRequest extends FormRequest
             'empresa' => ['nullable', 'string', 'max:255'],
             'ciudad' => ['nullable', 'string', 'max:255'],
             'ruta' => ['nullable', 'string', 'max:255'],
+            'ingresos_contables' => ['nullable', 'boolean'],
             'buscar' => ['required', 'string', 'min:2', 'max:100'],
         ];
     }

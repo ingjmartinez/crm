@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaController;
 use App\Http\Requests\BuscarRentabilidadAgenciaRequest;
 use App\Http\Requests\ConsultarRentabilidadAgenciaRequest;
+use App\Models\ClasificacionCuenta;
 use App\Models\RentabilidadAgencia;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
@@ -54,6 +55,150 @@ class RentabilidadAgenciaTest extends TestCase
             $table->decimal('credito', 15, 2)->default(0);
             $table->string('id_viejo')->nullable();
         });
+        Schema::create('centros_de_costo', function (Blueprint $table): void {
+            $table->id();
+            $table->string('id_viejo');
+            $table->string('company_id');
+            $table->unsignedInteger('id_centro_costo');
+            $table->boolean('inactivo')->default(false);
+        });
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+        });
+        (require database_path('migrations/2026_10_23_171204_create_clasificacion_cuentas_table.php'))->up();
+        (require database_path('migrations/2026_10_26_171602_create_rentabilidad_agencia_r20_table.php'))->up();
+        config(['clasificacion_cuentas.cuentas' => ['5001' => 'FIJO', '6001' => 'VARIABLE']]);
+    }
+
+    public function test_september_terminal_search_returns_sales_and_company_cost_center_id(): void
+    {
+        DB::table('agencias')->insert([
+            'nombre_agencia' => 'Ag Jose Armando Soler',
+            'terminal' => '052232',
+            'sistema' => 'LOTOBET',
+            'empresa' => 'Grupo Joselito',
+            'estatus' => 1,
+        ]);
+        DB::table('centros_de_costo')->insert([
+            ['id_viejo' => '052232', 'company_id' => '168', 'id_centro_costo' => 5289],
+            ['id_viejo' => '052232', 'company_id' => '169', 'id_centro_costo' => 4014],
+        ]);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '052232', 'monto' => 428423, 'fecha' => '2026-09-15']);
+
+        $this->actingAs(User::factory()->make());
+        $request = BuscarRentabilidadAgenciaRequest::create('/gerencia/rentabilidad-agencia/buscar', 'GET', [
+            'mes' => '2026-09', 'buscar' => '052232',
+        ]);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $data = app(RentabilidadAgenciaController::class)->buscar($request)->getData(true);
+
+        $this->assertSame(1, $data['total']);
+        $this->assertSame('052232', $data['data'][0]['terminal']);
+        $this->assertSame(428423, $data['data'][0]['venta_bruta']);
+        $this->assertSame(5289, $data['data'][0]['centro_costo_id']);
+    }
+
+    public function test_manual_r20_applies_to_every_month_and_terminal(): void
+    {
+        DB::table('agencias')->insert([
+            ['nombre_agencia' => 'Agencia A', 'terminal' => '1001', 'sistema' => 'LOTOBET', 'estatus' => 1],
+            ['nombre_agencia' => 'Agencia B', 'terminal' => '1002', 'sistema' => 'LOTOBET', 'estatus' => 1],
+        ]);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'monto' => 1000, 'fecha' => '2026-06-05']);
+        DB::table('rentabilidad_agencia_r20')->insert(['terminal' => '*', 'mes' => '2026-10', 'monto' => 7966.33]);
+        $this->actingAs(User::factory()->make())->withoutMiddleware();
+        $ruta = route('gerencia.rentabilidad-agencia.r20.guardar');
+
+        $historicalRequest = ConsultarRentabilidadAgenciaRequest::create('/gerencia/rentabilidad-agencia', 'GET', ['mes' => '2026-09']);
+        $historicalRequest->setContainer(app())->setRedirector(app('redirect'));
+        $historicalRequest->validateResolved();
+        $historicalView = app(RentabilidadAgenciaController::class)->index($historicalRequest);
+        $this->assertSame(7966.33, $historicalView->getData()['agencias']->first()->gastos_mes);
+        $this->assertSame('R20', $historicalView->getData()['agenciasDataTable']->first()['cuentas'][0]['cuenta']);
+
+        $this->post($ruta, ['mes' => '2026-06', 'monto' => '125.50', 'ingresos_contables' => '1'])
+            ->assertRedirect(route('gerencia.rentabilidad-agencia', ['mes' => '2026-06', 'ingresos_contables' => '1']));
+        $this->assertDatabaseHas('rentabilidad_agencia_r20', ['terminal' => '*', 'mes' => 'GLOBAL', 'monto' => 125.50]);
+
+        $request = ConsultarRentabilidadAgenciaRequest::create('/gerencia/rentabilidad-agencia', 'GET', ['mes' => '2026-06']);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $view = app(RentabilidadAgenciaController::class)->index($request);
+        $agencias = $view->getData()['agencias']->keyBy('terminal');
+
+        $this->assertSame(125.50, $agencias['1001']->gastos_mes);
+        $this->assertSame(874.50, $agencias['1001']->balance_mes);
+        $this->assertSame(125.50, $agencias['1002']->gastos_mes);
+        $this->assertSame(-125.50, $agencias['1002']->balance_mes);
+        $this->assertSame(['terminal' => '1001', 'cuenta' => 'R20', 'descripcion' => 'Gasto R20 manual', 'tipo' => 'gasto', 'clasificacion' => 'FIJO', 'importe' => 125.50], $agencias['1001']->cuentas_mes[0]);
+        $this->assertSame(['terminal' => '1002', 'cuenta' => 'R20', 'descripcion' => 'Gasto R20 manual', 'tipo' => 'gasto', 'clasificacion' => 'FIJO', 'importe' => 125.50], $agencias['1002']->cuentas_mes[0]);
+        $this->assertSame(125.50, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['r20']);
+        $this->assertSame(251.0, $view->getData()['ciudadesResumen']->first()['gastos_mes']);
+        $this->assertSame(125.50, $view->getData()['montoR20Global']);
+
+        $this->post($ruta, ['mes' => '2026-06', 'monto' => '200'])
+            ->assertRedirect();
+        $this->assertDatabaseCount('rentabilidad_agencia_r20', 2);
+        $this->post($ruta, ['mes' => '2026-07', 'monto' => '50'])
+            ->assertRedirect();
+        $this->assertDatabaseCount('rentabilidad_agencia_r20', 2);
+        $this->assertDatabaseHas('rentabilidad_agencia_r20', ['terminal' => '*', 'mes' => 'GLOBAL', 'monto' => 50]);
+        $this->post($ruta, ['mes' => '2026-06', 'monto' => '0'])
+            ->assertRedirect();
+        $this->assertDatabaseHas('rentabilidad_agencia_r20', ['terminal' => '*', 'mes' => 'GLOBAL', 'monto' => 0]);
+
+        $searchRequest = BuscarRentabilidadAgenciaRequest::create('/gerencia/rentabilidad-agencia/buscar', 'GET', ['mes' => '2026-06', 'buscar' => '1001']);
+        $searchRequest->setContainer(app())->setRedirector(app('redirect'));
+        $searchRequest->validateResolved();
+        $row = app(RentabilidadAgenciaController::class)->buscar($searchRequest)->getData(true)['data'][0];
+        $this->assertSame(0, $row['r20']);
+        $this->assertSame(0, $row['gastos']);
+        $this->assertSame([], $row['cuentas']);
+    }
+
+    public function test_manual_r20_rejects_invalid_amount_or_month(): void
+    {
+        $this->actingAs(User::factory()->make())->withoutMiddleware();
+
+        $this->post(route('gerencia.rentabilidad-agencia.r20.guardar'), ['mes' => 'junio-2026', 'monto' => '100'])
+            ->assertSessionHasErrors('mes');
+        $this->post(route('gerencia.rentabilidad-agencia.r20.guardar'), ['mes' => '2026-06', 'monto' => '-5'])
+            ->assertSessionHasErrors('monto');
+        $this->post(route('gerencia.rentabilidad-agencia.r20.guardar'), ['mes' => '2026-06', 'monto' => '12.345'])
+            ->assertSessionHasErrors('monto');
+        $this->assertDatabaseCount('rentabilidad_agencia_r20', 0);
+    }
+
+    public function test_report_uses_only_accounts_active_in_account_classification(): void
+    {
+        DB::table('agencias')->insert(['nombre_agencia' => 'Agencia', 'terminal' => '1001', 'estatus' => 1]);
+        DB::table('cuentas_contables')->insert([
+            ['cuenta' => '5001', 'descripcion' => 'Costo excluido', 'tipo' => 'Costo'],
+            ['cuenta' => '6001', 'descripcion' => 'Gasto activo', 'tipo' => 'Gasto'],
+            ['cuenta' => '7001', 'descripcion' => 'Costo agregado', 'tipo' => 'Costo'],
+            ['cuenta' => '8001', 'descripcion' => 'Gasto sin clasificar', 'tipo' => 'Gasto'],
+        ]);
+        foreach (['5001' => 100, '6001' => 50, '7001' => 25, '8001' => 500] as $cuenta => $importe) {
+            DB::table('entradas_diario')->insert([
+                'fecha' => '2026-06-05', 'cuenta' => $cuenta, 'debito' => $importe, 'credito' => 0, 'id_viejo' => '1001',
+            ]);
+        }
+        ClasificacionCuenta::query()->create(['cuenta' => '5001', 'activo' => false]);
+        ClasificacionCuenta::query()->create(['cuenta' => '7001', 'clasificacion' => 'VARIABLE', 'activo' => true]);
+        ClasificacionCuenta::query()->create(['cuenta' => '6001', 'clasificacion' => 'FIJO', 'activo' => true]);
+
+        $this->actingAs(User::factory()->make());
+        $request = ConsultarRentabilidadAgenciaRequest::create('/gerencia/rentabilidad-agencia', 'GET', ['mes' => '2026-06']);
+        $request->setContainer(app());
+        $request->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $agencia = app(RentabilidadAgenciaController::class)->index($request)->getData()['agencias']->first();
+
+        $this->assertSame(25.0, $agencia->costos_mes);
+        $this->assertSame(50.0, $agencia->gastos_mes);
+        $this->assertSame(['6001', '7001'], collect($agencia->cuentas_mes)->pluck('cuenta')->all());
+        $this->assertSame(['FIJO', 'VARIABLE'], collect($agencia->cuentas_mes)->pluck('clasificacion')->all());
     }
 
     public function test_month_filter_rejects_an_invalid_format(): void
@@ -66,8 +211,45 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertFalse(Validator::make(['empresa' => 'Empresa A'], $request->rules())->fails());
         $this->assertTrue(Validator::make(['empresa' => str_repeat('A', 256)], $request->rules())->fails());
         $this->assertFalse(Validator::make(['ciudad' => 'Santo Domingo', 'ruta' => 'Ruta 1'], $request->rules())->fails());
+        $this->assertFalse(Validator::make(['ingresos_contables' => '1'], $request->rules())->fails());
+        $this->assertTrue(Validator::make(['ingresos_contables' => 'si'], $request->rules())->fails());
         $this->assertFalse(Validator::make(['mes' => '2026-06', 'buscar' => '9205'], $searchRequest->rules())->fails());
         $this->assertTrue(Validator::make(['mes' => '2026-06', 'buscar' => '9'], $searchRequest->rules())->fails());
+    }
+
+    public function test_accounting_income_option_uses_only_five_accounts_and_preserves_search_mode(): void
+    {
+        DB::table('agencias')->insert(['nombre_agencia' => 'Agencia 1001', 'terminal' => '1001', 'sistema' => 'LOTOBET', 'estatus' => 1]);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'monto' => 999, 'fecha' => '2026-06-05']);
+        foreach (['400110001', '400120001', '400130001', '400130002', '400130003', '400199999'] as $cuenta) {
+            DB::table('entradas_diario')->insert([
+                'fecha' => '2026-06-05', 'cuenta' => $cuenta, 'debito' => 10, 'credito' => 110, 'id_viejo' => '1001',
+            ]);
+        }
+        DB::table('entradas_diario')->insert([
+            ['fecha' => '2026-05-05', 'cuenta' => '400110001', 'debito' => 0, 'credito' => 500, 'id_viejo' => '1001'],
+            ['fecha' => '2026-06-05', 'cuenta' => '400110001', 'debito' => 0, 'credito' => 500, 'id_viejo' => '9999'],
+        ]);
+
+        $this->actingAs(User::factory()->make());
+        $request = ConsultarRentabilidadAgenciaRequest::create('/gerencia/rentabilidad-agencia', 'GET', ['mes' => '2026-06', 'ingresos_contables' => '1']);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $view = app(RentabilidadAgenciaController::class)->index($request);
+
+        $this->assertTrue($view->getData()['usarIngresosContables']);
+        $this->assertSame(500.0, $view->getData()['agencias']->first()->venta_bruta_mes);
+        $this->assertSame(500.0, $view->getData()['ciudadesResumen']->first()['venta_bruta_mes']);
+
+        $searchRequest = BuscarRentabilidadAgenciaRequest::create('/gerencia/rentabilidad-agencia/buscar', 'GET', ['mes' => '2026-06', 'buscar' => '1001', 'ingresos_contables' => '1']);
+        $searchRequest->setContainer(app())->setRedirector(app('redirect'));
+        $searchRequest->validateResolved();
+        $this->assertSame(500, app(RentabilidadAgenciaController::class)->buscar($searchRequest)->getData(true)['data'][0]['venta_bruta']);
+
+        $request = ConsultarRentabilidadAgenciaRequest::create('/gerencia/rentabilidad-agencia', 'GET', ['mes' => '2026-06']);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $this->assertSame(999.0, app(RentabilidadAgenciaController::class)->index($request)->getData()['agencias']->first()->venta_bruta_mes);
     }
 
     public function test_monthly_query_form_displays_a_sweet_alert_loading_state(): void
@@ -76,6 +258,10 @@ class RentabilidadAgenciaTest extends TestCase
 
         $this->assertIsString($viewSource);
         $this->assertStringContainsString('formConsultarRentabilidadAgencia', $viewSource);
+        $this->assertSame(1, substr_count($viewSource, 'data-bs-target="#modalR20"'));
+        $this->assertStringContainsString('>R20</button>', $viewSource);
+        $this->assertStringContainsString('todos los meses', $viewSource);
+        $this->assertStringNotContainsString('data-r20-terminal', $viewSource);
         $this->assertStringContainsString('(() => {', $viewSource);
         $this->assertStringContainsString('})();', $viewSource);
         $this->assertStringContainsString("title: 'Consultando datos'", $viewSource);
@@ -87,7 +273,14 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertStringContainsString('Rentabilidad por ciudad', $viewSource);
         $this->assertStringContainsString('Rentabilidad por ruta', $viewSource);
         $this->assertStringContainsString('<th>Cuentas</th>', $viewSource);
+        $this->assertStringContainsString('<th class="text-center">Centro de costo</th>', $viewSource);
+        $this->assertStringContainsString("data: 'centro_costo_id'", $viewSource);
         $this->assertStringContainsString("data: 'cuentas'", $viewSource);
+        $this->assertStringContainsString('data-bs-target="#modalCuentasAgencia"', $viewSource);
+        $this->assertStringContainsString('id="modalCuentasAgenciaFilas"', $viewSource);
+        $this->assertStringContainsString('<th>Clasificación</th>', $viewSource);
+        $this->assertStringContainsString('agenciasTable.rows().data().toArray().find', $viewSource);
+        $this->assertStringContainsString('filas.replaceChildren()', $viewSource);
         $this->assertStringContainsString('Sin costos ni gastos', $viewSource);
         $this->assertStringContainsString("->orderByRaw('TRIM(cuentas.cuenta)')", file_get_contents(app_path('Http/Controllers/Gerencia/RentabilidadAgenciaController.php')));
         $this->assertStringContainsString('id="buscarAgenciaRentabilidad"', $viewSource);
@@ -272,6 +465,7 @@ class RentabilidadAgenciaTest extends TestCase
 
         $this->assertSame('agencias', (new RentabilidadAgencia)->getTable());
         $this->assertSame('2026-06', $view->getData()['mesSeleccionado']);
+        $this->assertSame((int) $agenciasPorTerminal->get('1001')->id, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['id']);
         $this->assertTrue($view->getData()['consultaRealizada']);
         $this->assertCount(2, $agencias);
         $this->assertCount(2, $view->getData()['agenciasDataTable']);
@@ -287,6 +481,7 @@ class RentabilidadAgenciaTest extends TestCase
                 'cuenta' => '5001',
                 'descripcion' => 'Costo de operación',
                 'tipo' => 'costo',
+                'clasificacion' => 'FIJO',
                 'importe' => 9000.0,
             ],
             [
@@ -294,6 +489,7 @@ class RentabilidadAgenciaTest extends TestCase
                 'cuenta' => '6001',
                 'descripcion' => 'Energía eléctrica',
                 'tipo' => 'gasto',
+                'clasificacion' => 'VARIABLE',
                 'importe' => 2000.0,
             ],
         ], $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['cuentas']);

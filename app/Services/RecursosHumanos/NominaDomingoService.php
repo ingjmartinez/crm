@@ -188,6 +188,7 @@ class NominaDomingoService
         return $filas->groupBy('cedula')->map(function (Collection $filasCedula): array {
             $fila = $filasCedula->first();
             $fila['terminales'] = $filasCedula->pluck('terminal')->unique()->implode(', ');
+            $fila['centros_costo'] = $filasCedula->pluck('centro_costo_id')->filter()->unique()->implode(', ');
             $fila['empresa'] = $filasCedula->pluck('empresa')->unique()->implode(', ');
             $fila['coordinador'] = $filasCedula->pluck('coordinador')->unique()->implode(', ');
             $fila['entrada'] = $filasCedula->pluck('entrada')->filter()->min();

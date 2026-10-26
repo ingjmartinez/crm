@@ -149,6 +149,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         ->name('gerencia.rentabilidad-agencia');
     Route::get('/gerencia/rentabilidad-agencia/buscar', [RentabilidadAgenciaController::class, 'buscar'])
         ->name('gerencia.rentabilidad-agencia.buscar');
+    Route::post('/gerencia/rentabilidad-agencia/r20', [RentabilidadAgenciaController::class, 'guardarR20'])
+        ->name('gerencia.rentabilidad-agencia.r20.guardar');
     Route::get('/gerencia/seguimiento-agencia', [SeguimientoAgenciaController::class, 'index'])
         ->name('gerencia.seguimiento-agencia');
     Route::get('/gerencia/seguimiento-agencia/detalle', [SeguimientoAgenciaController::class, 'detalle'])
@@ -413,6 +415,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
             ->name('recursos-humanos.nomina-domingo.consultar-cedula');
         Route::get('/recursos-humanos/nomina-domingo/informe-ejecutivo', [NominaDomingoController::class, 'informeEjecutivo'])
             ->name('recursos-humanos.nomina-domingo.informe-ejecutivo');
+        Route::get('/recursos-humanos/nomina-domingo/pago-txt', [NominaDomingoController::class, 'pagoTxt'])
+            ->name('recursos-humanos.nomina-domingo.pago-txt');
         Route::post('/recursos-humanos/nomina-domingo/cargar-ventas', [NominaDomingoController::class, 'cargarVentas'])
             ->name('recursos-humanos.nomina-domingo.cargar-ventas');
         Route::post('/recursos-humanos/nomina-domingo/recargas-pendientes/resolver', [NominaDomingoController::class, 'resolverRecargaPendiente'])
