@@ -24,8 +24,13 @@
                                         <td>{{ ucfirst($auditoria->accion) }}</td>
                                         <td>
                                             @if ($auditoria->categoria === 'configuracion')
-                                                Horas requeridas: {{ data_get($auditoria->antes, 'horas_requeridas') }} → {{ data_get($auditoria->despues, 'horas_requeridas') }}<br>
-                                                Minutos doble turno: {{ data_get($auditoria->antes, 'minutos_requeridos_doble_turno', '-') }} → {{ data_get($auditoria->despues, 'minutos_requeridos_doble_turno', '-') }}<br>
+                                                @php
+                                                    $formatearTiempo = static fn ($minutos): string => $minutos === null
+                                                        ? '-'
+                                                        : intdiv((int) $minutos, 60).' h '.((int) $minutos % 60).' min';
+                                                @endphp
+                                                Horas requeridas: {{ number_format((float) data_get($auditoria->antes, 'horas_requeridas'), 2, '.', '') }} → {{ number_format((float) data_get($auditoria->despues, 'horas_requeridas'), 2, '.', '') }}<br>
+                                                Tiempo doble turno: {{ $formatearTiempo(data_get($auditoria->antes, 'minutos_requeridos_doble_turno')) }} → {{ $formatearTiempo(data_get($auditoria->despues, 'minutos_requeridos_doble_turno')) }}<br>
                                                 Monto fijo: {{ data_get($auditoria->antes, 'monto_fijo') }} → {{ data_get($auditoria->despues, 'monto_fijo') }}
                                             @else
                                                 Terminal {{ $auditoria->terminal }} ({{ $auditoria->categoria === 'excluida' ? 'excluida' : 'doble turno' }})

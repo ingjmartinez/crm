@@ -56,6 +56,7 @@
                                         <th>Usuario responsable</th>
                                         <th>Empleado afectado</th>
                                         <th>Puesto</th>
+                                        <th>Bloque anterior → nuevo</th>
                                         <th>Correo / Telefono</th>
                                         <th>Origen</th>
                                     </tr>
@@ -78,6 +79,11 @@
                                                 <small class="text-muted">Cedula: {{ $auditoria->cedula ?: '-' }} · ID: {{ $auditoria->registro_id ?: '-' }}</small>
                                             </td>
                                             <td class="text-capitalize">{{ $auditoria->puesto }}</td>
+                                            <td class="text-nowrap">
+                                                {{ data_get($auditoria->datos, 'bloque_anterior_id') ? 'Bloque '.data_get($auditoria->datos, 'bloque_anterior_id') : '-' }}
+                                                →
+                                                {{ data_get($auditoria->datos, 'bloque_nuevo_id') ? 'Bloque '.data_get($auditoria->datos, 'bloque_nuevo_id') : '-' }}
+                                            </td>
                                             <td>
                                                 <div>{{ data_get($auditoria->datos, 'correo', '-') ?: '-' }}</div>
                                                 <small class="text-muted">{{ data_get($auditoria->datos, 'telefono', '-') ?: '-' }}</small>
@@ -91,7 +97,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="7" class="py-4 text-center text-muted">No hay movimientos registrados.</td>
+                                            <td colspan="8" class="py-4 text-center text-muted">No hay movimientos registrados.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

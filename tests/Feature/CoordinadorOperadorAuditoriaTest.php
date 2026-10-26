@@ -22,4 +22,13 @@ class CoordinadorOperadorAuditoriaTest extends TestCase
         $this->assertStringContainsString("@hasanyrole('superadmin|admin2')", $view);
         $this->assertStringContainsString("route('coordinador-operador.auditoria')", $view);
     }
+
+    public function test_audit_report_displays_previous_and_new_blocks(): void
+    {
+        $view = file_get_contents(resource_path('views/coordinador_operador/auditoria.blade.php'));
+
+        $this->assertStringContainsString('Bloque anterior → nuevo', $view);
+        $this->assertStringContainsString("data_get(\$auditoria->datos, 'bloque_anterior_id')", $view);
+        $this->assertStringContainsString("data_get(\$auditoria->datos, 'bloque_nuevo_id')", $view);
+    }
 }

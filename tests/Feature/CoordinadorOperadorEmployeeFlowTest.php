@@ -675,6 +675,30 @@ class CoordinadorOperadorEmployeeFlowTest extends TestCase
         $this->assertDatabaseCount('coordinador_operador_auditorias', 2);
     }
 
+    public function test_exchange_audit_records_previous_and_new_block_for_each_coordinator(): void
+    {
+        $firstEmployee = $this->insertEmployee();
+        $secondEmployee = $this->insertEmployee(['empleadoid' => 1002, 'nombres' => 'Luis', 'cedula' => '00111111112']);
+        $firstBlock = CoordinadorOperador::query()->create([
+            'empleado_id' => $firstEmployee, 'nombre' => 'Ana', 'apellido' => 'Pérez',
+            'cedula' => '00111111111', 'puesto' => 'coordinador',
+        ]);
+        $secondBlock = CoordinadorOperador::query()->create([
+            'empleado_id' => $secondEmployee, 'nombre' => 'Luis', 'apellido' => 'Gómez',
+            'cedula' => '00111111112', 'puesto' => 'coordinador',
+        ]);
+
+        $this->post(route('coordinador-operador.intercambiar', $firstBlock), ['destino_id' => $secondBlock->id])
+            ->assertSessionHas('success');
+
+        $movimientoOrigen = DB::table('coordinador_operador_auditorias')->where('registro_id', $firstBlock->id)->first();
+        $movimientoDestino = DB::table('coordinador_operador_auditorias')->where('registro_id', $secondBlock->id)->first();
+        $this->assertSame($secondBlock->id, json_decode($movimientoOrigen->datos, true)['bloque_anterior_id']);
+        $this->assertSame($firstBlock->id, json_decode($movimientoOrigen->datos, true)['bloque_nuevo_id']);
+        $this->assertSame($firstBlock->id, json_decode($movimientoDestino->datos, true)['bloque_anterior_id']);
+        $this->assertSame($secondBlock->id, json_decode($movimientoDestino->datos, true)['bloque_nuevo_id']);
+    }
+
     public function test_coordinator_can_move_to_empty_block_and_cannot_select_same_block(): void
     {
         $employeeId = $this->insertEmployee();

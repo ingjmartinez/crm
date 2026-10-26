@@ -206,8 +206,8 @@ class CoordinadorOperadorController extends Controller
             $origen->update($datosDestino);
             $destino->update($datosOrigen);
 
-            $this->registrarAuditoria($request, 'intercambiado', $origen);
-            $this->registrarAuditoria($request, 'intercambiado', $destino);
+            $this->registrarAuditoria($request, 'intercambiado', $origen, $destino->id);
+            $this->registrarAuditoria($request, 'intercambiado', $destino, $origen->id);
         });
 
         return redirect()->route('coordinador-operador.index')
@@ -350,7 +350,7 @@ class CoordinadorOperadorController extends Controller
         return view('coordinador_operador.auditoria', compact('auditorias', 'buscar', 'accion', 'desde', 'hasta'));
     }
 
-    private function registrarAuditoria(Request $request, string $accion, CoordinadorOperador $registro): void
+    private function registrarAuditoria(Request $request, string $accion, CoordinadorOperador $registro, ?int $bloqueAnteriorId = null): void
     {
         $usuario = $request->user();
 
@@ -363,7 +363,10 @@ class CoordinadorOperadorController extends Controller
             'empleado_nombre' => trim($registro->nombre.' '.$registro->apellido),
             'cedula' => $registro->cedula,
             'puesto' => $registro->puesto,
-            'datos' => $registro->only(['id', 'empleado_id', 'nombre', 'apellido', 'correo', 'cedula', 'telefono', 'puesto']),
+            'datos' => array_merge($registro->only(['id', 'empleado_id', 'nombre', 'apellido', 'correo', 'cedula', 'telefono', 'puesto']), [
+                'bloque_anterior_id' => $accion === 'intercambiado' ? $bloqueAnteriorId : ($accion === 'eliminado' ? $registro->id : null),
+                'bloque_nuevo_id' => $accion === 'eliminado' ? null : $registro->id,
+            ]),
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
