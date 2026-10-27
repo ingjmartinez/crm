@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Gerencia;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BuscarRentabilidadAgenciaRequest;
+use App\Http\Requests\ConsultarMetaDiariaAgenciaRequest;
 use App\Http\Requests\ConsultarRentabilidadAgenciaRequest;
 use App\Http\Requests\GuardarRentabilidadAgenciaR20Request;
 use App\Models\CentroDeCosto;
@@ -197,6 +198,49 @@ class RentabilidadAgenciaController extends Controller
             'data' => $this->formatearAgenciasDataTable($agencias, $fechaFin->day)->values(),
             'total' => $total,
             'limit' => self::AGENCIAS_BUSQUEDA_LIMITE,
+        ]);
+    }
+
+    public function metaDiaria(ConsultarMetaDiariaAgenciaRequest $request): JsonResponse
+    {
+        $datos = $request->validated();
+        $terminal = trim($datos['terminal']);
+        $agencia = RentabilidadAgencia::query()->activas()->where('terminal', $terminal)->firstOrFail();
+        $inicio = Carbon::createFromFormat('Y-m', $datos['mes'])->startOfMonth();
+        $fin = $inicio->copy()->endOfMonth();
+        $tablas = match (mb_strtoupper(trim((string) $agencia->sistema))) {
+            'LOTOBET' => ['vt_usuarios_bet'],
+            'LOTONET', 'LOTENET' => ['vt_usuarios_net'],
+            default => ['vt_usuarios_bet', 'vt_usuarios_net'],
+        };
+        $ventasPorFecha = collect();
+
+        foreach ($tablas as $tabla) {
+            $ventas = DB::table($tabla)
+                ->where('agencia_id', $terminal)
+                ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+                ->select('fecha')
+                ->selectRaw('SUM(COALESCE(monto, 0)) AS total')
+                ->groupBy('fecha')
+                ->get();
+
+            foreach ($ventas as $venta) {
+                $fecha = (string) $venta->fecha;
+                $ventasPorFecha->put($fecha, (float) $ventasPorFecha->get($fecha, 0) + (float) $venta->total);
+            }
+        }
+
+        $dias = collect();
+        for ($fecha = $inicio->copy(); $fecha->lte($fin); $fecha->addDay()) {
+            $dia = $fecha->toDateString();
+            $dias->push(['fecha' => $dia, 'venta' => (float) $ventasPorFecha->get($dia, 0)]);
+        }
+
+        return response()->json([
+            'terminal' => $terminal,
+            'mes' => $datos['mes'],
+            'dias' => $dias,
+            'total' => (float) $dias->sum('venta'),
         ]);
     }
 

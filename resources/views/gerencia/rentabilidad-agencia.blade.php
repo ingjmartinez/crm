@@ -204,7 +204,7 @@
                                                 <th class="text-end">Gasto fijo</th>
                                                 <th class="text-end">Gasto variable</th>
                                                 <th class="text-end">Total de gasto</th>
-                                                <th>Cuentas</th>
+                                                <th>Acción</th>
                                                 <th class="text-end">Balance</th>
                                                 <th class="text-center">Cumplimiento</th>
                                             </tr>
@@ -387,6 +387,30 @@
             </div>
         </div>
     </div>
+    <div class="modal fade" id="modalMetaDiariaAgencia" tabindex="-1" aria-labelledby="modalMetaDiariaAgenciaTitulo" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="modalMetaDiariaAgenciaTitulo">Meta y ventas por día</h5>
+                        <span class="text-muted" id="modalMetaDiariaAgenciaTerminal"></span>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="modalMetaDiariaAgenciaEstado" class="text-muted mb-2"></div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-light"><tr><th>Fecha</th><th class="text-end">Ventas del día</th><th class="text-end">Meta diaria</th></tr></thead>
+                            <tbody id="modalMetaDiariaAgenciaFilas"></tbody>
+                            <tfoot class="table-light"><tr><th>Total</th><th class="text-end" id="modalMetaDiariaAgenciaTotal">RD$ 0.00</th><th class="text-end" id="modalMetaDiariaAgenciaMetaTotal"></th></tr></tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>
+            </div>
+        </div>
+    </div>
     <div class="modal fade" id="modalR20" tabindex="-1" aria-labelledby="modalR20Titulo" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -424,6 +448,7 @@
         const agenciasRentabilidadData = {{ Illuminate\Support\Js::from($agenciasDataTable) }};
         const agenciasDetalleGrupos = {{ Illuminate\Support\Js::from($agenciasDetalleGrupos) }};
         const buscarAgenciaUrl = {{ Illuminate\Support\Js::from(route('gerencia.rentabilidad-agencia.buscar')) }};
+        const metaDiariaUrl = {{ Illuminate\Support\Js::from(route('gerencia.rentabilidad-agencia.meta-diaria')) }};
 
         const escapeHtml = (value) => {
             const element = document.createElement('div');
@@ -537,7 +562,8 @@
                                     .join(' ');
                             }
 
-                            return `<button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCuentasAgencia" data-agencia-id="${Number(row.id)}">Ver</button>`;
+                            return `<div class="d-flex gap-1"><button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCuentasAgencia" data-agencia-id="${Number(row.id)}">Cuentas</button>`
+                                + `<button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalMetaDiariaAgencia" data-agencia-id="${Number(row.id)}">Meta</button></div>`;
                         },
                     },
                     {
@@ -575,6 +601,60 @@
 
             document.querySelectorAll('#porcentajesPagoRentabilidad input').forEach((checkbox) => {
                 checkbox.addEventListener('change', () => agenciasTable.rows().invalidate().draw(false));
+            });
+
+            let metaDiariaController;
+            document.getElementById('modalMetaDiariaAgencia')?.addEventListener('show.bs.modal', async function (event) {
+                metaDiariaController?.abort();
+                metaDiariaController = new AbortController();
+                const agenciaId = Number(event.relatedTarget?.dataset.agenciaId);
+                const agencia = agenciasTable.rows().data().toArray().find((fila) => Number(fila.id) === agenciaId);
+                const filas = document.getElementById('modalMetaDiariaAgenciaFilas');
+                const estado = document.getElementById('modalMetaDiariaAgenciaEstado');
+                const porcentajes = [...document.querySelectorAll('#porcentajesPagoRentabilidad input:checked')].map((input) => input.value);
+                filas.replaceChildren();
+                document.getElementById('modalMetaDiariaAgenciaTitulo').textContent = agencia ? `Meta y ventas por día de ${agencia.nombre}` : 'Meta y ventas por día';
+                document.getElementById('modalMetaDiariaAgenciaTerminal').textContent = agencia ? `Terminal ${agencia.terminal}` : '';
+                document.getElementById('modalMetaDiariaAgenciaTotal').textContent = 'RD$ 0.00';
+                document.getElementById('modalMetaDiariaAgenciaMetaTotal').textContent = porcentajes.map((porcentaje) => `${porcentaje} %: RD$ ${formatMoney(agencia?.meta_venta?.[porcentaje])}`).join(' | ');
+                estado.textContent = 'Consultando ventas diarias...';
+
+                if (!agencia) {
+                    estado.textContent = 'No se encontró la terminal.';
+                    return;
+                }
+
+                try {
+                    const query = new URLSearchParams({ mes: {{ Illuminate\Support\Js::from($mesSeleccionado) }}, terminal: agencia.terminal });
+                    const response = await fetch(`${metaDiariaUrl}?${query.toString()}`, {
+                        headers: { Accept: 'application/json' },
+                        signal: metaDiariaController.signal,
+                    });
+                    if (!response.ok) throw new Error('No se pudieron consultar las ventas diarias.');
+                    const datos = await response.json();
+                    datos.dias.forEach((dia) => {
+                        const fila = document.createElement('tr');
+                        const fecha = document.createElement('td');
+                        fecha.textContent = dia.fecha;
+                        const venta = document.createElement('td');
+                        venta.className = 'text-end';
+                        venta.textContent = `RD$ ${formatMoney(dia.venta)}`;
+                        const meta = document.createElement('td');
+                        meta.className = 'text-end';
+                        meta.textContent = porcentajes.length
+                            ? porcentajes.map((porcentaje) => `${porcentaje} %: RD$ ${formatMoney(agencia.ventas_por_dia[porcentaje])}`).join(' | ')
+                            : 'Selecciona un porcentaje de pago';
+                        fila.append(fecha, venta, meta);
+                        filas.appendChild(fila);
+                    });
+                    document.getElementById('modalMetaDiariaAgenciaTotal').textContent = `RD$ ${formatMoney(datos.total)}`;
+                    estado.textContent = `${datos.dias.length} días del mes consultado. Ventas reales de la terminal.`;
+                } catch (error) {
+                    if (error.name !== 'AbortError') estado.textContent = error.message;
+                }
+            });
+            document.getElementById('modalMetaDiariaAgencia')?.addEventListener('hidden.bs.modal', function () {
+                metaDiariaController?.abort();
             });
 
             document.getElementById('modalCuentasAgencia')?.addEventListener('show.bs.modal', function (event) {

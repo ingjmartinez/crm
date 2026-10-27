@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaController;
 use App\Http\Requests\BuscarRentabilidadAgenciaRequest;
+use App\Http\Requests\ConsultarMetaDiariaAgenciaRequest;
 use App\Http\Requests\ConsultarRentabilidadAgenciaRequest;
 use App\Models\ClasificacionCuenta;
 use App\Models\RentabilidadAgencia;
@@ -97,6 +98,44 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertSame('052232', $data['data'][0]['terminal']);
         $this->assertSame(428423, $data['data'][0]['venta_bruta']);
         $this->assertSame(5289, $data['data'][0]['centro_costo_id']);
+    }
+
+    public function test_meta_modal_uses_daily_sales_from_the_terminals_system(): void
+    {
+        DB::table('agencias')->insert([
+            ['terminal' => '1001', 'sistema' => 'LOTOBET', 'estatus' => 1],
+            ['terminal' => '2002', 'sistema' => 'LOTONET', 'estatus' => 1],
+        ]);
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 100],
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 50],
+            ['agencia_id' => '1001', 'fecha' => '2026-08-31', 'monto' => 500],
+            ['agencia_id' => '2002', 'fecha' => '2026-09-01', 'monto' => 900],
+        ]);
+        DB::table('vt_usuarios_net')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 800],
+            ['agencia_id' => '2002', 'fecha' => '2026-09-02', 'monto' => 75],
+        ]);
+        $this->actingAs(User::factory()->make());
+
+        foreach ([
+            ['1001', 150.0, 0.0, 150.0],
+            ['2002', 0.0, 75.0, 75.0],
+        ] as [$terminal, $primero, $segundo, $total]) {
+            $request = ConsultarMetaDiariaAgenciaRequest::create('/gerencia/rentabilidad-agencia/meta-diaria', 'GET', [
+                'mes' => '2026-09', 'terminal' => $terminal,
+            ]);
+            $request->setContainer(app())->setRedirector(app('redirect'));
+            $request->validateResolved();
+            $data = app(RentabilidadAgenciaController::class)->metaDiaria($request)->getData(true);
+
+            $this->assertCount(30, $data['dias']);
+            $this->assertEquals($primero, $data['dias'][0]['venta']);
+            $this->assertEquals($segundo, $data['dias'][1]['venta']);
+            $this->assertEquals($total, $data['total']);
+        }
+
+        $this->assertTrue(Validator::make(['mes' => 'septiembre', 'terminal' => '1001'], (new ConsultarMetaDiariaAgenciaRequest)->rules())->fails());
     }
 
     public function test_manual_r20_applies_to_every_month_and_terminal(): void
@@ -284,7 +323,10 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertStringContainsString("No cumplen: {{ number_format(\$resumenCumplimiento['no_cumple']) }}", $viewSource);
         $this->assertStringContainsString('Rentabilidad por ciudad', $viewSource);
         $this->assertStringContainsString('Rentabilidad por ruta', $viewSource);
-        $this->assertStringContainsString('<th>Cuentas</th>', $viewSource);
+        $this->assertStringContainsString('<th>Acción</th>', $viewSource);
+        $this->assertStringContainsString('>Cuentas</button>', $viewSource);
+        $this->assertStringContainsString('>Meta</button>', $viewSource);
+        $this->assertStringContainsString('id="modalMetaDiariaAgenciaFilas"', $viewSource);
         $this->assertStringContainsString('<th class="text-center">Centro de costo</th>', $viewSource);
         $this->assertStringContainsString("data: 'centro_costo_id'", $viewSource);
         $this->assertStringContainsString("data: 'cuentas'", $viewSource);
