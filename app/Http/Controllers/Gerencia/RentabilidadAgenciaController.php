@@ -294,6 +294,11 @@ class RentabilidadAgenciaController extends Controller
                 '70' => (float) $agencia->gastos_fijos_mes / 0.30 / $diasMes,
                 '80' => (float) $agencia->gastos_fijos_mes / 0.20 / $diasMes,
             ],
+            'meta_venta' => [
+                '60' => (float) $agencia->gastos_fijos_mes / 0.40,
+                '70' => (float) $agencia->gastos_fijos_mes / 0.30,
+                '80' => (float) $agencia->gastos_fijos_mes / 0.20,
+            ],
             'cuentas' => $agencia->cuentas_mes,
             'r20' => (float) $agencia->r20_mes,
             'balance' => (float) $agencia->balance_mes,

@@ -139,6 +139,11 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertEqualsWithDelta(125.50 / 0.40 / 30, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['ventas_por_dia']['60'], 0.0001);
         $this->assertEqualsWithDelta(125.50 / 0.30 / 30, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['ventas_por_dia']['70'], 0.0001);
         $this->assertEqualsWithDelta(125.50 / 0.20 / 30, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['ventas_por_dia']['80'], 0.0001);
+        foreach ([60 => 0.40, 70 => 0.30, 80 => 0.20] as $porcentaje => $margen) {
+            $fila = $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001');
+            $this->assertEqualsWithDelta(125.50 / $margen, $fila['meta_venta'][$porcentaje], 0.0001);
+            $this->assertEqualsWithDelta($fila['ventas_por_dia'][$porcentaje] * 30, $fila['meta_venta'][$porcentaje], 0.0001);
+        }
         $this->assertSame(251.0, $view->getData()['ciudadesResumen']->first()['gastos_mes']);
         $this->assertSame(125.50, $view->getData()['montoR20Global']);
 
@@ -293,6 +298,11 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertStringContainsString("data: 'gastos_variables'", $viewSource);
         $this->assertStringContainsString('<th class="text-end">Total de gasto</th>', $viewSource);
         $this->assertStringContainsString('<th class="text-end">Ventas por día</th>', $viewSource);
+        $this->assertStringContainsString('<th class="text-end">Meta de venta</th>', $viewSource);
+        $this->assertStringContainsString("data: 'meta_venta'", $viewSource);
+        $this->assertStringContainsString('id="tableRentabilidadAgencias" style="min-width: 1500px"', $viewSource);
+        $this->assertStringContainsString('responsive: false,', $viewSource);
+        $this->assertLessThan(strpos($viewSource, "data: 'centro_costo_id'"), strpos($viewSource, "data: 'meta_venta'"));
         $this->assertStringContainsString('id="porcentajesPagoRentabilidad"', $viewSource);
         $this->assertStringContainsString('<th class="text-end">Gastos fijos</th>', $viewSource);
         $this->assertStringContainsString('<th class="text-end">Gastos variables</th>', $viewSource);

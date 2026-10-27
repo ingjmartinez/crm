@@ -193,16 +193,17 @@
                                     </div>
                                 </div>
                                 <div class="table-responsive">
-                                    <table class="table table-bordered table-hover align-middle mb-0 w-100" id="tableRentabilidadAgencias">
+                                    <table class="table table-bordered table-hover align-middle mb-0 w-100" id="tableRentabilidadAgencias" style="min-width: 1500px">
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Agencia</th>
                                                 <th class="text-end">{{ $usarIngresosContables ? 'Ingresos contables' : 'Venta bruta mensual' }}</th>
+                                                <th class="text-end">Ventas por día</th>
+                                                <th class="text-end">Meta de venta</th>
                                                 <th class="text-center">Centro de costo</th>
                                                 <th class="text-end">Gasto fijo</th>
                                                 <th class="text-end">Gasto variable</th>
                                                 <th class="text-end">Total de gasto</th>
-                                                <th class="text-end">Ventas por día</th>
                                                 <th>Cuentas</th>
                                                 <th class="text-end">Balance</th>
                                                 <th class="text-center">Cumplimiento</th>
@@ -448,7 +449,7 @@
             const agenciasTable = $('#tableRentabilidadAgencias').DataTable({
                 data: agenciasRentabilidadData,
                 deferRender: true,
-                responsive: true,
+                responsive: false,
                 autoWidth: false,
                 pageLength: 10,
                 lengthChange: false,
@@ -477,6 +478,34 @@
                         render: (data, type) => type === 'display' ? `RD$ ${formatMoney(data)}` : Number(data || 0),
                     },
                     {
+                        data: 'ventas_por_dia',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const porcentajes = [...document.querySelectorAll('#porcentajesPagoRentabilidad input:checked')]
+                                .map((input) => input.value);
+                            if (type !== 'display') {
+                                return porcentajes.length ? Number(data?.[porcentajes[0]] || 0) : 0;
+                            }
+                            return porcentajes.length
+                                ? porcentajes.map((porcentaje) => `<div><span class="text-muted">${porcentaje} %:</span> <span class="fw-semibold">RD$ ${formatMoney(data?.[porcentaje])}</span></div>`).join('')
+                                : '<span class="text-muted">—</span>';
+                        },
+                    },
+                    {
+                        data: 'meta_venta',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const porcentajes = [...document.querySelectorAll('#porcentajesPagoRentabilidad input:checked')]
+                                .map((input) => input.value);
+                            if (type !== 'display') {
+                                return porcentajes.length ? Number(data?.[porcentajes[0]] || 0) : 0;
+                            }
+                            return porcentajes.length
+                                ? porcentajes.map((porcentaje) => `<div><span class="text-muted">${porcentaje} %:</span> <span class="fw-semibold">RD$ ${formatMoney(data?.[porcentaje])}</span></div>`).join('')
+                                : '<span class="text-muted">—</span>';
+                        },
+                    },
+                    {
                         data: 'centro_costo_id',
                         className: 'text-center fw-semibold',
                         render: (data, type) => type === 'display' ? escapeHtml(data ?? 'Sin centro') : String(data ?? ''),
@@ -495,20 +524,6 @@
                         data: 'gastos',
                         className: 'text-end fw-semibold text-danger',
                         render: (data, type) => type === 'display' ? `RD$ ${formatMoney(data)}` : Number(data || 0),
-                    },
-                    {
-                        data: 'ventas_por_dia',
-                        className: 'text-end',
-                        render: function (data, type) {
-                            const porcentajes = [...document.querySelectorAll('#porcentajesPagoRentabilidad input:checked')]
-                                .map((input) => input.value);
-                            if (type !== 'display') {
-                                return porcentajes.length ? Number(data?.[porcentajes[0]] || 0) : 0;
-                            }
-                            return porcentajes.length
-                                ? porcentajes.map((porcentaje) => `<div><span class="text-muted">${porcentaje} %:</span> <span class="fw-semibold">RD$ ${formatMoney(data?.[porcentaje])}</span></div>`).join('')
-                                : '<span class="text-muted">—</span>';
-                        },
                     },
                     {
                         data: 'cuentas',
