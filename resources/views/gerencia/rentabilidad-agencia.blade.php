@@ -25,6 +25,7 @@
                             <div class="card-body">
                                 <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2">
                                     <span>Los costos y gastos se calculan exclusivamente con las cuentas activas de Clasificación de cuentas. Revísalas antes de consultar.</span>
+                                    <a href="{{ route('gerencia.rentabilidad-agencia-v2') }}" class="btn btn-outline-success btn-sm">Ver rentabilidad V2</a>
                                     <a href="{{ route('contabilidad.clasificacion-cuentas') }}" class="btn btn-outline-primary btn-sm">Clasificar cuentas</a>
                                 </div>
                                 @if (session('mensaje'))
@@ -161,6 +162,16 @@
                                 </div>
                             </div>
                             <div class="card-body">
+                                <div class="d-flex flex-wrap align-items-center gap-3 mb-3" id="porcentajesPagoRentabilidad">
+                                    <span class="fw-medium">Meta de ventas por día (gastos fijos):</span>
+                                    @foreach ([60, 70, 80] as $porcentajePago)
+                                        <label class="form-check mb-0">
+                                            <input class="form-check-input" type="checkbox" value="{{ $porcentajePago }}" @checked($porcentajePago === 60)>
+                                            <span class="form-check-label">Pago {{ $porcentajePago }} %</span>
+                                        </label>
+                                    @endforeach
+                                    <small class="text-muted">Gastos fijos ÷ (1 − pago) ÷ días del mes.</small>
+                                </div>
                                 <div class="row mb-3">
                                     <div class="col-12 col-md-6 col-lg-4">
                                         <label for="buscarAgenciaRentabilidad" class="form-label">Buscar agencia</label>
@@ -188,7 +199,10 @@
                                                 <th>Agencia</th>
                                                 <th class="text-end">{{ $usarIngresosContables ? 'Ingresos contables' : 'Venta bruta mensual' }}</th>
                                                 <th class="text-center">Centro de costo</th>
-                                                <th class="text-end">Gastos</th>
+                                                <th class="text-end">Gasto fijo</th>
+                                                <th class="text-end">Gasto variable</th>
+                                                <th class="text-end">Total de gasto</th>
+                                                <th class="text-end">Ventas por día</th>
                                                 <th>Cuentas</th>
                                                 <th class="text-end">Balance</th>
                                                 <th class="text-center">Cumplimiento</th>
@@ -317,7 +331,7 @@
     </div>
 
     <div class="modal fade" id="modalAgenciasGrupo" tabindex="-1" aria-labelledby="modalAgenciasGrupoTitulo" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <div>
@@ -359,10 +373,10 @@
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered align-middle mb-0">
                             <thead class="table-light">
-                                <tr><th>Cuenta</th><th>Descripción</th><th>Tipo</th><th>Clasificación</th><th class="text-end">Monto</th></tr>
+                                <tr><th>Cuenta</th><th>Descripción</th><th>Tipo</th><th>Clasificación</th><th class="text-end">Gastos fijos</th><th class="text-end">Gastos variables</th><th class="text-end">Total de gasto</th></tr>
                             </thead>
                             <tbody id="modalCuentasAgenciaFilas"></tbody>
-                            <tfoot class="table-light"><tr><th colspan="4">Total</th><th class="text-end" id="modalCuentasAgenciaTotal">RD$ 0.00</th></tr></tfoot>
+                            <tfoot class="table-light"><tr><th colspan="4">Total</th><th class="text-end" id="modalCuentasAgenciaGastosFijosTotal">RD$ 0.00</th><th class="text-end" id="modalCuentasAgenciaGastosVariablesTotal">RD$ 0.00</th><th class="text-end" id="modalCuentasAgenciaGastosTotal">RD$ 0.00</th></tr></tfoot>
                         </table>
                     </div>
                 </div>
@@ -468,9 +482,33 @@
                         render: (data, type) => type === 'display' ? escapeHtml(data ?? 'Sin centro') : String(data ?? ''),
                     },
                     {
+                        data: 'gastos_fijos',
+                        className: 'text-end fw-semibold text-danger',
+                        render: (data, type) => type === 'display' ? `RD$ ${formatMoney(data)}` : Number(data || 0),
+                    },
+                    {
+                        data: 'gastos_variables',
+                        className: 'text-end fw-semibold text-danger',
+                        render: (data, type) => type === 'display' ? `RD$ ${formatMoney(data)}` : Number(data || 0),
+                    },
+                    {
                         data: 'gastos',
                         className: 'text-end fw-semibold text-danger',
                         render: (data, type) => type === 'display' ? `RD$ ${formatMoney(data)}` : Number(data || 0),
+                    },
+                    {
+                        data: 'ventas_por_dia',
+                        className: 'text-end',
+                        render: function (data, type) {
+                            const porcentajes = [...document.querySelectorAll('#porcentajesPagoRentabilidad input:checked')]
+                                .map((input) => input.value);
+                            if (type !== 'display') {
+                                return porcentajes.length ? Number(data?.[porcentajes[0]] || 0) : 0;
+                            }
+                            return porcentajes.length
+                                ? porcentajes.map((porcentaje) => `<div><span class="text-muted">${porcentaje} %:</span> <span class="fw-semibold">RD$ ${formatMoney(data?.[porcentaje])}</span></div>`).join('')
+                                : '<span class="text-muted">—</span>';
+                        },
                     },
                     {
                         data: 'cuentas',
@@ -520,6 +558,10 @@
                 ],
             });
 
+            document.querySelectorAll('#porcentajesPagoRentabilidad input').forEach((checkbox) => {
+                checkbox.addEventListener('change', () => agenciasTable.rows().invalidate().draw(false));
+            });
+
             document.getElementById('modalCuentasAgencia')?.addEventListener('show.bs.modal', function (event) {
                 const agenciaId = Number(event.relatedTarget?.dataset.agenciaId);
                 const agencia = agenciasTable.rows().data().toArray().find((fila) => Number(fila.id) === agenciaId);
@@ -532,13 +574,15 @@
                 document.getElementById('modalCuentasAgenciaTerminal').textContent = agencia
                     ? `Terminal ${agencia.terminal}`
                     : '';
-                document.getElementById('modalCuentasAgenciaTotal').textContent = `RD$ ${formatMoney(cuentas.reduce((total, cuenta) => total + Number(cuenta.importe || 0), 0))}`;
+                document.getElementById('modalCuentasAgenciaGastosFijosTotal').textContent = `RD$ ${formatMoney(cuentas.reduce((total, cuenta) => total + (cuenta.tipo === 'gasto' && String(cuenta.clasificacion).toUpperCase() === 'FIJO' ? Number(cuenta.importe || 0) : 0), 0))}`;
+                document.getElementById('modalCuentasAgenciaGastosVariablesTotal').textContent = `RD$ ${formatMoney(cuentas.reduce((total, cuenta) => total + (cuenta.tipo === 'gasto' && String(cuenta.clasificacion).toUpperCase() === 'VARIABLE' ? Number(cuenta.importe || 0) : 0), 0))}`;
+                document.getElementById('modalCuentasAgenciaGastosTotal').textContent = `RD$ ${formatMoney(cuentas.reduce((total, cuenta) => total + (cuenta.tipo === 'gasto' ? Number(cuenta.importe || 0) : 0), 0))}`;
                 filas.replaceChildren();
 
                 if (cuentas.length === 0) {
                     const fila = document.createElement('tr');
                     const celda = document.createElement('td');
-                    celda.colSpan = 5;
+                    celda.colSpan = 7;
                     celda.className = 'text-center text-muted';
                     celda.textContent = 'Sin costos ni gastos';
                     fila.appendChild(celda);
@@ -548,10 +592,12 @@
 
                 cuentas.forEach((cuenta) => {
                     const fila = document.createElement('tr');
-                    [cuenta.cuenta, cuenta.descripcion, cuenta.tipo === 'costo' ? 'Costo' : 'Gasto', cuenta.clasificacion || 'Sin clasificar', `RD$ ${formatMoney(cuenta.importe)}`].forEach((valor, indice) => {
+                    const gastoFijo = cuenta.tipo === 'gasto' && String(cuenta.clasificacion).toUpperCase() === 'FIJO';
+                    const gastoVariable = cuenta.tipo === 'gasto' && String(cuenta.clasificacion).toUpperCase() === 'VARIABLE';
+                    [cuenta.cuenta, cuenta.descripcion, cuenta.tipo === 'costo' ? 'Costo' : 'Gasto', cuenta.clasificacion || 'Sin clasificar', gastoFijo ? `RD$ ${formatMoney(cuenta.importe)}` : '—', gastoVariable ? `RD$ ${formatMoney(cuenta.importe)}` : '—', cuenta.tipo === 'gasto' ? `RD$ ${formatMoney(cuenta.importe)}` : '—'].forEach((valor, indice) => {
                         const celda = document.createElement('td');
                         celda.textContent = String(valor ?? '');
-                        if (indice === 4) {
+                        if (indice >= 4) {
                             celda.className = 'text-end fw-semibold';
                         }
                         fila.appendChild(celda);

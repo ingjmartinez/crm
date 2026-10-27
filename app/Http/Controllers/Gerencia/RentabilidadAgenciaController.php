@@ -123,7 +123,7 @@ class RentabilidadAgenciaController extends Controller
         $ciudadesResumen = $ciudadesAgrupadas;
         $rutasResumen = $rutasAgrupadas;
         $agencias = $agenciasParaResumen;
-        $agenciasDataTable = $this->formatearAgenciasDataTable($agencias)
+        $agenciasDataTable = $this->formatearAgenciasDataTable($agencias, $fechaFin->day)
             ->take(self::AGENCIAS_CARGA_INICIAL)
             ->values();
 
@@ -169,7 +169,7 @@ class RentabilidadAgenciaController extends Controller
                 $this->cargarIndicadores($agencias, $fechaInicio, $fechaFin, (bool) ($datos['ingresos_contables'] ?? false));
 
                 return response()->json([
-                    'data' => $this->formatearAgenciasDataTable($agencias)->values(),
+                    'data' => $this->formatearAgenciasDataTable($agencias, $fechaFin->day)->values(),
                     'total' => 1,
                     'limit' => self::AGENCIAS_BUSQUEDA_LIMITE,
                 ]);
@@ -194,7 +194,7 @@ class RentabilidadAgenciaController extends Controller
         $this->cargarIndicadores($agencias, $fechaInicio, $fechaFin, (bool) ($datos['ingresos_contables'] ?? false));
 
         return response()->json([
-            'data' => $this->formatearAgenciasDataTable($agencias)->values(),
+            'data' => $this->formatearAgenciasDataTable($agencias, $fechaFin->day)->values(),
             'total' => $total,
             'limit' => self::AGENCIAS_BUSQUEDA_LIMITE,
         ]);
@@ -277,7 +277,7 @@ class RentabilidadAgenciaController extends Controller
         );
     }
 
-    private function formatearAgenciasDataTable(Collection $agencias): Collection
+    private function formatearAgenciasDataTable(Collection $agencias, int $diasMes): Collection
     {
         return $agencias->map(fn (RentabilidadAgencia $agencia): array => [
             'id' => (int) $agencia->id,
@@ -286,7 +286,14 @@ class RentabilidadAgenciaController extends Controller
             'centro_costo_id' => $agencia->centro_costo_id,
             'venta_bruta' => (float) $agencia->venta_bruta_mes,
             'costos' => (float) $agencia->costos_mes,
+            'gastos_fijos' => (float) $agencia->gastos_fijos_mes,
+            'gastos_variables' => (float) $agencia->gastos_variables_mes,
             'gastos' => (float) $agencia->gastos_mes,
+            'ventas_por_dia' => [
+                '60' => (float) $agencia->gastos_fijos_mes / 0.40 / $diasMes,
+                '70' => (float) $agencia->gastos_fijos_mes / 0.30 / $diasMes,
+                '80' => (float) $agencia->gastos_fijos_mes / 0.20 / $diasMes,
+            ],
             'cuentas' => $agencia->cuentas_mes,
             'r20' => (float) $agencia->r20_mes,
             'balance' => (float) $agencia->balance_mes,
@@ -388,11 +395,19 @@ class RentabilidadAgenciaController extends Controller
         $gastos = (float) $movimientos
             ->where('tipo', 'gasto')
             ->sum('importe');
+        $gastosFijos = (float) $movimientos
+            ->filter(fn (array $movimiento): bool => $movimiento['tipo'] === 'gasto' && mb_strtoupper(trim((string) $movimiento['clasificacion'])) === 'FIJO')
+            ->sum('importe');
+        $gastosVariables = (float) $movimientos
+            ->filter(fn (array $movimiento): bool => $movimiento['tipo'] === 'gasto' && mb_strtoupper(trim((string) $movimiento['clasificacion'])) === 'VARIABLE')
+            ->sum('importe');
         $balance = $ventaBruta - $costos - $gastos;
 
         $agencia->setAttribute('venta_bruta_mes', $ventaBruta);
         $agencia->setAttribute('costos_mes', $costos);
         $agencia->setAttribute('gastos_mes', $gastos);
+        $agencia->setAttribute('gastos_fijos_mes', $gastosFijos);
+        $agencia->setAttribute('gastos_variables_mes', $gastosVariables);
         $agencia->setAttribute('centro_costo_id', $centro?->id_centro_costo);
         $agencia->setAttribute('r20_mes', $montoR20);
         $agencia->setAttribute('cuentas_mes', $movimientos->values()->all());

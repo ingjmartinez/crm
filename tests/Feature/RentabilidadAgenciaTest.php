@@ -128,12 +128,17 @@ class RentabilidadAgenciaTest extends TestCase
         $agencias = $view->getData()['agencias']->keyBy('terminal');
 
         $this->assertSame(125.50, $agencias['1001']->gastos_mes);
+        $this->assertSame(125.50, $agencias['1001']->gastos_fijos_mes);
+        $this->assertSame(0.0, $agencias['1001']->gastos_variables_mes);
         $this->assertSame(874.50, $agencias['1001']->balance_mes);
         $this->assertSame(125.50, $agencias['1002']->gastos_mes);
         $this->assertSame(-125.50, $agencias['1002']->balance_mes);
         $this->assertSame(['terminal' => '1001', 'cuenta' => 'R20', 'descripcion' => 'Gasto R20 manual', 'tipo' => 'gasto', 'clasificacion' => 'FIJO', 'importe' => 125.50], $agencias['1001']->cuentas_mes[0]);
         $this->assertSame(['terminal' => '1002', 'cuenta' => 'R20', 'descripcion' => 'Gasto R20 manual', 'tipo' => 'gasto', 'clasificacion' => 'FIJO', 'importe' => 125.50], $agencias['1002']->cuentas_mes[0]);
         $this->assertSame(125.50, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['r20']);
+        $this->assertEqualsWithDelta(125.50 / 0.40 / 30, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['ventas_por_dia']['60'], 0.0001);
+        $this->assertEqualsWithDelta(125.50 / 0.30 / 30, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['ventas_por_dia']['70'], 0.0001);
+        $this->assertEqualsWithDelta(125.50 / 0.20 / 30, $view->getData()['agenciasDataTable']->firstWhere('terminal', '1001')['ventas_por_dia']['80'], 0.0001);
         $this->assertSame(251.0, $view->getData()['ciudadesResumen']->first()['gastos_mes']);
         $this->assertSame(125.50, $view->getData()['montoR20Global']);
 
@@ -197,6 +202,8 @@ class RentabilidadAgenciaTest extends TestCase
 
         $this->assertSame(25.0, $agencia->costos_mes);
         $this->assertSame(50.0, $agencia->gastos_mes);
+        $this->assertSame(50.0, $agencia->gastos_fijos_mes);
+        $this->assertSame(0.0, $agencia->gastos_variables_mes);
         $this->assertSame(['6001', '7001'], collect($agencia->cuentas_mes)->pluck('cuenta')->all());
         $this->assertSame(['FIJO', 'VARIABLE'], collect($agencia->cuentas_mes)->pluck('clasificacion')->all());
     }
@@ -278,6 +285,22 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertStringContainsString("data: 'cuentas'", $viewSource);
         $this->assertStringContainsString('data-bs-target="#modalCuentasAgencia"', $viewSource);
         $this->assertStringContainsString('id="modalCuentasAgenciaFilas"', $viewSource);
+        $modalCuentasSource = explode('id="modalCuentasAgencia"', $viewSource, 2)[1];
+        $modalCuentasSource = explode('id="modalR20"', $modalCuentasSource, 2)[0];
+        $this->assertStringNotContainsString('<th class="text-end">Monto</th>', $modalCuentasSource);
+        $this->assertStringNotContainsString('id="modalCuentasAgenciaTotal"', $modalCuentasSource);
+        $this->assertStringContainsString("data: 'gastos_fijos'", $viewSource);
+        $this->assertStringContainsString("data: 'gastos_variables'", $viewSource);
+        $this->assertStringContainsString('<th class="text-end">Total de gasto</th>', $viewSource);
+        $this->assertStringContainsString('<th class="text-end">Ventas por día</th>', $viewSource);
+        $this->assertStringContainsString('id="porcentajesPagoRentabilidad"', $viewSource);
+        $this->assertStringContainsString('<th class="text-end">Gastos fijos</th>', $viewSource);
+        $this->assertStringContainsString('<th class="text-end">Gastos variables</th>', $viewSource);
+        $this->assertStringContainsString('id="modalCuentasAgenciaGastosVariablesTotal"', $viewSource);
+        $this->assertStringContainsString('id="modalCuentasAgenciaGastosTotal"', $viewSource);
+        $this->assertStringContainsString('id="modalCuentasAgenciaGastosFijosTotal"', $viewSource);
+        $this->assertStringContainsString("cuenta.tipo === 'gasto' && String(cuenta.clasificacion).toUpperCase() === 'FIJO'", $viewSource);
+        $this->assertStringContainsString("cuenta.tipo === 'gasto' && String(cuenta.clasificacion).toUpperCase() === 'VARIABLE'", $viewSource);
         $this->assertStringContainsString('<th>Clasificación</th>', $viewSource);
         $this->assertStringContainsString('agenciasTable.rows().data().toArray().find', $viewSource);
         $this->assertStringContainsString('filas.replaceChildren()', $viewSource);
@@ -475,6 +498,8 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertSame(275000.0, $agenciasPorTerminal->get('2001')->venta_bruta_mes);
         $this->assertSame(9000.0, $agenciasPorTerminal->get('1001')->costos_mes);
         $this->assertSame(2000.0, $agenciasPorTerminal->get('1001')->gastos_mes);
+        $this->assertSame(0.0, $agenciasPorTerminal->get('1001')->gastos_fijos_mes);
+        $this->assertSame(2000.0, $agenciasPorTerminal->get('1001')->gastos_variables_mes);
         $this->assertSame([
             [
                 'terminal' => '1001',

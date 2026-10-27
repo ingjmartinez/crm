@@ -896,6 +896,16 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Rentabilidad de Agencia V2',
+                'descripcion' => 'Consulta ventas y premios diarios para calcular el ingreso real por terminal.',
+                'url' => '/gerencia/rentabilidad-agencia-v2',
+                'icono' => 'ri-line-chart-line',
+                'categoria' => 'Rentabilidad',
+                'tags' => ['gerencia', 'rentabilidad', 'ventas', 'premios', 'terminales'],
+                'permission' => 'gerencia.rentabilidad_de_agencia.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Venta Gerencial',
                 'descripcion' => 'Consulta ventas gerenciales con filtros y exportacion.',
                 'url' => '/gerencia/venta-gerencial',
