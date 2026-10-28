@@ -87,7 +87,11 @@ class RentabilidadAgenciaV2Test extends TestCase
             ['agencia_id' => '999', 'fecha' => '2026-09-01', 'monto' => 300],
         ]);
         DB::table('pagos_aotra_empresa_bet')->insert(['agencia_id' => '052232', 'fecha' => '2026-09-02', 'monto' => 150]);
-        DB::table('premios_bet')->insert(['agencia_id' => '052232', 'fecha' => '2026-09-01', 'monto' => 999]);
+        DB::table('premios_bet')->insert([
+            ['agencia_id' => '052232', 'fecha' => '2026-09-01', 'monto' => 999],
+            ['agencia_id' => '052232', 'fecha' => '2026-08-31', 'monto' => 500],
+            ['agencia_id' => '999', 'fecha' => '2026-09-01', 'monto' => 600],
+        ]);
         DB::table('vt_usuarios_net')->insert(['agencia_id' => '052232', 'fecha' => '2026-09-01', 'monto' => 999]);
         DB::table('cuentas_contables')->insert([
             ['cuenta' => '5001', 'tipo' => 'Costo'],
@@ -106,19 +110,22 @@ class RentabilidadAgenciaV2Test extends TestCase
         $request->validateResolved();
         $data = app(RentabilidadAgenciaV2Controller::class)->index($request)->getData();
 
-        $this->assertSame(['fecha' => '2026-09-01', 'venta' => 200.0, 'premios' => 80.0, 'ingreso_real' => 120.0], $data['dias']->first());
+        $this->assertSame(['fecha' => '2026-09-01', 'venta' => 200.0, 'premios' => 80.0, 'premios_sacados' => 999.0, 'ingreso_real' => 120.0], $data['dias']->first());
         $this->assertSame(-50.0, $data['dias'][1]['ingreso_real']);
         $this->assertCount(30, $data['dias']);
         $this->assertSame([
             'venta' => 300.0,
             'premios' => 230.0,
+            'premios_sacados' => 999.0,
             'ingreso_real' => 70.0,
             'costos' => 20.0,
             'gastos' => 15.0,
+            'gastos_fijos' => 5.0,
             'r20' => 5.0,
             'balance' => 35.0,
         ], $data['resumen']);
-        $this->assertSame(35.0 / 0.4 / 30, $data['metasDiarias']->first()['meta_diaria']);
+        $this->assertSame(5.0 / 0.4 / 30, $data['metasDiarias']->first()['meta_diaria']);
+        $this->assertSame(5.0 / 0.4, $data['metasDiarias']->first()['meta_venta']);
         $this->assertSame('/gerencia/rentabilidad-agencia-v2', route('gerencia.rentabilidad-agencia-v2', [], false));
         $item = app(ViewPermissionCatalog::class)->items()->firstWhere('path', '/gerencia/rentabilidad-agencia-v2');
         $this->assertSame('Rentabilidad de Agencia V2', $item['name']);
@@ -134,17 +141,46 @@ class RentabilidadAgenciaV2Test extends TestCase
         $this->assertTrue(\Illuminate\Support\Facades\Validator::make(['productos_filtrados' => 1, 'productos' => ['No válido']], $request->rules())->fails());
     }
 
+    public function test_terminal_detail_link_returns_rendered_modal_content(): void
+    {
+        $this->withoutMiddleware();
+        DB::table('agencias')->insert(['terminal' => '1001', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia A']);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 100]);
+
+        $this->withHeaders(['X-Requested-With' => 'XMLHttpRequest'])->get(route('gerencia.rentabilidad-agencia-v2', [
+            'mes' => '2026-09',
+            'alcance' => 'terminal',
+            'terminal' => '1001',
+            'productos_filtrados' => 1,
+            'productos' => ['Tradicional', 'No Tradicional', 'Recarga'],
+        ]))->assertOk()->assertSee('id="detalleTerminalRentabilidadV2"', false)->assertSee('Agencia A')->assertDontSee('<html', false);
+    }
+
+    public function test_payment_tables_receive_indexes_for_terminal_detail_queries(): void
+    {
+        (require database_path('migrations/2026_10_28_130957_add_agencia_fecha_indexes_to_pagos_premios_tables.php'))->up();
+
+        foreach (['pagos_misma_empresa_bet', 'pagos_aotra_empresa_bet', 'pagos_misma_empresa_net', 'pagos_aotra_empresa_net'] as $tabla) {
+            $indices = collect(Schema::getIndexes($tabla))->pluck('columns', 'name');
+
+            $this->assertSame(['agencia_id', 'fecha', 'monto'], $indices[$tabla.'_agencia_fecha_monto_index']);
+        }
+    }
+
     public function test_v2_can_summarize_all_terminals_and_open_each_daily_detail(): void
     {
+        config(['clasificacion_cuentas.cuentas' => ['6001' => 'FIJO']]);
         DB::table('agencias')->insert([
             ['terminal' => '1001', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia BET'],
             ['terminal' => '2002', 'sistema' => 'LOTONET', 'nombre_agencia' => 'Agencia NET'],
         ]);
         DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 200]);
         DB::table('pagos_misma_empresa_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 30]);
+        DB::table('premios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 45]);
         DB::table('pagos_aotra_empresa_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 50]);
         DB::table('vt_usuarios_net')->insert(['agencia_id' => '2002', 'fecha' => '2026-09-01', 'monto' => 300]);
         DB::table('pagos_misma_empresa_net')->insert(['agencia_id' => '2002', 'fecha' => '2026-09-01', 'monto' => 60]);
+        DB::table('premios_net')->insert(['agencia_id' => '2002', 'fecha' => '2026-09-01', 'monto' => 75]);
         DB::table('pagos_aotra_empresa_net')->insert(['agencia_id' => '2002', 'fecha' => '2026-09-01', 'monto' => 40]);
         DB::table('cuentas_contables')->insert(['cuenta' => '6001', 'tipo' => 'Gasto']);
         DB::table('entradas_diario')->insert(['id_viejo' => '1001', 'fecha' => '2026-09-01', 'cuenta' => '6001', 'debito' => 20, 'credito' => 0]);
@@ -160,14 +196,31 @@ class RentabilidadAgenciaV2Test extends TestCase
         $this->assertSame(195.0, $data['agenciasResumen'][1]['balance']);
         $this->assertSame(500.0, $data['resumen']['venta']);
         $this->assertSame(180.0, $data['resumen']['premios']);
+        $this->assertSame(120.0, $data['resumen']['premios_sacados']);
+        $this->assertSame(45.0, $data['agenciasResumen'][0]['premios_sacados']);
+        $this->assertSame(75.0, $data['agenciasResumen'][1]['premios_sacados']);
+        $this->assertSame(25.0, $data['agenciasResumen'][0]['gastos_fijos']);
+        $this->assertSame(5.0, $data['agenciasResumen'][1]['gastos_fijos']);
+        $this->assertEqualsWithDelta(25.0 / 0.4 / 30, $data['agenciasResumen'][0]['ventas_por_dia'][60], 0.0001);
+        $this->assertEqualsWithDelta(25.0 / 0.3, $data['agenciasResumen'][0]['meta_venta'][70], 0.0001);
         $this->assertSame(290.0, $data['resumen']['balance']);
+        $this->assertSame(2, $data['resumen']['terminales_balance_positivo']);
+        $this->assertSame(0, $data['resumen']['terminales_balance_negativo']);
         $this->assertStringContainsString('<th class="text-end">Premios pagados</th>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString('<th class="text-end">Premios sacados</th>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString('Terminales con balance positivo', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString('Terminales con balance negativo', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString('<th class="text-end">Ventas por día</th>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString('<th class="text-end">Meta de venta</th>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('<th>Acción</th>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('<td>{{ $fila[\'terminal\'] }}</td>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('data-terminal="{{ $fila[\'terminal\'] }}">Ver</a>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('id="modalDetalleTerminalRentabilidadV2"', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('document.body.appendChild(modalElemento);', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
-        $this->assertStringContainsString('id="detalleTerminalRentabilidadV2"', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString("@include('gerencia.rentabilidad-agencia-v2-detalle')", file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString('id="detalleTerminalRentabilidadV2"', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2-detalle.blade.php')));
+        $viewSource = file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php'));
+        $this->assertMatchesRegularExpression('/<th[^>]*>Ventas<\/th><th[^>]*>Ventas por día<\/th><th[^>]*>Meta de venta<\/th><th[^>]*>Premios sacados<\/th><th[^>]*>Premios pagados<\/th><th[^>]*>Ingreso real<\/th><th[^>]*>Gasto fijo<\/th><th[^>]*>Gastos<\/th><th[^>]*>Balance<\/th><th>Acción<\/th>/', $viewSource);
         $this->assertStringContainsString("'alcance' => 'terminal'", file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
     }
 
@@ -209,6 +262,34 @@ class RentabilidadAgenciaV2Test extends TestCase
         $this->assertNull($detail['resumen']);
     }
 
+    public function test_v2_counts_positive_and_negative_balances_without_counting_zero(): void
+    {
+        DB::table('agencias')->insert([
+            ['terminal' => '1001', 'sistema' => 'LOTOBET'],
+            ['terminal' => '2002', 'sistema' => 'LOTOBET'],
+            ['terminal' => '3003', 'sistema' => 'LOTOBET'],
+        ]);
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 100],
+            ['agencia_id' => '2002', 'fecha' => '2026-09-01', 'monto' => 50],
+            ['agencia_id' => '3003', 'fecha' => '2026-09-01', 'monto' => 30],
+        ]);
+        DB::table('pagos_misma_empresa_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 20],
+            ['agencia_id' => '2002', 'fecha' => '2026-09-01', 'monto' => 70],
+            ['agencia_id' => '3003', 'fecha' => '2026-09-01', 'monto' => 30],
+        ]);
+
+        $request = ConsultarRentabilidadAgenciaV2Request::create('/gerencia/rentabilidad-agencia-v2', 'GET', ['mes' => '2026-09', 'alcance' => 'todas']);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $resumen = app(RentabilidadAgenciaV2Controller::class)->index($request)->getData()['resumen'];
+
+        $this->assertSame(3, $resumen['terminales']);
+        $this->assertSame(1, $resumen['terminales_balance_positivo']);
+        $this->assertSame(1, $resumen['terminales_balance_negativo']);
+    }
+
     public function test_product_checks_filter_sales_and_matching_prizes_in_both_scopes(): void
     {
         DB::table('agencias')->insert(['terminal' => '1001', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia A']);
@@ -225,13 +306,17 @@ class RentabilidadAgenciaV2Test extends TestCase
             ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 40, 'producto_id' => '1'],
             ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 70, 'producto_id' => '2'],
         ]);
+        DB::table('premios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 25, 'producto_id' => '1'],
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 35, 'producto_id' => '2'],
+        ]);
 
         foreach ([
-            [['Tradicional'], 100.0, 40.0],
-            [['Recarga'], 50.0, 0.0],
-            [['Tradicional', 'Recarga'], 150.0, 40.0],
-            [[], 0.0, 0.0],
-        ] as [$productos, $venta, $premios]) {
+            [['Tradicional'], 100.0, 40.0, 25.0],
+            [['Recarga'], 50.0, 0.0, 0.0],
+            [['Tradicional', 'Recarga'], 150.0, 40.0, 25.0],
+            [[], 0.0, 0.0, 0.0],
+        ] as [$productos, $venta, $premios, $premiosSacados]) {
             foreach (['todas', 'terminal'] as $alcance) {
                 $request = ConsultarRentabilidadAgenciaV2Request::create('/gerencia/rentabilidad-agencia-v2', 'GET', [
                     'mes' => '2026-09', 'alcance' => $alcance, 'terminal' => '1001',
@@ -244,6 +329,7 @@ class RentabilidadAgenciaV2Test extends TestCase
                 $this->assertSame($productos, $data['productosSeleccionados']->all());
                 $this->assertSame($venta, $data['resumen']['venta']);
                 $this->assertSame($premios, $data['resumen']['premios']);
+                $this->assertSame($premiosSacados, $data['resumen']['premios_sacados']);
                 $this->assertSame($venta - $premios, $data['resumen']['ingreso_real']);
             }
         }

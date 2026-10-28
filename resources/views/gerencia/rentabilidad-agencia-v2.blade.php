@@ -1,6 +1,16 @@
 @extends('app')
 
 @section('content')
+    <style>
+        #tablaRentabilidadAgenciaV2 .escenario-pago-v2 { display: none; white-space: nowrap; }
+        #tablaRentabilidadAgenciaV2.mostrar-pago-60 .escenario-pago-v2[data-porcentaje="60"],
+        #tablaRentabilidadAgenciaV2.mostrar-pago-70 .escenario-pago-v2[data-porcentaje="70"],
+        #tablaRentabilidadAgenciaV2.mostrar-pago-80 .escenario-pago-v2[data-porcentaje="80"] { display: block; }
+        #tablaRentabilidadAgenciaV2 th:nth-child(4),
+        #tablaRentabilidadAgenciaV2 th:nth-child(5),
+        #tablaRentabilidadAgenciaV2 td:nth-child(4),
+        #tablaRentabilidadAgenciaV2 td:nth-child(5) { min-width: 195px; white-space: nowrap; }
+    </style>
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -12,7 +22,7 @@
 
                 <div class="card mb-4">
                     <div class="card-body">
-                        <p class="text-muted">Ingreso real = ventas registradas − premios pagados. Los costos y gastos provienen de las cuentas activas de Clasificación de cuentas.</p>
+                        <p class="text-muted">Ingreso real = ventas registradas − premios pagados. Premios sacados se muestra por separado y no se resta otra vez. Los costos y gastos provienen de las cuentas activas de Clasificación de cuentas.</p>
                         <form method="GET" action="{{ route('gerencia.rentabilidad-agencia-v2') }}" class="row g-3 align-items-end" id="formRentabilidadAgenciaV2">
                             <div class="col-md-2">
                                 <label for="mesRentabilidadV2" class="form-label">Mes</label>
@@ -64,25 +74,49 @@
                         <div class="card-header"><h5 class="mb-0">Resumen de {{ $resumen['terminales'] }} terminales · {{ $empresa ?: 'Todas las empresas' }} · {{ $mes }}</h5></div>
                         <div class="card-body">
                             <div class="row g-3">
-                                @foreach (['Ventas' => $resumen['venta'], 'Premios pagados' => $resumen['premios'], 'Ingreso real' => $resumen['ingreso_real'], 'Costos' => $resumen['costos'], 'Gastos' => $resumen['gastos'], 'Balance' => $resumen['balance']] as $etiqueta => $importe)
+                                @foreach (['Ventas' => $resumen['venta'], 'Premios sacados' => $resumen['premios_sacados'], 'Premios pagados' => $resumen['premios'], 'Ingreso real' => $resumen['ingreso_real'], 'Costos' => $resumen['costos'], 'Gastos' => $resumen['gastos'], 'Balance' => $resumen['balance']] as $etiqueta => $importe)
                                     <div class="col-md-4 col-xl-2"><div class="border rounded p-3 h-100"><div class="text-muted small">{{ $etiqueta }}</div><div class="fw-semibold {{ $importe < 0 ? 'text-danger' : '' }}">RD$ {{ number_format($importe, 2) }}</div></div></div>
                                 @endforeach
+                                <div class="col-md-4 col-xl-2"><div class="border rounded p-3 h-100"><div class="text-muted small">Terminales con balance positivo</div><div class="fw-semibold text-success">{{ number_format($resumen['terminales_balance_positivo']) }}</div></div></div>
+                                <div class="col-md-4 col-xl-2"><div class="border rounded p-3 h-100"><div class="text-muted small">Terminales con balance negativo</div><div class="fw-semibold text-danger">{{ number_format($resumen['terminales_balance_negativo']) }}</div></div></div>
                             </div>
                         </div>
                     </div>
                     <div class="card">
                         <div class="card-header"><h5 class="mb-0">Rentabilidad por terminal</h5></div>
                         <div class="card-body table-responsive">
-                            <table id="tablaRentabilidadAgenciaV2" class="table table-bordered table-striped align-middle w-100">
-                                <thead><tr><th>Terminal</th><th>Agencia</th><th class="text-end">Ventas</th><th class="text-end">Premios pagados</th><th class="text-end">Ingreso real</th><th class="text-end">Gastos</th><th class="text-end">Balance</th><th>Acción</th></tr></thead>
+                            <div id="porcentajesPagoRentabilidadV2" class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                                <span class="fw-medium">Metas basadas en gastos fijos:</span>
+                                @foreach ([60, 70, 80] as $porcentaje)
+                                    <label class="form-check mb-0">
+                                        <input class="form-check-input" type="checkbox" value="{{ $porcentaje }}" @checked($porcentaje === 60)>
+                                        <span class="form-check-label">Pago {{ $porcentaje }} %</span>
+                                    </label>
+                                @endforeach
+                                <small class="text-muted">Meta = gasto fijo ÷ (1 − pago). Ventas por día = meta ÷ días del mes.</small>
+                            </div>
+                            <table id="tablaRentabilidadAgenciaV2" class="table table-bordered table-striped align-middle w-100 mostrar-pago-60" style="min-width: 1750px">
+                                <thead><tr><th>Terminal</th><th>Agencia</th><th class="text-end">Ventas</th><th class="text-end">Ventas por día</th><th class="text-end">Meta de venta</th><th class="text-end">Premios sacados</th><th class="text-end">Premios pagados</th><th class="text-end">Ingreso real</th><th class="text-end">Gasto fijo</th><th class="text-end">Gastos</th><th class="text-end">Balance</th><th>Acción</th></tr></thead>
                                 <tbody>
                                     @foreach ($agenciasResumen as $fila)
                                         <tr>
                                             <td>{{ $fila['terminal'] }}</td>
                                             <td>{{ $fila['nombre'] }}</td>
                                             <td class="text-end" data-order="{{ $fila['venta'] }}">RD$ {{ number_format($fila['venta'], 2) }}</td>
+                                            <td class="text-end" data-order="{{ $fila['ventas_por_dia'][60] }}">
+                                                @foreach ([60, 70, 80] as $porcentaje)
+                                                    <div class="escenario-pago-v2" data-porcentaje="{{ $porcentaje }}">{{ $porcentaje }} %: <strong>RD$ {{ number_format($fila['ventas_por_dia'][$porcentaje], 2) }}</strong></div>
+                                                @endforeach
+                                            </td>
+                                            <td class="text-end" data-order="{{ $fila['meta_venta'][60] }}">
+                                                @foreach ([60, 70, 80] as $porcentaje)
+                                                    <div class="escenario-pago-v2" data-porcentaje="{{ $porcentaje }}">{{ $porcentaje }} %: <strong>RD$ {{ number_format($fila['meta_venta'][$porcentaje], 2) }}</strong></div>
+                                                @endforeach
+                                            </td>
+                                            <td class="text-end" data-order="{{ $fila['premios_sacados'] }}">RD$ {{ number_format($fila['premios_sacados'], 2) }}</td>
                                             <td class="text-end" data-order="{{ $fila['premios'] }}">RD$ {{ number_format($fila['premios'], 2) }}</td>
                                             <td class="text-end" data-order="{{ $fila['ingreso_real'] }}">RD$ {{ number_format($fila['ingreso_real'], 2) }}</td>
+                                            <td class="text-end" data-order="{{ $fila['gastos_fijos'] }}">RD$ {{ number_format($fila['gastos_fijos'], 2) }}</td>
                                             <td class="text-end" data-order="{{ $fila['gastos'] }}">RD$ {{ number_format($fila['gastos'], 2) }}</td>
                                             <td class="text-end {{ $fila['balance'] < 0 ? 'text-danger' : '' }}" data-order="{{ $fila['balance'] }}">RD$ {{ number_format($fila['balance'], 2) }}</td>
                                             <td><a class="btn btn-sm btn-outline-primary ver-detalle-terminal-v2" href="{{ route('gerencia.rentabilidad-agencia-v2', ['mes' => $mes, 'empresa' => $empresa, 'alcance' => 'terminal', 'terminal' => $fila['terminal'], 'productos_filtrados' => 1, 'productos' => $productosSeleccionados->all()]) }}" data-terminal="{{ $fila['terminal'] }}">Ver</a></td>
@@ -95,68 +129,7 @@
                 @elseif ($consultar && $alcance === 'terminal' && $terminal !== '' && $agencia === null)
                     <div class="alert alert-warning">No se encontró el terminal activo {{ $terminal }}{{ $empresa !== '' ? ' en '.$empresa : '' }}.</div>
                 @elseif ($consultar && $alcance === 'terminal' && $resumen !== null)
-                    <div id="detalleTerminalRentabilidadV2">
-                    <div class="card mb-4">
-                        <div class="card-header"><h5 class="mb-0">{{ $agencia->nombre_agencia ?: $agencia->agencia ?: $terminal }} · Terminal {{ $terminal }} · {{ $mes }}</h5></div>
-                        <div class="card-body">
-                            <div class="row g-3">
-                                @foreach ([
-                                    'Ventas' => $resumen['venta'],
-                                    'Premios pagados' => $resumen['premios'],
-                                    'Ingreso real' => $resumen['ingreso_real'],
-                                    'Costos' => $resumen['costos'],
-                                    'Gastos' => $resumen['gastos'],
-                                    'Balance' => $resumen['balance'],
-                                ] as $etiqueta => $importe)
-                                    <div class="col-md-4 col-xl-2">
-                                        <div class="border rounded p-3 h-100">
-                                            <div class="text-muted small">{{ $etiqueta }}</div>
-                                            <div class="fw-semibold {{ $importe < 0 ? 'text-danger' : '' }}">RD$ {{ number_format($importe, 2) }}</div>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                            <p class="text-muted small mt-3 mb-0">Los gastos incluyen RD$ {{ number_format($resumen['r20'], 2) }} de R20 por terminal.</p>
-                        </div>
-                    </div>
-
-                    <div class="card mb-4">
-                        <div class="card-header"><h5 class="mb-0">Venta diaria necesaria para cubrir costos y gastos</h5></div>
-                        <div class="card-body">
-                            <p class="text-muted small">Escenarios calculados con los costos y gastos del mes y {{ $dias->count() }} días. Son metas de equilibrio, sin ganancia adicional.</p>
-                            <div class="row g-3">
-                                @foreach ($metasDiarias as $meta)
-                                    <div class="col-md-4">
-                                        <div class="border rounded p-3">
-                                            <div class="text-muted">Pago en premios: {{ $meta['premios_porcentaje'] }} %</div>
-                                            <div class="fw-semibold">RD$ {{ number_format($meta['meta_diaria'], 2) }} por día</div>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header"><h5 class="mb-0">Ingresos reales por día</h5></div>
-                        <div class="card-body table-responsive">
-                            <table class="table table-bordered table-striped align-middle mb-0">
-                                <thead><tr><th>Fecha</th><th class="text-end">Ventas</th><th class="text-end">Premios pagados</th><th class="text-end">Ingreso real</th></tr></thead>
-                                <tbody>
-                                    @foreach ($dias as $dia)
-                                        <tr>
-                                            <td>{{ $dia['fecha'] }}</td>
-                                            <td class="text-end">RD$ {{ number_format($dia['venta'], 2) }}</td>
-                                            <td class="text-end">RD$ {{ number_format($dia['premios'], 2) }}</td>
-                                            <td class="text-end {{ $dia['ingreso_real'] < 0 ? 'text-danger' : '' }}">RD$ {{ number_format($dia['ingreso_real'], 2) }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                                <tfoot class="table-light fw-semibold"><tr><td>Total</td><td class="text-end">RD$ {{ number_format($resumen['venta'], 2) }}</td><td class="text-end">RD$ {{ number_format($resumen['premios'], 2) }}</td><td class="text-end">RD$ {{ number_format($resumen['ingreso_real'], 2) }}</td></tr></tfoot>
-                            </table>
-                        </div>
-                    </div>
-                    </div>
+                    @include('gerencia.rentabilidad-agencia-v2-detalle')
                 @endif
                 @if ($consultar && $alcance === 'todas' && $resumen !== null)
                     <div class="modal fade" id="modalDetalleTerminalRentabilidadV2" tabindex="-1" aria-labelledby="tituloModalDetalleTerminalRentabilidadV2" aria-hidden="true">
@@ -206,6 +179,14 @@
                     language: { url: '{{ asset('assets/json/es-ES.json') }}' },
                 });
             }
+            const tablaMetas = document.getElementById('tablaRentabilidadAgenciaV2');
+            if (tablaMetas) {
+                document.querySelectorAll('#porcentajesPagoRentabilidadV2 input[type="checkbox"]').forEach((checkbox) => {
+                    checkbox.addEventListener('change', function () {
+                        tablaMetas.classList.toggle(`mostrar-pago-${this.value}`, this.checked);
+                    });
+                });
+            }
             const modalElemento = document.getElementById('modalDetalleTerminalRentabilidadV2');
             if (modalElemento && window.bootstrap) {
                 document.body.appendChild(modalElemento);
@@ -218,15 +199,22 @@
                     document.getElementById('tituloModalDetalleTerminalRentabilidadV2').textContent = 'Terminal ' + enlace.dataset.terminal;
                     contenido.innerHTML = '<div class="text-center py-4">Cargando detalle...</div>';
                     modal.show();
+                    const controlador = new AbortController();
+                    const esperaMaxima = setTimeout(() => controlador.abort(), 30000);
                     try {
-                        const respuesta = await fetch(enlace.href, { headers: { 'Accept': 'text/html' } });
+                        const respuesta = await fetch(enlace.href, { headers: { 'Accept': 'text/html', 'X-Requested-With': 'XMLHttpRequest' }, signal: controlador.signal });
                         if (!respuesta.ok) throw new Error('No se pudo consultar el detalle.');
+                        if (respuesta.redirected) throw new Error('La sesión expiró. Actualiza la página e inicia sesión de nuevo.');
                         const pagina = new DOMParser().parseFromString(await respuesta.text(), 'text/html');
                         const detalle = pagina.getElementById('detalleTerminalRentabilidadV2');
                         if (!detalle) throw new Error('No se encontró el detalle de la terminal.');
-                        contenido.innerHTML = detalle.innerHTML;
+                        contenido.replaceChildren(...detalle.cloneNode(true).childNodes);
                     } catch (error) {
-                        contenido.textContent = error.message;
+                        contenido.textContent = error.name === 'AbortError'
+                            ? 'La consulta tardó demasiado. Intenta de nuevo o reduce los productos seleccionados.'
+                            : error.message;
+                    } finally {
+                        clearTimeout(esperaMaxima);
                     }
                 });
             }
