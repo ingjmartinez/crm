@@ -26,6 +26,7 @@
                                 <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2">
                                     <span>Los costos y gastos se calculan exclusivamente con las cuentas activas de Clasificación de cuentas. Revísalas antes de consultar.</span>
                                     <a href="{{ route('gerencia.rentabilidad-agencia-v2') }}" class="btn btn-outline-success btn-sm">Ver rentabilidad V2</a>
+                                    <a href="{{ route('gerencia.rentabilidad-agencia-v3') }}" class="btn btn-outline-success btn-sm">Ver rentabilidad V3</a>
                                     <a href="{{ route('contabilidad.clasificacion-cuentas') }}" class="btn btn-outline-primary btn-sm">Clasificar cuentas</a>
                                 </div>
                                 @if (session('mensaje'))

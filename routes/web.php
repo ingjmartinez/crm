@@ -33,6 +33,7 @@ use App\Http\Controllers\Gerencia\BeneficioBrutoController;
 use App\Http\Controllers\Gerencia\PromedioHistoricoVentasOnlineController;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaController;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV2Controller;
+use App\Http\Controllers\Gerencia\RentabilidadAgenciaV3Controller;
 use App\Http\Controllers\Gerencia\SeguimientoAgenciaController;
 use App\Http\Controllers\Gerencia\VentasEnVivoController;
 use App\Http\Controllers\GestionAgenciasReporteController;
@@ -150,6 +151,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         ->name('gerencia.rentabilidad-agencia');
     Route::get('/gerencia/rentabilidad-agencia-v2', [RentabilidadAgenciaV2Controller::class, 'index'])
         ->name('gerencia.rentabilidad-agencia-v2');
+    Route::get('/gerencia/rentabilidad-agencia-v3', [RentabilidadAgenciaV3Controller::class, 'index'])
+        ->name('gerencia.rentabilidad-agencia-v3');
     Route::get('/gerencia/rentabilidad-agencia/buscar', [RentabilidadAgenciaController::class, 'buscar'])
         ->name('gerencia.rentabilidad-agencia.buscar');
     Route::get('/gerencia/rentabilidad-agencia/meta-diaria', [RentabilidadAgenciaController::class, 'metaDiaria'])

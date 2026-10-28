@@ -1338,38 +1338,14 @@ class Api extends Controller
                 ];
             }
 
-            $rows = [];
-
-            foreach ($fetch['items'] as $rawItem) {
-                $received++;
-
-                if (! is_array($rawItem)) {
-                    $skipped++;
-
-                    continue;
-                }
-
-                $row = $this->buildEntradaDiarioUpsertRow($empresa, $fechaActual->toDateString(), $rawItem);
-
-                if ($row === null) {
-                    $skipped++;
-
-                    continue;
-                }
-
-                if ($cuentasPermitidasSet !== null && ! isset($cuentasPermitidasSet[$row['cuenta']])) {
-                    $skipped++;
-
-                    continue;
-                }
-
-                $rows[$row['external_key']] = $row;
-            }
-
-            $persisted = $this->persistEntradaDiarioRows(array_values($rows));
-            $created += $persisted['creados'];
-            $updated += $persisted['actualizados'];
-            $unchanged += $persisted['sin_cambios'];
+            $items = $fetch['items'];
+            unset($fetch);
+            $procesados = $this->procesarEntradasDiarioItems($items, $empresa, $fechaActual->toDateString(), $cuentasPermitidasSet);
+            $received += $procesados['total_recibidos'];
+            $created += $procesados['creados'];
+            $updated += $procesados['actualizados'];
+            $unchanged += $procesados['sin_cambios'];
+            $skipped += $procesados['omitidos'];
 
             $fechaActual->addDay();
         }
@@ -1382,6 +1358,78 @@ class Api extends Controller
             'sin_cambios' => $unchanged,
             'omitidos' => $skipped,
             'status' => 200,
+        ];
+    }
+
+    /**
+     * @param  array<int, mixed>  $items
+     * @param  array<string, bool>|null  $cuentasPermitidasSet
+     * @return array{total_recibidos: int, creados: int, actualizados: int, sin_cambios: int, omitidos: int}
+     */
+    private function procesarEntradasDiarioItems(array &$items, string $empresa, string $fecha, ?array $cuentasPermitidasSet): array
+    {
+        $received = 0;
+        $created = 0;
+        $updated = 0;
+        $unchanged = 0;
+        $skipped = 0;
+        $seenKeys = [];
+        $rows = [];
+
+        while ($items !== []) {
+            $rawItem = array_pop($items);
+            $received++;
+
+            if (! is_array($rawItem)) {
+                $skipped++;
+
+                continue;
+            }
+
+            $row = $this->buildEntradaDiarioUpsertRow($empresa, $fecha, $rawItem);
+            unset($rawItem);
+
+            if ($row === null) {
+                $skipped++;
+
+                continue;
+            }
+
+            if ($cuentasPermitidasSet !== null && ! isset($cuentasPermitidasSet[$row['cuenta']])) {
+                $skipped++;
+
+                continue;
+            }
+
+            if (isset($seenKeys[$row['external_key']])) {
+                continue;
+            }
+
+            $seenKeys[$row['external_key']] = true;
+            $rows[] = $row;
+
+            if (count($rows) === 250) {
+                $persisted = $this->persistEntradaDiarioRows($rows);
+                $created += $persisted['creados'];
+                $updated += $persisted['actualizados'];
+                $unchanged += $persisted['sin_cambios'];
+                $rows = [];
+            }
+        }
+
+        if ($rows !== []) {
+            $persisted = $this->persistEntradaDiarioRows($rows);
+            $created += $persisted['creados'];
+            $updated += $persisted['actualizados'];
+            $unchanged += $persisted['sin_cambios'];
+        }
+
+        return [
+            'total_recibidos' => $received,
+            'creados' => $created,
+            'actualizados' => $updated,
+            'sin_cambios' => $unchanged,
+            'omitidos' => $skipped,
         ];
     }
 

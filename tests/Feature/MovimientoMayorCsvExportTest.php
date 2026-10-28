@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api;
 use App\Models\EntradaDiario;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
@@ -106,7 +107,7 @@ class MovimientoMayorCsvExportTest extends TestCase
             ->where('cuenta', '5101')
             ->count());
 
-        $response = $this->actingAs($this->user())
+        $response = $this->actingAs($this->user())->withoutMiddleware()
             ->get(route('contabilidad.movimiento-mayor.exportar-csv', [
                 'empresa' => '168',
                 'fecha_inicio' => '2026-08-01',
@@ -131,7 +132,7 @@ class MovimientoMayorCsvExportTest extends TestCase
 
     public function test_csv_export_rejects_an_invalid_date_range(): void
     {
-        $response = $this->actingAs($this->user())
+        $response = $this->actingAs($this->user())->withoutMiddleware()
             ->getJson(route('contabilidad.movimiento-mayor.exportar-csv', [
                 'empresa' => '168',
                 'fecha_inicio' => '2026-08-02',
@@ -140,6 +141,36 @@ class MovimientoMayorCsvExportTest extends TestCase
 
         $response->assertUnprocessable();
         $response->assertJsonPath('message', 'La fecha inicio no puede ser mayor que la fecha fin.');
+    }
+
+    public function test_sync_processes_large_daily_response_in_batches_without_losing_later_duplicates(): void
+    {
+        $items = [];
+        for ($numero = 1; $numero <= 600; $numero++) {
+            $items[] = [
+                'NOASIENTO' => 'ASIENTO-'.$numero,
+                'CUENTA' => '5101',
+                'FECHA' => '2026-07-14',
+                'DEBITO' => '25.00',
+                'CREDITO' => '0',
+                'DESCRIPCION' => 'Original',
+            ];
+        }
+        $items[] = ['NOASIENTO' => 'ASIENTO-1', 'CUENTA' => '5101', 'FECHA' => '2026-07-14', 'DEBITO' => '30.00', 'CREDITO' => '0', 'DESCRIPCION' => 'Última versión'];
+        $items[] = ['NOASIENTO' => 'EXCLUIDO', 'CUENTA' => '9999', 'FECHA' => '2026-07-14'];
+        $items[] = ['CUENTA' => '5101'];
+
+        $metodo = new \ReflectionMethod(Api::class, 'procesarEntradasDiarioItems');
+        $resultado = $metodo->invokeArgs(app(Api::class), [&$items, '168', '2026-07-14', ['5101' => true]]);
+
+        $this->assertSame([], $items);
+        $this->assertSame(['total_recibidos' => 603, 'creados' => 600, 'actualizados' => 0, 'sin_cambios' => 0, 'omitidos' => 2], $resultado);
+        $this->assertSame(600, EntradaDiario::query()->count());
+        $this->assertSame('Última versión', EntradaDiario::query()->where('no_asiento', 'ASIENTO-1')->value('descripcion'));
+
+        $repetidos = [['NOASIENTO' => 'ASIENTO-1', 'CUENTA' => '5101', 'FECHA' => '2026-07-14', 'DEBITO' => '30.00', 'CREDITO' => '0', 'DESCRIPCION' => 'Última versión']];
+        $sinCambios = $metodo->invokeArgs(app(Api::class), [&$repetidos, '168', '2026-07-14', null]);
+        $this->assertSame(1, $sinCambios['sin_cambios']);
     }
 
     /**

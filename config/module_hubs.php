@@ -906,6 +906,16 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Rentabilidad de Agencia V3',
+                'descripcion' => 'Evalúa la utilidad contable acumulada del año y de los últimos tres meses cerrados por terminal.',
+                'url' => '/gerencia/rentabilidad-agencia-v3',
+                'icono' => 'ri-bar-chart-grouped-line',
+                'categoria' => 'Rentabilidad',
+                'tags' => ['gerencia', 'rentabilidad', 'contabilidad', 'terminales'],
+                'permission' => 'gerencia.rentabilidad_de_agencia.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Venta Gerencial',
                 'descripcion' => 'Consulta ventas gerenciales con filtros y exportacion.',
                 'url' => '/gerencia/venta-gerencial',

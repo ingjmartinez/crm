@@ -7,6 +7,7 @@
                 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
                     <h4 class="mb-0">Rentabilidad de agencia V2</h4>
                     <a href="{{ route('gerencia.rentabilidad-agencia') }}" class="btn btn-outline-secondary">Ver reporte anterior</a>
+                    <a href="{{ route('gerencia.rentabilidad-agencia-v3') }}" class="btn btn-outline-success">Ver análisis V3</a>
                 </div>
 
                 <div class="card mb-4">
