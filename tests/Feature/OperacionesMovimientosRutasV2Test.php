@@ -793,6 +793,11 @@ class OperacionesMovimientosRutasV2Test extends TestCase
 
     public function test_clasifica_un_gasto_existente_sin_perder_sus_datos_originales(): void
     {
+        \App\Models\CuentaContable::query()->create([
+            'cuenta' => '600120018',
+            'descripcion' => 'Error En Impresion De Tickets',
+        ]);
+
         DB::table('distribucion_gasto_ruta_mapeos')->insert([
             'ruta_key' => 'TAMAYO',
             'ruta_nombre' => 'Tamayo',
@@ -839,10 +844,15 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             'ruta_key' => 'TAMAYO',
         ]))->assertOk()
             ->assertJsonPath('terminales.0.centro_costo_id', $centroCostoId)
-            ->assertJsonPath('terminales.0.socio', 'Socio A');
+            ->assertJsonPath('terminales.0.socio', 'Socio A')
+            ->assertJsonFragment([
+                'codigo' => '600120018',
+                'descripcion' => 'Error En Impresion De Tickets',
+                'distribucion' => 'terminal',
+            ]);
 
         $this->withoutMiddleware($middleware)->putJson(route('operaciones.movimientos-rutas-v2.gastos.clasificar', $gastoId), [
-            'cuenta_codigo' => '600120016',
+            'cuenta_codigo' => '600120018',
             'distribucion_tipo' => 'terminal',
             'centro_costo_id' => $centroCostoId,
         ])->assertOk()
@@ -856,7 +866,8 @@ class OperacionesMovimientosRutasV2Test extends TestCase
             'concepto' => 'Reparación inversor agencia',
             'comprobante_path' => 'comprobantes/original.png',
             'observacion' => 'Conservar esta observación',
-            'cuenta_codigo' => '600120016',
+            'cuenta_codigo' => '600120018',
+            'cuenta_descripcion' => 'Error En Impresion De Tickets',
             'distribucion_tipo' => 'terminal',
             'terminal_destino' => '05001',
         ]);
