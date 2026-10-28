@@ -4,11 +4,15 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV2Controller;
 use App\Http\Requests\ConsultarRentabilidadAgenciaV2Request;
+use App\Http\Requests\GenerarInformeEjecutivoRentabilidadAgenciaV2Request;
 use App\Models\User;
 use App\ViewPermissionCatalog;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Mockery;
 use Tests\TestCase;
 
 class RentabilidadAgenciaV2Test extends TestCase
@@ -44,6 +48,7 @@ class RentabilidadAgenciaV2Test extends TestCase
         Schema::create('cuentas_contables', function (Blueprint $table): void {
             $table->id();
             $table->string('cuenta');
+            $table->string('descripcion')->nullable();
             $table->string('tipo');
         });
         Schema::create('entradas_diario', function (Blueprint $table): void {
@@ -167,6 +172,55 @@ class RentabilidadAgenciaV2Test extends TestCase
         }
     }
 
+    public function test_cuentas_button_returns_classified_expenses_and_r20_for_the_selected_terminal(): void
+    {
+        $this->withoutMiddleware();
+        config(['clasificacion_cuentas.cuentas' => ['5001' => 'FIJO', '6001' => 'FIJO', '6002' => 'VARIABLE']]);
+        DB::table('agencias')->insert(['terminal' => '052232', 'nombre_agencia' => 'Agencia prueba', 'empresa' => 'Grupo Joselito']);
+        DB::table('cuentas_contables')->insert([
+            ['cuenta' => '5001', 'descripcion' => 'Costo', 'tipo' => 'Costo'],
+            ['cuenta' => '6001', 'descripcion' => 'Alquiler', 'tipo' => 'Gasto'],
+            ['cuenta' => '6002', 'descripcion' => 'Incentivo', 'tipo' => 'Gasto'],
+            ['cuenta' => '7001', 'descripcion' => 'Excluida', 'tipo' => 'Gasto'],
+        ]);
+        DB::table('entradas_diario')->insert([
+            ['id_viejo' => '052232', 'fecha' => '2026-09-15', 'cuenta' => '5001', 'debito' => 20, 'credito' => 0],
+            ['id_viejo' => '052232', 'fecha' => '2026-09-15', 'cuenta' => '6001', 'debito' => 100, 'credito' => 0],
+            ['id_viejo' => '052232', 'fecha' => '2026-09-15', 'cuenta' => '6002', 'debito' => 40, 'credito' => 0],
+            ['id_viejo' => '052232', 'fecha' => '2026-09-15', 'cuenta' => '7001', 'debito' => 999, 'credito' => 0],
+            ['id_viejo' => '052232', 'fecha' => '2026-08-15', 'cuenta' => '6001', 'debito' => 999, 'credito' => 0],
+            ['id_viejo' => '9999', 'fecha' => '2026-09-15', 'cuenta' => '6001', 'debito' => 999, 'credito' => 0],
+        ]);
+        DB::table('rentabilidad_agencia_r20')->insert(['terminal' => '*', 'mes' => 'GLOBAL', 'monto' => 5]);
+
+        $response = $this->get(route('gerencia.rentabilidad-agencia-v2.cuentas', [
+            'mes' => '2026-09', 'terminal' => '052232', 'empresa' => 'Grupo Joselito',
+        ]))->assertOk();
+        $datos = $response->json();
+
+        $this->assertSame('Agencia prueba', $datos['agencia']);
+        $this->assertSame(['5001', '6001', '6002', 'R20'], array_column($datos['movimientos'], 'cuenta'));
+        $this->assertSame(20.0, (float) $datos['costos']);
+        $this->assertSame(105.0, (float) $datos['gastos_fijos']);
+        $this->assertSame(40.0, (float) $datos['gastos_variables']);
+        $this->assertSame(145.0, (float) $datos['gastos']);
+        $this->assertSame('FIJO', $datos['movimientos'][3]['clasificacion']);
+
+        $request = ConsultarRentabilidadAgenciaV2Request::create('/gerencia/rentabilidad-agencia-v2', 'GET', [
+            'mes' => '2026-09', 'alcance' => 'terminal', 'terminal' => '052232', 'empresa' => 'Grupo Joselito',
+        ]);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $resumen = app(RentabilidadAgenciaV2Controller::class)->index($request)->getData()['resumen'];
+        $this->assertSame($resumen['costos'], (float) $datos['costos']);
+        $this->assertSame($resumen['gastos_fijos'], (float) $datos['gastos_fijos']);
+        $this->assertSame($resumen['gastos'], (float) $datos['gastos']);
+
+        $this->get(route('gerencia.rentabilidad-agencia-v2.cuentas', [
+            'mes' => '2026-09', 'terminal' => '052232', 'empresa' => 'Negosur',
+        ]))->assertNotFound();
+    }
+
     public function test_v2_can_summarize_all_terminals_and_open_each_daily_detail(): void
     {
         config(['clasificacion_cuentas.cuentas' => ['6001' => 'FIJO']]);
@@ -216,6 +270,8 @@ class RentabilidadAgenciaV2Test extends TestCase
         $this->assertStringContainsString('<td>{{ $fila[\'terminal\'] }}</td>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('data-terminal="{{ $fila[\'terminal\'] }}">Ver</a>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('id="modalDetalleTerminalRentabilidadV2"', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString('class="btn btn-sm btn-outline-secondary ver-cuentas-terminal-v2"', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
+        $this->assertStringContainsString('id="modalCuentasRentabilidadV2"', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('document.body.appendChild(modalElemento);', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString("@include('gerencia.rentabilidad-agencia-v2-detalle')", file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('id="detalleTerminalRentabilidadV2"', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2-detalle.blade.php')));
@@ -288,6 +344,81 @@ class RentabilidadAgenciaV2Test extends TestCase
         $this->assertSame(3, $resumen['terminales']);
         $this->assertSame(1, $resumen['terminales_balance_positivo']);
         $this->assertSame(1, $resumen['terminales_balance_negativo']);
+    }
+
+    public function test_executive_pdf_distinguishes_daily_and_monthly_goal_compliance(): void
+    {
+        config(['clasificacion_cuentas.cuentas' => ['6001' => 'FIJO']]);
+        DB::table('agencias')->insert([
+            ['terminal' => '1001', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia A'],
+            ['terminal' => '2002', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia B'],
+        ]);
+        DB::table('cuentas_contables')->insert(['cuenta' => '6001', 'tipo' => 'Gasto']);
+        DB::table('entradas_diario')->insert([
+            ['id_viejo' => '1001', 'fecha' => '2026-09-01', 'cuenta' => '6001', 'debito' => 120, 'credito' => 0],
+            ['id_viejo' => '2002', 'fecha' => '2026-09-01', 'cuenta' => '6001', 'debito' => 120, 'credito' => 0],
+        ]);
+        for ($dia = 1; $dia <= 30; $dia++) {
+            DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => sprintf('2026-09-%02d', $dia), 'monto' => 12]);
+            if ($dia <= 20) {
+                DB::table('vt_usuarios_bet')->insert(['agencia_id' => '2002', 'fecha' => sprintf('2026-09-%02d', $dia), 'monto' => 20]);
+            }
+        }
+        DB::table('pagos_misma_empresa_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-09-30', 'monto' => 100],
+            ['agencia_id' => '2002', 'fecha' => '2026-09-30', 'monto' => 350],
+        ]);
+
+        $pdf = Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+        $pdf->shouldReceive('setPaper')->once()->with('a4')->andReturnSelf();
+        $pdf->shouldReceive('download')->once()->with('informe_ejecutivo_rentabilidad_agencia_2026-09.pdf')->andReturn(new Response('%PDF-test'));
+        Pdf::shouldReceive('loadView')->once()->withArgs(function (string $vista, array $datos): bool {
+            $this->assertSame('gerencia.rentabilidad-agencia-v2-informe-ejecutivo-pdf', $vista);
+            $informe = $datos['informe'];
+            $this->assertSame(2, $informe['terminales_vendieron']);
+            $this->assertSame(1, $informe['terminales_cumplieron_diario']);
+            $this->assertSame(2, $informe['terminales_cumplieron_mes']);
+            $this->assertSame(50, $informe['jornadas_cumplidas']);
+            $this->assertSame(60, $informe['jornadas_totales']);
+            $this->assertEqualsWithDelta(83.3333, $informe['cumplimiento_diario_porcentaje'], 0.001);
+            $this->assertSame(760.0, $informe['ventas']);
+            $this->assertSame(310.0, $informe['beneficio_bruto']);
+            $this->assertSame(70.0, $informe['balance']);
+            $this->assertSame(1, $informe['terminales_balance_positivo']);
+            $this->assertSame(1, $informe['terminales_balance_negativo']);
+            $this->assertSame(140.0, $informe['balance_positivo']);
+            $this->assertSame(-70.0, $informe['balance_negativo']);
+            $contenido = view($vista, $datos)->render();
+            $this->assertStringNotContainsString('<td>Costos</td>', $contenido);
+            $this->assertStringContainsString('Total de gastos, incluido R20', $contenido);
+
+            return true;
+        })->andReturn($pdf);
+
+        $request = GenerarInformeEjecutivoRentabilidadAgenciaV2Request::create('/gerencia/rentabilidad-agencia-v2/informe-ejecutivo', 'GET', [
+            'mes' => '2026-09', 'porcentaje_pago' => 60,
+        ]);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+
+        $this->assertSame('%PDF-test', app(RentabilidadAgenciaV2Controller::class)->informeEjecutivo($request)->getContent());
+    }
+
+    public function test_executive_pdf_renders_and_requires_a_closed_month(): void
+    {
+        $this->withoutMiddleware();
+        DB::table('agencias')->insert(['terminal' => '1001', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia de prueba']);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 100]);
+        DB::table('pagos_misma_empresa_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 150]);
+        $response = $this->get(route('gerencia.rentabilidad-agencia-v2.informe-ejecutivo', [
+            'mes' => '2026-09', 'porcentaje_pago' => 60,
+        ]))->assertOk();
+
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+        $this->assertStringContainsString('informe_ejecutivo_rentabilidad_agencia_2026-09.pdf', $response->headers->get('Content-Disposition'));
+        $this->assertTrue(\Illuminate\Support\Facades\Validator::make([
+            'mes' => now()->format('Y-m'), 'porcentaje_pago' => 60,
+        ], (new GenerarInformeEjecutivoRentabilidadAgenciaV2Request)->rules())->fails());
     }
 
     public function test_product_checks_filter_sales_and_matching_prizes_in_both_scopes(): void

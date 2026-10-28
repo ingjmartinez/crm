@@ -80,6 +80,17 @@
                                 <div class="col-md-4 col-xl-2"><div class="border rounded p-3 h-100"><div class="text-muted small">Terminales con balance positivo</div><div class="fw-semibold text-success">{{ number_format($resumen['terminales_balance_positivo']) }}</div></div></div>
                                 <div class="col-md-4 col-xl-2"><div class="border rounded p-3 h-100"><div class="text-muted small">Terminales con balance negativo</div><div class="fw-semibold text-danger">{{ number_format($resumen['terminales_balance_negativo']) }}</div></div></div>
                             </div>
+                            <form id="formInformeEjecutivoRentabilidadV2" method="GET" action="{{ route('gerencia.rentabilidad-agencia-v2.informe-ejecutivo') }}" target="_blank" class="mt-3">
+                                <input type="hidden" name="mes" value="{{ $mes }}">
+                                <input type="hidden" name="empresa" value="{{ $empresa }}">
+                                <input type="hidden" name="productos_filtrados" value="1">
+                                <input type="hidden" name="porcentaje_pago" id="porcentajeInformeEjecutivoRentabilidadV2" value="60">
+                                @foreach ($productosSeleccionados as $producto)
+                                    <input type="hidden" name="productos[]" value="{{ $producto }}">
+                                @endforeach
+                                <button type="submit" class="btn btn-outline-primary" @disabled($mes >= now()->format('Y-m'))>Descargar informe ejecutivo PDF</button>
+                                <small class="text-muted ms-2">Usa el menor porcentaje de pago marcado. Disponible para meses cerrados.</small>
+                            </form>
                         </div>
                     </div>
                     <div class="card">
@@ -119,7 +130,10 @@
                                             <td class="text-end" data-order="{{ $fila['gastos_fijos'] }}">RD$ {{ number_format($fila['gastos_fijos'], 2) }}</td>
                                             <td class="text-end" data-order="{{ $fila['gastos'] }}">RD$ {{ number_format($fila['gastos'], 2) }}</td>
                                             <td class="text-end {{ $fila['balance'] < 0 ? 'text-danger' : '' }}" data-order="{{ $fila['balance'] }}">RD$ {{ number_format($fila['balance'], 2) }}</td>
-                                            <td><a class="btn btn-sm btn-outline-primary ver-detalle-terminal-v2" href="{{ route('gerencia.rentabilidad-agencia-v2', ['mes' => $mes, 'empresa' => $empresa, 'alcance' => 'terminal', 'terminal' => $fila['terminal'], 'productos_filtrados' => 1, 'productos' => $productosSeleccionados->all()]) }}" data-terminal="{{ $fila['terminal'] }}">Ver</a></td>
+                                            <td class="text-nowrap">
+                                                <a class="btn btn-sm btn-outline-primary ver-detalle-terminal-v2" href="{{ route('gerencia.rentabilidad-agencia-v2', ['mes' => $mes, 'empresa' => $empresa, 'alcance' => 'terminal', 'terminal' => $fila['terminal'], 'productos_filtrados' => 1, 'productos' => $productosSeleccionados->all()]) }}" data-terminal="{{ $fila['terminal'] }}">Ver</a>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary ver-cuentas-terminal-v2" data-terminal="{{ $fila['terminal'] }}">Cuentas</button>
+                                            </td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -140,6 +154,29 @@
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                                 </div>
                                 <div class="modal-body" id="contenidoModalDetalleTerminalRentabilidadV2"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal fade" id="modalCuentasRentabilidadV2" tabindex="-1" aria-labelledby="tituloModalCuentasRentabilidadV2" aria-hidden="true">
+                        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <div>
+                                        <h5 class="modal-title" id="tituloModalCuentasRentabilidadV2">Movimientos de cuentas</h5>
+                                        <span class="text-muted" id="terminalModalCuentasRentabilidadV2"></span>
+                                    </div>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered align-middle mb-0">
+                                            <thead class="table-light"><tr><th>Cuenta</th><th>Descripción</th><th>Tipo</th><th>Clasificación</th><th class="text-end">Costo</th><th class="text-end">Gasto fijo</th><th class="text-end">Gasto variable</th><th class="text-end">Total gasto</th></tr></thead>
+                                            <tbody id="filasModalCuentasRentabilidadV2"></tbody>
+                                            <tfoot class="table-light fw-semibold"><tr><td colspan="4">Total</td><td class="text-end" id="totalCostosCuentasV2">RD$ 0.00</td><td class="text-end" id="totalFijosCuentasV2">RD$ 0.00</td><td class="text-end" id="totalVariablesCuentasV2">RD$ 0.00</td><td class="text-end" id="totalGastosCuentasV2">RD$ 0.00</td></tr></tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>
                             </div>
                         </div>
                     </div>
@@ -187,6 +224,19 @@
                     });
                 });
             }
+            const formInforme = document.getElementById('formInformeEjecutivoRentabilidadV2');
+            if (formInforme) {
+                formInforme.addEventListener('submit', function (event) {
+                    const porcentajes = [...document.querySelectorAll('#porcentajesPagoRentabilidadV2 input:checked')]
+                        .map((checkbox) => Number(checkbox.value));
+                    if (porcentajes.length === 0) {
+                        event.preventDefault();
+                        if (window.Swal) Swal.fire('Selecciona un pago', 'Marca 60 %, 70 % u 80 % antes de generar el informe.', 'warning');
+                        return;
+                    }
+                    document.getElementById('porcentajeInformeEjecutivoRentabilidadV2').value = Math.min(...porcentajes);
+                });
+            }
             const modalElemento = document.getElementById('modalDetalleTerminalRentabilidadV2');
             if (modalElemento && window.bootstrap) {
                 document.body.appendChild(modalElemento);
@@ -217,6 +267,70 @@
                         clearTimeout(esperaMaxima);
                     }
                 });
+            }
+            const modalCuentasElemento = document.getElementById('modalCuentasRentabilidadV2');
+            if (modalCuentasElemento && window.bootstrap) {
+                document.body.appendChild(modalCuentasElemento);
+                const modalCuentas = new bootstrap.Modal(modalCuentasElemento);
+                const filasCuentas = document.getElementById('filasModalCuentasRentabilidadV2');
+                const moneda = (valor) => `RD$ ${Number(valor || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                let consultaCuentas;
+                document.getElementById('tablaRentabilidadAgenciaV2').addEventListener('click', async function (event) {
+                    const boton = event.target.closest('.ver-cuentas-terminal-v2');
+                    if (!boton) return;
+                    consultaCuentas?.abort();
+                    const controlador = new AbortController();
+                    consultaCuentas = controlador;
+                    const esperaMaxima = setTimeout(() => controlador.abort(), 30000);
+                    document.getElementById('tituloModalCuentasRentabilidadV2').textContent = 'Movimientos de cuentas';
+                    document.getElementById('terminalModalCuentasRentabilidadV2').textContent = `Terminal ${boton.dataset.terminal}`;
+                    filasCuentas.innerHTML = '<tr><td colspan="8" class="text-center py-4">Cargando cuentas...</td></tr>';
+                    modalCuentas.show();
+                    try {
+                        const url = new URL({{ Illuminate\Support\Js::from(route('gerencia.rentabilidad-agencia-v2.cuentas')) }});
+                        url.searchParams.set('mes', {{ Illuminate\Support\Js::from($mes) }});
+                        url.searchParams.set('empresa', {{ Illuminate\Support\Js::from($empresa) }});
+                        url.searchParams.set('terminal', boton.dataset.terminal);
+                        const respuesta = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: controlador.signal });
+                        if (!respuesta.ok) throw new Error('No se pudieron consultar las cuentas de esta terminal.');
+                        const datos = await respuesta.json();
+                        if (controlador !== consultaCuentas) return;
+                        document.getElementById('tituloModalCuentasRentabilidadV2').textContent = `Movimientos de ${datos.agencia}`;
+                        filasCuentas.replaceChildren();
+                        if (datos.movimientos.length === 0) {
+                            const fila = document.createElement('tr');
+                            const celda = document.createElement('td');
+                            celda.colSpan = 8;
+                            celda.className = 'text-center text-muted';
+                            celda.textContent = 'Sin costos ni gastos en el mes consultado.';
+                            fila.appendChild(celda);
+                            filasCuentas.appendChild(fila);
+                        }
+                        datos.movimientos.forEach((movimiento) => {
+                            const fila = document.createElement('tr');
+                            const fijo = movimiento.tipo === 'gasto' && movimiento.clasificacion === 'FIJO';
+                            const variable = movimiento.tipo === 'gasto' && movimiento.clasificacion === 'VARIABLE';
+                            [movimiento.cuenta, movimiento.descripcion, movimiento.tipo === 'costo' ? 'Costo' : 'Gasto', movimiento.clasificacion || 'Sin clasificar', movimiento.tipo === 'costo' ? moneda(movimiento.importe) : '—', fijo ? moneda(movimiento.importe) : '—', variable ? moneda(movimiento.importe) : '—', movimiento.tipo === 'gasto' ? moneda(movimiento.importe) : '—'].forEach((valor, indice) => {
+                                const celda = document.createElement('td');
+                                celda.textContent = valor;
+                                if (indice >= 4) celda.className = 'text-end fw-semibold';
+                                fila.appendChild(celda);
+                            });
+                            filasCuentas.appendChild(fila);
+                        });
+                        document.getElementById('totalCostosCuentasV2').textContent = moneda(datos.costos);
+                        document.getElementById('totalFijosCuentasV2').textContent = moneda(datos.gastos_fijos);
+                        document.getElementById('totalVariablesCuentasV2').textContent = moneda(datos.gastos_variables);
+                        document.getElementById('totalGastosCuentasV2').textContent = moneda(datos.gastos);
+                    } catch (error) {
+                        if (controlador !== consultaCuentas) return;
+                        if (error.name === 'AbortError' && !modalCuentasElemento.classList.contains('show')) return;
+                        filasCuentas.innerHTML = `<tr><td colspan="8" class="text-center text-danger">${error.name === 'AbortError' ? 'La consulta tardó demasiado. Intenta de nuevo.' : 'No se pudieron cargar las cuentas.'}</td></tr>`;
+                    } finally {
+                        clearTimeout(esperaMaxima);
+                    }
+                });
+                modalCuentasElemento.addEventListener('hidden.bs.modal', () => consultaCuentas?.abort());
             }
         });
     </script>

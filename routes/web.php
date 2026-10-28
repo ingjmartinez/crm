@@ -151,6 +151,10 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         ->name('gerencia.rentabilidad-agencia');
     Route::get('/gerencia/rentabilidad-agencia-v2', [RentabilidadAgenciaV2Controller::class, 'index'])
         ->name('gerencia.rentabilidad-agencia-v2');
+    Route::get('/gerencia/rentabilidad-agencia-v2/informe-ejecutivo', [RentabilidadAgenciaV2Controller::class, 'informeEjecutivo'])
+        ->name('gerencia.rentabilidad-agencia-v2.informe-ejecutivo');
+    Route::get('/gerencia/rentabilidad-agencia-v2/cuentas', [RentabilidadAgenciaV2Controller::class, 'cuentas'])
+        ->name('gerencia.rentabilidad-agencia-v2.cuentas');
     Route::get('/gerencia/rentabilidad-agencia-v3', [RentabilidadAgenciaV3Controller::class, 'index'])
         ->name('gerencia.rentabilidad-agencia-v3');
     Route::get('/gerencia/rentabilidad-agencia/buscar', [RentabilidadAgenciaController::class, 'buscar'])
