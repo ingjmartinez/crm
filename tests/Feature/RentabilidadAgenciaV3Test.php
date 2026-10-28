@@ -134,7 +134,8 @@ class RentabilidadAgenciaV3Test extends TestCase
         $this->assertStringContainsString('id="totalIngresosGraficoV3"', $viewSource);
         $this->assertStringContainsString('id="filtrosRentabilidadAgenciaV3"', $viewSource);
         $this->assertStringContainsString("title: 'Generando reporte'", $viewSource);
-        $this->assertStringContainsString('didOpen: () => Swal.showLoading()', $viewSource);
+        $this->assertStringContainsString('event.preventDefault()', $viewSource);
+        $this->assertStringContainsString('setTimeout(() => HTMLFormElement.prototype.submit.call(formulario), 150)', $viewSource);
     }
 
     public function test_v3_quarter_can_cross_calendar_year_and_company_filter_applies(): void
@@ -183,6 +184,39 @@ class RentabilidadAgenciaV3Test extends TestCase
         $this->assertTrue($data['filas'][0]['trimestre']['completo']);
         $this->assertSame('Rentable sostenida', $data['filas'][0]['clasificacion']);
         $this->assertSame(1, $data['resumen']['rentables_anio']);
+    }
+
+    public function test_v3_distinguishes_sustained_loss_from_an_isolated_bad_month(): void
+    {
+        DB::table('agencias')->insert([
+            ['terminal' => '1001', 'empresa' => 'Grupo A'],
+            ['terminal' => '2002', 'empresa' => 'Grupo A'],
+        ]);
+        DB::table('cuentas_contables')->insert(['cuenta' => '6001', 'tipo' => 'Gasto']);
+        DB::table('clasificacion_cuentas')->insert(['cuenta' => '6001', 'clasificacion' => 'VARIABLE', 'activo' => 1]);
+
+        foreach (['2026-01', '2026-02', '2026-03'] as $mes) {
+            DB::table('entradas_diario')->insert([
+                ['id_viejo' => '1001', 'cuenta' => '400110001', 'fecha' => $mes.'-15', 'debito' => 0, 'credito' => 100],
+                ['id_viejo' => '2002', 'cuenta' => '400110001', 'fecha' => $mes.'-15', 'debito' => 0, 'credito' => 100],
+                ['id_viejo' => '1001', 'cuenta' => '6001', 'fecha' => $mes.'-15', 'debito' => $mes === '2026-03' ? 50 : 150, 'credito' => 0],
+                ['id_viejo' => '2002', 'cuenta' => '6001', 'fecha' => $mes.'-15', 'debito' => $mes === '2026-03' ? 400 : 50, 'credito' => 0],
+            ]);
+        }
+
+        $request = ConsultarRentabilidadAgenciaV3Request::create('/gerencia/rentabilidad-agencia-v3', 'GET', ['mes_cierre' => '2026-03']);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+        $data = app(RentabilidadAgenciaV3Controller::class)->index($request)->getData();
+        $sostenida = $data['filas']->firstWhere('terminal', '1001');
+        $aislada = $data['filas']->firstWhere('terminal', '2002');
+
+        $this->assertSame(2, $sostenida['trimestre']['meses_perdida']);
+        $this->assertSame('Pérdida sostenida', $sostenida['clasificacion']);
+        $this->assertSame(1, $aislada['trimestre']['meses_perdida']);
+        $this->assertSame('En observación', $aislada['clasificacion']);
+        $this->assertSame(1, $data['resumen']['perdida_sostenida']);
+        $this->assertSame(1, $data['resumen']['en_observacion']);
     }
 
     public function test_v3_rejects_open_month(): void

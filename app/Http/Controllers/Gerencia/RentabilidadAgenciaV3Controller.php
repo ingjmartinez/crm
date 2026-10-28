@@ -83,6 +83,7 @@ class RentabilidadAgenciaV3Controller extends Controller
                     'anio' => $anio,
                     'trimestre' => $trimestre,
                     'clasificacion' => $this->clasificar($anio, $trimestre),
+                    'diagnostico' => $this->diagnosticar($anio, $trimestre),
                     'mensual' => $mensual->values()->all(),
                 ];
             })->values();
@@ -92,6 +93,8 @@ class RentabilidadAgenciaV3Controller extends Controller
                 'rentables_anio' => $filas->filter(fn (array $fila): bool => $fila['anio']['completo'] && $fila['anio']['utilidad'] > 0)->count(),
                 'rentables_trimestre' => $filas->filter(fn (array $fila): bool => $fila['trimestre']['completo'] && $fila['trimestre']['utilidad'] > 0)->count(),
                 'incompletas' => $filas->filter(fn (array $fila): bool => $fila['clasificacion'] === 'Datos incompletos')->count(),
+                'perdida_sostenida' => $filas->filter(fn (array $fila): bool => $fila['clasificacion'] === 'Pérdida sostenida')->count(),
+                'en_observacion' => $filas->filter(fn (array $fila): bool => $fila['clasificacion'] === 'En observación')->count(),
                 'utilidad_anio' => (float) $filas->sum(fn (array $fila): float => $fila['anio']['utilidad']),
                 'utilidad_trimestre' => (float) $filas->sum(fn (array $fila): float => $fila['trimestre']['utilidad']),
             ];
@@ -147,7 +150,7 @@ class RentabilidadAgenciaV3Controller extends Controller
 
     /** @param Collection<string, array<string, mixed>> $mensual
      * @param  Collection<int, string>  $meses
-     * @return array{ingresos: float, gastos: float, utilidad: float, margen: float|null, meses_rentables: int, meses_con_movimientos: int, meses: int, completo: bool}
+     * @return array{ingresos: float, gastos: float, utilidad: float, margen: float|null, meses_rentables: int, meses_perdida: int, meses_con_movimientos: int, meses: int, completo: bool}
      */
     private function resumirPeriodo(Collection $mensual, Collection $meses): array
     {
@@ -163,6 +166,7 @@ class RentabilidadAgenciaV3Controller extends Controller
             'utilidad' => $ingresos - $gastos,
             'margen' => $ingresos > 0 ? ($ingresos - $gastos) / $ingresos * 100 : null,
             'meses_rentables' => $filas->filter(fn (array $fila): bool => $fila['utilidad'] > 0)->count(),
+            'meses_perdida' => $filas->filter(fn (array $fila): bool => $fila['con_movimientos'] && $fila['utilidad'] < 0)->count(),
             'meses_con_movimientos' => $mesesConMovimientos,
             'meses' => $meses->count(),
             'completo' => $mesesConMovimientos === $meses->count(),
@@ -193,6 +197,34 @@ class RentabilidadAgenciaV3Controller extends Controller
             return 'En deterioro';
         }
 
-        return 'No rentable';
+        if ($anio['utilidad'] < 0 && $trimestre['utilidad'] < 0 && $trimestre['meses_perdida'] >= 2) {
+            return 'Pérdida sostenida';
+        }
+
+        return 'En observación';
+    }
+
+    /** @param array<string, mixed> $anio
+     * @param  array<string, mixed>  $trimestre
+     */
+    private function diagnosticar(array $anio, array $trimestre): string
+    {
+        if (! $anio['completo'] || ! $trimestre['completo']) {
+            return 'Faltan meses con asientos; el resultado acumulado es parcial.';
+        }
+        if ($anio['utilidad'] < 0 && $trimestre['utilidad'] < 0 && $trimestre['meses_perdida'] >= 2) {
+            return 'Pérdida acumulada y al menos dos meses recientes con pérdida. Revisar la continuidad de la terminal.';
+        }
+        if ($anio['utilidad'] > 0 && $trimestre['utilidad'] <= 0) {
+            return 'Año positivo, trimestre sin utilidad. Revisar la tendencia antes de decidir.';
+        }
+        if ($anio['utilidad'] <= 0 && $trimestre['utilidad'] > 0) {
+            return 'Acumulado sin utilidad, trimestre positivo. Seguir la recuperación.';
+        }
+        if ($anio['utilidad'] > 0 && $trimestre['utilidad'] > 0) {
+            return 'Acumulado y trimestre positivos; confirmar la estabilidad mensual.';
+        }
+
+        return 'La pérdida no es sostenida según los tres meses recientes; continuar en observación.';
     }
 }

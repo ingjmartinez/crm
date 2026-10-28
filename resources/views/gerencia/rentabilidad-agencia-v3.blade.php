@@ -51,6 +51,8 @@
                                     'Rentables en el año' => number_format($resumen['rentables_anio']),
                                     'Rentables en el trimestre' => number_format($resumen['rentables_trimestre']),
                                     'Terminales con datos incompletos' => number_format($resumen['incompletas']),
+                                    'Terminales con pérdida sostenida' => number_format($resumen['perdida_sostenida']),
+                                    'Terminales en observación' => number_format($resumen['en_observacion']),
                                     'Resultado registrado del año' => 'RD$ '.number_format($resumen['utilidad_anio'], 2),
                                     'Resultado registrado del trimestre' => 'RD$ '.number_format($resumen['utilidad_trimestre'], 2),
                                 ] as $etiqueta => $valor)
@@ -93,7 +95,7 @@
                                     <label for="estadoRentabilidadV3" class="form-label">Clasificación</label>
                                     <select id="estadoRentabilidadV3" class="form-select">
                                         <option value="">Todas</option>
-                                        @foreach (['Rentable sostenida', 'Rentable irregular', 'En recuperación', 'En deterioro', 'No rentable', 'Datos incompletos', 'Sin movimientos'] as $estado)
+                                        @foreach (['Rentable sostenida', 'Rentable irregular', 'En recuperación', 'En deterioro', 'Pérdida sostenida', 'En observación', 'Datos incompletos', 'Sin movimientos'] as $estado)
                                             <option value="{{ $estado }}">{{ $estado }}</option>
                                         @endforeach
                                     </select>
@@ -101,7 +103,7 @@
                             </div>
                             <div class="table-responsive">
                                 <table id="tablaRentabilidadAgenciaV3" class="table table-bordered table-striped align-middle w-100" style="min-width: 1450px">
-                                    <thead><tr><th>Terminal</th><th>Agencia</th><th>Empresa</th><th class="text-end">Ingresos registrados año</th><th class="text-end">Gastos registrados año</th><th class="text-end">Resultado año</th><th class="text-end">Margen registrado</th><th class="text-end">Resultado 3 meses</th><th class="text-center">Meses rentables</th><th class="text-center">Cobertura año / 3 meses</th><th>Clasificación</th><th>Acción</th></tr></thead>
+                                    <thead><tr><th>Terminal</th><th>Agencia</th><th>Empresa</th><th class="text-end">Ingresos registrados año</th><th class="text-end">Gastos registrados año</th><th class="text-end">Resultado año</th><th class="text-end">Margen registrado</th><th class="text-end">Resultado 3 meses</th><th class="text-center">Meses rentables</th><th class="text-center">Meses con pérdida 3 meses</th><th class="text-center">Meses con asientos año / 3 meses</th><th>Clasificación</th><th>Lectura financiera</th><th>Acción</th></tr></thead>
                                     <tbody>
                                         @foreach ($filas as $fila)
                                             <tr>
@@ -114,15 +116,17 @@
                                                 <td class="text-end" data-order="{{ $fila['anio']['margen'] ?? -999999 }}">{{ $fila['anio']['margen'] === null ? '—' : number_format($fila['anio']['margen'], 1).' %' }}</td>
                                                 <td class="text-end {{ $fila['trimestre']['utilidad'] < 0 ? 'text-danger' : 'text-success' }}" data-order="{{ $fila['trimestre']['utilidad'] }}">RD$ {{ number_format($fila['trimestre']['utilidad'], 2) }}</td>
                                                 <td class="text-center" data-order="{{ $fila['anio']['meses_rentables'] }}">{{ $fila['anio']['meses_rentables'] }}/{{ $fila['anio']['meses'] }}</td>
+                                                <td class="text-center" data-order="{{ $fila['trimestre']['meses_perdida'] }}">{{ $fila['trimestre']['meses_perdida'] }}/3</td>
                                                 <td class="text-center">{{ $fila['anio']['meses_con_movimientos'] }}/{{ $fila['anio']['meses'] }} · {{ $fila['trimestre']['meses_con_movimientos'] }}/3</td>
                                                 <td>{{ $fila['clasificacion'] }}</td>
+                                                <td>{{ $fila['diagnostico'] }}</td>
                                                 <td><button type="button" class="btn btn-sm btn-outline-primary ver-detalle-v3" data-terminal="{{ $fila['terminal'] }}" data-bs-toggle="modal" data-bs-target="#modalRentabilidadAgenciaV3">Ver meses</button></td>
                                             </tr>
                                         @endforeach
                                     </tbody>
                                 </table>
                             </div>
-                            <p class="small text-muted mt-3 mb-0">La clasificación financiera requiere movimientos contables en todos los meses del año y del trimestre. Rentable sostenida: utilidad positiva en el año y en cada uno de los tres meses recientes. Recuperación y deterioro comparan el trimestre con el acumulado del año.</p>
+                            <p class="small text-muted mt-3 mb-0">Pérdida sostenida: resultado acumulado y trimestre negativos, con pérdida en al menos dos de los tres meses recientes. Un mes con asientos no demuestra que la carga contable esté cerrada; confirme la integridad de los datos antes de decidir. Los períodos sin asientos se clasifican como datos incompletos.</p>
                         </div>
                     </div>
                 @endif
@@ -150,19 +154,25 @@
 @section('script')
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            document.getElementById('filtrosRentabilidadAgenciaV3').addEventListener('submit', function () {
+            document.getElementById('filtrosRentabilidadAgenciaV3').addEventListener('submit', function (event) {
+                if (typeof Swal === 'undefined') return;
+                event.preventDefault();
+                const formulario = this;
                 Swal.fire({
                     title: 'Generando reporte',
                     text: 'Consultando ingresos y gastos contables. Esto puede tardar unos momentos.',
                     allowOutsideClick: false,
                     allowEscapeKey: false,
                     showConfirmButton: false,
-                    didOpen: () => Swal.showLoading(),
+                    didOpen: () => {
+                        Swal.showLoading();
+                        setTimeout(() => HTMLFormElement.prototype.submit.call(formulario), 150);
+                    },
                 });
             });
         });
         window.addEventListener('pageshow', function (event) {
-            if (event.persisted && Swal.isVisible()) Swal.close();
+            if (event.persisted && typeof Swal !== 'undefined' && Swal.isVisible()) Swal.close();
         });
     </script>
     @if ($consultar && $resumen !== null)
@@ -231,7 +241,7 @@
                         language: { url: '{{ asset('assets/json/es-ES.json') }}' },
                     });
                     document.getElementById('estadoRentabilidadV3').addEventListener('change', function () {
-                        dataTable.column(10).search(this.value ? '^' + $.fn.dataTable.util.escapeRegex(this.value) + '$' : '', true, false).draw();
+                        dataTable.column(11).search(this.value ? '^' + $.fn.dataTable.util.escapeRegex(this.value) + '$' : '', true, false).draw();
                     });
                 }
 
