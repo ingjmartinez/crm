@@ -1,6 +1,7 @@
 @extends('app')
 
 @section('content')
+    <link href="{{ asset('libs/choices.js/public/assets/styles/choices.min.css') }}" rel="stylesheet">
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -56,7 +57,25 @@
                                     'Resultado registrado del año' => 'RD$ '.number_format($resumen['utilidad_anio'], 2),
                                     'Resultado registrado del trimestre' => 'RD$ '.number_format($resumen['utilidad_trimestre'], 2),
                                 ] as $etiqueta => $valor)
-                                    <div class="col-md-4 col-xl"><div class="border rounded p-3 h-100"><div class="text-muted small">{{ $etiqueta }}</div><div class="fw-semibold">{{ $valor }}</div></div></div>
+                                    @php
+                                        $clasificacionTarjeta = match ($etiqueta) {
+                                            'Terminales con datos incompletos' => 'Datos incompletos',
+                                            'Terminales con pérdida sostenida' => 'Pérdida sostenida',
+                                            'Terminales en observación' => 'En observación',
+                                            default => null,
+                                        };
+                                    @endphp
+                                    <div class="col-md-4 col-xl">
+                                        @if ($clasificacionTarjeta)
+                                            <button type="button" class="btn border rounded p-3 h-100 w-100 text-start tarjeta-clasificacion-v3" data-clasificacion="{{ $clasificacionTarjeta }}" aria-pressed="false" aria-label="Ver terminales: {{ $clasificacionTarjeta }}">
+                                                <span class="text-muted small d-block">{{ $etiqueta }}</span>
+                                                <span class="fw-semibold d-block">{{ $valor }}</span>
+                                                <span class="small text-primary">Ver terminales</span>
+                                            </button>
+                                        @else
+                                            <div class="border rounded p-3 h-100"><div class="text-muted small">{{ $etiqueta }}</div><div class="fw-semibold">{{ $valor }}</div></div>
+                                        @endif
+                                    </div>
                                 @endforeach
                             </div>
                             <p class="small text-muted mt-3 mb-0">Año: {{ $mesesAnio->first() }} a {{ $mesesAnio->last() }} · Últimos tres meses cerrados: {{ $mesesTrimestre->first() }} a {{ $mesesTrimestre->last() }}. Los resultados con cobertura incompleta son parciales. R20 se aplica una vez por cada mes con movimientos contables y terminal.</p>
@@ -68,7 +87,7 @@
                         <div class="card-body">
                             <div class="row g-3 mb-3">
                                 <div class="col-md-5">
-                                    <label for="terminalGraficoRentabilidadV3" class="form-label">Terminal</label>
+                                    <label for="terminalGraficoRentabilidadV3" class="form-label">Terminal o nombre</label>
                                     <select id="terminalGraficoRentabilidadV3" class="form-select">
                                         <option value="">Todas las terminales</option>
                                         @foreach ($filas as $fila)
@@ -87,7 +106,7 @@
                         </div>
                     </div>
 
-                    <div class="card">
+                    <div class="card" id="listadoRentabilidadAgenciaV3">
                         <div class="card-header"><h5 class="mb-0">Evolución por terminal</h5></div>
                         <div class="card-body">
                             <div class="row g-3 mb-3">
@@ -176,6 +195,7 @@
         });
     </script>
     @if ($consultar && $resumen !== null)
+        <script src="{{ asset('libs/choices.js/public/assets/scripts/choices.min.js') }}"></script>
         <script src="{{ asset('libs/apexcharts/apexcharts.min.js') }}"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function () {
@@ -185,6 +205,18 @@
                 const graficoMensual = {{ Illuminate\Support\Js::from($graficoMensual) }};
                 const selectorPeriodo = document.getElementById('periodoGraficoRentabilidadV3');
                 const selectorTerminal = document.getElementById('terminalGraficoRentabilidadV3');
+                if (typeof Choices !== 'undefined') {
+                    new Choices(selectorTerminal, {
+                        allowHTML: false,
+                        itemSelectText: '',
+                        noResultsText: 'No se encontró la terminal',
+                        searchEnabled: true,
+                        searchFields: ['label', 'value'],
+                        searchFloor: 1,
+                        searchPlaceholderValue: 'Buscar por nombre o terminal...',
+                        shouldSort: false,
+                    });
+                }
                 const formatoMoneda = (valor) => `RD$ ${Number(valor || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 const seriesGrafico = () => {
                     const meses = selectorPeriodo.value === 'anio' ? mesesAnio : mesesTrimestre;
@@ -233,17 +265,37 @@
                     selectorTerminal.addEventListener('change', actualizarGrafico);
                 }
                 const tabla = document.getElementById('tablaRentabilidadAgenciaV3');
+                const selectorEstado = document.getElementById('estadoRentabilidadV3');
+                let dataTable = null;
                 if (window.jQuery && $.fn.DataTable) {
-                    const dataTable = $(tabla).DataTable({
+                    dataTable = $(tabla).DataTable({
                         responsive: false,
                         pageLength: 25,
                         order: [[5, 'desc']],
                         language: { url: '{{ asset('assets/json/es-ES.json') }}' },
                     });
-                    document.getElementById('estadoRentabilidadV3').addEventListener('change', function () {
-                        dataTable.column(11).search(this.value ? '^' + $.fn.dataTable.util.escapeRegex(this.value) + '$' : '', true, false).draw();
-                    });
                 }
+                const tarjetasClasificacion = document.querySelectorAll('.tarjeta-clasificacion-v3');
+                selectorEstado.addEventListener('change', function () {
+                    if (dataTable) {
+                        dataTable.column(11).search(this.value ? '^' + $.fn.dataTable.util.escapeRegex(this.value) + '$' : '', true, false).draw();
+                    } else {
+                        tabla.querySelectorAll('tbody tr').forEach((fila) => {
+                            fila.hidden = this.value !== '' && fila.cells[11].textContent.trim() !== this.value;
+                        });
+                    }
+                    tarjetasClasificacion.forEach((tarjeta) => {
+                        const activa = tarjeta.dataset.clasificacion === this.value;
+                        tarjeta.classList.toggle('border-primary', activa);
+                        tarjeta.classList.toggle('bg-primary-subtle', activa);
+                        tarjeta.setAttribute('aria-pressed', String(activa));
+                    });
+                });
+                tarjetasClasificacion.forEach((tarjeta) => tarjeta.addEventListener('click', function () {
+                    selectorEstado.value = selectorEstado.value === this.dataset.clasificacion ? '' : this.dataset.clasificacion;
+                    selectorEstado.dispatchEvent(new Event('change'));
+                    document.getElementById('listadoRentabilidadAgenciaV3').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }));
 
                 tabla.addEventListener('click', function (event) {
                     const boton = event.target.closest('.ver-detalle-v3');

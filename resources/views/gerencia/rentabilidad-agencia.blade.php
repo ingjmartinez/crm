@@ -1,6 +1,22 @@
 @extends('app')
 
 @section('content')
+    <style>
+        #tableRentabilidadAgencias th:nth-child(3),
+        #tableRentabilidadAgencias th:nth-child(4),
+        #tableRentabilidadAgencias td:nth-child(3),
+        #tableRentabilidadAgencias td:nth-child(4) {
+            min-width: 205px;
+            white-space: nowrap;
+        }
+
+        #tableRentabilidadAgencias .meta-pago-detalle {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.3rem;
+            white-space: nowrap;
+        }
+    </style>
     <div class="main-content">
         <div class="page-content">
             <div class="container-fluid">
@@ -194,7 +210,7 @@
                                     </div>
                                 </div>
                                 <div class="table-responsive">
-                                    <table class="table table-bordered table-hover align-middle mb-0 w-100" id="tableRentabilidadAgencias" style="min-width: 1500px">
+                                    <table class="table table-bordered table-hover align-middle mb-0 w-100" id="tableRentabilidadAgencias" style="min-width: 1800px">
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Agencia</th>
@@ -513,7 +529,7 @@
                                 return porcentajes.length ? Number(data?.[porcentajes[0]] || 0) : 0;
                             }
                             return porcentajes.length
-                                ? porcentajes.map((porcentaje) => `<div><span class="text-muted">${porcentaje} %:</span> <span class="fw-semibold">RD$ ${formatMoney(data?.[porcentaje])}</span></div>`).join('')
+                                ? porcentajes.map((porcentaje) => `<div class="meta-pago-detalle"><span class="text-muted">${porcentaje} %:</span><span class="fw-semibold">RD$ ${formatMoney(data?.[porcentaje])}</span></div>`).join('')
                                 : '<span class="text-muted">—</span>';
                         },
                     },
@@ -527,7 +543,7 @@
                                 return porcentajes.length ? Number(data?.[porcentajes[0]] || 0) : 0;
                             }
                             return porcentajes.length
-                                ? porcentajes.map((porcentaje) => `<div><span class="text-muted">${porcentaje} %:</span> <span class="fw-semibold">RD$ ${formatMoney(data?.[porcentaje])}</span></div>`).join('')
+                                ? porcentajes.map((porcentaje) => `<div class="meta-pago-detalle"><span class="text-muted">${porcentaje} %:</span><span class="fw-semibold">RD$ ${formatMoney(data?.[porcentaje])}</span></div>`).join('')
                                 : '<span class="text-muted">—</span>';
                         },
                     },

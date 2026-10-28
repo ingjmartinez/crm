@@ -131,7 +131,13 @@ class RentabilidadAgenciaV3Test extends TestCase
         $this->assertStringContainsString('id="periodoGraficoRentabilidadV3"', $viewSource);
         $this->assertLessThan(strpos($viewSource, '@if ($consultar && $resumen !== null)'), strpos($viewSource, 'id="periodoGraficoRentabilidadV3"'));
         $this->assertStringContainsString('id="graficoRentabilidadAgenciaV3"', $viewSource);
+        $this->assertStringContainsString('new Choices(selectorTerminal', $viewSource);
+        $this->assertStringContainsString("searchFields: ['label', 'value']", $viewSource);
+        $this->assertStringContainsString('Buscar por nombre o terminal...', $viewSource);
         $this->assertStringContainsString('id="totalIngresosGraficoV3"', $viewSource);
+        $this->assertStringContainsString('class="btn border rounded p-3 h-100 w-100 text-start tarjeta-clasificacion-v3"', $viewSource);
+        $this->assertStringContainsString('data-clasificacion="{{ $clasificacionTarjeta }}"', $viewSource);
+        $this->assertStringContainsString('selectorEstado.dispatchEvent(new Event(\'change\'))', $viewSource);
         $this->assertStringContainsString('id="filtrosRentabilidadAgenciaV3"', $viewSource);
         $this->assertStringContainsString("title: 'Generando reporte'", $viewSource);
         $this->assertStringContainsString('event.preventDefault()', $viewSource);

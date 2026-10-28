@@ -342,7 +342,10 @@ class RentabilidadAgenciaTest extends TestCase
         $this->assertStringContainsString('<th class="text-end">Ventas por día</th>', $viewSource);
         $this->assertStringContainsString('<th class="text-end">Meta de venta</th>', $viewSource);
         $this->assertStringContainsString("data: 'meta_venta'", $viewSource);
-        $this->assertStringContainsString('id="tableRentabilidadAgencias" style="min-width: 1500px"', $viewSource);
+        $this->assertStringContainsString('id="tableRentabilidadAgencias" style="min-width: 1800px"', $viewSource);
+        $this->assertStringContainsString('#tableRentabilidadAgencias td:nth-child(3)', $viewSource);
+        $this->assertStringContainsString('#tableRentabilidadAgencias td:nth-child(4)', $viewSource);
+        $this->assertSame(2, substr_count($viewSource, 'class="meta-pago-detalle"'));
         $this->assertStringContainsString('responsive: false,', $viewSource);
         $this->assertLessThan(strpos($viewSource, "data: 'centro_costo_id'"), strpos($viewSource, "data: 'meta_venta'"));
         $this->assertStringContainsString('id="porcentajesPagoRentabilidad"', $viewSource);
