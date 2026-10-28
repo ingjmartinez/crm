@@ -172,6 +172,21 @@ class RentabilidadAgenciaV2Test extends TestCase
         }
     }
 
+    public function test_product_filters_have_covering_indexes_for_sales_and_prizes(): void
+    {
+        (require database_path('migrations/2026_10_28_155945_add_product_filter_indexes_to_rentabilidad_v2_tables.php'))->up();
+
+        foreach (['vt_usuarios_bet', 'vt_usuarios_net'] as $tabla) {
+            $indices = collect(Schema::getIndexes($tabla))->pluck('columns', 'name');
+            $this->assertSame(['agencia_id', 'fecha', 'tipo', 'monto'], $indices[$tabla.'_rent_v2_tipo_index']);
+        }
+
+        foreach (['premios_bet', 'premios_net', 'pagos_misma_empresa_bet', 'pagos_aotra_empresa_bet', 'pagos_misma_empresa_net', 'pagos_aotra_empresa_net'] as $tabla) {
+            $indices = collect(Schema::getIndexes($tabla))->pluck('columns', 'name');
+            $this->assertSame(['agencia_id', 'fecha', 'producto_id', 'monto'], $indices[$tabla.'_rent_v2_producto_index']);
+        }
+    }
+
     public function test_cuentas_button_returns_classified_expenses_and_r20_for_the_selected_terminal(): void
     {
         $this->withoutMiddleware();
@@ -260,6 +275,7 @@ class RentabilidadAgenciaV2Test extends TestCase
         $this->assertSame(290.0, $data['resumen']['balance']);
         $this->assertSame(2, $data['resumen']['terminales_balance_positivo']);
         $this->assertSame(0, $data['resumen']['terminales_balance_negativo']);
+        $this->assertStringNotContainsString("'Costos' => \$resumen['costos']", file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('<th class="text-end">Premios pagados</th>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('<th class="text-end">Premios sacados</th>', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
         $this->assertStringContainsString('Terminales con balance positivo', file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v2.blade.php')));
@@ -437,15 +453,21 @@ class RentabilidadAgenciaV2Test extends TestCase
             ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 40, 'producto_id' => '1'],
             ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 70, 'producto_id' => '2'],
         ]);
+        DB::table('pagos_aotra_empresa_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 10, 'producto_id' => '1'],
+            ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 20, 'producto_id' => '2'],
+        ]);
         DB::table('premios_bet')->insert([
             ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 25, 'producto_id' => '1'],
             ['agencia_id' => '1001', 'fecha' => '2026-09-01', 'monto' => 35, 'producto_id' => '2'],
         ]);
 
         foreach ([
-            [['Tradicional'], 100.0, 40.0, 25.0],
+            [['Tradicional'], 100.0, 50.0, 25.0],
+            [['No Tradicional'], 200.0, 90.0, 35.0],
             [['Recarga'], 50.0, 0.0, 0.0],
-            [['Tradicional', 'Recarga'], 150.0, 40.0, 25.0],
+            [['Tradicional', 'Recarga'], 150.0, 50.0, 25.0],
+            [['No Tradicional', 'Recarga'], 250.0, 90.0, 35.0],
             [[], 0.0, 0.0, 0.0],
         ] as [$productos, $venta, $premios, $premiosSacados]) {
             foreach (['todas', 'terminal'] as $alcance) {

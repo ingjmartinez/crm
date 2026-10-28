@@ -372,13 +372,18 @@ class RentabilidadAgenciaV2Controller extends Controller
             return collect();
         }
 
-        return DB::table($tabla)
+        $consulta = DB::table($tabla)
             ->whereIn('agencia_id', $terminales->all())
             ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
             ->when($filtro !== null, fn ($query) => $query->whereIn($columna, $filtro->all()))
             ->selectRaw('agencia_id AS terminal, SUM(COALESCE(monto, 0)) AS total')
-            ->groupBy('agencia_id')
-            ->pluck('total', 'terminal');
+            ->groupBy('agencia_id');
+
+        if ($filtro !== null && DB::connection()->getDriverName() === 'mysql') {
+            $consulta->forceIndex($tabla.'_rent_v2_'.($columna === 'tipo' ? 'tipo' : 'producto').'_index');
+        }
+
+        return $consulta->pluck('total', 'terminal');
     }
 
     /** @param Collection<int, string> $terminales
@@ -414,8 +419,13 @@ class RentabilidadAgenciaV2Controller extends Controller
             ->when($filtro !== null, fn ($query) => $query->whereIn($columna, $filtro->all()))
             ->select('fecha')
             ->selectRaw('SUM(COALESCE(monto, 0)) AS total')
-            ->groupBy('fecha')
-            ->get();
+            ->groupBy('fecha');
+
+        if ($filtro !== null && DB::connection()->getDriverName() === 'mysql') {
+            $filas->forceIndex($tabla.'_rent_v2_'.($columna === 'tipo' ? 'tipo' : 'producto').'_index');
+        }
+
+        $filas = $filas->get();
 
         foreach ($filas as $fila) {
             $dia = (string) $fila->fecha;

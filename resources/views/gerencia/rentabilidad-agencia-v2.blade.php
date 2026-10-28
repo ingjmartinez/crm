@@ -74,7 +74,7 @@
                         <div class="card-header"><h5 class="mb-0">Resumen de {{ $resumen['terminales'] }} terminales · {{ $empresa ?: 'Todas las empresas' }} · {{ $mes }}</h5></div>
                         <div class="card-body">
                             <div class="row g-3">
-                                @foreach (['Ventas' => $resumen['venta'], 'Premios sacados' => $resumen['premios_sacados'], 'Premios pagados' => $resumen['premios'], 'Ingreso real' => $resumen['ingreso_real'], 'Costos' => $resumen['costos'], 'Gastos' => $resumen['gastos'], 'Balance' => $resumen['balance']] as $etiqueta => $importe)
+                                @foreach (['Ventas' => $resumen['venta'], 'Premios sacados' => $resumen['premios_sacados'], 'Premios pagados' => $resumen['premios'], 'Ingreso real' => $resumen['ingreso_real'], 'Gastos' => $resumen['gastos'], 'Balance' => $resumen['balance']] as $etiqueta => $importe)
                                     <div class="col-md-4 col-xl-2"><div class="border rounded p-3 h-100"><div class="text-muted small">{{ $etiqueta }}</div><div class="fw-semibold {{ $importe < 0 ? 'text-danger' : '' }}">RD$ {{ number_format($importe, 2) }}</div></div></div>
                                 @endforeach
                                 <div class="col-md-4 col-xl-2"><div class="border rounded p-3 h-100"><div class="text-muted small">Terminales con balance positivo</div><div class="fw-semibold text-success">{{ number_format($resumen['terminales_balance_positivo']) }}</div></div></div>
