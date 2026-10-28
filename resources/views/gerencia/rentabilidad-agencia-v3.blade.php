@@ -12,7 +12,7 @@
                 <div class="card mb-4">
                     <div class="card-body">
                         <p class="text-muted mb-3">Utilidad = ingresos de las cinco cuentas contables seleccionadas − gastos de las cuentas activas clasificadas como Gasto − R20. El trimestre comprende los últimos tres meses cerrados. Los períodos sin asientos se muestran como datos incompletos y no se clasifican como rentables ni como pérdidas.</p>
-                        <form method="GET" action="{{ route('gerencia.rentabilidad-agencia-v3') }}" class="row g-3 align-items-end">
+                        <form id="filtrosRentabilidadAgenciaV3" method="GET" action="{{ route('gerencia.rentabilidad-agencia-v3') }}" class="row g-3 align-items-end">
                             <div class="col-md-3">
                                 <label for="mesCierreRentabilidadV3" class="form-label">Mes de cierre</label>
                                 <input id="mesCierreRentabilidadV3" type="month" name="mes_cierre" class="form-control" value="{{ $mesCierre }}" max="{{ now()->subMonth()->format('Y-m') }}" required>
@@ -24,6 +24,13 @@
                                     @foreach ($empresas as $nombreEmpresa)
                                         <option value="{{ $nombreEmpresa }}" @selected($empresa === $nombreEmpresa)>{{ $nombreEmpresa }}</option>
                                     @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="periodoGraficoRentabilidadV3" class="form-label">Período del gráfico</label>
+                                <select id="periodoGraficoRentabilidadV3" name="periodo" class="form-select">
+                                    <option value="trimestre" @selected(request('periodo') !== 'anio')>Últimos 3 meses cerrados</option>
+                                    <option value="anio" @selected(request('periodo') === 'anio')>Acumulado del año</option>
                                 </select>
                             </div>
                             <div class="col-md-auto"><button type="submit" class="btn btn-primary">Consultar</button></div>
@@ -51,6 +58,30 @@
                                 @endforeach
                             </div>
                             <p class="small text-muted mt-3 mb-0">Año: {{ $mesesAnio->first() }} a {{ $mesesAnio->last() }} · Últimos tres meses cerrados: {{ $mesesTrimestre->first() }} a {{ $mesesTrimestre->last() }}. Los resultados con cobertura incompleta son parciales. R20 se aplica una vez por cada mes con movimientos contables y terminal.</p>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header"><h5 class="mb-0">Evolución mensual de ingresos y gastos</h5></div>
+                        <div class="card-body">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-5">
+                                    <label for="terminalGraficoRentabilidadV3" class="form-label">Terminal</label>
+                                    <select id="terminalGraficoRentabilidadV3" class="form-select">
+                                        <option value="">Todas las terminales</option>
+                                        @foreach ($filas as $fila)
+                                            <option value="{{ $fila['terminal'] }}">{{ $fila['terminal'] }} · {{ $fila['nombre'] }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="graficoRentabilidadAgenciaV3" aria-label="Gráfico de barras de ingresos y gastos por mes"></div>
+                            <div class="d-flex flex-wrap gap-4 mt-2 mb-2 fw-semibold">
+                                <span>Ingresos: <span id="totalIngresosGraficoV3"></span></span>
+                                <span>Gastos: <span id="totalGastosGraficoV3"></span></span>
+                                <span>Resultado: <span id="resultadoGraficoV3"></span></span>
+                            </div>
+                            <p class="small text-muted mb-0">Las barras muestran los movimientos registrados; un mes sin datos aparece en cero y no se considera completo.</p>
                         </div>
                     </div>
 
@@ -117,10 +148,80 @@
 @endsection
 
 @section('script')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('filtrosRentabilidadAgenciaV3').addEventListener('submit', function () {
+                Swal.fire({
+                    title: 'Generando reporte',
+                    text: 'Consultando ingresos y gastos contables. Esto puede tardar unos momentos.',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading(),
+                });
+            });
+        });
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted && Swal.isVisible()) Swal.close();
+        });
+    </script>
     @if ($consultar && $resumen !== null)
+        <script src="{{ asset('libs/apexcharts/apexcharts.min.js') }}"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 const filas = {{ Illuminate\Support\Js::from($filas) }};
+                const mesesAnio = {{ Illuminate\Support\Js::from($mesesAnio) }};
+                const mesesTrimestre = {{ Illuminate\Support\Js::from($mesesTrimestre) }};
+                const graficoMensual = {{ Illuminate\Support\Js::from($graficoMensual) }};
+                const selectorPeriodo = document.getElementById('periodoGraficoRentabilidadV3');
+                const selectorTerminal = document.getElementById('terminalGraficoRentabilidadV3');
+                const formatoMoneda = (valor) => `RD$ ${Number(valor || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const seriesGrafico = () => {
+                    const meses = selectorPeriodo.value === 'anio' ? mesesAnio : mesesTrimestre;
+                    const terminal = filas.find((fila) => fila.terminal === selectorTerminal.value);
+                    const datos = terminal
+                        ? Object.fromEntries(terminal.mensual.map((mes) => [mes.mes, mes]))
+                        : graficoMensual;
+
+                    return {
+                        meses,
+                        series: [
+                            { name: 'Ingresos contables', data: meses.map((mes) => Number(datos[mes]?.ingresos || 0)) },
+                            { name: 'Total de gastos', data: meses.map((mes) => Number(datos[mes]?.gastos || 0)) },
+                        ],
+                    };
+                };
+                const actualizarTotalesGrafico = (datos) => {
+                    const ingresos = datos.series[0].data.reduce((total, monto) => total + monto, 0);
+                    const gastos = datos.series[1].data.reduce((total, monto) => total + monto, 0);
+                    document.getElementById('totalIngresosGraficoV3').textContent = formatoMoneda(ingresos);
+                    document.getElementById('totalGastosGraficoV3').textContent = formatoMoneda(gastos);
+                    document.getElementById('resultadoGraficoV3').textContent = formatoMoneda(ingresos - gastos);
+                };
+                actualizarTotalesGrafico(seriesGrafico());
+                if (typeof ApexCharts !== 'undefined') {
+                    const inicial = seriesGrafico();
+                    const grafico = new ApexCharts(document.getElementById('graficoRentabilidadAgenciaV3'), {
+                        chart: { type: 'bar', height: 340, toolbar: { show: false } },
+                        series: inicial.series,
+                        xaxis: { categories: inicial.meses },
+                        yaxis: { labels: { formatter: (valor) => `RD$ ${Number(valor || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}` } },
+                        tooltip: { y: { formatter: formatoMoneda } },
+                        plotOptions: { bar: { columnWidth: '45%', borderRadius: 3 } },
+                        dataLabels: { enabled: false },
+                        colors: ['#0ab39c', '#f06548'],
+                        legend: { position: 'top' },
+                        noData: { text: 'Sin movimientos para el período' },
+                    });
+                    grafico.render();
+                    const actualizarGrafico = () => {
+                        const datos = seriesGrafico();
+                        grafico.updateOptions({ xaxis: { categories: datos.meses }, series: datos.series });
+                        actualizarTotalesGrafico(datos);
+                    };
+                    selectorPeriodo.addEventListener('change', actualizarGrafico);
+                    selectorTerminal.addEventListener('change', actualizarGrafico);
+                }
                 const tabla = document.getElementById('tablaRentabilidadAgenciaV3');
                 if (window.jQuery && $.fn.DataTable) {
                     const dataTable = $(tabla).DataTable({

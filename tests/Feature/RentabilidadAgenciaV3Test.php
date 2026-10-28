@@ -121,11 +121,20 @@ class RentabilidadAgenciaV3Test extends TestCase
         $this->assertSame(0, $data['resumen']['rentables_anio']);
         $this->assertSame(1, $data['resumen']['rentables_trimestre']);
         $this->assertSame(2, $data['resumen']['incompletas']);
+        $this->assertSame(['ingresos' => 120.0, 'gastos' => 100.0, 'terminales_con_movimientos' => 2], $data['graficoMensual']['2026-07']);
+        $this->assertSame(['ingresos' => 0.0, 'gastos' => 0.0, 'terminales_con_movimientos' => 0], $data['graficoMensual']['2026-02']);
         $this->assertSame('/gerencia/rentabilidad-agencia-v3', route('gerencia.rentabilidad-agencia-v3', [], false));
         $this->assertSame('gerencia.rentabilidad_de_agencia.view', app(ViewPermissionCatalog::class)->items()->firstWhere('path', '/gerencia/rentabilidad-agencia-v3')['permission']);
         $viewSource = file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v3.blade.php'));
         $this->assertStringContainsString('Rentable sostenida', $viewSource);
         $this->assertStringContainsString('id="modalRentabilidadAgenciaV3"', $viewSource);
+        $this->assertStringContainsString('id="periodoGraficoRentabilidadV3"', $viewSource);
+        $this->assertLessThan(strpos($viewSource, '@if ($consultar && $resumen !== null)'), strpos($viewSource, 'id="periodoGraficoRentabilidadV3"'));
+        $this->assertStringContainsString('id="graficoRentabilidadAgenciaV3"', $viewSource);
+        $this->assertStringContainsString('id="totalIngresosGraficoV3"', $viewSource);
+        $this->assertStringContainsString('id="filtrosRentabilidadAgenciaV3"', $viewSource);
+        $this->assertStringContainsString("title: 'Generando reporte'", $viewSource);
+        $this->assertStringContainsString('didOpen: () => Swal.showLoading()', $viewSource);
     }
 
     public function test_v3_quarter_can_cross_calendar_year_and_company_filter_applies(): void
@@ -152,6 +161,8 @@ class RentabilidadAgenciaV3Test extends TestCase
         $this->assertSame(100.0, $data['filas'][0]['anio']['utilidad']);
         $this->assertSame(130.0, $data['filas'][0]['trimestre']['utilidad']);
         $this->assertSame('Rentable irregular', $data['filas'][0]['clasificacion']);
+        $this->assertSame(50.0, $data['graficoMensual']['2025-11']['ingresos']);
+        $this->assertSame(20.0, $data['graficoMensual']['2025-12']['gastos']);
     }
 
     public function test_v3_classifies_sustained_profit_only_with_complete_months(): void

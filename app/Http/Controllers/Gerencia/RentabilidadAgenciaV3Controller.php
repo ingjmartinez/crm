@@ -31,6 +31,7 @@ class RentabilidadAgenciaV3Controller extends Controller
         $resumen = null;
         $mesesAnio = collect();
         $mesesTrimestre = collect();
+        $graficoMensual = collect();
 
         if ($consultar) {
             $cierre = Carbon::createFromFormat('Y-m', $mesCierre)->startOfMonth();
@@ -94,9 +95,15 @@ class RentabilidadAgenciaV3Controller extends Controller
                 'utilidad_anio' => (float) $filas->sum(fn (array $fila): float => $fila['anio']['utilidad']),
                 'utilidad_trimestre' => (float) $filas->sum(fn (array $fila): float => $fila['trimestre']['utilidad']),
             ];
+            $movimientosPorMes = $filas->flatMap(fn (array $fila): array => $fila['mensual'])->groupBy('mes');
+            $graficoMensual = $mesesDetalle->mapWithKeys(fn (string $mes): array => [$mes => [
+                'ingresos' => (float) $movimientosPorMes->get($mes, collect())->sum('ingresos'),
+                'gastos' => (float) $movimientosPorMes->get($mes, collect())->sum('gastos'),
+                'terminales_con_movimientos' => $movimientosPorMes->get($mes, collect())->where('con_movimientos', true)->count(),
+            ]]);
         }
 
-        return view('gerencia.rentabilidad-agencia-v3', compact('mesCierre', 'empresa', 'empresas', 'consultar', 'filas', 'resumen', 'mesesAnio', 'mesesTrimestre'));
+        return view('gerencia.rentabilidad-agencia-v3', compact('mesCierre', 'empresa', 'empresas', 'consultar', 'filas', 'resumen', 'mesesAnio', 'mesesTrimestre', 'graficoMensual'));
     }
 
     /** @return Collection<int, string> */
