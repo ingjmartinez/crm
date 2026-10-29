@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class GraficoRentabilidadController extends Controller
@@ -240,16 +241,18 @@ class GraficoRentabilidadController extends Controller
             return collect();
         }
 
+        $mismoMes = $inicio->format('Y-m') === $fin->format('Y-m');
         $consulta = DB::table($tabla)
             ->whereIn('agencia_id', $terminales->all())
             ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
             ->when($productos !== null, fn ($query) => $query->whereIn('tipo', $productos->all()))
-            ->selectRaw('agencia_id AS terminal, tipo, SUBSTR(fecha, 1, 7) AS mes, SUM(COALESCE(monto, 0)) AS total')
-            ->groupBy('agencia_id', 'tipo')
-            ->groupByRaw('SUBSTR(fecha, 1, 7)');
+            ->selectRaw('agencia_id AS terminal, tipo, SUM(COALESCE(monto, 0)) AS total')
+            ->groupBy('agencia_id', 'tipo');
 
-        if (DB::connection()->getDriverName() === 'mysql') {
-            $consulta->forceIndex($tabla.'_rent_v2_tipo_index');
+        if ($mismoMes) {
+            $consulta->selectRaw('? AS mes', [$inicio->format('Y-m')]);
+        } else {
+            $consulta->selectRaw('SUBSTR(fecha, 1, 7) AS mes')->groupByRaw('SUBSTR(fecha, 1, 7)');
         }
 
         return $consulta->get();
@@ -276,17 +279,24 @@ class GraficoRentabilidadController extends Controller
             $parametros = array_merge($parametros, $productos);
         }
 
-        return DB::table($tabla)
+        $consulta = DB::table($tabla)
             ->whereIn($columnaTerminal, $terminales->all())
             ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
-            ->selectRaw($columnaTerminal.' AS terminal, SUBSTR(fecha, 1, 7) AS mes, SUM(COALESCE(monto, 0)) AS total')
+            ->selectRaw($columnaTerminal.' AS terminal, SUM(COALESCE(monto, 0)) AS total')
             ->selectRaw('('.implode(' + ', $expresiones).') AS grupo_producto', $parametros)
-            ->groupBy($columnaTerminal, 'grupo_producto')->groupByRaw('SUBSTR(fecha, 1, 7)')
-            ->get()->map(function (object $fila): object {
-                $fila->producto_id = (string) $fila->grupo_producto;
+            ->groupBy($columnaTerminal, 'grupo_producto');
 
-                return $fila;
-            });
+        if ($inicio->format('Y-m') === $fin->format('Y-m')) {
+            $consulta->selectRaw('? AS mes', [$inicio->format('Y-m')]);
+        } else {
+            $consulta->selectRaw('SUBSTR(fecha, 1, 7) AS mes')->groupByRaw('SUBSTR(fecha, 1, 7)');
+        }
+
+        return $consulta->get()->map(function (object $fila): object {
+            $fila->producto_id = (string) $fila->grupo_producto;
+
+            return $fila;
+        });
     }
 
     /** @return Collection<string, float> */
@@ -365,15 +375,23 @@ class GraficoRentabilidadController extends Controller
             ->whereIn('movimientos.cuenta', $clasificaciones->keys()->all())
             ->whereIn(DB::raw('LOWER(TRIM(cuentas.tipo))'), ['costo', 'gasto'])
             ->selectRaw('movimientos.id_viejo AS terminal')
-            ->selectRaw('SUBSTR(movimientos.fecha, 1, 7) AS mes')
             ->selectRaw($gastoFijo.' AS gasto_fijo', $cuentasFijas)
             ->selectRaw('LOWER(TRIM(cuentas.tipo)) AS tipo')
             ->selectRaw('SUM(COALESCE(movimientos.debito, 0) - COALESCE(movimientos.credito, 0)) AS importe')
             ->groupBy('gasto_fijo')
-            ->groupByRaw('movimientos.id_viejo, LOWER(TRIM(cuentas.tipo)), SUBSTR(movimientos.fecha, 1, 7)');
+            ->groupByRaw('movimientos.id_viejo, LOWER(TRIM(cuentas.tipo))');
+
+        if ($inicio->format('Y-m') === $fin->format('Y-m')) {
+            $movimientos->selectRaw('? AS mes', [$inicio->format('Y-m')]);
+        } else {
+            $movimientos->selectRaw('SUBSTR(movimientos.fecha, 1, 7) AS mes')->groupByRaw('SUBSTR(movimientos.fecha, 1, 7)');
+        }
 
         if (DB::connection()->getDriverName() === 'mysql') {
-            $movimientos->forceIndex('entradas_diario_fecha_index');
+            $indice = Schema::hasIndex('entradas_diario', 'entradas_diario_rent_grafico_fecha_index')
+                ? 'entradas_diario_rent_grafico_fecha_index'
+                : 'entradas_diario_fecha_index';
+            $movimientos->forceIndex($indice);
         }
 
         return $movimientos

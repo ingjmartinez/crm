@@ -389,11 +389,11 @@
                 } else {
                     estadoCarga.classList.toggle('d-none', false);
                 }
-                FiltrosGraficoRentabilidad.cargarMeses(mesesPorCargar, async (mes) => {
+                FiltrosGraficoRentabilidad.cargarMeses(mesesPorCargar, async (mes, signal) => {
                     const url = new URL({{ Illuminate\Support\Js::from(route('gerencia.grafico-rentabilidad.datos')) }});
                     url.searchParams.set('periodo', 'mes');
                     url.searchParams.set('mes', mes);
-                    const respuesta = await fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+                    const respuesta = await fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin', signal });
                     if (!respuesta.ok) {
                         throw new Error('No se pudieron cargar los datos de ' + mes + '. Pulsa Cargar datos para reintentar.');
                     }
@@ -416,7 +416,7 @@
                     }
                 }).catch((error) => {
                     cargandoMeses = false;
-                    const mensaje = error.message || 'No se pudo completar la carga. Pulsa Cargar datos para reintentar.';
+                    const mensaje = error?.message || 'No se pudo completar la carga. Pulsa Cargar datos para reintentar.';
                     if (window.Swal) {
                         Swal.fire({ title: 'No se pudo cargar el reporte', text: mensaje, icon: 'error', confirmButtonText: 'Entendido' });
                     } else {

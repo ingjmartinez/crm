@@ -121,6 +121,91 @@ class GraficoRentabilidadTest extends TestCase
         $this->assertSame(210.0, $agencia['gastosMensuales'][0]['gastos']);
     }
 
+    public function test_date_covering_migration_is_idempotent_and_reversible(): void
+    {
+        Schema::table('entradas_diario', function (Blueprint $table): void {
+            $table->index('fecha', 'entradas_diario_fecha_index');
+        });
+        $migracion = require database_path('migrations/2026_10_29_155434_add_date_covering_indexes_to_rentabilidad_chart_tables.php');
+        $migracion->up();
+        $migracion->up();
+        foreach (['vt_usuarios_bet', 'vt_usuarios_net'] as $tabla) {
+            $this->assertTrue(Schema::hasIndex($tabla, ['fecha', 'agencia_id', 'tipo', 'monto']));
+        }
+        foreach (['premios_bet', 'premios_net'] as $tabla) {
+            $this->assertTrue(Schema::hasIndex($tabla, ['fecha', 'agencia_id', 'producto_id', 'monto']));
+        }
+        $this->assertTrue(Schema::hasIndex('entradas_diario', ['fecha', 'cuenta', 'id_viejo', 'debito', 'credito']));
+        $migracion->down();
+        $migracion->down();
+        foreach (['vt_usuarios_bet', 'vt_usuarios_net', 'premios_bet', 'premios_net', 'entradas_diario'] as $tabla) {
+            $this->assertFalse(Schema::hasIndex($tabla, $tabla.'_rent_grafico_fecha_index'));
+        }
+        $this->assertTrue(Schema::hasIndex('entradas_diario', 'entradas_diario_fecha_index'));
+    }
+
+    public function test_online_migration_rejects_myisam_before_any_ddl(): void
+    {
+        $conexion = \Mockery::mock(\Illuminate\Database\Connection::class);
+        $conexion->shouldReceive('getDriverName')->andReturn('mysql');
+        $conexion->shouldReceive('getDatabaseName')->andReturn('crm');
+        $conexion->shouldReceive('select')->once()->andReturn(collect([
+            'vt_usuarios_bet', 'vt_usuarios_net', 'premios_bet', 'premios_net', 'entradas_diario',
+        ])->map(fn (string $tabla): object => (object) ['tabla' => $tabla, 'motor' => $tabla === 'entradas_diario' ? 'MyISAM' : 'InnoDB'])->all());
+        $conexion->shouldNotReceive('statement');
+        Schema::shouldReceive('hasIndex')->never();
+        DB::shouldReceive('connection')->andReturn($conexion);
+        $migracion = require database_path('migrations/2026_10_29_155434_add_date_covering_indexes_to_rentabilidad_chart_tables.php');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('entradas_diario debe usar InnoDB');
+        $migracion->up();
+    }
+
+    public function test_mysql_migration_requires_online_ddl_for_creation_and_rollback(): void
+    {
+        $conexion = \Mockery::mock(\Illuminate\Database\Connection::class);
+        $conexion->shouldReceive('getDriverName')->andReturn('mysql');
+        $conexion->shouldReceive('getDatabaseName')->andReturn('crm');
+        $conexion->shouldReceive('select')->twice()->andReturn(collect([
+            'vt_usuarios_bet', 'vt_usuarios_net', 'premios_bet', 'premios_net', 'entradas_diario',
+        ])->map(fn (string $tabla): object => (object) ['tabla' => $tabla, 'motor' => 'InnoDB'])->all());
+        $sentencias = [];
+        $conexion->shouldReceive('statement')->times(10)->andReturnUsing(function (string $sql) use (&$sentencias): bool {
+            $sentencias[] = $sql;
+
+            return true;
+        });
+        $creando = true;
+        Schema::shouldReceive('hasIndex')->andReturnUsing(function () use (&$creando): bool {
+            return ! $creando;
+        });
+        DB::shouldReceive('connection')->andReturn($conexion);
+        $migracion = require database_path('migrations/2026_10_29_155434_add_date_covering_indexes_to_rentabilidad_chart_tables.php');
+        $migracion->up();
+        $creando = false;
+        $migracion->down();
+        foreach ($sentencias as $sql) {
+            $this->assertStringContainsString('ALGORITHM=INPLACE, LOCK=NONE', $sql);
+        }
+        $this->assertCount(5, array_filter($sentencias, fn (string $sql): bool => str_contains($sql, 'ADD INDEX')));
+        $this->assertCount(5, array_filter($sentencias, fn (string $sql): bool => str_contains($sql, 'DROP INDEX')));
+    }
+
+    public function test_monthly_queries_keep_date_filters_sargable_and_omit_redundant_month_grouping(): void
+    {
+        $this->crearDatos();
+        DB::enableQueryLog();
+        $this->consultar(['mes' => '2026-09']);
+        $consultas = collect(DB::getQueryLog())->pluck('query')->filter(fn (string $sql): bool => str_contains(strtolower($sql), 'sum('));
+        DB::disableQueryLog();
+        $this->assertCount(9, $consultas);
+        foreach ($consultas as $sql) {
+            $this->assertStringNotContainsString('SUBSTR(', $sql);
+            $this->assertStringContainsString('between ? and ?', strtolower($sql));
+            $this->assertStringContainsString('? AS mes', $sql);
+        }
+    }
+
     public function test_http_page_defers_annual_data_without_querying_the_transaction_tables(): void
     {
         $this->crearDatos();
@@ -385,6 +470,92 @@ class GraficoRentabilidadTest extends TestCase
         $this->assertEquals(1000.0, $navegador['ventasMensuales']['series'][0]['data'][8]);
         $this->assertEquals(300.0, $navegador['ventasMensuales']['series'][0]['data'][9]);
         $this->assertEquals(220.0, $navegador['resumen']['gastos']);
+    }
+
+    public function test_month_loader_limits_concurrency_preserves_order_and_aborts_pending_requests_on_error(): void
+    {
+        $codigo = <<<'JS'
+import { pathToFileURL } from 'node:url';
+await import(pathToFileURL(process.argv[2]).href);
+const cargar = FiltrosGraficoRentabilidad.cargarMeses;
+const meses = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'];
+const datosMes = (mes) => {
+    const numero = Number(mes.slice(-2));
+    return { meses: [mes], etiquetas: [mes], productosPremios: { Tradicional: ['1', '3'], 'No Tradicional': ['2', '3'] }, agencias: [{
+        terminal: '001', empresa: 'Empresa A', ruta: 'Norte', costos: numero / 10, gastos: numero,
+        ventas: [{ mes, tipo: 'Tradicional', total: numero * 100 }], premios: [{ mes, producto_id: '1', total: numero * 2 }],
+        sacados: [{ mes, producto_id: '1', total: numero * 3 }], gastosMensuales: [{ mes, costos: numero / 10, gastos: numero }],
+    }] };
+};
+const referencia = await cargar(meses, async (mes) => datosMes(mes), () => {});
+const pendientes = new Map();
+const solicitados = [];
+const progreso = [];
+let activas = 0;
+let maximo = 0;
+const promesa = cargar([...meses].reverse(), (mes) => new Promise((resolver) => {
+    solicitados.push(mes);
+    maximo = Math.max(maximo, ++activas);
+    pendientes.set(mes, () => { activas--; resolver(datosMes(mes)); });
+}), (completados, total, mes) => progreso.push({ completados, total, mes }));
+const iniciales = [...solicitados];
+for (const mes of ['2026-03', '2026-04', '2026-05', '2026-02', '2026-01']) {
+    pendientes.get(mes)();
+    await new Promise(setImmediate);
+}
+const datos = await promesa;
+const resumen = FiltrosGraficoRentabilidad.filtrar(datos, { empresa: 'Empresa A', ruta: '', alcance: 'todas', terminal: '', productos: ['Tradicional'] }).resumen;
+const iniciadosError = [];
+const pendientesError = new Map();
+let activosError = 0;
+let abortados = 0;
+let terminados = 0;
+const cargaConError = cargar(meses, (mes, signal) => new Promise((resolver, rechazar) => {
+    iniciadosError.push(mes);
+    activosError++;
+    let terminado = false;
+    const finalizar = (error) => {
+        if (terminado) return;
+        terminado = true;
+        activosError--;
+        terminados++;
+        rechazar(error);
+    };
+    pendientesError.set(mes, finalizar);
+    signal.addEventListener('abort', () => {
+        if (!terminado) abortados++;
+        finalizar(new Error('Cancelado'));
+    }, { once: true });
+}), () => {});
+const errorObservado = cargaConError.then(() => 'No debe completar', (error) => error.message);
+pendientesError.get('2026-02')(new Error('Falló 2026-02'));
+const error = await errorObservado;
+const vacio = await cargar([], () => { throw new Error('No debe consultar'); }, () => { throw new Error('No debe actualizar'); });
+process.stdout.write(JSON.stringify({ iniciales, maximo, activas, meses: datos.meses, igual: JSON.stringify(datos) === JSON.stringify(referencia),
+    progreso, resumen, error, iniciadosError, activosError, abortados, terminados, vacio }));
+JS;
+        $proceso = new Process(['node', '--input-type=module', '-', public_path('js/pages/grafico-rentabilidad-filtros.js')]);
+        $proceso->setInput($codigo);
+        $proceso->mustRun();
+        $resultado = json_decode($proceso->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame(['2026-01', '2026-02', '2026-03'], $resultado['iniciales']);
+        $this->assertSame(3, $resultado['maximo']);
+        $this->assertSame(0, $resultado['activas']);
+        $this->assertSame(['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'], $resultado['meses']);
+        $this->assertTrue($resultado['igual']);
+        $this->assertSame([0, 1, 2, 3, 4, 5], array_column($resultado['progreso'], 'completados'));
+        $this->assertSame([5], array_values(array_unique(array_column($resultado['progreso'], 'total'))));
+        $this->assertSame(1500, $resultado['resumen']['venta']);
+        $this->assertSame(30, $resultado['resumen']['premios']);
+        $this->assertSame(15, $resultado['resumen']['gastos']);
+        $this->assertSame(1453.5, $resultado['resumen']['balance']);
+        $this->assertSame('Falló 2026-02', $resultado['error']);
+        $this->assertSame(['2026-01', '2026-02', '2026-03'], $resultado['iniciadosError']);
+        $this->assertSame(0, $resultado['activosError']);
+        $this->assertSame(2, $resultado['abortados']);
+        $this->assertSame(3, $resultado['terminados']);
+        $this->assertNull($resultado['vacio']);
     }
 
     public function test_filter_button_updates_cards_and_chart_without_reloading_and_requires_loading_new_dates(): void

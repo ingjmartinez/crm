@@ -122,14 +122,42 @@
     }
 
     async function cargarMeses(meses, obtenerMes, progreso) {
-        let acumulado = null;
-        for (const [indice, mes] of meses.entries()) {
-            progreso(indice, meses.length, mes);
-            const datos = await obtenerMes(mes);
-            acumulado = combinarMeses(acumulado, datos);
-            progreso(indice + 1, meses.length, mes);
+        const mesesOrdenados = [...meses].sort();
+        if (mesesOrdenados.length === 0) {
+            return null;
         }
-        return acumulado;
+        const controlador = new AbortController();
+        const resultados = new Array(mesesOrdenados.length);
+        let siguiente = 0;
+        let completados = 0;
+        let fallo = false;
+        let errorCarga;
+        const cargarSiguiente = async () => {
+            while (!fallo && siguiente < mesesOrdenados.length) {
+                const indice = siguiente++;
+                const mes = mesesOrdenados[indice];
+                try {
+                    const datos = await obtenerMes(mes, controlador.signal);
+                    if (fallo) {
+                        return;
+                    }
+                    resultados[indice] = datos;
+                    progreso(++completados, mesesOrdenados.length, mes);
+                } catch (error) {
+                    if (!fallo) {
+                        fallo = true;
+                        errorCarga = error;
+                        controlador.abort();
+                    }
+                }
+            }
+        };
+        progreso(0, mesesOrdenados.length, mesesOrdenados[0]);
+        await Promise.all(Array.from({ length: Math.min(3, mesesOrdenados.length) }, cargarSiguiente));
+        if (fallo) {
+            throw errorCarga;
+        }
+        return resultados.reduce(combinarMeses, null);
     }
 
     global.FiltrosGraficoRentabilidad = { filtrar, cargarMeses };
