@@ -106,7 +106,7 @@
                 </div>
 
                 @if ($consultar && $resumen !== null)
-                    <div id="estadoCargaMesesRentabilidad" @class(['alert alert-info', 'd-none' => $mesesPorCargar === []]) role="status" aria-live="polite">Cargando los datos del período por mes…</div>
+                    <div id="estadoCargaMesesRentabilidad" class="alert alert-info d-none" role="status" aria-live="polite">Cargando los datos del período por mes…</div>
                     <div id="sinTerminalesRentabilidad" @class(['alert alert-info', 'd-none' => $agenciasResumen->isNotEmpty() || $mesesPorCargar !== []])>No se encontraron terminales activas con los filtros seleccionados.</div>
                     <div id="tarjetaVentasRentabilidad" @class(['card mb-4', 'd-none' => $agenciasResumen->isEmpty()])>
                         <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -376,6 +376,19 @@
 
             if (cargandoMeses) {
                 const estadoCarga = document.getElementById('estadoCargaMesesRentabilidad');
+                if (window.Swal) {
+                    Swal.fire({
+                        title: 'Consultando rentabilidad',
+                        text: 'Cargando los datos del período por mes…',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        showCloseButton: false,
+                        didOpen: () => Swal.showLoading(),
+                    });
+                } else {
+                    estadoCarga.classList.toggle('d-none', false);
+                }
                 FiltrosGraficoRentabilidad.cargarMeses(mesesPorCargar, async (mes) => {
                     const url = new URL({{ Illuminate\Support\Js::from(route('gerencia.grafico-rentabilidad.datos')) }});
                     url.searchParams.set('periodo', 'mes');
@@ -387,6 +400,9 @@
                     return respuesta.json();
                 }, (completados, total, mes) => {
                     estadoCarga.textContent = 'Cargando ' + mes + ' · ' + completados + ' de ' + total + ' meses completados.';
+                    if (window.Swal) {
+                        Swal.update({ text: estadoCarga.textContent });
+                    }
                 }).then((datos) => {
                     datosCargados = datos;
                     cargandoMeses = false;
@@ -395,11 +411,20 @@
                     if (clavePeriodo() === periodoCargado) {
                         aplicarFiltros();
                     }
+                    if (window.Swal) {
+                        Swal.close();
+                    }
                 }).catch((error) => {
                     cargandoMeses = false;
-                    estadoCarga.classList.toggle('alert-info', false);
-                    estadoCarga.classList.toggle('alert-danger', true);
-                    estadoCarga.textContent = error.message || 'No se pudo completar la carga. Pulsa Cargar datos para reintentar.';
+                    const mensaje = error.message || 'No se pudo completar la carga. Pulsa Cargar datos para reintentar.';
+                    if (window.Swal) {
+                        Swal.fire({ title: 'No se pudo cargar el reporte', text: mensaje, icon: 'error', confirmButtonText: 'Entendido' });
+                    } else {
+                        estadoCarga.classList.toggle('d-none', false);
+                        estadoCarga.classList.toggle('alert-info', false);
+                        estadoCarga.classList.toggle('alert-danger', true);
+                        estadoCarga.textContent = mensaje;
+                    }
                     actualizarEstadoDatos();
                 });
             }

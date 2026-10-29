@@ -398,11 +398,10 @@ class GraficoRentabilidadTest extends TestCase
         $htmlDiferido = Blade::render(str_replace(["@extends('app')", "@section('content')", "@section('script')", '@endsection'], '', $fuente), [...$diferidos, 'errors' => new ViewErrorBag]);
         preg_match('/<script>\s*([\s\S]*?)<\/script>/', $htmlDiferido, $scriptDiferido);
         $codigo = <<<'JS'
-import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 await import(pathToFileURL(process.argv[1]).href);
-const entrada = JSON.parse(readFileSync(0, 'utf8'));
+const entrada = globalThis.entradaGrafico;
 const elementos = new Map();
 function elemento(value = '') {
     const clases = new Set();
@@ -483,6 +482,16 @@ valores.periodoRentabilidadGrafico = 'rango';
 valores.mesDesdeRentabilidadGrafico = '2026-09';
 valores.mesHastaRentabilidadGrafico = '2026-10';
 let peticiones = [];
+const avisos = [];
+const actualizacionesAviso = [];
+let cargasAviso = 0;
+let cierresAviso = 0;
+globalThis.Swal = {
+    fire(opciones) { avisos.push(opciones); opciones.didOpen?.(); },
+    showLoading() { cargasAviso++; },
+    update(opciones) { actualizacionesAviso.push(opciones.text); },
+    close() { cierresAviso++; },
+};
 globalThis.fetch = async (url) => {
     const mes = url.searchParams.get('mes');
     peticiones.push(mes);
@@ -499,6 +508,7 @@ resultado.diferido = {
     habilitado: !get('filtrarRentabilidadGrafico').disabled,
     avisoOculto: get('estadoCargaMesesRentabilidad').classList.contains('d-none'),
 };
+resultado.modalCarga = { opciones: avisos[0], cargas: cargasAviso, cierres: cierresAviso, progreso: [...actualizacionesAviso] };
 get('filtrarRentabilidadGrafico').eventos.click();
 resultado.diferido.sinPeticionesAlFiltrar = peticiones.length === 2;
 elementos.clear();
@@ -509,13 +519,22 @@ globalThis.fetch = async (url) => {
 };
 vm.runInThisContext(entrada.scriptDiferido);
 await new Promise(setImmediate);
-resultado.errorCarga = get('estadoCargaMesesRentabilidad').classList.contains('alert-danger')
+resultado.errorCarga = avisos.at(-1).icon === 'error'
+    && avisos.at(-1).text.includes('2026-10')
+    && get('filtrarRentabilidadGrafico').disabled;
+delete globalThis.Swal;
+elementos.clear();
+vm.runInThisContext(entrada.scriptDiferido);
+await new Promise(setImmediate);
+resultado.errorSinSweetAlert = get('estadoCargaMesesRentabilidad').classList.contains('alert-danger')
     && get('estadoCargaMesesRentabilidad').textContent.includes('2026-10')
     && get('filtrarRentabilidadGrafico').disabled;
 process.stdout.write(JSON.stringify(resultado));
 JS;
-        $proceso = new Process(['node', '--input-type=module', '-e', $codigo, public_path('js/pages/grafico-rentabilidad-filtros.js')]);
+        $ejecutor = 'globalThis.entradaGrafico = JSON.parse((await import("node:fs")).readFileSync(0, "utf8")); await import("data:text/javascript;base64," + Buffer.from(entradaGrafico.codigo).toString("base64"));';
+        $proceso = new Process(['node', '--input-type=module', '-e', $ejecutor, public_path('js/pages/grafico-rentabilidad-filtros.js')]);
         $proceso->setInput(json_encode([
+            'codigo' => $codigo,
             'script' => $coincidencias[1], 'scriptDiferido' => $scriptDiferido[1],
             'meses' => ['2026-09' => $datos['datosCargados'], '2026-10' => $this->consultar(['mes' => '2026-10'])['datosCargados']],
         ], JSON_THROW_ON_ERROR));
@@ -543,6 +562,14 @@ JS;
         $this->assertTrue($resultado['totalBalancePositivoNormal']);
         $this->assertTrue($resultado['coloresVentasSinCambios']);
         $this->assertTrue($resultado['errorCarga']);
+        $this->assertTrue($resultado['errorSinSweetAlert']);
+        $this->assertSame('Cargando los datos del período por mes…', $resultado['modalCarga']['opciones']['text']);
+        foreach (['allowOutsideClick', 'allowEscapeKey', 'showConfirmButton', 'showCloseButton'] as $opcion) {
+            $this->assertFalse($resultado['modalCarga']['opciones'][$opcion], $opcion);
+        }
+        $this->assertSame(1, $resultado['modalCarga']['cargas']);
+        $this->assertSame(1, $resultado['modalCarga']['cierres']);
+        $this->assertStringContainsString('2 de 2 meses completados.', collect($resultado['modalCarga']['progreso'])->last());
         $this->assertSame(['2026-09', '2026-10'], $resultado['diferido']['peticiones']);
         $this->assertSame('RD$ 1,600.00', $resultado['diferido']['ventas']);
         $this->assertSame('RD$ 1,085.00', $resultado['diferido']['balance']);
