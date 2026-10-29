@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class ContabilidadDistribucionGastoRutaTest extends TestCase
@@ -15,6 +18,11 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
     {
         parent::setUp();
         $this->withoutMiddleware();
+        $usuario = User::factory()->make();
+        $usuario->setRelation('roles', new Collection([
+            new \Spatie\Permission\Models\Role(['name' => 'superadmin', 'guard_name' => 'web']),
+        ]));
+        $this->actingAs($usuario);
         Cache::put('cuentas_ruta_empresa:168', [], now()->addMinute());
         Cache::put('cuentas_ruta_empresa:169', [], now()->addMinute());
         $this->crearEsquema();
@@ -34,6 +42,114 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         Schema::dropIfExists('rutas');
 
         parent::tearDown();
+    }
+
+    public function test_excel_exporta_la_pestana_activa_con_sus_encabezados_y_filtros(): void
+    {
+        $contenido = $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()->getContent();
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($contenido);
+        $xpath = new \DOMXPath($documento);
+        $script = $xpath->query('//script[contains(text(), "const tablasDistribucion = {}")]')->item(0)->textContent;
+        $encabezados = [];
+        foreach (['tablaSocios', 'tablaAgencias', 'tablaRutas', 'tablaIncidencias', 'tablaDepositosRuta', 'tablaGastosRuta'] as $id) {
+            $encabezados['#'.$id] = [];
+            foreach ($xpath->query('//*[@id="'.$id.'"]/thead/tr/th') as $celda) {
+                $encabezados['#'.$id][] = trim($celda->textContent);
+            }
+        }
+        $codigo = <<<'JS'
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+const entrada = JSON.parse(readFileSync(0, 'utf8'));
+const elementos = new Map();
+let activa = 'socios';
+let iniciar;
+const pestanas = Object.fromEntries(['socios', 'agencias', 'rutas', 'incidencias', 'depositos', 'gastos'].map((clave) => [clave, {
+    dataset: { tablaExportar: clave }, eventos: {}, addEventListener(nombre, accion) { this.eventos[nombre] = accion; },
+}]));
+function get(id) {
+    if (!elementos.has(id)) elementos.set(id, { value: '', disabled: true, eventos: {}, addEventListener(nombre, accion) { this.eventos[nombre] = accion; } });
+    return elementos.get(id);
+}
+globalThis.document = {
+    getElementById: get, addEventListener(nombre, accion) { iniciar = accion; },
+    querySelector() { return pestanas[activa]; },
+    querySelectorAll(selector) { return selector.includes('pestanasDistribucion') ? Object.values(pestanas) : []; },
+};
+const tablas = new Map();
+const exportaciones = [];
+globalThis.$ = (selector) => ({ DataTable(opciones) {
+    const tabla = {
+        opciones, cantidad: opciones.data.length, eventos: {},
+        rows(modificador) { if (modificador.search !== 'applied') throw new Error('Debe respetar la búsqueda.'); return { count: () => this.cantidad }; },
+        on(nombre, accion) { this.eventos[nombre] = accion; },
+        button(selectorBoton) {
+            if (selectorBoton !== '.buttons-excel') throw new Error('Debe exportar Excel.');
+            return { trigger() { exportaciones.push({ selector, archivo: opciones.buttons[0].filename, encabezados: entrada.encabezados[selector] }); } };
+        },
+    };
+    tablas.set(selector, tabla);
+    return tabla;
+} });
+$.fn = { DataTable: { isDataTable() { return false; } } };
+vm.runInThisContext(entrada.script);
+iniciar();
+get('btnExcel').eventos.click();
+const sinDatosIniciales = exportaciones.length === 0;
+renderizarReporte({ meta: {}, data: [], detalle: [{}], rutas: [{}], incidencias: [{}], depositos_ruta: [{}], gastos_ruta: [{}] });
+const sociosVacio = get('btnExcel').disabled;
+const estados = [];
+for (const clave of ['agencias', 'rutas', 'incidencias', 'depositos', 'gastos']) {
+    activa = clave;
+    pestanas[clave].eventos['shown.bs.tab']();
+    estados.push(!get('btnExcel').disabled);
+    get('btnExcel').eventos.click();
+}
+const depositos = tablas.get('#tablaDepositosRuta').opciones;
+const gastos = tablas.get('#tablaGastosRuta').opciones;
+const formatos = {
+    deposito: depositos.buttons[0], gasto: gastos.buttons[0],
+    debito: depositos.columns[2].render(1234.5, 'export'),
+    creditoVacio: depositos.columns[3].render(null, 'export'),
+    cuenta: depositos.columns[0].render('000123', 'export'),
+};
+const tablaGastos = tablas.get('#tablaGastosRuta');
+tablaGastos.cantidad = 0;
+tablaGastos.eventos['draw.dt']();
+const busquedaVacia = get('btnExcel').disabled;
+get('btnExcel').eventos.click();
+tablaGastos.cantidad = 1;
+tablaGastos.eventos['draw.dt']();
+const busquedaConDatos = !get('btnExcel').disabled;
+activa = 'socios';
+pestanas.socios.eventos['shown.bs.tab']();
+const regresaAVacio = get('btnExcel').disabled;
+process.stdout.write(JSON.stringify({ sinDatosIniciales, sociosVacio, estados, exportaciones, formatos, busquedaVacia, busquedaConDatos, regresaAVacio }));
+JS;
+        $proceso = new Process(['node', '--input-type=module', '-e', $codigo]);
+        $proceso->setInput(json_encode(['script' => $script, 'encabezados' => $encabezados], JSON_THROW_ON_ERROR));
+        $proceso->mustRun();
+        $resultado = json_decode($proceso->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+
+        foreach (['sinDatosIniciales', 'sociosVacio', 'busquedaVacia', 'busquedaConDatos', 'regresaAVacio'] as $comprobacion) {
+            $this->assertTrue($resultado[$comprobacion], $comprobacion);
+        }
+        $this->assertSame([true, true, true, true, true], $resultado['estados']);
+        $this->assertCount(5, $resultado['exportaciones']);
+        $this->assertSame('deposito_ruta_asiento', $resultado['exportaciones'][3]['archivo']);
+        $this->assertSame(['Cuenta', 'Descripción', 'Débito', 'Crédito', 'Centro de costo', 'Movimiento'], $resultado['exportaciones'][3]['encabezados']);
+        $this->assertSame('gasto_ruta_asiento', $resultado['exportaciones'][4]['archivo']);
+        $this->assertSame(['Fecha', 'Ruta', 'Terminal', 'Cuenta', 'Nombre', 'Descripción', 'Débito', 'Crédito', 'IdCentroCosto', 'Centro de Costo'], $resultado['exportaciones'][4]['encabezados']);
+        foreach (['deposito', 'gasto'] as $tipo) {
+            $this->assertSame('excelHtml5', $resultado['formatos'][$tipo]['extend']);
+            $this->assertNull($resultado['formatos'][$tipo]['title']);
+            $this->assertSame('export', $resultado['formatos'][$tipo]['exportOptions']['orthogonal']);
+            $this->assertSame(['search' => 'applied', 'order' => 'applied', 'page' => 'all', 'selected' => null], $resultado['formatos'][$tipo]['exportOptions']['modifier']);
+        }
+        $this->assertSame(1234.5, $resultado['formatos']['debito']);
+        $this->assertSame('', $resultado['formatos']['creditoVacio']);
+        $this->assertSame('000123', $resultado['formatos']['cuenta']);
     }
 
     public function test_distribuye_el_gasto_en_partes_iguales_por_agencia_y_agrupa_por_socio(): void

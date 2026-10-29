@@ -273,17 +273,17 @@
                             <p class="text-muted mb-0" id="periodoReporte">Seleccione un período para generar el reporte.</p>
                         </div>
                         <button type="button" class="btn btn-success" id="btnExcel" disabled>
-                            <i class="ri-file-excel-2-line me-1"></i>Descargar resumen
+                            <i class="ri-file-excel-2-line me-1"></i>Descargar Excel
                         </button>
                     </div>
                     <div class="card-body">
-                        <ul class="nav nav-tabs nav-tabs-custom mb-3" role="tablist">
-                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabSocios" type="button">Por socio</button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabAgencias" type="button">Detalle por agencia</button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRutas" type="button">Control por ruta</button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIncidencias" type="button">Incidencias <span class="badge bg-danger ms-1" id="cantidadIncidencias">0</span></button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDepositosRuta" type="button">Depósitos de ruta</button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabGastosRuta" type="button">Gasto ruta</button></li>
+                        <ul class="nav nav-tabs nav-tabs-custom mb-3" role="tablist" id="pestanasDistribucion">
+                            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabSocios" data-tabla-exportar="socios" type="button">Por socio</button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabAgencias" data-tabla-exportar="agencias" type="button">Detalle por agencia</button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRutas" data-tabla-exportar="rutas" type="button">Control por ruta</button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIncidencias" data-tabla-exportar="incidencias" type="button">Incidencias <span class="badge bg-danger ms-1" id="cantidadIncidencias">0</span></button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDepositosRuta" data-tabla-exportar="depositos" type="button">Depósitos de ruta</button></li>
+                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabGastosRuta" data-tabla-exportar="gastos" type="button">Gasto ruta</button></li>
                         </ul>
 
                         <div class="tab-content">
@@ -422,10 +422,28 @@
             document.querySelectorAll('.btn-eliminar-mapeo').forEach((boton) => boton.addEventListener('click', eliminarMapeoRuta));
             document.querySelectorAll('.btn-eliminar-ruta').forEach((boton) => boton.addEventListener('click', eliminarRutaCompleta));
             document.getElementById('buscarRutaAgregada').addEventListener('input', filtrarRutasAgregadas);
-            document.getElementById('btnExcel').addEventListener('click', function () {
-                tablasDistribucion.socios?.button('.buttons-excel').trigger();
+            document.getElementById('btnExcel').addEventListener('click', exportarTablaActiva);
+            document.querySelectorAll('#pestanasDistribucion [data-tabla-exportar]').forEach((pestana) => {
+                pestana.addEventListener('shown.bs.tab', actualizarBotonExcel);
             });
         });
+
+        function obtenerTablaActiva() {
+            const pestana = document.querySelector('#pestanasDistribucion .nav-link.active');
+            return tablasDistribucion[pestana?.dataset.tablaExportar];
+        }
+
+        function actualizarBotonExcel() {
+            const tabla = obtenerTablaActiva();
+            document.getElementById('btnExcel').disabled = !tabla || tabla.rows({ search: 'applied' }).count() === 0;
+        }
+
+        function exportarTablaActiva() {
+            const tabla = obtenerTablaActiva();
+            if (tabla && tabla.rows({ search: 'applied' }).count() > 0) {
+                tabla.button('.buttons-excel').trigger();
+            }
+        }
 
         function habilitarBusquedaRutas(elementoId) {
             const selector = document.getElementById(elementoId);
@@ -720,7 +738,7 @@
                 { data: 'debito', className: 'text-end', render: montoAsiento },
                 { data: 'credito', className: 'text-end', render: montoAsiento },
                 { data: 'centro_costo', render: texto }, { data: 'movimiento', render: texto },
-            ], null);
+            ], 'deposito_ruta_asiento');
             tablasDistribucion.gastos = crearTabla('#tablaGastosRuta', payload.gastos_ruta || [], [
                 { data: 'fecha', render: texto }, { data: 'ruta', render: texto }, { data: 'terminal', render: texto },
                 { data: 'cuenta', render: texto }, { data: 'nombre', render: texto }, { data: 'descripcion', render: texto },
@@ -729,21 +747,29 @@
                 { data: 'centro_costo', render: texto }, { data: 'nombre_centro_costo', render: texto },
             ], 'gasto_ruta_asiento');
 
-            document.getElementById('btnExcel').disabled = !(payload.data || []).length;
+            actualizarBotonExcel();
         }
 
         function crearTabla(selector, filas, columnas, archivo) {
             if ($.fn.DataTable.isDataTable(selector)) $(selector).DataTable().clear().destroy();
-            return $(selector).DataTable({
+            const tabla = $(selector).DataTable({
                 data: filas,
                 columns: columnas,
                 responsive: true,
                 pageLength: 25,
                 order: [[0, 'asc']],
                 dom: 'Bfrtip',
-                buttons: archivo ? [{ extend: 'excelHtml5', title: 'Distribución de Gastos de Ruta', filename: archivo, text: 'Excel' }] : [],
+                buttons: [{
+                    extend: 'excelHtml5', title: null, filename: archivo, text: 'Excel',
+                    exportOptions: {
+                        orthogonal: 'export',
+                        modifier: { search: 'applied', order: 'applied', page: 'all', selected: null },
+                    },
+                }],
                 language: { search: 'Buscar:', info: 'Mostrando _START_ a _END_ de _TOTAL_', infoEmpty: 'No hay datos', zeroRecords: 'No hay resultados', paginate: { next: 'Siguiente', previous: 'Anterior' } },
             });
+            tabla.on('draw.dt', actualizarBotonExcel);
+            return tabla;
         }
 
         function dinero(valor) {
