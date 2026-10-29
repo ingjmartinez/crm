@@ -30,10 +30,13 @@ use App\Http\Controllers\EntrevistaOnlineController;
 use App\Http\Controllers\FaltantesController;
 use App\Http\Controllers\FinanceDashboardController;
 use App\Http\Controllers\Gerencia\BeneficioBrutoController;
+use App\Http\Controllers\Gerencia\GraficoRentabilidadController;
 use App\Http\Controllers\Gerencia\PromedioHistoricoVentasOnlineController;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaController;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV2Controller;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV3Controller;
+use App\Http\Controllers\Gerencia\RentabilidadAgenciaV4Controller;
+use App\Http\Controllers\Gerencia\RentabilidadAgenciaV5Controller;
 use App\Http\Controllers\Gerencia\SeguimientoAgenciaController;
 use App\Http\Controllers\Gerencia\VentasEnVivoController;
 use App\Http\Controllers\GestionAgenciasReporteController;
@@ -157,6 +160,22 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         ->name('gerencia.rentabilidad-agencia-v2.cuentas');
     Route::get('/gerencia/rentabilidad-agencia-v3', [RentabilidadAgenciaV3Controller::class, 'index'])
         ->name('gerencia.rentabilidad-agencia-v3');
+    Route::get('/gerencia/rentabilidad-agencia-v4', [RentabilidadAgenciaV4Controller::class, 'index'])
+        ->name('gerencia.rentabilidad-agencia-v4');
+    Route::get('/gerencia/rentabilidad-agencia-v4/informe-ejecutivo', [RentabilidadAgenciaV4Controller::class, 'informeEjecutivo'])
+        ->name('gerencia.rentabilidad-agencia-v4.informe-ejecutivo');
+    Route::get('/gerencia/rentabilidad-agencia-v4/cuentas', [RentabilidadAgenciaV4Controller::class, 'cuentas'])
+        ->name('gerencia.rentabilidad-agencia-v4.cuentas');
+    Route::get('/gerencia/rentabilidad-agencia-v5', [RentabilidadAgenciaV5Controller::class, 'index'])
+        ->name('gerencia.rentabilidad-agencia-v5');
+    Route::get('/gerencia/rentabilidad-agencia-v5/informe-ejecutivo', [RentabilidadAgenciaV5Controller::class, 'informeEjecutivo'])
+        ->name('gerencia.rentabilidad-agencia-v5.informe-ejecutivo');
+    Route::get('/gerencia/rentabilidad-agencia-v5/cuentas', [RentabilidadAgenciaV5Controller::class, 'cuentas'])
+        ->name('gerencia.rentabilidad-agencia-v5.cuentas');
+    Route::get('/gerencia/grafico-rentabilidad', [GraficoRentabilidadController::class, 'index'])
+        ->name('gerencia.grafico-rentabilidad');
+    Route::get('/gerencia/grafico-rentabilidad/datos', [GraficoRentabilidadController::class, 'datos'])
+        ->name('gerencia.grafico-rentabilidad.datos');
     Route::get('/gerencia/rentabilidad-agencia/buscar', [RentabilidadAgenciaController::class, 'buscar'])
         ->name('gerencia.rentabilidad-agencia.buscar');
     Route::get('/gerencia/rentabilidad-agencia/meta-diaria', [RentabilidadAgenciaController::class, 'metaDiaria'])

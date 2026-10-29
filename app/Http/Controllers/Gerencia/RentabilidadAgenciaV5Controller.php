@@ -1,0 +1,476 @@
+<?php
+
+namespace App\Http\Controllers\Gerencia;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\ConsultarCuentasRentabilidadAgenciaV5Request;
+use App\Http\Requests\ConsultarRentabilidadAgenciaV5Request;
+use App\Http\Requests\GenerarInformeEjecutivoRentabilidadAgenciaV5Request;
+use App\Models\CatalogoJuego;
+use App\Models\ClasificacionCuenta;
+use App\Models\EntradaDiario;
+use App\Models\RentabilidadAgenciaR20;
+use App\Models\RentabilidadAgenciaV5;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+
+class RentabilidadAgenciaV5Controller extends Controller
+{
+    private const PRODUCTOS = ['Tradicional', 'No Tradicional', 'Recarga'];
+
+    public function index(ConsultarRentabilidadAgenciaV5Request $request): View
+    {
+        $datos = $request->validated();
+        $mes = (string) (($datos['mes'] ?? null) ?: now()->format('Y-m'));
+        $terminal = trim((string) ($datos['terminal'] ?? ''));
+        $empresa = trim((string) ($datos['empresa'] ?? ''));
+        $alcance = (string) ($datos['alcance'] ?? ($terminal !== '' ? 'terminal' : 'todas'));
+        $productosSeleccionados = collect($datos['productos'] ?? (! empty($datos['productos_filtrados']) ? [] : self::PRODUCTOS))->unique()->values();
+        [$filtroVentas, $filtroPremios] = $this->filtrosProductos($productosSeleccionados);
+        $consultar = $request->filled('mes');
+        $empresas = RentabilidadAgenciaV5::query()->activas()
+            ->whereNotNull('empresa')
+            ->whereRaw("TRIM(empresa) <> ''")
+            ->selectRaw('TRIM(empresa) AS empresa')
+            ->distinct()
+            ->orderBy('empresa')
+            ->pluck('empresa');
+        $agencia = null;
+        $dias = collect();
+        $resumen = null;
+        $metasDiarias = collect();
+        $agenciasResumen = collect();
+
+        if ($consultar && $alcance === 'todas') {
+            [$agenciasResumen, $resumen] = $this->resumenTodas($mes, $empresa, $filtroVentas, $filtroPremios);
+        } elseif ($consultar && $terminal !== '') {
+            $agencia = RentabilidadAgenciaV5::query()->activas()
+                ->where('terminal', $terminal)
+                ->when($empresa !== '', fn ($query) => $query->whereRaw('TRIM(empresa) = ?', [$empresa]))
+                ->first();
+
+            if ($agencia !== null) {
+                $inicio = Carbon::createFromFormat('Y-m', $mes)->startOfMonth();
+                $fin = $inicio->copy()->endOfMonth();
+                $tablas = match (mb_strtoupper(trim((string) $agencia->sistema))) {
+                    'LOTOBET' => [['vt_usuarios_bet', 'premios_bet', 'pagos_misma_empresa_bet', 'pagos_porotra_empresa_bet']],
+                    'LOTONET', 'LOTENET' => [['vt_usuarios_net', 'premios_net', 'pagos_misma_empresa_net', 'pagos_porotra_empresa_net']],
+                    default => [['vt_usuarios_bet', 'premios_bet', 'pagos_misma_empresa_bet', 'pagos_porotra_empresa_bet'], ['vt_usuarios_net', 'premios_net', 'pagos_misma_empresa_net', 'pagos_porotra_empresa_net']],
+                };
+                $ventas = collect();
+                $premios = collect();
+                $premiosSacados = collect();
+
+                foreach ($tablas as [$tablaVentas, $tablaPremiosSacados, $tablaPagosMismaEmpresa, $tablaPagosOtraEmpresa]) {
+                    $this->acumularPorDia($ventas, $tablaVentas, $terminal, $inicio, $fin, $filtroVentas, 'tipo');
+                    $this->acumularPorDia($premiosSacados, $tablaPremiosSacados, $terminal, $inicio, $fin, $filtroPremios, 'producto_id');
+                    $this->acumularPorDia($premios, $tablaPagosMismaEmpresa, $terminal, $inicio, $fin, $filtroPremios, 'producto_id', 'pagado_agencia_id');
+                    $this->acumularPorDia($premios, $tablaPagosOtraEmpresa, $terminal, $inicio, $fin, $filtroPremios, 'producto_id');
+                }
+
+                $dias = collect();
+                for ($fecha = $inicio->copy(); $fecha->lte($fin); $fecha->addDay()) {
+                    $dia = $fecha->toDateString();
+                    $venta = (float) $ventas->get($dia, 0);
+                    $premio = (float) $premios->get($dia, 0);
+                    $dias->push([
+                        'fecha' => $dia,
+                        'venta' => $venta,
+                        'premios' => $premio,
+                        'premios_sacados' => (float) $premiosSacados->get($dia, 0),
+                        'ingreso_real' => $venta - $premio,
+                    ]);
+                }
+
+                $ventaMes = (float) $dias->sum('venta');
+                $premiosMes = (float) $dias->sum('premios');
+                $gastos = $this->costosYGastos($terminal, $inicio, $fin);
+                $r20 = (float) RentabilidadAgenciaR20::query()
+                    ->where('terminal', '*')
+                    ->orderByRaw('CASE WHEN mes = ? THEN 0 ELSE 1 END', ['GLOBAL'])
+                    ->orderByDesc('updated_at')
+                    ->value('monto');
+                $resumen = [
+                    'venta' => $ventaMes,
+                    'premios' => $premiosMes,
+                    'premios_sacados' => (float) $dias->sum('premios_sacados'),
+                    'ingreso_real' => $ventaMes - $premiosMes,
+                    'costos' => $gastos['costos'],
+                    'gastos' => $gastos['gastos'] + $r20,
+                    'gastos_fijos' => $gastos['gastos_fijos'] + $r20,
+                    'r20' => $r20,
+                    'balance' => $ventaMes - $premiosMes - $gastos['costos'] - $gastos['gastos'] - $r20,
+                ];
+                $metasDiarias = collect([60, 70, 80])->map(fn (int $porcentaje): array => [
+                    'premios_porcentaje' => $porcentaje,
+                    'meta_venta' => $resumen['gastos_fijos'] / (1 - $porcentaje / 100),
+                    'meta_diaria' => $resumen['gastos_fijos'] / (1 - $porcentaje / 100) / $fin->day,
+                ]);
+            }
+        }
+
+        if ($request->ajax() && $alcance === 'terminal') {
+            abort_if($agencia === null || $resumen === null, 404, 'No se encontró la terminal solicitada.');
+
+            return view('gerencia.rentabilidad-agencia-v5-detalle', compact('agencia', 'terminal', 'mes', 'resumen', 'metasDiarias', 'dias'));
+        }
+
+        return view('gerencia.rentabilidad-agencia-v5', compact('mes', 'terminal', 'empresa', 'empresas', 'alcance', 'consultar', 'agencia', 'dias', 'resumen', 'metasDiarias', 'agenciasResumen', 'productosSeleccionados'));
+    }
+
+    public function informeEjecutivo(GenerarInformeEjecutivoRentabilidadAgenciaV5Request $request): Response
+    {
+        $datos = $request->validated();
+        $mes = (string) $datos['mes'];
+        $empresa = trim((string) ($datos['empresa'] ?? ''));
+        $porcentajePago = (int) $datos['porcentaje_pago'];
+        $productosSeleccionados = collect($datos['productos'] ?? (! empty($datos['productos_filtrados']) ? [] : self::PRODUCTOS))->unique()->values();
+        [$filtroVentas, $filtroPremios] = $this->filtrosProductos($productosSeleccionados);
+        [$filas, $resumen] = $this->resumenTodas($mes, $empresa, $filtroVentas, $filtroPremios);
+        $inicio = Carbon::createFromFormat('Y-m', $mes)->startOfMonth();
+        $fin = $inicio->copy()->endOfMonth();
+        $fechas = collect(range(1, $fin->day))->map(fn (int $dia): string => sprintf('%s-%02d', $mes, $dia));
+        $terminales = $filas->pluck('terminal')->unique()->values();
+        $ventasBet = $this->ventasDiariasPorTerminal('vt_usuarios_bet', $terminales, $inicio, $fin, $filtroVentas);
+        $ventasNet = $this->ventasDiariasPorTerminal('vt_usuarios_net', $terminales, $inicio, $fin, $filtroVentas);
+
+        $filas = $filas->map(function (array $fila) use ($fechas, $porcentajePago, $ventasBet, $ventasNet): array {
+            $terminal = $fila['terminal'];
+            $diasCumplidos = $fechas->filter(function (string $fecha) use ($fila, $terminal, $porcentajePago, $ventasBet, $ventasNet): bool {
+                $ventaBet = (float) ($ventasBet[$terminal][$fecha] ?? 0);
+                $ventaNet = (float) ($ventasNet[$terminal][$fecha] ?? 0);
+                $venta = match ($fila['sistema']) {
+                    'LOTOBET' => $ventaBet,
+                    'LOTONET', 'LOTENET' => $ventaNet,
+                    default => $ventaBet + $ventaNet,
+                };
+
+                return $venta > 0 && $venta >= $fila['ventas_por_dia'][$porcentajePago];
+            })->count();
+
+            return [
+                ...$fila,
+                'dias_cumplidos' => $diasCumplidos,
+                'cumple_diario' => $diasCumplidos === $fechas->count(),
+                'cumple_mensual' => $fila['venta'] > 0 && $fila['venta'] >= $fila['meta_venta'][$porcentajePago],
+            ];
+        });
+
+        $totalJornadas = $filas->count() * $fechas->count();
+        $jornadasCumplidas = (int) $filas->sum('dias_cumplidos');
+        $metaMensualTotal = (float) $filas->sum(fn (array $fila): float => $fila['meta_venta'][$porcentajePago]);
+        $balancePositivo = (float) $filas->filter(fn (array $fila): bool => $fila['balance'] > 0)->sum('balance');
+        $balanceNegativo = (float) $filas->filter(fn (array $fila): bool => $fila['balance'] < 0)->sum('balance');
+        $informe = [
+            'mes' => $mes,
+            'empresa' => $empresa,
+            'productos' => $productosSeleccionados->all(),
+            'porcentaje_pago' => $porcentajePago,
+            'dias_mes' => $fechas->count(),
+            'terminales' => $resumen['terminales'],
+            'terminales_vendieron' => $filas->filter(fn (array $fila): bool => $fila['venta'] > 0)->count(),
+            'terminales_cumplieron_diario' => $filas->where('cumple_diario', true)->count(),
+            'terminales_cumplieron_mes' => $filas->where('cumple_mensual', true)->count(),
+            'jornadas_cumplidas' => $jornadasCumplidas,
+            'jornadas_totales' => $totalJornadas,
+            'cumplimiento_diario_porcentaje' => $totalJornadas > 0 ? $jornadasCumplidas / $totalJornadas * 100 : null,
+            'cumplimiento_mensual_porcentaje' => $filas->count() > 0 ? $filas->where('cumple_mensual', true)->count() / $filas->count() * 100 : null,
+            'cumplimiento_venta_mensual_porcentaje' => $metaMensualTotal > 0 ? $resumen['venta'] / $metaMensualTotal * 100 : null,
+            'meta_mensual_total' => $metaMensualTotal,
+            'ventas' => $resumen['venta'],
+            'premios_sacados' => $resumen['premios_sacados'],
+            'premios_pagados' => $resumen['premios'],
+            'beneficio_bruto' => $resumen['ingreso_real'],
+            'costos' => $resumen['costos'],
+            'gastos' => $resumen['gastos'],
+            'balance' => $resumen['balance'],
+            'terminales_balance_positivo' => $resumen['terminales_balance_positivo'],
+            'terminales_balance_negativo' => $resumen['terminales_balance_negativo'],
+            'balance_positivo' => $balancePositivo,
+            'balance_negativo' => $balanceNegativo,
+            'margen_neto_porcentaje' => $resumen['venta'] > 0 ? $resumen['balance'] / $resumen['venta'] * 100 : null,
+            'terminales_perdida' => $filas->where('balance', '<', 0)->sortBy('balance')->take(5)->values()->all(),
+        ];
+
+        return Pdf::loadView('gerencia.rentabilidad-agencia-v5-informe-ejecutivo-pdf', compact('informe'))
+            ->setPaper('a4')
+            ->download('informe_ejecutivo_rentabilidad_agencia_v5_'.$mes.'.pdf');
+    }
+
+    public function cuentas(ConsultarCuentasRentabilidadAgenciaV5Request $request): JsonResponse
+    {
+        $datos = $request->validated();
+        $terminal = trim((string) $datos['terminal']);
+        $empresa = trim((string) ($datos['empresa'] ?? ''));
+        $agencia = RentabilidadAgenciaV5::query()->activas()
+            ->where('terminal', $terminal)
+            ->when($empresa !== '', fn ($query) => $query->whereRaw('TRIM(empresa) = ?', [$empresa]))
+            ->firstOrFail();
+        $inicio = Carbon::createFromFormat('Y-m', $datos['mes'])->startOfMonth();
+        $fin = $inicio->copy()->endOfMonth();
+        $clasificaciones = ClasificacionCuenta::clasificacionesActivas();
+        $movimientos = collect();
+
+        if ($clasificaciones->isNotEmpty()) {
+            $consulta = EntradaDiario::query()
+                ->from('entradas_diario as movimientos')
+                ->join('cuentas_contables as cuentas', 'cuentas.cuenta', '=', 'movimientos.cuenta')
+                ->where('movimientos.id_viejo', $terminal)
+                ->whereBetween('movimientos.fecha', [$inicio->toDateString(), $fin->toDateString()])
+                ->whereIn('movimientos.cuenta', $clasificaciones->keys()->all())
+                ->whereIn(DB::raw('LOWER(TRIM(cuentas.tipo))'), ['costo', 'gasto'])
+                ->selectRaw('movimientos.cuenta AS cuenta')
+                ->selectRaw("COALESCE(NULLIF(TRIM(cuentas.descripcion), ''), 'Sin descripción') AS descripcion")
+                ->selectRaw('LOWER(TRIM(cuentas.tipo)) AS tipo')
+                ->selectRaw('SUM(COALESCE(movimientos.debito, 0) - COALESCE(movimientos.credito, 0)) AS importe')
+                ->groupByRaw('movimientos.cuenta, cuentas.descripcion, LOWER(TRIM(cuentas.tipo))')
+                ->orderBy('movimientos.cuenta');
+            if (DB::connection()->getDriverName() === 'mysql') {
+                $consulta->forceIndex('entradas_diario_id_viejo_index');
+            }
+            $movimientos = $consulta->get()->map(fn (EntradaDiario $movimiento): array => [
+                'cuenta' => (string) $movimiento->cuenta,
+                'descripcion' => (string) $movimiento->descripcion,
+                'tipo' => (string) $movimiento->tipo,
+                'clasificacion' => mb_strtoupper(trim((string) $clasificaciones->get((string) $movimiento->cuenta))),
+                'importe' => (float) $movimiento->importe,
+            ]);
+        }
+
+        $r20 = (float) RentabilidadAgenciaR20::query()
+            ->where('terminal', '*')
+            ->orderByRaw('CASE WHEN mes = ? THEN 0 ELSE 1 END', ['GLOBAL'])
+            ->orderByDesc('updated_at')
+            ->value('monto');
+        if ($r20 !== 0.0) {
+            $movimientos->push([
+                'cuenta' => 'R20',
+                'descripcion' => 'Gasto R20 manual',
+                'tipo' => 'gasto',
+                'clasificacion' => 'FIJO',
+                'importe' => $r20,
+            ]);
+        }
+
+        return response()->json([
+            'terminal' => $terminal,
+            'agencia' => trim((string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $terminal)),
+            'mes' => $datos['mes'],
+            'movimientos' => $movimientos->values(),
+            'costos' => (float) $movimientos->where('tipo', 'costo')->sum('importe'),
+            'gastos_fijos' => (float) $movimientos->filter(fn (array $movimiento): bool => $movimiento['tipo'] === 'gasto' && $movimiento['clasificacion'] === 'FIJO')->sum('importe'),
+            'gastos_variables' => (float) $movimientos->filter(fn (array $movimiento): bool => $movimiento['tipo'] === 'gasto' && $movimiento['clasificacion'] === 'VARIABLE')->sum('importe'),
+            'gastos' => (float) $movimientos->where('tipo', 'gasto')->sum('importe'),
+        ]);
+    }
+
+    /** @return array{0: Collection<int, string>|null, 1: Collection<int, string>|null} */
+    private function filtrosProductos(Collection $productos): array
+    {
+        $filtroVentas = $productos->count() === count(self::PRODUCTOS) ? null : $productos;
+        $tiposConPremios = $productos->filter(fn (string $producto): bool => $producto !== 'Recarga')->values();
+        if ($tiposConPremios->count() === 2) {
+            return [$filtroVentas, null];
+        }
+
+        $filtroPremios = $tiposConPremios->isEmpty()
+            ? collect()
+            : CatalogoJuego::query()->whereIn('tipo', $tiposConPremios->all())
+                ->pluck('producto_id')->map(fn (mixed $id): string => (string) $id)->unique()->values();
+
+        return [$filtroVentas, $filtroPremios];
+    }
+
+    /** @return array{0: Collection<int, array<string, mixed>>, 1: array<string, float|int>} */
+    private function resumenTodas(string $mes, string $empresa, ?Collection $filtroVentas, ?Collection $filtroPremios): array
+    {
+        $inicio = Carbon::createFromFormat('Y-m', $mes)->startOfMonth();
+        $fin = $inicio->copy()->endOfMonth();
+        $agencias = RentabilidadAgenciaV5::query()->activas()
+            ->whereNotNull('terminal')->where('terminal', '<>', '')
+            ->when($empresa !== '', fn ($query) => $query->whereRaw('TRIM(empresa) = ?', [$empresa]))
+            ->orderBy('terminal')
+            ->get(['terminal', 'sistema', 'nombre_agencia', 'agencia']);
+        $terminales = $agencias->pluck('terminal')->map(fn (mixed $valor): string => trim((string) $valor))->unique()->values();
+        $ventasBet = $this->totalesPorTerminal('vt_usuarios_bet', $terminales, $inicio, $fin, $filtroVentas, 'tipo');
+        $ventasNet = $this->totalesPorTerminal('vt_usuarios_net', $terminales, $inicio, $fin, $filtroVentas, 'tipo');
+        $premiosSacadosBet = $this->totalesPorTerminal('premios_bet', $terminales, $inicio, $fin, $filtroPremios, 'producto_id');
+        $premiosSacadosNet = $this->totalesPorTerminal('premios_net', $terminales, $inicio, $fin, $filtroPremios, 'producto_id');
+        $premiosBet = $this->totalesPorTerminal('pagos_misma_empresa_bet', $terminales, $inicio, $fin, $filtroPremios, 'producto_id', 'pagado_agencia_id');
+        $premiosOtraBet = $this->totalesPorTerminal('pagos_porotra_empresa_bet', $terminales, $inicio, $fin, $filtroPremios, 'producto_id');
+        $premiosNet = $this->totalesPorTerminal('pagos_misma_empresa_net', $terminales, $inicio, $fin, $filtroPremios, 'producto_id', 'pagado_agencia_id');
+        $premiosOtraNet = $this->totalesPorTerminal('pagos_porotra_empresa_net', $terminales, $inicio, $fin, $filtroPremios, 'producto_id');
+        $gastosPorTerminal = $this->costosYGastosPorTerminal($terminales, $inicio, $fin);
+        $r20 = (float) RentabilidadAgenciaR20::query()
+            ->where('terminal', '*')
+            ->orderByRaw('CASE WHEN mes = ? THEN 0 ELSE 1 END', ['GLOBAL'])
+            ->orderByDesc('updated_at')
+            ->value('monto');
+
+        $filas = $agencias->map(function (RentabilidadAgenciaV5 $agencia) use ($ventasBet, $ventasNet, $premiosSacadosBet, $premiosSacadosNet, $premiosBet, $premiosOtraBet, $premiosNet, $premiosOtraNet, $gastosPorTerminal, $r20, $fin): array {
+            $terminal = trim((string) $agencia->terminal);
+            $sistema = mb_strtoupper(trim((string) $agencia->sistema));
+            $venta = match ($sistema) {
+                'LOTOBET' => (float) $ventasBet->get($terminal, 0),
+                'LOTONET', 'LOTENET' => (float) $ventasNet->get($terminal, 0),
+                default => (float) $ventasBet->get($terminal, 0) + (float) $ventasNet->get($terminal, 0),
+            };
+            $premios = match ($sistema) {
+                'LOTOBET' => (float) $premiosBet->get($terminal, 0) + (float) $premiosOtraBet->get($terminal, 0),
+                'LOTONET', 'LOTENET' => (float) $premiosNet->get($terminal, 0) + (float) $premiosOtraNet->get($terminal, 0),
+                default => (float) $premiosBet->get($terminal, 0) + (float) $premiosOtraBet->get($terminal, 0) + (float) $premiosNet->get($terminal, 0) + (float) $premiosOtraNet->get($terminal, 0),
+            };
+            $premiosSacados = match ($sistema) {
+                'LOTOBET' => (float) $premiosSacadosBet->get($terminal, 0),
+                'LOTONET', 'LOTENET' => (float) $premiosSacadosNet->get($terminal, 0),
+                default => (float) $premiosSacadosBet->get($terminal, 0) + (float) $premiosSacadosNet->get($terminal, 0),
+            };
+            $gastos = $gastosPorTerminal->get($terminal, ['costos' => 0.0, 'gastos' => 0.0, 'gastos_fijos' => 0.0]);
+            $ingresoReal = $venta - $premios;
+            $gastosFijos = $gastos['gastos_fijos'] + $r20;
+
+            return [
+                'terminal' => $terminal,
+                'nombre' => trim((string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $terminal)),
+                'sistema' => $sistema,
+                'venta' => $venta,
+                'premios' => $premios,
+                'premios_sacados' => $premiosSacados,
+                'ingreso_real' => $ingresoReal,
+                'costos' => $gastos['costos'],
+                'gastos' => $gastos['gastos'] + $r20,
+                'gastos_fijos' => $gastosFijos,
+                'ventas_por_dia' => collect([60, 70, 80])->mapWithKeys(fn (int $porcentaje): array => [$porcentaje => $gastosFijos / (1 - $porcentaje / 100) / $fin->day])->all(),
+                'meta_venta' => collect([60, 70, 80])->mapWithKeys(fn (int $porcentaje): array => [$porcentaje => $gastosFijos / (1 - $porcentaje / 100)])->all(),
+                'balance' => $ingresoReal - $gastos['costos'] - $gastos['gastos'] - $r20,
+            ];
+        })->values();
+
+        return [$filas, [
+            'terminales' => $filas->count(),
+            'terminales_balance_positivo' => $filas->filter(fn (array $fila): bool => $fila['balance'] > 0)->count(),
+            'terminales_balance_negativo' => $filas->filter(fn (array $fila): bool => $fila['balance'] < 0)->count(),
+            'venta' => (float) $filas->sum('venta'),
+            'premios' => (float) $filas->sum('premios'),
+            'premios_sacados' => (float) $filas->sum('premios_sacados'),
+            'ingreso_real' => (float) $filas->sum('ingreso_real'),
+            'costos' => (float) $filas->sum('costos'),
+            'gastos' => (float) $filas->sum('gastos'),
+            'balance' => (float) $filas->sum('balance'),
+        ]];
+    }
+
+    /** @param Collection<int, string> $terminales */
+    private function totalesPorTerminal(string $tabla, Collection $terminales, Carbon $inicio, Carbon $fin, ?Collection $filtro, string $columna, string $columnaTerminal = 'agencia_id'): Collection
+    {
+        if ($terminales->isEmpty() || ($filtro !== null && $filtro->isEmpty())) {
+            return collect();
+        }
+
+        $consulta = DB::table($tabla)
+            ->whereIn($columnaTerminal, $terminales->all())
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->when($filtro !== null, fn ($query) => $query->whereIn($columna, $filtro->all()))
+            ->selectRaw($columnaTerminal.' AS terminal, SUM(COALESCE(monto, 0)) AS total')
+            ->groupBy($columnaTerminal);
+
+        if ($filtro !== null && ! str_starts_with($tabla, 'pagos_') && DB::connection()->getDriverName() === 'mysql') {
+            $consulta->forceIndex($tabla.'_rent_v2_'.($columna === 'tipo' ? 'tipo' : 'producto').'_index');
+        }
+
+        return $consulta->pluck('total', 'terminal');
+    }
+
+    /** @param Collection<int, string> $terminales
+     * @return Collection<string, Collection<string, float>>
+     */
+    private function ventasDiariasPorTerminal(string $tabla, Collection $terminales, Carbon $inicio, Carbon $fin, ?Collection $filtro): Collection
+    {
+        if ($terminales->isEmpty() || ($filtro !== null && $filtro->isEmpty())) {
+            return collect();
+        }
+
+        return DB::table($tabla)
+            ->whereIn('agencia_id', $terminales->all())
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->when($filtro !== null, fn ($query) => $query->whereIn('tipo', $filtro->all()))
+            ->select('agencia_id', 'fecha')
+            ->selectRaw('SUM(COALESCE(monto, 0)) AS total')
+            ->groupBy('agencia_id', 'fecha')
+            ->get()
+            ->groupBy('agencia_id')
+            ->map(fn (Collection $filas): Collection => $filas->mapWithKeys(fn (object $fila): array => [(string) $fila->fecha => (float) $fila->total]));
+    }
+
+    private function acumularPorDia(Collection $totales, string $tabla, string $terminal, Carbon $inicio, Carbon $fin, ?Collection $filtro, string $columna, string $columnaTerminal = 'agencia_id'): void
+    {
+        if ($filtro !== null && $filtro->isEmpty()) {
+            return;
+        }
+
+        $filas = DB::table($tabla)
+            ->where($columnaTerminal, $terminal)
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->when($filtro !== null, fn ($query) => $query->whereIn($columna, $filtro->all()))
+            ->select('fecha')
+            ->selectRaw('SUM(COALESCE(monto, 0)) AS total')
+            ->groupBy('fecha');
+
+        if ($filtro !== null && ! str_starts_with($tabla, 'pagos_') && DB::connection()->getDriverName() === 'mysql') {
+            $filas->forceIndex($tabla.'_rent_v2_'.($columna === 'tipo' ? 'tipo' : 'producto').'_index');
+        }
+
+        $filas = $filas->get();
+
+        foreach ($filas as $fila) {
+            $dia = (string) $fila->fecha;
+            $totales->put($dia, (float) $totales->get($dia, 0) + (float) $fila->total);
+        }
+    }
+
+    /** @return array{costos: float, gastos: float, gastos_fijos: float} */
+    private function costosYGastos(string $terminal, Carbon $inicio, Carbon $fin): array
+    {
+        return $this->costosYGastosPorTerminal(collect([$terminal]), $inicio, $fin)
+            ->get($terminal, ['costos' => 0.0, 'gastos' => 0.0, 'gastos_fijos' => 0.0]);
+    }
+
+    /** @param Collection<int, string> $terminales */
+    private function costosYGastosPorTerminal(Collection $terminales, Carbon $inicio, Carbon $fin): Collection
+    {
+        $clasificaciones = ClasificacionCuenta::clasificacionesActivas();
+        if ($clasificaciones->isEmpty() || $terminales->isEmpty()) {
+            return collect();
+        }
+
+        $movimientos = EntradaDiario::query()
+            ->from('entradas_diario as movimientos')
+            ->join('cuentas_contables as cuentas', 'cuentas.cuenta', '=', 'movimientos.cuenta')
+            ->whereIn('movimientos.id_viejo', $terminales->all())
+            ->whereBetween('movimientos.fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->whereIn('movimientos.cuenta', $clasificaciones->keys()->all())
+            ->whereIn(DB::raw('LOWER(TRIM(cuentas.tipo))'), ['costo', 'gasto'])
+            ->selectRaw('movimientos.id_viejo AS terminal')
+            ->selectRaw('movimientos.cuenta AS cuenta')
+            ->selectRaw('LOWER(TRIM(cuentas.tipo)) AS tipo')
+            ->selectRaw('SUM(COALESCE(movimientos.debito, 0) - COALESCE(movimientos.credito, 0)) AS importe')
+            ->groupByRaw('movimientos.id_viejo, movimientos.cuenta, LOWER(TRIM(cuentas.tipo))');
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $movimientos->forceIndex($terminales->count() === 1 ? 'entradas_diario_id_viejo_index' : 'entradas_diario_cuenta_index');
+        }
+
+        return $movimientos
+            ->get()
+            ->groupBy('terminal')
+            ->map(fn (Collection $filas): array => [
+                'costos' => (float) $filas->where('tipo', 'costo')->sum('importe'),
+                'gastos' => (float) $filas->where('tipo', 'gasto')->sum('importe'),
+                'gastos_fijos' => (float) $filas->filter(fn (EntradaDiario $fila): bool => $fila->tipo === 'gasto' && mb_strtoupper(trim((string) $clasificaciones->get((string) $fila->cuenta))) === 'FIJO')->sum('importe'),
+            ]);
+    }
+}
