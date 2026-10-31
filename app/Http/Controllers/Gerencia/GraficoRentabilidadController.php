@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Gerencia;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ConsultarGraficoRentabilidadRequest;
 use App\Models\CatalogoJuego;
+use App\Models\CentroDeCosto;
 use App\Models\ClasificacionCuenta;
 use App\Models\EntradaDiario;
 use App\Models\GraficoRentabilidad;
@@ -51,6 +52,8 @@ class GraficoRentabilidadController extends Controller
         };
         $empresa = trim((string) ($datos['empresa'] ?? ''));
         $ruta = trim((string) ($datos['ruta'] ?? ''));
+        $socio = trim((string) ($datos['socio'] ?? ''));
+        $agenciasCatalogo = $this->agenciasConSocios();
         $terminal = trim((string) ($datos['terminal'] ?? ''));
         $alcance = (string) ($datos['alcance'] ?? ($terminal !== '' ? 'terminal' : 'todas'));
         $consultar = match ($periodo) {
@@ -69,6 +72,13 @@ class GraficoRentabilidadController extends Controller
         $rutas = $rutasDisponibles
             ->when($empresa !== '', fn (Collection $filas): Collection => $filas->where('empresa', $empresa))
             ->pluck('ruta')->unique()->values();
+        $sociosDisponibles = $agenciasCatalogo->flatMap(fn (GraficoRentabilidad $agencia): array => array_map(fn (string $nombre): array => [
+            'empresa' => trim((string) $agencia->empresa), 'ruta' => trim((string) $agencia->ruta), 'socio' => $nombre,
+        ], $agencia->socios))->unique(fn (array $fila): string => json_encode($fila))->sortBy('socio')->values();
+        $socios = $sociosDisponibles
+            ->when($empresa !== '', fn (Collection $filas): Collection => $filas->where('empresa', $empresa))
+            ->when($ruta !== '', fn (Collection $filas): Collection => $filas->where('ruta', $ruta))
+            ->pluck('socio')->unique()->values();
         $agenciasResumen = collect();
         $resumen = null;
         $ventasPorProducto = array_fill_keys(self::PRODUCTOS, 0.0);
@@ -78,7 +88,7 @@ class GraficoRentabilidadController extends Controller
 
         if ($consultar && $cargarDatos) {
             [$filtroVentas, $filtroPremios] = $this->filtrosProductos($productosSeleccionados);
-            [$agenciasResumen, $resumen, $ventasPorProducto, $ventasMensuales, $datosCargados] = $this->resumenTodas($inicio, $fin, $empresa, $ruta, $alcance === 'terminal' ? $terminal : '', $filtroVentas, $filtroPremios);
+            [$agenciasResumen, $resumen, $ventasPorProducto, $ventasMensuales, $datosCargados] = $this->resumenTodas($inicio, $fin, $empresa, $ruta, $socio, $alcance === 'terminal' ? $terminal : '', $filtroVentas, $filtroPremios, $agenciasCatalogo);
         } elseif ($consultar) {
             for ($fecha = $inicio->copy()->startOfMonth(); $fecha->lte($fin); $fecha->addMonth()) {
                 $mesesPorCargar[] = $fecha->format('Y-m');
@@ -89,7 +99,33 @@ class GraficoRentabilidadController extends Controller
             $resumen = array_fill_keys(['terminales', 'terminales_balance_positivo', 'terminales_balance_negativo', 'venta', 'premios', 'premios_sacados', 'ingreso_real', 'gastos', 'balance'], 0);
         }
 
-        return view('gerencia.grafico-rentabilidad', compact('mes', 'periodo', 'mesDesde', 'mesHasta', 'anio', 'etiquetaPeriodo', 'empresa', 'ruta', 'terminal', 'alcance', 'consultar', 'mostrarResumen', 'productosSeleccionados', 'empresas', 'rutas', 'rutasDisponibles', 'agenciasResumen', 'resumen', 'ventasPorProducto', 'ventasMensuales', 'datosCargados', 'mesesPorCargar'));
+        return view('gerencia.grafico-rentabilidad', compact('mes', 'periodo', 'mesDesde', 'mesHasta', 'anio', 'etiquetaPeriodo', 'empresa', 'ruta', 'socio', 'socios', 'sociosDisponibles', 'terminal', 'alcance', 'consultar', 'mostrarResumen', 'productosSeleccionados', 'empresas', 'rutas', 'rutasDisponibles', 'agenciasResumen', 'resumen', 'ventasPorProducto', 'ventasMensuales', 'datosCargados', 'mesesPorCargar'));
+    }
+
+    /** @return Collection<int, GraficoRentabilidad> */
+    private function agenciasConSocios(): Collection
+    {
+        $normalizarTerminal = static fn (mixed $valor): string => ltrim(trim((string) $valor), '0');
+        $normalizarEmpresa = static function (mixed $valor): string {
+            $empresa = mb_strtoupper(trim((string) $valor), 'UTF-8');
+
+            return match (true) {
+                str_starts_with($empresa, '168') => 'GRUPO JOSELITO',
+                str_starts_with($empresa, '169') => 'NEGOSUR',
+                default => $empresa,
+            };
+        };
+        $centros = CentroDeCosto::query()->where('inactivo', false)
+            ->whereNotNull('id_viejo')->whereNotNull('id_sub_grupo')
+            ->get(['id_viejo', 'company_id', 'id_sub_grupo'])
+            ->groupBy(fn (CentroDeCosto $centro): string => $normalizarEmpresa($centro->company_id).'|'.$normalizarTerminal($centro->id_viejo))
+            ->map(fn (Collection $filas): array => $filas->map(fn (CentroDeCosto $centro): string => trim((string) $centro->id_sub_grupo))->filter()->unique()->values()->all());
+
+        return GraficoRentabilidad::query()->activas()->whereNotNull('terminal')->where('terminal', '<>', '')
+            ->orderBy('terminal')->get(['terminal', 'sistema', 'nombre_agencia', 'agencia', 'ruta', 'empresa'])
+            ->each(function (GraficoRentabilidad $agencia) use ($centros, $normalizarEmpresa, $normalizarTerminal): void {
+                $agencia->setAttribute('socios', $centros->get($normalizarEmpresa($agencia->empresa).'|'.$normalizarTerminal($agencia->terminal), []));
+            });
     }
 
     /** @return array{0: Collection<int, string>|null, 1: Collection<int, string>|null} */
@@ -109,14 +145,10 @@ class GraficoRentabilidadController extends Controller
     }
 
     /** @return array{0: Collection<int, array<string, mixed>>, 1: array<string, float|int>, 2: array<string, float>, 3: array{meses: list<string>, etiquetas: list<string>, series: list<array{name: string, data: list<float>}>}, 4: array<string, mixed>} */
-    private function resumenTodas(Carbon $inicio, Carbon $fin, string $empresa, string $ruta, string $terminal, ?Collection $filtroVentas, ?Collection $filtroPremios): array
+    private function resumenTodas(Carbon $inicio, Carbon $fin, string $empresa, string $ruta, string $socio, string $terminal, ?Collection $filtroVentas, ?Collection $filtroPremios, Collection $agencias): array
     {
         $cantidadMeses = ($fin->year - $inicio->year) * 12 + $fin->month - $inicio->month + 1;
         $diasPeriodo = (int) $inicio->diffInDays($fin->copy()->startOfDay()) + 1;
-        $agencias = GraficoRentabilidad::query()->activas()
-            ->whereNotNull('terminal')->where('terminal', '<>', '')
-            ->orderBy('terminal')
-            ->get(['terminal', 'sistema', 'nombre_agencia', 'agencia', 'ruta', 'empresa']);
         $terminales = $agencias->pluck('terminal')->map(fn (mixed $valor): string => trim((string) $valor))->unique()->values();
         $terminalesBet = $agencias->reject(fn (GraficoRentabilidad $agencia): bool => in_array(mb_strtoupper(trim((string) $agencia->sistema)), ['LOTONET', 'LOTENET'], true))->pluck('terminal')->unique()->values();
         $terminalesNet = $agencias->reject(fn (GraficoRentabilidad $agencia): bool => mb_strtoupper(trim((string) $agencia->sistema)) === 'LOTOBET')->pluck('terminal')->unique()->values();
@@ -146,6 +178,7 @@ class GraficoRentabilidadController extends Controller
         ], ['bet' => $premiosSacadosBetDatos, 'net' => $premiosSacadosNetDatos], $gastosPorTerminal, $r20, $meses);
         $agencias = $agencias->filter(fn (GraficoRentabilidad $agencia): bool => ($empresa === '' || trim((string) $agencia->empresa) === $empresa)
             && ($ruta === '' || trim((string) $agencia->ruta) === $ruta)
+            && ($socio === '' || in_array($socio, $agencia->socios, true))
             && ($terminal === '' || (string) $agencia->terminal === $terminal));
         $terminalesSeleccionadas = $agencias->pluck('terminal')->all();
         $ventasProductosBet = $ventasProductosBet->whereIn('terminal', $terminalesSeleccionadas);
@@ -342,6 +375,7 @@ class GraficoRentabilidadController extends Controller
                     'terminal' => $terminal,
                     'empresa' => trim((string) $agencia->empresa),
                     'ruta' => trim((string) $agencia->ruta),
+                    'socios' => $agencia->socios,
                     'costos' => (float) $gastosTerminal['costos'],
                     'gastos' => (float) $gastosTerminal['gastos'] + $r20,
                     'gastosMensuales' => $meses->map(fn (Carbon $fecha): array => [

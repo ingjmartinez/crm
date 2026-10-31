@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CentroDeCosto extends Model
 {
@@ -16,6 +17,7 @@ class CentroDeCosto extends Model
         'company_id',
         'descripcion',
         'cuenta',
+        'cuenta_ruta_id',
         'inactivo',
         'id_grupo',
         'id_sub_grupo',
@@ -52,6 +54,11 @@ class CentroDeCosto extends Model
 
     protected $appends = ['activo'];
 
+    public function cuentaRuta(): BelongsTo
+    {
+        return $this->belongsTo(CuentaContable::class, 'cuenta_ruta_id');
+    }
+
     public function getActivoAttribute(): bool
     {
         return ! $this->inactivo;
@@ -65,7 +72,7 @@ class CentroDeCosto extends Model
             return $query;
         }
 
-        if (!in_array($empresa, self::EMPRESAS_VALIDAS, true)) {
+        if (! in_array($empresa, self::EMPRESAS_VALIDAS, true)) {
             return $query->whereRaw('1 = 0');
         }
 

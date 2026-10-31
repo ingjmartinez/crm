@@ -13,7 +13,7 @@
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">Grupo Joselito</h4>
+                            <h4 class="mb-sm-0">Inicio Contable</h4>
                             <div class="page-title-right d-flex flex-wrap align-items-center justify-content-end gap-2">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="{{ route('inicio.index') }}">Inicio</a></li>
@@ -35,7 +35,11 @@
                             <div class="card-header">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <h5 class="card-title mb-0">Cuentas</h5>
-                                    <div>
+                                    <div class="d-flex flex-wrap gap-2 align-items-end">
+                                        <div>
+                                            <label for="limiteSincronizarCuentas" class="form-label mb-1">Limite de cuentas</label>
+                                            <input type="number" id="limiteSincronizarCuentas" name="limite" class="form-control" min="1" max="10000" step="1" value="200" required style="width: 140px">
+                                        </div>
                                         <button type="button" class="btn btn-info me-2" id="btnSincronizarCuentas">
                                             Sincronizar
                                         </button>
@@ -46,6 +50,15 @@
                                 </div>
                             </div>
                             <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label for="filtroEmpresaContabilidad" class="form-label">Empresa</label>
+                                        <select id="filtroEmpresaContabilidad" class="form-select">
+                                            <option value="168">168 - Grupo Joselito</option>
+                                            <option value="169">169 - Negosur</option>
+                                        </select>
+                                    </div>
+                                </div>
                                 <table id="tableCuentas"
                                     class="table table-bordered dt-responsive nowrap table-striped align-middle"
                                     style="width:100%">
@@ -205,12 +218,39 @@
         document.getElementById('btnGuardarCuenta').addEventListener('click', guardarCuenta);
         document.getElementById('btnSincronizarCuentas').addEventListener('click', sincronizarCuentas);
 
+        const filtroEmpresaContabilidad = document.getElementById('filtroEmpresaContabilidad');
+        let versionConsultaEmpresa = 0;
+        filtroEmpresaContabilidad.addEventListener('change', () => {
+            versionConsultaEmpresa++;
+            document.getElementById('cuenta').value = '';
+            cuentaModal.hide();
+            bootstrap.Modal.getInstance(document.getElementById('myModal'))?.hide();
+            for (const selector of ['#tableCuentas', '#tableDetalleCuenta']) {
+                if ($.fn.DataTable.isDataTable(selector)) {
+                    $(selector).DataTable().clear().destroy();
+                }
+                document.querySelector(selector + ' tbody').innerHTML = '';
+            }
+            cargarCuentas();
+        });
+
+        function empresaSeleccionada() {
+            return filtroEmpresaContabilidad.value;
+        }
+
         cargarCuentas();
 
         function cargarCuentas() {
-            fetch('/api-cuentas')
-                .then(response => response.json())
+            const version = versionConsultaEmpresa;
+            fetch('/api-cuentas?empresa=' + empresaSeleccionada())
+                .then(async response => {
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.message || 'No se pudieron cargar las cuentas.');
+                    return data;
+                })
                 .then(data => {
+                    if (version !== versionConsultaEmpresa) return;
+                    if ($.fn.DataTable.isDataTable('#tableCuentas')) $('#tableCuentas').DataTable().destroy();
                     const tableBody = document.querySelector('#tableCuentas tbody');
                     tableBody.innerHTML = '';
 
@@ -273,6 +313,7 @@
         function guardarCuenta() {
             const id = document.getElementById('cuentaId').value;
             const payload = {
+                empresa: empresaSeleccionada(),
                 cuenta: document.getElementById('formCuenta').value.trim(),
                 descripcion: document.getElementById('formDescripcion').value.trim(),
                 ctacontrol: document.getElementById('formCtaControl').value.trim(),
@@ -314,6 +355,9 @@
         }
 
         function sincronizarCuentas() {
+            const campoLimite = document.getElementById('limiteSincronizarCuentas');
+            if (!campoLimite.reportValidity()) return;
+            const limite = Number(campoLimite.value);
             if (!confirm('¿Deseas sincronizar las cuentas desde el API externo?')) {
                 return;
             }
@@ -321,10 +365,12 @@
             const boton = document.getElementById('btnSincronizarCuentas');
             const textoOriginal = boton.innerText;
             boton.disabled = true;
+            campoLimite.disabled = true;
             boton.innerText = 'Sincronizando...';
 
-            fetch('/api-cuentas/sync', {
+            fetch('/api-cuentas/sync?empresa=' + empresaSeleccionada(), {
                     method: 'POST',
+                    body: JSON.stringify({ limite }),
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
@@ -349,6 +395,7 @@
                 })
                 .finally(() => {
                     boton.disabled = false;
+                    campoLimite.disabled = false;
                     boton.innerText = textoOriginal;
                 });
         }
@@ -358,7 +405,7 @@
                 return;
             }
 
-            fetch(`/api-cuentas/${id}`, {
+            fetch(`/api-cuentas/${id}?empresa=${empresaSeleccionada()}`, {
                     method: 'DELETE',
                     headers: {
                         'X-CSRF-TOKEN': csrfToken,
@@ -420,7 +467,7 @@
                 return;
             }
 
-            fetch("/api-entradas?fecha_inicio=" + encodeURIComponent(fechaInicio) + "&fecha_fin=" + encodeURIComponent(fechaFin) + "&cuenta=" + encodeURIComponent(cuenta))
+            fetch("/api-entradas?empresa=" + empresaSeleccionada() + "&fecha_inicio=" + encodeURIComponent(fechaInicio) + "&fecha_fin=" + encodeURIComponent(fechaFin) + "&cuenta=" + encodeURIComponent(cuenta))
                 .then(async response => {
                     let data;
 
@@ -557,8 +604,8 @@
             `;
         }
 
-        async function consultarEntradasDia(cuenta, fecha) {
-            const response = await fetch("/api-entradas?fecha_inicio=" + encodeURIComponent(fecha) + "&fecha_fin=" + encodeURIComponent(fecha) + "&cuenta=" + encodeURIComponent(cuenta));
+        async function consultarEntradasDia(cuenta, fecha, empresa) {
+            const response = await fetch("/api-entradas?empresa=" + empresa + "&fecha_inicio=" + encodeURIComponent(fecha) + "&fecha_fin=" + encodeURIComponent(fecha) + "&cuenta=" + encodeURIComponent(cuenta));
             const contentType = response.headers.get("content-type");
             let data;
 
@@ -581,6 +628,8 @@
         }
 
         async function verDetalle() {
+            const empresa = empresaSeleccionada();
+            const version = versionConsultaEmpresa;
             let cuenta = document.getElementById('cuenta').value;
             let fechaInicio = document.getElementById('fechaInicio').value;
             let fechaFin = document.getElementById('fechaFin').value;
@@ -620,7 +669,11 @@
                 for (let index = 0; index < fechas.length; index += 1) {
                     const fecha = fechas[index];
                     actualizarSwalProgresoEntradas(cuenta, fecha, index, fechas.length);
-                    const items = await consultarEntradasDia(cuenta, fecha);
+                    const items = await consultarEntradasDia(cuenta, fecha, empresa);
+                    if (version !== versionConsultaEmpresa) {
+                        if (typeof Swal !== 'undefined') Swal.close();
+                        return;
+                    }
                     items.forEach(function (item) {
                         detalles.push(item);
                     });

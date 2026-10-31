@@ -9,6 +9,7 @@ use App\Http\Controllers\AutoProcesoConfigController;
 use App\Http\Controllers\BancoOperacionController;
 use App\Http\Controllers\Bi\DashboardController as BiDashboardController;
 use App\Http\Controllers\CatalogoJuegoController;
+use App\Http\Controllers\CentroCostoCuentaController;
 use App\Http\Controllers\ComercialController;
 use App\Http\Controllers\ContabilidadClasificacionCuentaController;
 use App\Http\Controllers\ContabilidadComisionController;
@@ -299,6 +300,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         ->name('contabilidad.movimiento-mayor.exportar-csv');
     Route::post('/api-entradas-diario/sync', [Api::class, 'syncEntradasDiario']);
     Route::delete('/api-entradas-diario', [Api::class, 'deleteEntradasDiario']);
+    Route::get('/api-centros-costo/{centro}/cuentas', [CentroCostoCuentaController::class, 'index'])->name('contabilidad.centros-costo.cuentas');
+    Route::put('/api-centros-costo/{centro}/cuenta', [CentroCostoCuentaController::class, 'update'])->name('contabilidad.centros-costo.cuenta');
     Route::get('/api-centros-costo', [Api::class, 'getCentrosCosto']);
     Route::post('/api-centros-costo/visibilidad', [Api::class, 'updateCentrosCostoVisibilidad']);
     Route::post('/api-centros-costo/sync', [Api::class, 'syncCentrosCosto']);

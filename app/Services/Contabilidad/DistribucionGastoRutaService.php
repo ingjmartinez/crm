@@ -193,7 +193,6 @@ class DistribucionGastoRutaService
         $centrosPorGrupo = CentroDeCosto::query()
             ->where('inactivo', false)
             ->where('ocultar', false)
-            ->whereNull('id_viejo')
             ->where('descripcion', 'like', 'Grupo:%')
             ->get(['id_centro_costo', 'company_id', 'id_grupo'])
             ->groupBy(fn (CentroDeCosto $centro): string => $this->codigoCampo($centro->company_id).'|'.$this->codigoCampo($centro->id_grupo));
@@ -896,14 +895,14 @@ class DistribucionGastoRutaService
             return '';
         }
 
-        $grupos = $mapeos->where('company_id', $empresaId)->pluck('nombre_grupo')->unique()->values();
+        $grupos = $mapeos->where('company_id', $empresaId)->unique('id_grupo')->values();
         if ($grupos->isEmpty()) {
             return '';
         }
 
-        $cuentas = $grupos->map(function (string $nombreGrupo) use ($empresaId): ?string {
+        $cuentas = $grupos->map(function (DistribucionGastoRutaMapeo $mapeo) use ($empresaId): ?string {
             try {
-                return $this->catalogoCuentasRuta->resolver($empresaId, $nombreGrupo)['cuenta'] ?? null;
+                return $this->catalogoCuentasRuta->resolver($empresaId, $mapeo->nombre_grupo, $mapeo->id_grupo)['cuenta'] ?? null;
             } catch (ConnectionException|RuntimeException) {
                 return null;
             }

@@ -26,6 +26,13 @@
                             <div class="card-body">
                                 <form id="form-estado-resultado" class="row g-3 align-items-end">
                                     <div class="col-md-3">
+                                        <label for="empresaEstadoResultado" class="form-label">Empresa</label>
+                                        <select id="empresaEstadoResultado" name="empresa" class="form-select">
+                                            <option value="168" @selected($empresa === '168')>168 - Grupo Joselito</option>
+                                            <option value="169" @selected($empresa === '169')>169 - Negosur</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
                                         <label class="form-label">Fecha desde</label>
                                         <input type="date" class="form-control" id="fecha_desde" value="{{ now()->startOfMonth()->format('Y-m-d') }}">
                                     </div>
@@ -141,6 +148,9 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const form = document.getElementById('form-estado-resultado');
+            const inputEmpresa = document.getElementById('empresaEstadoResultado');
+            let empresaConsulta = inputEmpresa.value;
+            const nombreEmpresa = () => empresaConsulta === '169' ? 'Negosur (169)' : 'Grupo Joselito (168)';
             const inputFechaDesde = document.getElementById('fecha_desde');
             const inputFechaHasta = document.getElementById('fecha_hasta');
             const btnConsultar = document.getElementById('btn-consultar');
@@ -268,6 +278,7 @@
 
             async function obtenerMetaCuentas(tiposSeleccionados) {
                 const params = new URLSearchParams();
+                params.set('empresa', empresaConsulta);
                 tiposSeleccionados.forEach(function (tipo) {
                     params.append('tipos[]', tipo);
                 });
@@ -376,6 +387,7 @@
 
             async function consultarBloqueRango(tipo, fechaDesde, fechaHasta, cuentaOffset, cuentaLimit) {
                 const params = new URLSearchParams();
+                params.set('empresa', empresaConsulta);
                 params.set('fecha_desde', fechaDesde);
                 params.set('fecha_hasta', fechaHasta);
                 params.append('tipos[]', tipo);
@@ -555,7 +567,7 @@
 
                 let y = 36;
                 doc.setFontSize(20);
-                doc.text('Estado de Resultado Grupo Joselito', margin, y);
+                doc.text('Estado de Resultado - ' + nombreEmpresa(), margin, y);
                 y += 20;
                 doc.setFontSize(10);
                 doc.setTextColor(90, 90, 90);
@@ -695,6 +707,9 @@
                 vacio.classList.add('d-none');
                 contenido.classList.add('d-none');
                 tbody.innerHTML = '';
+                empresaConsulta = inputEmpresa.value;
+                inputEmpresa.disabled = true;
+                btnGenerarPdf.disabled = true;
                 btnConsultar.disabled = true;
 
                 try {
@@ -795,7 +810,8 @@
                         Swal.close();
                     }
 
-                    textoPeriodo.textContent = periodoTexto;
+                    textoPeriodo.textContent = nombreEmpresa() + ' / ' + periodoTexto;
+                    btnGenerarPdf.disabled = false;
                     thPeriodo.textContent = columnaPeriodo;
                     resumenIngresos.textContent = formatoMonto(resumenAcumulado.ingresos_periodo);
                     resumenCostos.textContent = formatoMonto(resumenAcumulado.costos_periodo);
@@ -840,8 +856,18 @@
                 } finally {
                     loader.classList.add('d-none');
                     btnConsultar.disabled = false;
+                    inputEmpresa.disabled = false;
                 }
             }
+
+            inputEmpresa.addEventListener('change', () => {
+                contenido.classList.add('d-none');
+                vacio.classList.remove('d-none');
+                tbody.innerHTML = '';
+                textoPeriodo.textContent = '-';
+                [resumenIngresos, resumenCostos, resumenGastos, resumenResultado].forEach(elemento => elemento.textContent = '0.00');
+                btnGenerarPdf.disabled = true;
+            });
 
             if (form) {
                 form.addEventListener('submit', function (event) {

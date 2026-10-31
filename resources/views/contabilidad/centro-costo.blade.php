@@ -129,10 +129,12 @@
                                             <tr>
                                                 <th>CompanyID</th>
                                                 <th>Id Centro Costo</th>
+                                                <th>Cuenta contable de la ruta</th>
                                                 <th>Terminal</th>
                                                 <th>Nombre Agencia</th>
                                                 <th>Estado</th>
                                                 <th>Ruta Empresa</th>
+                                                <th>Centro de costo ruta</th>
                                                 <th>Id SubGrupo</th>
                                                 <th>Ciudad</th>
                                                 <th>Empresa</th>
@@ -180,8 +182,8 @@
                 <div class="modal-body">
                     <div class="row g-2 align-items-end mb-3">
                         <div class="col-12 col-md-5">
-                            <label class="form-label">Buscar por Terminal</label>
-                            <input type="text" class="form-control form-control-sm" id="buscarConfigIdViejo" placeholder="Escribe la Terminal">
+                            <label class="form-label">Buscar ruta o terminal</label>
+                            <input type="text" class="form-control form-control-sm" id="buscarConfigIdViejo" placeholder="Terminal, centro, agencia o ruta">
                         </div>
                         <div class="col-12 col-md-auto">
                             <button type="button" class="btn btn-soft-warning btn-sm" id="btnVerOcultosCentros">
@@ -190,15 +192,30 @@
                         </div>
                     </div>
 
+                    <div id="panelCuentaCentro" class="border rounded p-3 mb-3 d-none">
+                        <h6 id="tituloCuentaCentro"></h6>
+                        <p id="cuentaActualCentro" class="text-muted mb-2"></p>
+                        <label for="buscarCuentaCentro" class="form-label">Buscar cuenta por codigo o descripcion</label>
+                        <input id="buscarCuentaCentro" type="search" class="form-control mb-2" placeholder="Ej.: San Cristobal o codigo contable" maxlength="150">
+                        <label for="seleccionarCuentaCentro" class="form-label">Cuentas de la empresa de la ruta</label>
+                        <select id="seleccionarCuentaCentro" class="form-select mb-2" size="5"></select>
+                        <p id="estadoBusquedaCuentaCentro" class="text-muted small" role="status" aria-live="polite"></p>
+                        <div class="d-flex gap-2">
+                            <button id="guardarCuentaCentro" type="button" class="btn btn-primary btn-sm" disabled>Guardar asociacion</button>
+                            <button id="quitarCuentaCentro" type="button" class="btn btn-outline-danger btn-sm">Quitar asociacion</button>
+                            <button id="cerrarCuentaCentro" type="button" class="btn btn-light btn-sm">Cerrar</button>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Id Centro Costo</th>
-                                    <th>Terminal</th>
-                                    <th>Nombre Agencia</th>
-                                    <th>Estado</th>
-                                    <th class="text-center">Ocultar</th>
+                                    <th>Empresa</th>
+                                    <th>Ruta Empresa</th>
+                                    <th>Centro de costo ruta</th>
+                                    <th>Centros de costo y terminales</th>
+                                    <th>Cuenta contable de la ruta</th>
+                                    <th class="text-center">Ocultar todos</th>
                                 </tr>
                             </thead>
                             <tbody id="tablaConfigCentrosCosto"></tbody>
@@ -217,6 +234,12 @@
 @section('script')
     <script src="{{ asset('libs/choices.js/public/assets/scripts/choices.min.js') }}"></script>
     <script>
+        const buscarCuentasCentroUrl = @json(route('contabilidad.centros-costo.cuentas', ['centro' => '__CENTRO__']));
+        const guardarCuentaCentroUrl = @json(route('contabilidad.centros-costo.cuenta', ['centro' => '__CENTRO__']));
+        let centroCuentaSeleccionado = null;
+        let busquedaCuentaVersion = 0;
+        let busquedaCuentaTimer = null;
+        let guardandoCuentaCentro = false;
         const csrfToken = '{{ csrf_token() }}';
         let centrosCostoTable = null;
         let centrosCostoData = [];
@@ -281,6 +304,24 @@
         filtroRutaCentroCostoEl.addEventListener('change', aplicarFiltroEstadoCentroCosto);
         document.getElementById('filtroEmpresaCentroCosto').addEventListener('change', manejarCambioEmpresaCentroCosto);
         document.getElementById('tablaConfigCentrosCosto').addEventListener('change', manejarCambioOcultarCentro);
+        document.getElementById('tablaConfigCentrosCosto').addEventListener('click', event => {
+            const boton = event.target.closest('.asociar-cuenta-centro');
+            if (boton && !guardandoCuentaCentro) abrirCuentaCentro(Number(boton.dataset.id));
+        });
+        document.getElementById('buscarCuentaCentro').addEventListener('input', () => {
+            clearTimeout(busquedaCuentaTimer);
+            busquedaCuentaVersion++;
+            document.getElementById('seleccionarCuentaCentro').replaceChildren();
+            document.getElementById('guardarCuentaCentro').disabled = true;
+            busquedaCuentaTimer = setTimeout(buscarCuentasCentro, 300);
+        });
+        document.getElementById('seleccionarCuentaCentro').addEventListener('change', event => {
+            document.getElementById('guardarCuentaCentro').disabled = !event.target.value;
+        });
+        document.getElementById('guardarCuentaCentro').addEventListener('click', () => guardarCuentaCentro(false));
+        document.getElementById('quitarCuentaCentro').addEventListener('click', () => guardarCuentaCentro(true));
+        document.getElementById('cerrarCuentaCentro').addEventListener('click', cerrarCuentaCentro);
+        document.getElementById('modalConfigurarCentros').addEventListener('hidden.bs.modal', cerrarCuentaCentro);
         actualizarEtiquetaConsultar();
 
         function esOculto(valor) {
@@ -293,6 +334,7 @@
         }
 
         function cargarCentrosCosto(mostrarAlerta = true) {
+            cerrarCuentaCentro();
             const boton = document.getElementById('btnConsultarCentros');
             const textoOriginal = boton.innerText;
             const empresa = getEmpresaCentroCostoSeleccionada();
@@ -329,13 +371,16 @@
                             : '<span class="badge bg-success">Activo</span>';
 
                         const row = document.createElement('tr');
+                        row.dataset.centroId = item.id;
                         row.innerHTML = `
                             <td>${item.CompanyID ?? ''}</td>
                             <td>${item.IdCentroCosto ?? ''}</td>
+                            <td>${celdaCuentaCentro(item)}</td>
                             <td>${item.IdViejo ?? ''}</td>
                             <td>${item.Descripcion ?? ''}</td>
                             <td data-search="${estadoTexto}">${estadoBadge}</td>
                             <td>${item.IdGrupo ?? ''}</td>
+                            <td>${(item.CentrosCostoRuta ?? []).join(', ') || '—'}</td>
                             <td>${item.IdSubGrupo ?? ''}</td>
                             <td>${item.IdDivision ?? ''}</td>
                             <td>${item.IdSociedad ?? ''}</td>
@@ -391,8 +436,8 @@
             const ruta = String(filtroRutaCentroCostoEl.value || '').trim();
             const busquedaEstado = estado === 'activo' ? '^Activo$' : (estado === 'inactivo' ? '^Inactivo$' : '');
             const busquedaRuta = ruta === '' ? '' : '^' + $.fn.dataTable.util.escapeRegex(ruta) + '$';
-            centrosCostoTable.column(4).search(busquedaEstado, true, false);
-            centrosCostoTable.column(5).search(busquedaRuta, true, false);
+            centrosCostoTable.column(5).search(busquedaEstado, true, false);
+            centrosCostoTable.column(6).search(busquedaRuta, true, false);
             centrosCostoTable.draw();
             ajustarLayoutTablaCentrosCosto();
         }
@@ -407,6 +452,9 @@
         }
 
         function manejarCambioEmpresaCentroCosto() {
+            centrosCostoData = [];
+            destruirTablaCentrosCosto();
+            cerrarCuentaCentro();
             actualizarOpcionesRutaCentroCosto([], '');
             actualizarEtiquetaConsultar();
             aplicarFiltroEstadoCentroCosto();
@@ -475,6 +523,7 @@
                 await cargarCentrosCosto(false);
             }
 
+            cerrarCuentaCentro();
             renderConfigCentros();
 
             const modalElement = document.getElementById('modalConfigurarCentros');
@@ -482,38 +531,167 @@
             modal.show();
         }
 
+        function mismaRutaCentro(primero, segundo) {
+            return primero.EmpresaCodigo === segundo.EmpresaCodigo && primero.RutaClave === segundo.RutaClave;
+        }
+
+        function agruparCentrosPorRuta() {
+            const grupos = new Map();
+            centrosCostoData.forEach(item => {
+                const clave = JSON.stringify([item.EmpresaCodigo, item.RutaClave]);
+                if (!grupos.has(clave)) grupos.set(clave, []);
+                grupos.get(clave).push(item);
+            });
+            return [...grupos.values()];
+        }
+
         function renderConfigCentros() {
             const tbody = document.getElementById('tablaConfigCentrosCosto');
-            const busqueda = String(document.getElementById('buscarConfigIdViejo').value || '').trim().toLowerCase();
-            const registros = centrosCostoData.filter(item => {
-                const idViejo = String(item.IdViejo ?? '').trim();
-                if (idViejo === '') return false;
-                if (mostrarSoloOcultosConfig && !esOculto(item.Ocultar)) return false;
-                return busqueda === '' || idViejo.toLowerCase().includes(busqueda);
-            }).sort((a, b) => compararIdViejo(a.IdViejo, b.IdViejo));
+            const normalizar = valor => String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const busqueda = normalizar(document.getElementById('buscarConfigIdViejo').value.trim());
+            const grupos = agruparCentrosPorRuta().filter(grupo => {
+                if (mostrarSoloOcultosConfig && !grupo.some(item => esOculto(item.Ocultar))) return false;
+                return busqueda === '' || grupo.some(item => [item.IdViejo, item.IdCentroCosto, item.Descripcion, item.IdGrupo, item.CuentaRuta, item.CuentaRutaDescripcion].some(valor => normalizar(valor).includes(busqueda)));
+            }).sort((a, b) => String(a[0].EmpresaCodigo).localeCompare(String(b[0].EmpresaCodigo)) || String(a[0].IdGrupo).localeCompare(String(b[0].IdGrupo), 'es', { numeric: true }));
 
-            tbody.innerHTML = registros.map(item => {
-                const inactivo = Boolean(item.Inactivo);
-                const estadoBadge = inactivo
-                    ? '<span class="badge bg-danger">Inactivo</span>'
-                    : '<span class="badge bg-success">Activo</span>';
-
+            tbody.innerHTML = grupos.map(grupo => {
+                const item = grupo[0];
+                const ocultos = grupo.filter(centro => esOculto(centro.Ocultar)).length;
+                const detalle = grupo.slice().sort((a, b) => compararIdViejo(a.IdViejo, b.IdViejo)).map(centro => `
+                    <tr>
+                        <td>${escaparHtmlCentro(centro.IdCentroCosto)}</td>
+                        <td>${escaparHtmlCentro(centro.IdViejo)}</td>
+                        <td>${escaparHtmlCentro(centro.Descripcion)}</td>
+                        <td>${centro.Inactivo ? 'Inactivo' : 'Activo'}</td>
+                        <td><input type="checkbox" class="form-check-input centro-ocultar-check" aria-label="Ocultar centro ${Number(centro.IdCentroCosto)}" data-id="${centro.id}" ${esOculto(centro.Ocultar) ? 'checked' : ''}></td>
+                    </tr>
+                `).join('');
+                const terminales = grupo.filter(centro => String(centro.IdViejo ?? '').trim() !== '').length;
                 return `
                     <tr>
-                        <td>${item.IdCentroCosto ?? ''}</td>
-                        <td>${item.IdViejo ?? ''}</td>
-                        <td>${item.Descripcion ?? ''}</td>
-                        <td>${estadoBadge}</td>
+                        <td>${escaparHtmlCentro(item.EmpresaCodigo)}</td>
+                        <td>${escaparHtmlCentro(item.IdGrupo || 'Sin ruta')}</td>
+                        <td>${escaparHtmlCentro((item.CentrosCostoRuta ?? []).join(', ') || '—')}</td>
+                        <td><details>
+                            <summary>${grupo.length} centros / ${terminales} terminales</summary>
+                            <table class="table table-sm mt-2 mb-0">
+                                <thead><tr><th>Centro</th><th>Terminal</th><th>Agencia</th><th>Estado</th><th>Ocultar</th></tr></thead>
+                                <tbody>${detalle}</tbody>
+                            </table>
+                        </details></td>
+                        <td>
+                            ${celdaCuentaCentro(item)}
+                            ${item.RutaClave ? `<button type="button" class="btn btn-outline-primary btn-sm mt-1 asociar-cuenta-centro" data-id="${item.id}">${item.CuentaRutaId ? 'Cambiar' : 'Asociar'}</button>` : ''}
+                        </td>
                         <td class="text-center">
-                            <input type="checkbox" class="form-check-input centro-ocultar-check"
-                                data-id="${item.id}" ${esOculto(item.Ocultar) ? 'checked' : ''}>
+                            <input type="checkbox" class="form-check-input ruta-ocultar-check" aria-label="Ocultar todos los centros de la ruta" data-id="${item.id}" ${ocultos === grupo.length ? 'checked' : ''}>
+                            <div class="small text-muted">${ocultos} / ${grupo.length}</div>
                         </td>
                     </tr>
                 `;
             }).join('');
+            tbody.querySelectorAll('.ruta-ocultar-check').forEach(check => {
+                const centro = centrosCostoData.find(item => Number(item.id) === Number(check.dataset.id));
+                const grupo = centrosCostoData.filter(item => mismaRutaCentro(item, centro));
+                check.indeterminate = grupo.some(item => esOculto(item.Ocultar)) && !grupo.every(item => esOculto(item.Ocultar));
+            });
+            if (!grupos.length) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay rutas para configurar.</td></tr>';
+        }
 
-            if (!registros.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay centros de costo para configurar.</td></tr>';
+        function escaparHtmlCentro(valor) {
+            const elemento = document.createElement('span');
+            elemento.textContent = String(valor ?? '');
+            return elemento.innerHTML;
+        }
+
+        function celdaCuentaCentro(item) {
+            if (!item.CuentaRuta) return '<span class="text-muted">Sin asociar</span>';
+            return escaparHtmlCentro(item.CuentaRuta) + '<div class="small text-muted">' + escaparHtmlCentro(item.CuentaRutaDescripcion) + '</div>';
+        }
+
+        function cerrarCuentaCentro() {
+            if (guardandoCuentaCentro) return;
+            centroCuentaSeleccionado = null;
+            busquedaCuentaVersion++;
+            clearTimeout(busquedaCuentaTimer);
+            document.getElementById('panelCuentaCentro').classList.add('d-none');
+        }
+
+        function abrirCuentaCentro(id) {
+            centroCuentaSeleccionado = centrosCostoData.find(item => Number(item.id) === id);
+            if (!centroCuentaSeleccionado) return;
+            document.getElementById('panelCuentaCentro').classList.remove('d-none');
+            document.getElementById('tituloCuentaCentro').textContent = 'Ruta ' + centroCuentaSeleccionado.IdGrupo + ' | Empresa ' + centroCuentaSeleccionado.EmpresaCodigo + '. La cuenta se aplicara a todos sus centros y terminales.';
+            document.getElementById('cuentaActualCentro').textContent = centroCuentaSeleccionado.CuentaRuta
+                ? 'Cuenta actual: ' + centroCuentaSeleccionado.CuentaRuta + ' - ' + centroCuentaSeleccionado.CuentaRutaDescripcion
+                : 'Esta ruta no tiene una cuenta asociada.';
+            document.getElementById('buscarCuentaCentro').value = '';
+            document.getElementById('quitarCuentaCentro').disabled = !centroCuentaSeleccionado.CuentaRutaId;
+            buscarCuentasCentro();
+            document.getElementById('buscarCuentaCentro').focus();
+            document.getElementById('panelCuentaCentro').scrollIntoView({ block: 'nearest' });
+        }
+
+        async function buscarCuentasCentro() {
+            if (!centroCuentaSeleccionado) return;
+            const version = ++busquedaCuentaVersion;
+            const select = document.getElementById('seleccionarCuentaCentro');
+            const estado = document.getElementById('estadoBusquedaCuentaCentro');
+            select.replaceChildren();
+            document.getElementById('guardarCuentaCentro').disabled = true;
+            estado.textContent = 'Buscando cuentas...';
+            const url = buscarCuentasCentroUrl.replace('__CENTRO__', centroCuentaSeleccionado.id) + '?buscar=' + encodeURIComponent(document.getElementById('buscarCuentaCentro').value.trim());
+            try {
+                const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                const cuentas = await parsearRespuestaJson(response, 'No se pudieron buscar las cuentas');
+                if (version !== busquedaCuentaVersion) return;
+                select.replaceChildren(new Option('Selecciona una cuenta', ''), ...cuentas.map(cuenta => new Option(cuenta.cuenta + ' - ' + cuenta.descripcion, cuenta.id)));
+                select.value = '';
+                estado.textContent = cuentas.length ? 'Selecciona la cuenta y guarda la asociacion. Se muestran hasta 50 resultados; escribe para buscar.' : 'No hay coincidencias. Revisa o sincroniza el catalogo de esta empresa en Inicio Contable.';
+            } catch (error) {
+                if (version === busquedaCuentaVersion) estado.textContent = error.message;
+            }
+        }
+
+        async function guardarCuentaCentro(quitar) {
+            if (!centroCuentaSeleccionado || guardandoCuentaCentro) return;
+            const cuentaId = document.getElementById('seleccionarCuentaCentro').value;
+            if (!quitar && !cuentaId) return;
+            const centro = centroCuentaSeleccionado;
+            guardandoCuentaCentro = true;
+            const controles = ['guardarCuentaCentro', 'quitarCuentaCentro', 'cerrarCuentaCentro', 'buscarCuentaCentro', 'seleccionarCuentaCentro', 'btnGuardarConfigCentros'];
+            controles.forEach(id => document.getElementById(id).disabled = true);
+            const estado = document.getElementById('estadoBusquedaCuentaCentro');
+            estado.textContent = 'Guardando asociacion...';
+            try {
+                const response = await fetch(guardarCuentaCentroUrl.replace('__CENTRO__', centro.id), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                    body: JSON.stringify({ cuenta_ruta_id: quitar ? null : Number(cuentaId) }),
+                });
+                const data = await parsearRespuestaJson(response, 'No se pudo guardar la asociacion');
+                const miembros = centrosCostoData.filter(item => mismaRutaCentro(item, data));
+                miembros.forEach(item => Object.assign(item, { CuentaRutaId: data.CuentaRutaId, CuentaRuta: data.CuentaRuta, CuentaRutaDescripcion: data.CuentaRutaDescripcion }));
+                const idsActualizados = new Set(miembros.map(item => Number(item.id)));
+                renderConfigCentros();
+                if (centrosCostoTable) {
+                    centrosCostoTable.rows().every(function () {
+                        const fila = this.node();
+                        if (idsActualizados.has(Number(fila.dataset.centroId))) {
+                            centrosCostoTable.cell(this.index(), 2).data(celdaCuentaCentro(centro));
+                        }
+                    });
+                    centrosCostoTable.draw(false);
+                }
+                document.getElementById('cuentaActualCentro').textContent = centro.CuentaRuta ? 'Cuenta actual: ' + centro.CuentaRuta + ' - ' + centro.CuentaRutaDescripcion : 'Esta ruta no tiene una cuenta asociada.';
+                estado.textContent = quitar ? 'Asociacion eliminada.' : 'Asociacion guardada para toda la ruta, incluidos sus centros y terminales.';
+            } catch (error) {
+                estado.textContent = error.message;
+            } finally {
+                guardandoCuentaCentro = false;
+                controles.forEach(id => document.getElementById(id).disabled = false);
+                document.getElementById('guardarCuentaCentro').disabled = !document.getElementById('seleccionarCuentaCentro').value;
+                document.getElementById('quitarCuentaCentro').disabled = !centro.CuentaRutaId;
             }
         }
 
@@ -542,6 +720,13 @@
         }
 
         function manejarCambioOcultarCentro(event) {
+            const checkRuta = event.target.closest('.ruta-ocultar-check');
+            if (checkRuta) {
+                const centro = centrosCostoData.find(item => Number(item.id) === Number(checkRuta.dataset.id));
+                centrosCostoData.filter(item => mismaRutaCentro(item, centro)).forEach(item => item.Ocultar = checkRuta.checked ? 1 : 0);
+                renderConfigCentros();
+                return;
+            }
             const check = event.target.closest('.centro-ocultar-check');
             if (!check) return;
 
@@ -552,6 +737,13 @@
             if (!centro) return;
 
             centro.Ocultar = check.checked ? 1 : 0;
+            const grupo = centrosCostoData.filter(item => mismaRutaCentro(item, centro));
+            const cabecera = document.querySelector('.ruta-ocultar-check[data-id="' + grupo[0].id + '"]');
+            if (cabecera) {
+                cabecera.checked = grupo.every(item => esOculto(item.Ocultar));
+                cabecera.indeterminate = grupo.some(item => esOculto(item.Ocultar)) && !cabecera.checked;
+                cabecera.nextElementSibling.textContent = grupo.filter(item => esOculto(item.Ocultar)).length + ' / ' + grupo.length;
+            }
         }
 
         function guardarConfiguracionCentros() {

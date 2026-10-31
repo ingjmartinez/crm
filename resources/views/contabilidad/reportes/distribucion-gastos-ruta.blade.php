@@ -457,6 +457,7 @@
                 noResultsText: 'No se encontraron rutas',
                 searchEnabled: true,
                 searchFloor: 1,
+                searchResultLimit: selector.options.length,
                 searchPlaceholderValue: 'Buscar ruta...',
                 shouldSort: false,
             });

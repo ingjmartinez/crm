@@ -2,35 +2,36 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ConsultarEstadoResultadoRequest;
+use App\Http\Requests\ContabilidadEmpresaRequest;
+use App\Models\CuentaContable;
 use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\View\View;
+use RuntimeException;
 
 class ContabilidadEstadoResultadoController extends Controller
 {
     private const MAX_LLAMADAS_API_EN_VIVO = 1000;
 
-    public function index()
+    public function index(ContabilidadEmpresaRequest $request): View
     {
         return view('contabilidad.reportes.estado_resultado', [
+            'empresa' => $request->empresa(),
             'tipos' => collect(['Ingreso', 'Costo', 'Gasto']),
         ]);
     }
 
-    public function data(Request $request)
+    public function data(ConsultarEstadoResultadoRequest $request): JsonResponse
     {
         @set_time_limit(600);
 
-        $validated = $request->validate([
-            'fecha_desde' => ['required', 'date_format:Y-m-d'],
-            'fecha_hasta' => ['required', 'date_format:Y-m-d'],
-            'tipos' => ['nullable', 'array'],
-            'tipos.*' => ['nullable', 'string', 'max:50'],
-            'cuenta_offset' => ['nullable', 'integer', 'min:0'],
-            'cuenta_limit' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        $validated = $request->validated();
+        $empresa = $request->empresa();
 
         $desde = Carbon::createFromFormat('Y-m-d', $validated['fecha_desde'])->startOfDay();
         $hasta = Carbon::createFromFormat('Y-m-d', $validated['fecha_hasta'])->endOfDay();
@@ -47,7 +48,7 @@ class ContabilidadEstadoResultadoController extends Controller
             ->unique()
             ->values();
 
-        $cuentas = $this->obtenerCuentasPorTipo($tiposSeleccionados);
+        $cuentas = $this->obtenerCuentasPorTipo($tiposSeleccionados, $empresa);
         $cuentaOffset = (int) ($validated['cuenta_offset'] ?? 0);
         $cuentaLimit = isset($validated['cuenta_limit']) ? (int) $validated['cuenta_limit'] : null;
 
@@ -74,9 +75,16 @@ class ContabilidadEstadoResultadoController extends Controller
             ], 422);
         }
 
+        try {
+            $reporte = $this->construirReportePorBloqueDesdeApi($cuentas, $desde, $hasta, $empresa);
+        } catch (ConnectionException|RuntimeException) {
+            return response()->json(['message' => 'No se pudo consultar el API contable de la empresa seleccionada.'], 502);
+        }
+
         return response()->json(
-            $this->construirReportePorBloqueDesdeApi($cuentas, $desde, $hasta) + [
+            $reporte + [
                 'meta' => [
+                    'empresa' => $empresa,
                     'cuenta_offset' => $cuentaOffset,
                     'cuenta_limit' => $cuentaLimit,
                     'cuentas_procesadas' => $cuentas->count(),
@@ -85,12 +93,10 @@ class ContabilidadEstadoResultadoController extends Controller
         );
     }
 
-    public function meta(Request $request)
+    public function meta(ConsultarEstadoResultadoRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'tipos' => ['nullable', 'array'],
-            'tipos.*' => ['nullable', 'string', 'max:50'],
-        ]);
+        $validated = $request->validated();
+        $empresa = $request->empresa();
 
         $tiposSeleccionados = collect($validated['tipos'] ?? [])
             ->map(fn ($tipo) => trim((string) $tipo))
@@ -98,7 +104,7 @@ class ContabilidadEstadoResultadoController extends Controller
             ->unique()
             ->values();
 
-        $cuentas = $this->obtenerCuentasPorTipo($tiposSeleccionados);
+        $cuentas = $this->obtenerCuentasPorTipo($tiposSeleccionados, $empresa);
         $conteoPorTipo = $cuentas
             ->groupBy(fn ($cuenta) => (string) ($cuenta['tipo'] ?? ''))
             ->map(fn ($items) => $items->count())
@@ -110,7 +116,7 @@ class ContabilidadEstadoResultadoController extends Controller
         ]);
     }
 
-    private function obtenerCuentasPorTipo(Collection $tiposSeleccionados): Collection
+    private function obtenerCuentasPorTipo(Collection $tiposSeleccionados, string $empresa): Collection
     {
         $tiposNormalizados = $tiposSeleccionados
             ->map(fn ($tipo) => mb_strtolower(trim($tipo)))
@@ -118,7 +124,7 @@ class ContabilidadEstadoResultadoController extends Controller
             ->unique()
             ->values();
 
-        $query = DB::table('cuentas_contables')
+        $query = CuentaContable::query()->where('company_id', $empresa)
             ->select('cuenta', 'descripcion', 'tipo')
             ->whereNotNull('tipo')
             ->whereRaw("TRIM(tipo) <> ''");
@@ -126,7 +132,7 @@ class ContabilidadEstadoResultadoController extends Controller
         if ($tiposNormalizados->isNotEmpty()) {
             $placeholders = implode(',', array_fill(0, $tiposNormalizados->count(), '?'));
             $query->whereRaw(
-                'LOWER(TRIM(COALESCE(tipo, ""))) IN (' . $placeholders . ')',
+                'LOWER(TRIM(COALESCE(tipo, ""))) IN ('.$placeholders.')',
                 $tiposNormalizados->all()
             );
         }
@@ -146,7 +152,7 @@ class ContabilidadEstadoResultadoController extends Controller
             ->values();
     }
 
-    private function construirReportePorBloqueDesdeApi(Collection $cuentas, Carbon $desde, Carbon $hasta): array
+    private function construirReportePorBloqueDesdeApi(Collection $cuentas, Carbon $desde, Carbon $hasta, string $empresa): array
     {
         $gruposBase = [
             'ingreso' => ['titulo' => 'Ingresos', 'orden' => 1, 'cuentas' => [], 'total_periodo' => 0.0],
@@ -155,7 +161,7 @@ class ContabilidadEstadoResultadoController extends Controller
         ];
 
         foreach ($cuentas as $cuenta) {
-            $monto = $this->sumarCuentaPorRango($cuenta, $desde, $hasta);
+            $monto = $this->sumarCuentaPorRango($cuenta, $desde, $hasta, $empresa);
 
             if (abs($monto) < 0.00001) {
                 continue;
@@ -173,11 +179,12 @@ class ContabilidadEstadoResultadoController extends Controller
         }
 
         $grupos = collect($gruposBase)
-            ->filter(fn ($grupo) => !empty($grupo['cuentas']))
+            ->filter(fn ($grupo) => ! empty($grupo['cuentas']))
             ->sortBy('orden')
             ->map(function ($grupo) {
                 $grupo['total_periodo'] = round($grupo['total_periodo'], 2);
                 $grupo['total_acumulado'] = round($grupo['total_periodo'], 2);
+
                 return $grupo;
             })
             ->values()
@@ -189,9 +196,9 @@ class ContabilidadEstadoResultadoController extends Controller
         $gastos = (float) ($totales['Gastos']['total_periodo'] ?? 0);
 
         return [
-            'periodo_texto' => $desde->format('d/m/Y') . ' hasta ' . $hasta->format('d/m/Y'),
+            'periodo_texto' => $desde->format('d/m/Y').' hasta '.$hasta->format('d/m/Y'),
             'columnas' => [
-                'periodo' => $desde->format('d/m/Y') . ' a ' . $hasta->format('d/m/Y'),
+                'periodo' => $desde->format('d/m/Y').' a '.$hasta->format('d/m/Y'),
                 'acumulado' => 'Acumulado rango',
             ],
             'grupos' => $grupos,
@@ -211,9 +218,9 @@ class ContabilidadEstadoResultadoController extends Controller
     private function respuestaVacia(Carbon $desde, Carbon $hasta): array
     {
         return [
-            'periodo_texto' => $desde->format('d/m/Y') . ' hasta ' . $hasta->format('d/m/Y'),
+            'periodo_texto' => $desde->format('d/m/Y').' hasta '.$hasta->format('d/m/Y'),
             'columnas' => [
-                'periodo' => $desde->format('d/m/Y') . ' a ' . $hasta->format('d/m/Y'),
+                'periodo' => $desde->format('d/m/Y').' a '.$hasta->format('d/m/Y'),
                 'acumulado' => 'Acumulado rango',
             ],
             'grupos' => [],
@@ -245,17 +252,17 @@ class ContabilidadEstadoResultadoController extends Controller
         return 'gasto';
     }
 
-    private function sumarCuentaPorRango(array $cuenta, Carbon $desde, Carbon $hasta): float
+    private function sumarCuentaPorRango(array $cuenta, Carbon $desde, Carbon $hasta, string $empresa): float
     {
         $monto = 0.0;
         $fechaActual = $desde->copy();
 
         while ($fechaActual->lte($hasta)) {
             $fecha = $fechaActual->toDateString();
-            $items = $this->fetchDetalleByDate($cuenta['cuenta'], $fecha);
+            $items = $this->fetchDetalleByDate($cuenta['cuenta'], $fecha, $empresa);
 
             foreach ($items as $rawItem) {
-                if (!is_array($rawItem)) {
+                if (! is_array($rawItem)) {
                     continue;
                 }
 
@@ -277,40 +284,20 @@ class ContabilidadEstadoResultadoController extends Controller
         return $monto;
     }
 
-    private function fetchDetalleByDate(string $cuenta, string $fecha): array
+    private function fetchDetalleByDate(string $cuenta, string $fecha, string $empresa): array
     {
-        $cacheKey = 'estado_resultado_api:' . sha1($cuenta . '|' . $fecha);
+        $cacheKey = 'estado_resultado_api:'.sha1($empresa.'|'.$cuenta.'|'.$fecha);
 
-        return Cache::remember($cacheKey, now()->addHours(6), function () use ($cuenta, $fecha) {
-            $url = 'https://apisj.azurewebsites.net/ApiSJ/EntradaDiario/Listar?strToken=87eb2d56-25f3-4d46-9cb0-73c07a550bd2&intIdEmpresa=168&dtFecha=' . $fecha . '&strCuenta=' . urlencode($cuenta);
-
-            $curl = curl_init();
-            curl_setopt_array($curl, [
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 20,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-                CURLOPT_SSL_VERIFYHOST => 0,
-                CURLOPT_SSL_VERIFYPEER => 0,
-            ]);
-
-            $response = curl_exec($curl);
-
-            if ($response === false) {
-                curl_close($curl);
-                return [];
-            }
-
-            curl_close($curl);
-
-            $decoded = json_decode($response, true);
-            if (!is_array($decoded)) {
-                return [];
+        return Cache::remember($cacheKey, now()->addHours(6), function () use ($cuenta, $fecha, $empresa): array {
+            $response = Http::withOptions(['verify' => false])->timeout(20)->post(
+                'https://apisj.azurewebsites.net/ApiSJ/EntradaDiario/Listar?'.http_build_query([
+                    'strToken' => config('services.apisj.token'), 'intIdEmpresa' => $empresa,
+                    'dtFecha' => $fecha, 'strCuenta' => $cuenta,
+                ]),
+            );
+            $decoded = $response->json();
+            if (! $response->successful() || ! is_array($decoded)) {
+                throw new RuntimeException('Respuesta invalida del API contable.');
             }
 
             $decoded = $this->normalizeKeys($decoded);
@@ -362,7 +349,7 @@ class ContabilidadEstadoResultadoController extends Controller
 
         $clean = str_replace(',', '', trim((string) $value));
 
-        if ($clean === '' || !is_numeric($clean)) {
+        if ($clean === '' || ! is_numeric($clean)) {
             return null;
         }
 

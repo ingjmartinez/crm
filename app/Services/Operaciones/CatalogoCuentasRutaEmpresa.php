@@ -2,6 +2,8 @@
 
 namespace App\Services\Operaciones;
 
+use App\Models\CentroCostoCuentaRuta;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -9,6 +11,9 @@ use RuntimeException;
 
 class CatalogoCuentasRutaEmpresa
 {
+    /** @var array<string, Collection<string, CentroCostoCuentaRuta>> */
+    private array $asociacionesPorEmpresa = [];
+
     /** @return array<int, array{cuenta: string, descripcion: string}> */
     public function listar(string $empresaId): array
     {
@@ -54,8 +59,24 @@ class CatalogoCuentasRutaEmpresa
     }
 
     /** @return array{cuenta: string, descripcion: string}|null */
-    public function resolver(string $empresaId, string $nombreGrupo): ?array
+    public function resolver(string $empresaId, string $nombreGrupo, ?string $idGrupo = null): ?array
     {
+        if ($idGrupo !== null) {
+            $asociaciones = $this->asociacionesPorEmpresa[$empresaId] ??= CentroCostoCuentaRuta::query()
+                ->with('cuentaRuta')
+                ->where('company_id', $empresaId)
+                ->get()->keyBy('ruta_key');
+            $asociacion = $asociaciones->get(CentroCostoCuentaRuta::claveRuta($idGrupo));
+
+            if ($asociacion !== null) {
+                $cuenta = $asociacion->cuentaRuta;
+
+                return $cuenta !== null && $cuenta->company_id === $empresaId
+                    ? ['cuenta' => $cuenta->cuenta, 'descripcion' => $cuenta->descripcion]
+                    : null;
+            }
+        }
+
         $tokensGrupo = $this->tokens($nombreGrupo);
         if ($tokensGrupo === []) {
             return null;

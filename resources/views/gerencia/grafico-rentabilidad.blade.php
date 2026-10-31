@@ -55,6 +55,15 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
+                                <label for="socioRentabilidadGrafico" class="form-label">Socio</label>
+                                <select id="socioRentabilidadGrafico" name="socio" class="form-select">
+                                    <option value="">Todos los socios</option>
+                                    @foreach ($socios as $nombreSocio)
+                                        <option value="{{ $nombreSocio }}" @selected($socio === $nombreSocio)>{{ $nombreSocio }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <label for="alcanceRentabilidadGrafico" class="form-label">Consultar</label>
                                 <select id="alcanceRentabilidadGrafico" name="alcance" class="form-select">
                                     <option value="todas" @selected($alcance === 'todas')>Todas las terminales</option>
@@ -75,7 +84,7 @@
                                     <label class="form-check-label" for="mostrarResumenRentabilidad">Mostrar resumen</label>
                                 </div>
                             </div>
-                            <div class="col-12"><small id="estadoDatosRentabilidadGrafico" class="text-muted">Cargar datos obtiene el período completo. Filtrar reutiliza los datos cargados para empresa, ruta, terminal y productos.</small></div>
+                            <div class="col-12"><small id="estadoDatosRentabilidadGrafico" class="text-muted">Cargar datos obtiene el período completo. Filtrar reutiliza los datos cargados para empresa, ruta, socio, terminal y productos.</small></div>
                             <div class="col-12">
                                 <input type="hidden" name="productos_filtrados" value="1">
                                 <span class="form-label d-block mb-2">Productos incluidos</span>
@@ -148,7 +157,7 @@
                         </div>
                     @endforeach
                     <div id="tarjetaResumenRentabilidad" @class(['card mb-4', 'd-none' => ! $mostrarResumen || $agenciasResumen->isEmpty()])>
-                        <div class="card-header"><h5 class="mb-0" id="tituloResumenRentabilidad">Resumen de {{ $resumen['terminales'] }} terminales · {{ $empresa ?: 'Todas las empresas' }} · {{ $ruta ?: 'Todas las rutas' }} · {{ $etiquetaPeriodo }}</h5></div>
+                        <div class="card-header"><h5 class="mb-0" id="tituloResumenRentabilidad">Resumen de {{ $resumen['terminales'] }} terminales · {{ $empresa ?: 'Todas las empresas' }} · {{ $ruta ?: 'Todas las rutas' }} / {{ $socio ?: 'Todos los socios' }} · {{ $etiquetaPeriodo }}</h5></div>
                         <div class="card-body">
                             <div class="row g-3">
                                 @foreach (['Ventas' => $resumen['venta'], 'Premios sacados' => $resumen['premios_sacados'], 'Premios propios pagados' => $resumen['premios'], 'Ingreso real' => $resumen['ingreso_real'], 'Gastos' => $resumen['gastos'], 'Balance' => $resumen['balance']] as $etiqueta => $importe)
@@ -190,6 +199,8 @@
             actualizarPeriodo();
             const empresa = document.getElementById('empresaRentabilidadGrafico');
             const ruta = document.getElementById('rutaRentabilidadGrafico');
+            const socio = document.getElementById('socioRentabilidadGrafico');
+            const sociosDisponibles = {{ Illuminate\Support\Js::from($sociosDisponibles->toArray()) }};
             const alcance = document.getElementById('alcanceRentabilidadGrafico');
             const terminal = document.getElementById('terminalRentabilidadGrafico');
             const rutasDisponibles = {{ Illuminate\Support\Js::from($rutasDisponibles->toArray()) }};
@@ -246,7 +257,7 @@
 
             const graficosMetricas = new Map();
             const obtenerFiltros = () => ({
-                empresa: empresa.value, ruta: ruta.value, alcance: alcance.value, terminal: terminal.value,
+                empresa: empresa.value, ruta: ruta.value, socio: socio.value, alcance: alcance.value, terminal: terminal.value,
                 productos: [...document.querySelectorAll('#formRentabilidadAgenciaGrafico input[name="productos[]"]:checked')].map((campo) => campo.value),
                 pagos: [...document.querySelectorAll('#pagosRentabilidadGrafico input:checked')].map((campo) => Number(campo.value)),
             });
@@ -301,6 +312,16 @@
             });
             let filtrosAplicados = obtenerFiltros();
 
+            const actualizarSocios = () => {
+                const seleccionado = socio.value;
+                const nombres = [...new Set(sociosDisponibles
+                    .filter(fila => (!empresa.value || fila.empresa === empresa.value) && (!ruta.value || fila.ruta === ruta.value))
+                    .map(fila => fila.socio))];
+                socio.replaceChildren(new Option('Todos los socios', ''));
+                nombres.forEach(nombre => socio.add(new Option(nombre, nombre)));
+                socio.value = nombres.includes(seleccionado) ? seleccionado : '';
+            };
+            ruta.addEventListener('change', actualizarSocios);
             empresa.addEventListener('change', function () {
                 const seleccionada = ruta.value;
                 const nombres = [...new Set(rutasDisponibles
@@ -310,6 +331,7 @@
                 ruta.replaceChildren(new Option('Todas las rutas', ''));
                 nombres.forEach((nombre) => ruta.add(new Option(nombre, nombre)));
                 ruta.value = nombres.includes(seleccionada) ? seleccionada : '';
+                actualizarSocios();
             });
 
             const botonFiltrar = document.getElementById('filtrarRentabilidadGrafico');
@@ -330,7 +352,7 @@
                     ? 'Pulsa Cargar datos para obtener el período. Después puedes usar Filtrar sin volver a consultar.'
                     : cambioPeriodo
                         ? 'El período cambió. Pulsa Cargar datos para obtener las nuevas fechas.'
-                        : 'Datos cargados: ' + etiquetaPeriodoCargado + '. Usa Filtrar para cambiar empresa, ruta, terminal o productos sin volver a cargar.';
+                        : 'Datos cargados: ' + etiquetaPeriodoCargado + '. Usa Filtrar para cambiar empresa, ruta, socio, terminal o productos sin volver a cargar.';
             };
             ['periodoRentabilidadGrafico', 'mesRentabilidadGrafico', 'mesDesdeRentabilidadGrafico', 'mesHastaRentabilidadGrafico', 'anioRentabilidadGrafico'].forEach((id) => {
                 document.getElementById(id).addEventListener('change', actualizarEstadoDatos);
@@ -367,7 +389,7 @@
                 });
                 document.getElementById('terminalesPositivasRentabilidad').textContent = datos.resumen.terminales_balance_positivo.toLocaleString('es-DO');
                 document.getElementById('terminalesNegativasRentabilidad').textContent = datos.resumen.terminales_balance_negativo.toLocaleString('es-DO');
-                document.getElementById('tituloResumenRentabilidad').textContent = `Resumen de ${datos.resumen.terminales} terminales · ${empresa.value || 'Todas las empresas'} · ${ruta.value || 'Todas las rutas'} · ${etiquetaPeriodoCargado}`;
+                document.getElementById('tituloResumenRentabilidad').textContent = `Resumen de ${datos.resumen.terminales} terminales · ${empresa.value || 'Todas las empresas'} · ${ruta.value || 'Todas las rutas'} / ${socio.value || 'Todos los socios'} · ${etiquetaPeriodoCargado}`;
                 if (graficoVentas) {
                     graficoVentas.updateOptions({ series: datos.ventasMensuales.series, xaxis: { categories: datos.ventasMensuales.etiquetas } });
                 }

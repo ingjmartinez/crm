@@ -11,6 +11,7 @@
         const agencias = datos.agencias.filter((agencia) =>
             (!filtros.empresa || agencia.empresa === filtros.empresa)
             && (!filtros.ruta || agencia.ruta === filtros.ruta)
+            && (!filtros.socio || (agencia.socios ?? []).includes(filtros.socio))
             && (filtros.alcance !== 'terminal' || agencia.terminal === filtros.terminal.trim()));
         const resumen = {
             terminales: agencias.length,

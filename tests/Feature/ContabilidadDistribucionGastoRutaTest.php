@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\CentroCostoCuentaRuta;
+use App\Models\CuentaContable;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Schema\Blueprint;
@@ -36,6 +38,7 @@ class ContabilidadDistribucionGastoRutaTest extends TestCase
         Schema::dropIfExists('movimientos_rutas_v2_gastos');
         Schema::dropIfExists('movimientos_rutas_v2_depositos');
         Schema::dropIfExists('bancos_operaciones');
+        Schema::dropIfExists('centro_costo_cuenta_rutas');
         Schema::dropIfExists('cuentas_contables');
         Schema::dropIfExists('movimientos_rutas_v2_transacciones');
         Schema::dropIfExists('agencias');
@@ -521,7 +524,7 @@ JS;
             [
                 'id_centro_costo' => 1101, 'company_id' => '168-Consorcio Joselito Srl',
                 'id_grupo' => '68-05 - Gj Ruta 02 - Distrito', 'id_sub_grupo' => '65-Consorcio De Bancas Joselito',
-                'id_viejo' => null, 'descripcion' => 'Grupo: Ruta Distrito 2 Euris',
+                'id_viejo' => '001101', 'descripcion' => 'Grupo: Ruta Distrito 2 Euris',
                 'inactivo' => false, 'ocultar' => false,
             ],
             [
@@ -636,6 +639,8 @@ JS;
             'id_grupo' => '61', 'nombre_grupo' => 'Ruta Tamayo', 'id_sub_grupo' => '45',
             'nombre_socio' => 'Socio A', 'created_at' => now(), 'updated_at' => now(),
         ]);
+        $cuentaManual = CuentaContable::query()->create(['company_id' => '168', 'cuenta' => '100130099', 'descripcion' => 'Cuenta manual Tamayo']);
+        CentroCostoCuentaRuta::factory()->create(['company_id' => '168', 'ruta_key' => '61', 'cuenta_ruta_id' => $cuentaManual->id]);
         foreach ([5001 => 101, 5002 => 102] as $terminal => $centroId) {
             DB::table('centros_de_costo')->insert([
                 'id_centro_costo' => $centroId, 'company_id' => '168', 'id_grupo' => '61',
@@ -658,11 +663,44 @@ JS;
         $this->assertEqualsWithDelta(100.01, $asiento->sum('debito'), 0.001);
         $this->assertEqualsWithDelta(100.01, $asiento->sum('credito'), 0.001);
         $this->assertSame(['000101', '000102'], $asiento->pluck('centro_costo')->unique()->values()->all());
-        $this->assertSame(['600120005', '100130010'], $asiento->take(2)->pluck('cuenta')->all());
+        $this->assertSame(['600120005', '100130099'], $asiento->take(2)->pluck('cuenta')->all());
         $this->assertSame('2026-08-11', $asiento->first()['fecha']);
         $plantilla = file_get_contents(resource_path('views/contabilidad/reportes/distribucion-gastos-ruta.blade.php'));
         $this->assertStringContainsString('Gasto ruta</button>', $plantilla);
         $this->assertStringContainsString('id="tablaGastosRuta"', $plantilla);
+    }
+
+    public function test_muestra_cuenta_asociada_manualmente_y_la_usa_en_credito_del_deposito(): void
+    {
+        $cuenta = CuentaContable::query()->create(['company_id' => '169', 'cuenta' => '100130017', 'descripcion' => 'Ruta San Cristobal 1 Rafaela']);
+        CentroCostoCuentaRuta::factory()->create(['company_id' => '169', 'ruta_key' => '113', 'cuenta_ruta_id' => $cuenta->id]);
+        $otraCuenta = CuentaContable::query()->create(['company_id' => '168', 'cuenta' => '100139999', 'descripcion' => 'Cuenta de otra empresa']);
+        CentroCostoCuentaRuta::factory()->create(['company_id' => '168', 'ruta_key' => '113', 'cuenta_ruta_id' => $otraCuenta->id]);
+        Cache::put('cuentas_ruta_empresa:169', [['cuenta' => '100130099', 'descripcion' => 'Ruta San Cristobal 1']], now()->addMinute());
+        DB::table('distribucion_gasto_ruta_mapeos')->insert([
+            'ruta_key' => '05 - NG RUTA SAN CRISTOBAL 1', 'ruta_nombre' => '05 - NG RUTA SAN CRISTOBAL 1',
+            'company_id' => '169', 'id_grupo' => '113', 'nombre_grupo' => '05 - NG Ruta San Cristobal 1',
+            'id_sub_grupo' => '2', 'nombre_socio' => 'Socio', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('movimientos_rutas_v2_depositos')->insert([
+            'fecha' => '2026-10-08', 'ruta_key' => '05 - NG RUTA SAN CRISTOBAL 1', 'ruta' => '05 - NG Ruta San Cristobal 1',
+            'banco' => 'Santa Cruz', 'cuenta_banco' => '100210001', 'empresa_id' => '169', 'monto' => 100, 'estado' => 'aplicado',
+        ]);
+
+        $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()
+            ->assertSee('100130017')->assertSee('Ruta San Cristobal 1 Rafaela')->assertDontSee('100130099');
+        $depositos = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
+            'fecha_ini' => '2026-10-08', 'fecha_fin' => '2026-10-08', 'empresa' => 'todas',
+        ]))->assertOk()->json('depositos_ruta');
+        $this->assertSame('100130017', $depositos[1]['cuenta']);
+        $this->assertSame(100.0, (float) $depositos[1]['credito']);
+    }
+
+    public function test_cuenta_quitada_manualmente_no_se_reemplaza_por_coincidencia_de_nombre(): void
+    {
+        CentroCostoCuentaRuta::factory()->create(['company_id' => '169', 'ruta_key' => '113', 'cuenta_ruta_id' => null]);
+        Cache::put('cuentas_ruta_empresa:169', [['cuenta' => '100130099', 'descripcion' => 'Ruta San Cristobal 1']], now()->addMinute());
+        $this->assertNull(app(\App\Services\Operaciones\CatalogoCuentasRutaEmpresa::class)->resolver('169', '05 - NG Ruta San Cristobal 1', '113'));
     }
 
     public function test_el_credito_del_deposito_usa_la_cuenta_contable_de_la_ruta_y_empresa(): void
@@ -739,6 +777,7 @@ JS;
             ->assertSee('Ruta Nueva')
             ->assertDontSee('Ruta Sur')
             ->assertSee('Buscar ruta...')
+            ->assertSee('searchResultLimit: selector.options.length', false)
             ->assertSee('selector-ruta-con-busqueda')
             ->assertSee("itemSelectText: ''", false)
             ->assertSee('.choices__list--dropdown .choices__placeholder', false)
@@ -770,6 +809,31 @@ JS;
             'ruta_key' => 'RUTA NUEVA',
             'nombre_socio' => 'Socio Nuevo',
         ]);
+    }
+
+    public function test_selector_conserva_nombre_importado_con_varias_rutas_similares(): void
+    {
+        foreach (range(1, 6) as $numero) {
+            $nombre = '05 - NG RUTA SAN CRISTOBAL '.$numero;
+            \App\Models\MovimientoRutaV2Transaccion::query()->create([
+                'fecha' => '2026-10-08', 'ruta_key' => $nombre, 'ruta' => $nombre,
+            ]);
+        }
+        \App\Models\MovimientoRutaV2Transaccion::query()->create([
+            'fecha' => '2026-08-05', 'ruta_key' => 'RUTA SAN CRISTOBAL 1 NEGOSUR', 'ruta' => 'RUTA SAN CRISTOBAL 1 NEGOSUR',
+        ]);
+
+        $response = $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk();
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($documento);
+        $opciones = $xpath->query("//select[@id='mapeoRutaKey']/option");
+
+        $this->assertSame(8, $opciones->length);
+        $rutaReal = $xpath->query("//select[@id='mapeoRutaKey']/option[@value='05 - NG RUTA SAN CRISTOBAL 1']");
+        $this->assertSame(1, $rutaReal->length);
+        $this->assertSame('05 - NG RUTA SAN CRISTOBAL 1', trim($rutaReal->item(0)->textContent));
+        $response->assertSee('searchResultLimit: selector.options.length', false);
     }
 
     public function test_permite_eliminar_una_ruta_completa_de_la_lista(): void
@@ -868,8 +932,16 @@ JS;
         });
         Schema::create('cuentas_contables', function (Blueprint $table): void {
             $table->id();
+            $table->string('company_id', 3)->default('168');
             $table->string('cuenta')->unique();
             $table->string('descripcion');
+            $table->timestamps();
+        });
+        Schema::create('centro_costo_cuenta_rutas', function (Blueprint $table): void {
+            $table->id();
+            $table->string('company_id');
+            $table->string('ruta_key');
+            $table->unsignedBigInteger('cuenta_ruta_id')->nullable();
             $table->timestamps();
         });
         Schema::create('bancos_operaciones', function (Blueprint $table): void {

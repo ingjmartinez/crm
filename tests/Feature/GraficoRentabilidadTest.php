@@ -23,6 +23,13 @@ class GraficoRentabilidadTest extends TestCase
     {
         parent::setUp();
 
+        Schema::create('centros_de_costo', function (Blueprint $table): void {
+            $table->id();
+            $table->string('id_viejo')->nullable();
+            $table->string('company_id')->nullable();
+            $table->string('id_sub_grupo')->nullable();
+            $table->boolean('inactivo')->default(false);
+        });
         Schema::create('agencias', function (Blueprint $table): void {
             $table->id();
             $table->string('terminal');
@@ -80,6 +87,64 @@ class GraficoRentabilidadTest extends TestCase
         });
         config(['clasificacion_cuentas.cuentas' => ['5001' => 'FIJO', '6001' => 'VARIABLE']]);
         $this->actingAs(User::factory()->make());
+    }
+
+    public function test_socio_uses_cost_center_subgroup_and_filters_server_and_loaded_graphs(): void
+    {
+        $this->crearDatos();
+        DB::table('centros_de_costo')->insert([
+            ['id_viejo' => '001001', 'company_id' => 'Empresa A', 'id_sub_grupo' => '45-Juan', 'inactivo' => false],
+            ['id_viejo' => '1001', 'company_id' => 'Empresa A', 'id_sub_grupo' => '45-Juan', 'inactivo' => false],
+            ['id_viejo' => '1002', 'company_id' => 'Empresa A', 'id_sub_grupo' => '46-Maria', 'inactivo' => false],
+            ['id_viejo' => '2001', 'company_id' => 'Empresa B', 'id_sub_grupo' => '45-Juan', 'inactivo' => false],
+            ['id_viejo' => '1001', 'company_id' => 'Empresa B', 'id_sub_grupo' => '99-Otro', 'inactivo' => false],
+            ['id_viejo' => '1002', 'company_id' => 'Empresa A', 'id_sub_grupo' => '98-Inactivo', 'inactivo' => true],
+        ]);
+        $carga = $this->consultar(['mes' => '2026-09']);
+        $this->assertSame(['45-Juan', '46-Maria'], $carga['socios']->all());
+        $this->assertSame(['45-Juan'], collect($carga['datosCargados']['agencias'])->firstWhere('terminal', '1001')['socios']);
+        $this->assertSame(['45-Juan'], $this->consultar(['empresa' => 'Empresa A', 'ruta' => 'Norte'])['socios']->all());
+        $this->assertSame(['46-Maria'], $this->consultar(['empresa' => 'Empresa A', 'ruta' => 'Sur'])['socios']->all());
+        $base = ['empresa' => '', 'ruta' => '', 'alcance' => 'todas', 'terminal' => '', 'productos' => ['Tradicional', 'No Tradicional', 'Recarga']];
+        foreach ([
+            ['socio' => '45-Juan'],
+            ['socio' => '45-Juan', 'empresa' => 'Empresa A'],
+            ['socio' => '46-Maria', 'ruta' => 'Norte'],
+            ['socio' => 'Inexistente'],
+            ['socio' => '45-Juan', 'alcance' => 'terminal', 'terminal' => '1002'],
+            ['socio' => ''],
+        ] as $seleccion) {
+            $filtros = [...$base, ...$seleccion];
+            $servidor = $this->consultar(['mes' => '2026-09', ...$filtros]);
+            $navegador = $this->filtrarEnNavegador($carga['datosCargados'], $filtros);
+            foreach ($navegador['resumen'] as $campo => $total) {
+                $this->assertEqualsWithDelta($servidor['resumen'][$campo], $total, 0.00001, $campo);
+            }
+        }
+        $juan = $this->consultar(['mes' => '2026-09', 'empresa' => 'Empresa A', 'socio' => '45-Juan']);
+        $this->assertSame(1, $juan['resumen']['terminales']);
+        $this->assertSame(1600.0, $juan['resumen']['venta']);
+    }
+
+    public function test_socio_matches_company_codes_and_appears_immediately_after_route(): void
+    {
+        $this->crearDatos();
+        DB::table('agencias')->where('terminal', '1001')->update(['empresa' => 'Negosur']);
+        DB::table('centros_de_costo')->insert(['id_viejo' => '01001', 'company_id' => '169-Negosur', 'id_sub_grupo' => '45-Rafaela', 'inactivo' => false]);
+        $datos = $this->consultar(['mes' => '2026-09', 'empresa' => 'Negosur', 'ruta' => 'Norte', 'socio' => '45-Rafaela']);
+        $this->assertSame(1, $datos['resumen']['terminales']);
+        $fuente = file_get_contents(resource_path('views/gerencia/grafico-rentabilidad.blade.php'));
+        $contenido = Blade::render(str_replace(["@extends('app')", "@section('content')", "@section('script')", '@endsection'], '', $fuente), [...$datos, 'errors' => new ViewErrorBag]);
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($contenido);
+        $xpath = new \DOMXPath($documento);
+        $this->assertSame(1, $xpath->query("//*[@id='rutaRentabilidadGrafico']/parent::div/following-sibling::div[1]//select[@name='socio']")->length);
+        $this->assertStringContainsString('<option value="45-Rafaela" selected>', $contenido);
+        foreach ([['socio' => ['45-Rafaela']], ['socio' => str_repeat('x', 151)]] as $entrada) {
+            $validator = Validator::make($entrada, (new ConsultarGraficoRentabilidadRequest)->rules());
+            $this->assertTrue($validator->fails());
+            $this->assertTrue($validator->errors()->has('socio'));
+        }
     }
 
     public function test_initial_panel_lists_active_routes_and_registers_the_card(): void
@@ -394,7 +459,7 @@ class GraficoRentabilidadTest extends TestCase
         ]);
 
         $this->assertStringContainsString('Gráfico de rentabilidad', $contenido);
-        foreach (['periodo', 'mes', 'mes_desde', 'mes_hasta', 'anio', 'empresa', 'ruta', 'alcance', 'terminal', 'productos[]'] as $campo) {
+        foreach (['periodo', 'mes', 'mes_desde', 'mes_hasta', 'anio', 'empresa', 'ruta', 'socio', 'alcance', 'terminal', 'productos[]'] as $campo) {
             $this->assertStringContainsString('name="'.$campo.'"', $contenido);
         }
         $this->assertStringContainsString('<option value="Norte" selected>', $contenido);

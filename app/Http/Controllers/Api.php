@@ -2,13 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ContabilidadEmpresaRequest;
+use App\Http\Requests\GuardarCuentaContableRequest;
+use App\Http\Requests\SincronizarCuentasRequest;
+use App\Models\CentroCostoCuentaRuta;
 use App\Models\CentroDeCosto;
 use App\Models\CuentaContable;
 use App\Models\DetalleCuenta;
 use App\Models\EntradaDiario;
 use Carbon\Carbon;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class Api extends Controller
@@ -39,13 +46,18 @@ class Api extends Controller
     //     echo $response;
     // }
 
-    public function getCuentas()
+    public function getCuentas(ContabilidadEmpresaRequest $request): JsonResponse
     {
-        if (CuentaContable::query()->count() === 0) {
-            $this->syncCuentasFromExternal();
+        $empresa = $request->empresa();
+        if (CuentaContable::query()->where('company_id', $empresa)->doesntExist()) {
+            $resultado = $this->syncCuentasFromExternal($empresa);
+            if (! $resultado['ok']) {
+                return response()->json(['message' => $resultado['message']], $resultado['status']);
+            }
         }
 
         $cuentas = CuentaContable::query()
+            ->where('company_id', $empresa)
             ->orderBy('cuenta')
             ->get()
             ->map(function (CuentaContable $cuenta) {
@@ -61,55 +73,31 @@ class Api extends Controller
         return response()->json($cuentas);
     }
 
-    public function storeCuenta(Request $request)
+    public function storeCuenta(GuardarCuentaContableRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'cuenta' => 'required|string|max:50|unique:cuentas_contables,cuenta',
-            'descripcion' => 'required|string|max:255',
-            'ctacontrol' => 'nullable|string|max:50',
-            'tipo' => 'nullable|string|max:50',
-        ]);
+        $cuenta = CuentaContable::create([...$request->safe()->except('empresa'), 'company_id' => $request->empresa()]);
 
-        $cuenta = CuentaContable::create($validated);
-
-        return response()->json([
-            'message' => 'Cuenta creada correctamente.',
-            'data' => $cuenta,
-        ], 201);
+        return response()->json(['message' => 'Cuenta creada correctamente.', 'data' => $cuenta], 201);
     }
 
-    public function updateCuenta(Request $request, int $id)
+    public function updateCuenta(GuardarCuentaContableRequest $request, int $id): JsonResponse
     {
-        $cuenta = CuentaContable::findOrFail($id);
+        $cuenta = CuentaContable::query()->where('company_id', $request->empresa())->findOrFail($id);
+        $cuenta->update($request->safe()->except('empresa'));
 
-        $validated = $request->validate([
-            'cuenta' => 'required|string|max:50|unique:cuentas_contables,cuenta,'.$cuenta->id,
-            'descripcion' => 'required|string|max:255',
-            'ctacontrol' => 'nullable|string|max:50',
-            'tipo' => 'nullable|string|max:50',
-        ]);
-
-        $cuenta->update($validated);
-
-        return response()->json([
-            'message' => 'Cuenta actualizada correctamente.',
-            'data' => $cuenta,
-        ]);
+        return response()->json(['message' => 'Cuenta actualizada correctamente.', 'data' => $cuenta]);
     }
 
-    public function destroyCuenta(int $id)
+    public function destroyCuenta(ContabilidadEmpresaRequest $request, int $id): JsonResponse
     {
-        $cuenta = CuentaContable::findOrFail($id);
-        $cuenta->delete();
+        CuentaContable::query()->where('company_id', $request->empresa())->findOrFail($id)->delete();
 
-        return response()->json([
-            'message' => 'Cuenta eliminada correctamente.',
-        ]);
+        return response()->json(['message' => 'Cuenta eliminada correctamente.']);
     }
 
-    public function syncCuentas()
+    public function syncCuentas(SincronizarCuentasRequest $request): JsonResponse
     {
-        $syncResult = $this->syncCuentasFromExternal();
+        $syncResult = $this->syncCuentasFromExternal($request->empresa(), (int) $request->validated('limite', 200));
 
         if (! $syncResult['ok']) {
             return response()->json([
@@ -128,25 +116,44 @@ class Api extends Controller
         ]);
     }
 
-    public function getCentrosCosto(Request $request)
+    public function getCentrosCosto(Request $request): JsonResponse
     {
         $empresa = $this->normalizeEmpresaCentroCosto($request->query('empresa', '168'));
-
-        $centros = CentroDeCosto::query()
+        $asociaciones = CentroCostoCuentaRuta::query()
+            ->with('cuentaRuta:id,cuenta,descripcion')
+            ->when($empresa !== 'todas', fn ($query) => $query->where('company_id', $empresa))
+            ->get()->keyBy(fn (CentroCostoCuentaRuta $asociacion): string => $asociacion->company_id.'|'.$asociacion->ruta_key);
+        $registros = CentroDeCosto::query()
             ->empresa($empresa)
             ->orderBy('company_id')
             ->orderBy('id_centro_costo')
-            ->get()
-            ->map(function (CentroDeCosto $c) {
+            ->get();
+        $centrosPorRuta = $registros
+            ->filter(fn (CentroDeCosto $centro): bool => ! $centro->inactivo && ! $centro->ocultar
+                && str_starts_with(mb_strtoupper(ltrim((string) $centro->descripcion)), 'GRUPO:'))
+            ->groupBy(fn (CentroDeCosto $centro): string => $this->extractCompanyId($centro->company_id).'|'.CentroCostoCuentaRuta::claveRuta($centro->id_grupo))
+            ->map(fn ($grupo): array => $grupo->pluck('id_centro_costo')->unique()->sort()->values()->all());
+        $centros = $registros
+            ->map(function (CentroDeCosto $c) use ($asociaciones, $centrosPorRuta): array {
+                $empresaCodigo = $this->extractCompanyId($c->company_id);
+                $rutaClave = CentroCostoCuentaRuta::claveRuta($c->id_grupo);
+                $asociacion = $asociaciones->get($empresaCodigo.'|'.$rutaClave);
+
                 return [
                     'id' => $c->id,
                     'IdCentroCosto' => $c->id_centro_costo,
                     'CompanyID' => $c->company_id,
                     'Descripcion' => $c->descripcion,
                     'Cuenta' => $c->cuenta,
+                    'EmpresaCodigo' => $empresaCodigo,
+                    'RutaClave' => $rutaClave,
+                    'CuentaRutaId' => $asociacion?->cuenta_ruta_id,
+                    'CuentaRuta' => $asociacion?->cuentaRuta?->cuenta ?? '',
+                    'CuentaRutaDescripcion' => $asociacion?->cuentaRuta?->descripcion ?? '',
                     'Inactivo' => $c->inactivo,
                     'Activo' => $c->activo,
                     'IdGrupo' => $c->id_grupo,
+                    'CentrosCostoRuta' => $rutaClave !== '' ? $centrosPorRuta->get($empresaCodigo.'|'.$rutaClave, []) : [],
                     'IdSubGrupo' => $c->id_sub_grupo,
                     'IdDivision' => $c->id_division,
                     'IdSociedad' => $c->id_sociedad,
@@ -522,8 +529,9 @@ class Api extends Controller
         ]);
     }
 
-    public function getEntradas(Request $request)
+    public function getEntradas(ContabilidadEmpresaRequest $request): JsonResponse
     {
+        $empresa = $request->empresa();
         $cuenta = trim((string) $request->query('cuenta', ''));
         $fechaInicio = (string) $request->query('fecha_inicio', $request->query('fecha', date('Y-m-d')));
         $fechaFin = (string) $request->query('fecha_fin', $fechaInicio);
@@ -549,7 +557,11 @@ class Api extends Controller
             ], 422);
         }
 
-        $syncResult = $this->syncDetalleCuentasFromExternal($cuenta, $inicio, $fin);
+        try {
+            $syncResult = $this->syncDetalleCuentasFromExternal($empresa, $cuenta, $inicio, $fin);
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 502);
+        }
 
         if (! $syncResult['ok']) {
             return response()->json([
@@ -558,8 +570,10 @@ class Api extends Controller
         }
 
         $detalles = DetalleCuenta::query()
+            ->where('company_id', $empresa)
             ->where('cuenta', $cuenta)
-            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->where('fecha', '>=', $inicio->toDateString())
+            ->where('fecha', '<', $fin->copy()->addDay()->toDateString())
             ->orderBy('fecha')
             ->orderBy('no_asiento')
             ->get()
@@ -854,58 +868,22 @@ class Api extends Controller
         return $value === '' ? null : $value;
     }
 
-    private function syncCuentasFromExternal(): array
+    private function syncCuentasFromExternal(string $empresa, int $limite = 100): array
     {
-        $url = 'https://apisj.azurewebsites.net/ApiSJ/CatalagoCta/Listar?strToken=87eb2d56-25f3-4d46-9cb0-73c07a550bd2&intIdEmpresa=168&strFiltros=[[%22AceptaMov%22%2C%20%221%22]]';
-
-        $curl = curl_init();
-        curl_setopt_array($curl, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-            ],
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ]);
-
-        $response = curl_exec($curl);
-
-        if ($response === false) {
-            $error = curl_error($curl);
-            curl_close($curl);
-
-            return [
-                'ok' => false,
-                'message' => 'Error consultando API externa.',
-                'error' => $error,
-                'status' => 500,
-            ];
+        try {
+            $response = Http::withOptions(['verify' => false])->timeout(30)->post(
+                'https://apisj.azurewebsites.net/ApiSJ/CatalagoCta/Listar?'.http_build_query([
+                    'strToken' => config('services.apisj.token'), 'intIdEmpresa' => $empresa,
+                    'intLimite' => $limite,
+                    'strFiltros' => '[["AceptaMov", "1"]]',
+                ]),
+            );
+        } catch (ConnectionException) {
+            return ['ok' => false, 'message' => 'Error consultando API externa.', 'status' => 502];
         }
-
-        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
-
-        if ($httpCode < 200 || $httpCode >= 300) {
-            return [
-                'ok' => false,
-                'message' => 'La API externa respondió con error.',
-                'status' => 502,
-            ];
-        }
-
-        $decoded = json_decode($response, true);
-
-        if (! is_array($decoded)) {
-            return [
-                'ok' => false,
-                'message' => 'Respuesta inválida de API externa.',
-                'status' => 502,
-            ];
+        $decoded = $response->json();
+        if (! $response->successful() || ! is_array($decoded)) {
+            return ['ok' => false, 'message' => 'Respuesta invalida de API externa.', 'status' => 502];
         }
 
         $decoded = $this->normalizeKeys($decoded);
@@ -932,7 +910,7 @@ class Api extends Controller
             }
 
             $registro = CuentaContable::updateOrCreate(
-                ['cuenta' => $cuenta],
+                ['company_id' => $empresa, 'cuenta' => $cuenta],
                 [
                     'descripcion' => (string) ($item['DESCRIPCION'] ?? ''),
                     'ctacontrol' => $this->nullableString($item['CTACONTROL'] ?? null),
@@ -1185,7 +1163,7 @@ class Api extends Controller
         }
     }
 
-    private function syncDetalleCuentasFromExternal(string $cuenta, Carbon $inicio, Carbon $fin): array
+    private function syncDetalleCuentasFromExternal(string $empresa, string $cuenta, Carbon $inicio, Carbon $fin): array
     {
         $insertados = 0;
         $actualizados = 0;
@@ -1194,7 +1172,7 @@ class Api extends Controller
         $fechaActual = $inicio->copy();
 
         while ($fechaActual->lte($fin)) {
-            $items = $this->fetchDetalleByDate($cuenta, $fechaActual->toDateString());
+            $items = $this->fetchDetalleByDate($empresa, $cuenta, $fechaActual->toDateString());
 
             foreach ($items as $rawItem) {
                 if (! is_array($rawItem)) {
@@ -1218,8 +1196,11 @@ class Api extends Controller
                     (string) ($item['CREDITO'] ?? ''),
                 ]));
 
+                if ($empresa !== '168') {
+                    $externalKey = sha1($empresa.'|'.$externalKey);
+                }
                 $detalle = DetalleCuenta::updateOrCreate(
-                    ['external_key' => $externalKey],
+                    ['company_id' => $empresa, 'external_key' => $externalKey],
                     [
                         'cuenta' => $cuenta,
                         'no_asiento' => $this->nullableString($item['NOASIENTO'] ?? null),
@@ -1264,42 +1245,21 @@ class Api extends Controller
         ];
     }
 
-    private function fetchDetalleByDate(string $cuenta, string $fecha): array
+    private function fetchDetalleByDate(string $empresa, string $cuenta, string $fecha): array
     {
-        $url = 'https://apisj.azurewebsites.net/ApiSJ/EntradaDiario/Listar?strToken=87eb2d56-25f3-4d46-9cb0-73c07a550bd2&intIdEmpresa=168&dtFecha='.$fecha.'&strCuenta='.urlencode($cuenta);
-
-        $curl = curl_init();
-
-        curl_setopt_array($curl, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-            ],
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ]);
-
-        $response = curl_exec($curl);
-
-        if ($response === false) {
-            curl_close($curl);
-
-            return [];
+        try {
+            $response = Http::withOptions(['verify' => false])->timeout(30)->post(
+                'https://apisj.azurewebsites.net/ApiSJ/EntradaDiario/Listar?'.http_build_query([
+                    'strToken' => config('services.apisj.token'), 'intIdEmpresa' => $empresa,
+                    'dtFecha' => $fecha, 'strCuenta' => $cuenta,
+                ]),
+            );
+        } catch (ConnectionException) {
+            throw new RuntimeException('No se pudieron consultar los movimientos de la empresa.');
         }
-
-        curl_close($curl);
-
-        $decoded = json_decode($response, true);
-
-        if (! is_array($decoded)) {
-            return [];
+        $decoded = $response->json();
+        if (! $response->successful() || ! is_array($decoded)) {
+            throw new RuntimeException('Respuesta invalida al consultar movimientos.');
         }
 
         $decoded = $this->normalizeKeys($decoded);
