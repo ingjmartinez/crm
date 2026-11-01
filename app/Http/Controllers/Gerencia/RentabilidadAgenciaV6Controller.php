@@ -21,6 +21,9 @@ class RentabilidadAgenciaV6Controller extends Controller
         $productos = $this->reporte->productos($filtros);
         $consultar = $request->filled('anio');
         $resultado = $consultar ? $this->reporte->reporte($filtros) : null;
+        if ($resultado !== null) {
+            $this->reporte->guardarResumenEjecutivo($filtros, (string) $request->user()->getAuthIdentifier(), $resultado);
+        }
         $empresas = RentabilidadAgenciaV5::query()->activas()->whereNotNull('empresa')->whereRaw("TRIM(empresa) <> ''")
             ->selectRaw('TRIM(empresa) AS empresa')->distinct()->orderBy('empresa')->pluck('empresa');
         $datosTabla = $resultado === null ? [] : $resultado['filas']->map(fn (array $fila): array => array_diff_key($fila, ['periodos' => true]))->values()->all();
@@ -56,8 +59,7 @@ class RentabilidadAgenciaV6Controller extends Controller
         abort_unless($request->filled('anio'), 422, 'Selecciona un rango.');
         $filtros = $request->validated();
         $productos = $this->reporte->productos($filtros);
-        $resultado = $this->reporte->reporte($filtros);
-        unset($resultado['filas']);
+        $resultado = $this->reporte->resumenEjecutivo($filtros, (string) $request->user()->getAuthIdentifier());
 
         $pdf = Pdf::loadView('gerencia.rentabilidad-agencia-v6-pdf', compact('resultado', 'filtros', 'productos'))->setPaper('a4', 'landscape');
         $pdf->render();

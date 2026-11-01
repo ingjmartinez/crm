@@ -10,6 +10,7 @@ use App\Models\RentabilidadAgenciaV5;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class RentabilidadAgenciaV6Service
@@ -19,6 +20,8 @@ class RentabilidadAgenciaV6Service
     public const IMPORTES = ['ventas', 'premios_sacados', 'premios_propios', 'premios_no_propios', 'utilidad_propia', 'utilidad_general', 'gastos', 'balance_propio', 'balance_neto'];
 
     private const MEDIDAS = ['ventas', 'premios_sacados', 'premios_propios', 'premios_no_propios', 'costos', 'gastos_contables', 'gastos_fijos'];
+
+    private const MINUTOS_RESUMEN_EJECUTIVO = 10;
 
     public function __construct(private readonly ClasificadorRentabilidadMensual $clasificador) {}
 
@@ -34,6 +37,44 @@ class RentabilidadAgenciaV6Service
     public function productos(array $filtros): array
     {
         return array_values(array_unique($filtros['productos'] ?? (! empty($filtros['productos_filtrados']) ? [] : self::PRODUCTOS)));
+    }
+
+    /** @param array<string, mixed> $filtros @param array<string, mixed> $resultado */
+    public function guardarResumenEjecutivo(array $filtros, string $usuario, array $resultado): void
+    {
+        unset($resultado['filas']);
+        Cache::put($this->claveResumenEjecutivo($filtros, $usuario), $resultado, now()->addMinutes(self::MINUTOS_RESUMEN_EJECUTIVO));
+    }
+
+    /**
+     * @param  array<string, mixed>  $filtros
+     * @return array<string, mixed>
+     */
+    public function resumenEjecutivo(array $filtros, string $usuario): array
+    {
+        return Cache::remember($this->claveResumenEjecutivo($filtros, $usuario), now()->addMinutes(self::MINUTOS_RESUMEN_EJECUTIVO), function () use ($filtros): array {
+            $resultado = $this->reporte($filtros);
+            unset($resultado['filas']);
+
+            return $resultado;
+        });
+    }
+
+    /** @param array<string, mixed> $filtros */
+    private function claveResumenEjecutivo(array $filtros, string $usuario): string
+    {
+        [$desde, $hasta] = $this->rango($filtros);
+        $productos = $this->productos($filtros);
+        sort($productos, SORT_STRING);
+        $alcance = $filtros['alcance'] ?? 'todas';
+
+        return 'rentabilidad-v6:ejecutivo:v1:'.hash('sha256', json_encode([
+            'usuario' => $usuario,
+            'desde' => $desde->toDateString(), 'hasta' => $hasta->toDateString(),
+            'empresa' => trim((string) ($filtros['empresa'] ?? '')),
+            'terminal' => $alcance === 'terminal' ? trim((string) ($filtros['terminal'] ?? '')) : null,
+            'productos' => $productos,
+        ], JSON_THROW_ON_ERROR));
     }
 
     /** @param array<string, mixed> $filtros @return Collection<int, RentabilidadAgenciaV5> */

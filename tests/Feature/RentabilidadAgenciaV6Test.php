@@ -91,6 +91,7 @@ class RentabilidadAgenciaV6Test extends TestCase
     private function usuario(bool $permitido): void
     {
         $usuario = \Mockery::mock(User::class)->makePartial();
+        $usuario->id = 1;
         $usuario->name = 'Prueba';
         $usuario->email = 'prueba@example.test';
         $usuario->shouldReceive('can')->andReturn($permitido);
@@ -224,7 +225,7 @@ class RentabilidadAgenciaV6Test extends TestCase
         $resultado['totales'] = array_map(fn (float $importe): float => $importe * 3000, $resultado['totales']);
         $this->mock(RentabilidadAgenciaV6Service::class, function ($mock) use ($resultado): void {
             $mock->shouldReceive('productos')->once()->andReturn(RentabilidadAgenciaV6Service::PRODUCTOS);
-            $mock->shouldReceive('reporte')->once()->andReturn($resultado);
+            $mock->shouldReceive('resumenEjecutivo')->once()->andReturn($resultado);
         });
         $response = $this->get(route('gerencia.rentabilidad-agencia-v6.informe-ejecutivo', $this->filtros()))->assertOk();
         $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()));
@@ -235,6 +236,46 @@ class RentabilidadAgenciaV6Test extends TestCase
         $this->assertStringContainsString('Terminales evaluadas<strong>3,000', $html);
         $this->assertStringContainsString('RD$ 600,000.00', $html);
         $this->assertLessThan(20000, strlen($html));
+    }
+
+    public function test_pdf_reutiliza_el_resumen_de_la_consulta_sin_repetir_agregados(): void
+    {
+        $this->datos();
+        $filtros = $this->filtros();
+        $this->get(route('gerencia.rentabilidad-agencia-v6', $filtros))->assertOk();
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->get(route('gerencia.rentabilidad-agencia-v6.informe-ejecutivo', [...$filtros, 'productos_filtrados' => 1, 'productos' => array_reverse(RentabilidadAgenciaV6Service::PRODUCTOS)]))->assertOk();
+        $agregados = collect(DB::getQueryLog())->filter(fn (array $consulta): bool => str_contains(strtolower($consulta['query']), 'union all'));
+        DB::disableQueryLog();
+        $this->assertCount(0, $agregados);
+        $servicio = app(RentabilidadAgenciaV6Service::class);
+        $resumen = $servicio->resumenEjecutivo($filtros, '1');
+        $this->assertSame(200.0, $resumen['totales']['ventas']);
+        $this->assertArrayNotHasKey('filas', $resumen);
+        DB::table('vt_usuarios_bet')->where('agencia_id', '1001')->where('fecha', '2026-01-01')->update(['monto' => 1000]);
+        $this->assertSame(200.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['ventas']);
+        $this->get(route('gerencia.rentabilidad-agencia-v6', $filtros))->assertOk();
+        $this->assertSame(1100.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['ventas']);
+    }
+
+    public function test_resumen_ejecutivo_separa_usuarios_y_filtros_y_caduca(): void
+    {
+        $this->datos();
+        $servicio = app(RentabilidadAgenciaV6Service::class);
+        $filtros = $this->filtros();
+        $this->assertSame(200.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['ventas']);
+        DB::table('vt_usuarios_bet')->where('agencia_id', '1001')->where('fecha', '2026-01-01')->update(['monto' => 1000]);
+        $this->assertSame(1100.0, $servicio->resumenEjecutivo($filtros, '2')['totales']['ventas']);
+        $this->assertSame(200.0, $servicio->resumenEjecutivo([...$filtros, 'terminal' => '1002', 'empresa' => 'Negosur'], '1')['totales']['ventas']);
+        $this->assertSame(0.0, $servicio->resumenEjecutivo([...$filtros, 'empresa' => 'Inexistente'], '1')['totales']['ventas']);
+        $this->assertSame(0.0, $servicio->resumenEjecutivo([...$filtros, 'anio' => 2025], '1')['totales']['ventas']);
+        $this->assertSame(0.0, $servicio->resumenEjecutivo([...$filtros, 'productos_filtrados' => 1, 'productos' => []], '1')['totales']['ventas']);
+        $this->assertSame(2100.0, $servicio->resumenEjecutivo([...$filtros, 'mes_fin' => 4], '1')['totales']['ventas']);
+        $this->assertSame(200.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['ventas']);
+        $this->travel(11)->minutes();
+        $this->assertSame(1100.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['ventas']);
+        $this->travelBack();
     }
 
     public function test_resumen_cuenta_terminales_y_categorias_de_ambas_clasificaciones(): void
