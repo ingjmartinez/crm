@@ -899,7 +899,7 @@ class DistribucionGastoRutaService
 
         $cuentas = $grupos->map(function (DistribucionGastoRutaMapeo $mapeo) use ($empresaId): ?string {
             try {
-                return $this->catalogoCuentasRuta->resolver($empresaId, $mapeo->nombre_grupo, $mapeo->id_grupo)['cuenta'] ?? null;
+                return $this->catalogoCuentasRuta->resolverAsignada($empresaId, $mapeo->id_grupo)['cuenta'] ?? null;
             } catch (ConnectionException|RuntimeException) {
                 return null;
             }

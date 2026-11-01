@@ -551,7 +551,7 @@ JS;
         $this->assertSame(2, substr_count($response->getContent(), '<td>1101</td>'));
     }
 
-    public function test_apertura_resuelve_cuentas_desde_catalogo_local_sin_llamar_api(): void
+    public function test_apertura_no_asigna_cuentas_por_nombre_si_no_fueron_configuradas(): void
     {
         Cache::forget('cuentas_ruta_empresa:168');
         Cache::forget('cuentas_ruta_empresa:169');
@@ -573,11 +573,12 @@ JS;
 
         $response = $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()
             ->assertSee('Cuenta contable de ruta (crédito)')
-            ->assertSee('100130007 - Ruta Distrito 2')
-            ->assertSee('100130003 - Ruta Bani 9');
+            ->assertSee('Sin cuenta asignada en Centros de costo')
+            ->assertDontSee('100130007 - Ruta Distrito 2')
+            ->assertDontSee('100130003 - Ruta Bani 9');
         $rutas = $response->viewData('mapeosAgrupados')->keyBy('ruta_key');
-        $this->assertSame('100130007', $rutas['RUTA DISTRITO']['cuentas_credito'][0]['cuenta_codigo']);
-        $this->assertSame('100130003', $rutas['RUTA BANI 9']['cuentas_credito'][0]['cuenta_codigo']);
+        $this->assertNull($rutas['RUTA DISTRITO']['cuentas_credito'][0]['cuenta_codigo']);
+        $this->assertNull($rutas['RUTA BANI 9']['cuentas_credito'][0]['cuenta_codigo']);
         $this->assertNull($rutas['RUTA SIN CUENTA']['cuentas_credito'][0]['cuenta_codigo']);
         Http::assertNothingSent();
     }
@@ -599,7 +600,7 @@ JS;
             $response = $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk();
             $this->assertCount(40, $response->viewData('mapeosAgrupados'));
             $consultasCatalogo = collect(DB::getQueryLog())->filter(fn (array $consulta): bool => str_contains($consulta['query'], 'from "cuentas_contables"'));
-            $this->assertCount(1, $consultasCatalogo);
+            $this->assertCount(0, $consultasCatalogo);
             Http::assertNothingSent();
         } finally {
             DB::disableQueryLog();
@@ -730,16 +731,25 @@ JS;
         ]))->assertOk()->json('depositos_ruta');
         $this->assertSame('100130017', $depositos[1]['cuenta']);
         $this->assertSame(100.0, (float) $depositos[1]['credito']);
+        $cuentaNueva = CuentaContable::query()->create(['company_id' => '169', 'cuenta' => '100130018', 'descripcion' => 'Cuenta manual actualizada']);
+        CentroCostoCuentaRuta::query()->where('company_id', '169')->where('ruta_key', '113')->update(['cuenta_ruta_id' => $cuentaNueva->id]);
+        $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()
+            ->assertSee('100130018 - Cuenta manual actualizada')->assertDontSee('100130017');
+        $depositosActualizados = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
+            'fecha_ini' => '2026-10-08', 'fecha_fin' => '2026-10-08', 'empresa' => 'todas',
+        ]))->assertOk()->json('depositos_ruta');
+        $this->assertSame('100130018', $depositosActualizados[1]['cuenta']);
+        Http::assertNothingSent();
     }
 
     public function test_cuenta_quitada_manualmente_no_se_reemplaza_por_coincidencia_de_nombre(): void
     {
         CentroCostoCuentaRuta::factory()->create(['company_id' => '169', 'ruta_key' => '113', 'cuenta_ruta_id' => null]);
         Cache::put('cuentas_ruta_empresa:169', [['cuenta' => '100130099', 'descripcion' => 'Ruta San Cristobal 1']], now()->addMinute());
-        $this->assertNull(app(\App\Services\Operaciones\CatalogoCuentasRutaEmpresa::class)->resolver('169', '05 - NG Ruta San Cristobal 1', '113'));
+        $this->assertNull(app(\App\Services\Operaciones\CatalogoCuentasRutaEmpresa::class)->resolverAsignada('169', '113'));
     }
 
-    public function test_el_credito_del_deposito_usa_la_cuenta_contable_de_la_ruta_y_empresa(): void
+    public function test_credito_del_deposito_queda_pendiente_sin_asociacion_aunque_exista_en_cache(): void
     {
         Cache::put('cuentas_ruta_empresa:168', [
             ['cuenta' => '10013010', 'descripcion' => 'Ruta Villa Mella'],
@@ -765,7 +775,7 @@ JS;
         ]))->assertOk()->json('depositos_ruta');
 
         $this->assertCount(4, $depositos);
-        $this->assertSame('10013010', $depositos[1]['cuenta']);
+        $this->assertSame('Validar cuenta de ruta', $depositos[1]['cuenta']);
         $this->assertSame(578024.0, (float) $depositos[1]['credito']);
         $this->assertSame('Deposito', $depositos[1]['movimiento']);
         $this->assertSame('Validar cuenta de ruta', $depositos[3]['cuenta']);

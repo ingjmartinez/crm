@@ -4,7 +4,6 @@ namespace App\Services\Operaciones;
 
 use App\Models\CentroCostoCuentaRuta;
 use App\Models\CuentaContable;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -12,11 +11,35 @@ use RuntimeException;
 
 class CatalogoCuentasRutaEmpresa
 {
-    /** @var array<string, Collection<string, CentroCostoCuentaRuta>> */
-    private array $asociacionesPorEmpresa = [];
-
     /** @var array<string, array<int, array{cuenta: string, descripcion: string}>> */
     private array $catalogosLocalesPorEmpresa = [];
+
+    /** @return array{cuenta: string, descripcion: string}|null */
+    public function resolverAsignada(string $empresaId, string $idGrupo): ?array
+    {
+        $asociacion = $this->asociacionPorGrupo($empresaId, $idGrupo);
+        $cuenta = $asociacion?->cuentaRuta;
+
+        return $cuenta !== null && $cuenta->company_id === $empresaId
+            ? ['cuenta' => $cuenta->cuenta, 'descripcion' => $cuenta->descripcion]
+            : null;
+    }
+
+    private function asociacionPorGrupo(string $empresaId, string $idGrupo): ?CentroCostoCuentaRuta
+    {
+        $solicitud = request();
+        $claveCache = self::class.':asociaciones';
+        $asociacionesPorEmpresa = $solicitud->attributes->get($claveCache, []);
+        if (! isset($asociacionesPorEmpresa[$empresaId])) {
+            $asociacionesPorEmpresa[$empresaId] = CentroCostoCuentaRuta::query()
+                ->with('cuentaRuta')
+                ->where('company_id', $empresaId)
+                ->get()->keyBy('ruta_key');
+            $solicitud->attributes->set($claveCache, $asociacionesPorEmpresa);
+        }
+
+        return $asociacionesPorEmpresa[$empresaId]->get(CentroCostoCuentaRuta::claveRuta($idGrupo));
+    }
 
     /** @return array<int, array{cuenta: string, descripcion: string}> */
     public function listar(string $empresaId): array
@@ -66,18 +89,10 @@ class CatalogoCuentasRutaEmpresa
     public function resolver(string $empresaId, string $nombreGrupo, ?string $idGrupo = null, bool $consultarApi = true): ?array
     {
         if ($idGrupo !== null) {
-            $asociaciones = $this->asociacionesPorEmpresa[$empresaId] ??= CentroCostoCuentaRuta::query()
-                ->with('cuentaRuta')
-                ->where('company_id', $empresaId)
-                ->get()->keyBy('ruta_key');
-            $asociacion = $asociaciones->get(CentroCostoCuentaRuta::claveRuta($idGrupo));
+            $asociacion = $this->asociacionPorGrupo($empresaId, $idGrupo);
 
             if ($asociacion !== null) {
-                $cuenta = $asociacion->cuentaRuta;
-
-                return $cuenta !== null && $cuenta->company_id === $empresaId
-                    ? ['cuenta' => $cuenta->cuenta, 'descripcion' => $cuenta->descripcion]
-                    : null;
+                return $this->resolverAsignada($empresaId, $idGrupo);
             }
         }
 
