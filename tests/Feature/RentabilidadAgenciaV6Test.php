@@ -171,6 +171,11 @@ class RentabilidadAgenciaV6Test extends TestCase
     public function test_vista_columnas_ordenadas_y_rutas_con_mismos_permisos(): void
     {
         $this->datos();
+        $this->get(route('gerencia.rentabilidad-agencia-v6', $this->filtros()))->assertOk()
+            ->assertSee('id="clasificacionTablaV6"', false)
+            ->assertSee('id="categoriaTablaV6"', false)
+            ->assertSee('Todas las categorías')
+            ->assertSee('?v='.hash_file('sha256', public_path('js/pages/rentabilidad-agencia-v6.js')), false);
         $this->get(route('gerencia.rentabilidad-agencia-v6'))->assertOk()->assertSee('Año completo');
         $this->get(route('gerencia.rentabilidad-agencia-v6', $this->filtros()))->assertOk()->assertSeeInOrder(['Terminal</th>', 'Agencia (nombre)</th>', 'Ventas</th>', 'Premios sacados</th>', 'Premios pagados propios</th>', 'Premios pagados no propios</th>', 'Utilidad propia</th>', 'Utilidad general</th>', 'Gastos</th>', 'Balance propio</th>', 'Balance neto</th>', 'Clasificación propia</th>', 'Clasificación neta</th>', 'Acción</th>'], false);
         $this->assertSame(Route::getRoutes()->getByName('gerencia.rentabilidad-agencia-v5')->gatherMiddleware(), Route::getRoutes()->getByName('gerencia.rentabilidad-agencia-v6')->gatherMiddleware());
@@ -343,12 +348,24 @@ function elemento(id) {
 let inicio, opciones, ultimaUrl, alerta, cargando = false;
 const clasificacion = {nombre: 'Rentable', color: 'success', meses_positivos: 1, meses_con_ventas: 1, porcentaje: 100};
 const fila = {terminal: '001', nombre: '<Agencia>', empresa: 'Empresa', clasificacion_propia: clasificacion, clasificacion_neta: clasificacion};
+Object.assign(fila, {ventas: 100, balance_propio: 90, balance_neto: -5});
+const otraFila = {...fila, terminal: '002', ventas: 200, balance_propio: -20, balance_neto: 40, clasificacion_propia: {...clasificacion, nombre: 'No rentable'}};
+const sinVentas = {...fila, terminal: '003', ventas: 0, balance_propio: -5, balance_neto: -5, clasificacion_propia: {...clasificacion, nombre: 'Sin ventas'}, clasificacion_neta: {...clasificacion, nombre: 'Sin ventas'}};
 const datos = {...fila, meses: [{mes: '2026-01', ventas: 100, premios_propios: 1, premios_no_propios: 2, gastos: 10, balance_propio: 89, balance_neto: -2}]};
 global.document = {getElementById: elemento, addEventListener(tipo, fn){inicio = fn;}, body: {appendChild(){}}, createElement(){return {set textContent(v){this.innerHTML = v.replaceAll('<', '&lt;').replaceAll('>', '&gt;');}};}};
-global.window = {rentabilidadV6: {datos: [fila], filtros: {anio: 2026, mes_inicio: 1, mes_fin: 3, productos: ['Tradicional']}, urls: {resumen: 'http://localhost/resumen'}}};
+global.window = {rentabilidadV6: {datos: [fila, otraFila, sinVentas], filtros: {anio: 2026, mes_inicio: 1, mes_fin: 3, productos: ['Tradicional']}, urls: {resumen: 'http://localhost/resumen'}}};
 window.Swal = {fire(configuracion){alerta = configuracion; configuracion.didOpen();}, showLoading(){cargando = true;}};
-global.$ = () => ({DataTable(o){opciones = o; return {row(){return {data(){return fila;}}}};}});
-$.fn = {dataTable: {render: {text(){return x => x;}}}};
+const filtrosColumnas = new Map();
+const filasAplicadas = () => window.rentabilidadV6.datos.filter(fila => [...filtrosColumnas].every(([indice, filtro]) => !filtro || new RegExp(filtro).test(fila[indice === 11 ? 'clasificacion_propia' : 'clasificacion_neta'].nombre)));
+const apiTabla = {
+    row(){return {data(){return fila;}};},
+    rows(opciones){assert.equal(opciones.search, 'applied'); return {data(){return {toArray: filasAplicadas};}};},
+    columns(indices){return {search(valor){indices.forEach(indice => filtrosColumnas.set(indice, valor));}};},
+    column(indice){return {search(valor, regex, smart){assert.equal(regex, true); assert.equal(smart, false); filtrosColumnas.set(indice, valor);}, footer(){return elemento('pie' + indice);}};},
+    draw(){opciones.footerCallback.call({api(){return apiTabla;}});},
+};
+global.$ = () => ({DataTable(o){opciones = o; return apiTabla;}});
+$.fn = {dataTable: {render: {text(){return x => x;}}, util: {escapeRegex(valor){return valor.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\$&');}}}};
 global.bootstrap = {Modal: class {show(){}}};
 global.fetch = async url => {ultimaUrl = url; return {ok: true, redirected: false, async json(){return datos;}};};
 vm.runInThisContext(fs.readFileSync(process.argv[1], 'utf8'));
@@ -362,6 +379,31 @@ assert.equal(cargando, true);
 assert.equal(opciones.columns.length, 14);
 assert.equal(opciones.deferRender, true);
 assert.equal(opciones.pageLength, 25);
+apiTabla.draw();
+assert.equal(elemento('pie1').textContent, '3 terminales');
+assert.equal(elemento('pie2').textContent, 'RD$ 300.00');
+elemento('clasificacionTablaV6').value = 'propia';
+elemento('categoriaTablaV6').value = 'Rentable';
+elemento('categoriaTablaV6').listeners.change();
+assert.deepEqual(filasAplicadas().map(fila => fila.terminal), ['001']);
+assert.equal(elemento('pie9').textContent, 'RD$ 90.00');
+elemento('clasificacionTablaV6').value = 'neta';
+elemento('clasificacionTablaV6').listeners.change();
+assert.deepEqual(filasAplicadas().map(fila => fila.terminal), ['001', '002']);
+assert.equal(filtrosColumnas.get(11), '');
+assert.equal(elemento('pie10').textContent, 'RD$ 35.00');
+elemento('categoriaTablaV6').value = 'Buena';
+elemento('categoriaTablaV6').listeners.change();
+assert.equal(filasAplicadas().length, 0);
+assert.equal(elemento('pie2').textContent, 'RD$ 0.00');
+elemento('categoriaTablaV6').value = 'Sin ventas';
+elemento('categoriaTablaV6').listeners.change();
+assert.deepEqual(filasAplicadas().map(fila => fila.terminal), ['003']);
+elemento('categoriaTablaV6').value = '';
+elemento('categoriaTablaV6').listeners.change();
+assert.equal(filasAplicadas().length, 3);
+assert.equal(elemento('pie1').textContent, '3 terminales');
+assert.equal(ultimaUrl, undefined);
 elemento('anioCompletoV6').checked = true;
 elemento('anioCompletoV6').listeners.change();
 assert.equal(elemento('mes_finV6').value, '12');

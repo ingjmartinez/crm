@@ -46,6 +46,7 @@
         });
         if (!configuracion.datos.length || !document.getElementById('tablaRentabilidadV6')) return;
 
+        const camposImporte = ['ventas', 'premios_sacados', 'premios_propios', 'premios_no_propios', 'utilidad_propia', 'utilidad_general', 'gastos', 'balance_propio', 'balance_neto'];
         const tabla = $('#tablaRentabilidadV6').DataTable({
             data: configuracion.datos,
             deferRender: true,
@@ -57,7 +58,7 @@
             columns: [
                 { data: 'terminal', render: $.fn.dataTable.render.text() },
                 { data: 'nombre', render: $.fn.dataTable.render.text() },
-                ...['ventas', 'premios_sacados', 'premios_propios', 'premios_no_propios', 'utilidad_propia', 'utilidad_general', 'gastos', 'balance_propio', 'balance_neto'].map(campo => ({
+                ...camposImporte.map(campo => ({
                     data: campo, className: 'text-end', render: (valor, tipo) => tipo === 'display' ? moneda(valor) : Number(valor),
                     createdCell: (celda, valor) => { if (campo.startsWith('balance') && colorBalance(valor)) celda.classList.add(colorBalance(valor)); },
                 })),
@@ -69,8 +70,34 @@
                 document.getElementById('contenedorTablaV6').classList.remove('d-none');
                 this.api().columns.adjust();
             },
+            footerCallback: function () {
+                const api = this.api();
+                const filas = api.rows({ search: 'applied' }).data().toArray();
+                api.column(0).footer().textContent = 'Totales filtrados';
+                api.column(1).footer().textContent = `${filas.length} terminales`;
+                camposImporte.forEach((campo, indice) => {
+                    const total = Math.round(filas.reduce((suma, fila) => suma + Number(fila[campo] || 0), 0) * 100) / 100;
+                    const celda = api.column(indice + 2).footer();
+                    celda.textContent = moneda(total);
+                    celda.classList.remove('text-success', 'text-danger');
+                    if (campo.startsWith('balance') && colorBalance(total)) celda.classList.add(colorBalance(total));
+                });
+            },
             language: { search: 'Buscar:', info: 'Mostrando _START_ a _END_ de _TOTAL_ terminales', infoEmpty: 'Sin terminales', zeroRecords: 'Sin coincidencias', paginate: { next: 'Siguiente', previous: 'Anterior' } },
         });
+
+        const clasificacionTabla = document.getElementById('clasificacionTablaV6');
+        const categoriaTabla = document.getElementById('categoriaTablaV6');
+        const filtrarClasificacion = () => {
+            tabla.columns([11, 12]).search('');
+            if (categoriaTabla.value) {
+                const columna = clasificacionTabla.value === 'neta' ? 12 : 11;
+                tabla.column(columna).search('^' + $.fn.dataTable.util.escapeRegex(categoriaTabla.value) + '$', true, false);
+            }
+            tabla.draw();
+        };
+        clasificacionTabla.addEventListener('change', filtrarClasificacion);
+        categoriaTabla.addEventListener('change', filtrarClasificacion);
 
         const elementoModal = document.getElementById('modalRentabilidadV6');
         document.body.appendChild(elementoModal);

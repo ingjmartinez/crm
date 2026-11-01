@@ -63,6 +63,26 @@
                 @if ($resultado['filas']->isEmpty())<div class="alert alert-info">No se encontraron terminales activas con los filtros seleccionados.</div>@else
                     <div id="cargandoV6" role="status" class="text-muted py-3">Preparando tabla...</div>
                     <div id="contenedorTablaV6" class="d-none">
+                        <div class="row g-3 mb-3 align-items-end">
+                            <div class="col-md-3">
+                                <label for="clasificacionTablaV6" class="form-label">Clasificación</label>
+                                <select id="clasificacionTablaV6" class="form-select">
+                                    <option value="propia">Propia</option>
+                                    <option value="neta">Neta</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="categoriaTablaV6" class="form-label">Categoría</label>
+                                <select id="categoriaTablaV6" class="form-select">
+                                    <option value="">Todas las categorías</option>
+                                    @foreach (\App\Services\ClasificadorRentabilidadMensual::UMBRALES as $categoria)
+                                        <option value="{{ $categoria['nombre'] }}">{{ $categoria['nombre'] }}</option>
+                                    @endforeach
+                                    <option value="Sin ventas">Sin ventas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6"><p class="text-muted small mb-0">Filtra las terminales ya consultadas. Los totales al pie y las exportaciones de la tabla se ajustan a las filas filtradas.</p></div>
+                        </div>
                         <table id="tablaRentabilidadV6" class="table table-bordered table-striped align-middle w-100">
                             <thead><tr><th>Terminal</th><th>Agencia (nombre)</th><th>Ventas</th><th>Premios sacados</th><th>Premios pagados propios</th><th>Premios pagados no propios</th><th>Utilidad propia</th><th>Utilidad general</th><th>Gastos</th><th>Balance propio</th><th>Balance neto</th><th>Clasificación propia</th><th>Clasificación neta</th><th>Acción</th></tr></thead>
                             <tbody></tbody>
@@ -84,5 +104,5 @@
             urls: {{ Illuminate\Support\Js::from(['resumen' => route('gerencia.rentabilidad-agencia-v6.resumen'), 'ver' => route('gerencia.rentabilidad-agencia-v6.detalle'), 'cuentas' => route('gerencia.rentabilidad-agencia-v6.cuentas')]) }},
         };
     </script>
-    <script src="{{ asset('js/pages/rentabilidad-agencia-v6.js') }}"></script>
+    <script src="{{ asset('js/pages/rentabilidad-agencia-v6.js') }}?v={{ hash_file('sha256', public_path('js/pages/rentabilidad-agencia-v6.js')) }}"></script>
 @endsection
