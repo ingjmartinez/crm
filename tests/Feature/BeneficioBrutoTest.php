@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class BeneficioBrutoTest extends TestCase
@@ -18,6 +19,22 @@ class BeneficioBrutoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->withoutMiddleware(\App\Http\Middleware\EnsureViewPermission::class);
+        Schema::create('permissions', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+        });
+        $usuario = \Mockery::mock(\App\Models\User::class)->makePartial();
+        $usuario->name = 'Usuario de prueba';
+        $usuario->email = 'prueba@example.test';
+        $usuario->shouldReceive('can')->andReturnFalse();
+        $usuario->shouldReceive('hasRole')->andReturnFalse();
+        $usuario->setRelation('viewPermissions', collect());
+        $this->actingAs($usuario);
+        \Illuminate\Support\Facades\Gate::before(fn (): bool => false);
 
         config()->set('database.connections.crm', [
             'driver' => 'sqlite',
@@ -163,6 +180,69 @@ class BeneficioBrutoTest extends TestCase
                     && ! array_key_exists('bloque_lider', $informe)
                     && count($informe['bloques']) === 4;
             });
+    }
+
+    public function test_large_report_defers_table_rows_and_preserves_all_data_and_totals(): void
+    {
+        $encabezados = implode(',', array_map(fn (int $indice): string => "Columna{$indice}", range(1, 47)));
+        $registros = collect(range(1, 500))->map(fn (int $numero): string => "Terminal,Grupo,Terminal-{$numero},Responsable,100,0,0,-25,200,0,0,50,0,0,0,0");
+        $archivo = UploadedFile::fake()->createWithContent('grande.csv', $encabezados."\n".$registros->implode("\n"));
+        $response = $this->withoutMiddleware([Authenticate::class, ForcePasswordChange::class])
+            ->post(route('gerencia.beneficio-bruto.procesar'), ['archivo_joselito' => $archivo])
+            ->assertOk()->assertViewHas('datosTabla', fn (array $datos): bool => count($datos) === 500 && count($datos[0]) === 15)
+            ->assertViewHas('totales', fn (array $totales): bool => $totales['tradicional_ventas'] === 50000.0);
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($documento);
+        $this->assertSame(0, $xpath->query("//table[@id='tabla-beneficio-bruto']/tbody/tr")->length);
+        $this->assertSame(1, $xpath->query("//*[@id='cargando-tabla-beneficio'][@role='status']")->length);
+        $script = $xpath->query('//script[contains(text(), "const formatoMontoTabla =")]')->item(0)->textContent;
+        $inicio = strpos($script, 'const formatoMontoTabla =');
+        $script = substr($script, $inicio, strrpos($script, '});') - $inicio);
+        $codigo = <<<'JS'
+const fs = require('fs');
+const vm = require('vm');
+const entrada = JSON.parse(fs.readFileSync(0, 'utf8'));
+let configuracion;
+let ajustar = false;
+const marcos = [];
+const tareas = [];
+const ocultos = new Set(['contenedor-tabla-beneficio']);
+globalThis.document = { getElementById: id => ({ classList: {
+    add: () => ocultos.add(id), remove: () => ocultos.delete(id),
+} }) };
+globalThis.$ = () => ({ length: 1, DataTable: opciones => { configuracion = opciones; } });
+$.fn = { DataTable: {}, dataTable: { render: { text: () => ({}) } } };
+globalThis.requestAnimationFrame = accion => marcos.push(accion);
+globalThis.setTimeout = accion => tareas.push(accion);
+vm.runInThisContext('(function () {' + entrada.script + '})();');
+const diferido = configuracion === undefined && ocultos.has('contenedor-tabla-beneficio');
+marcos[0]();
+tareas[0]();
+configuracion.initComplete.call({ api: () => ({ columns: { adjust: () => { ajustar = true; } } }) });
+const colores = [];
+configuracion.columnDefs[2].createdCell({ classList: { add: (...clases) => colores.push(...clases) } }, -25);
+process.stdout.write(JSON.stringify({
+    diferido, cantidad: configuracion.data.length, pagina: configuracion.pageLength,
+    nodosDiferidos: configuracion.deferRender, texto: configuracion.columnDefs[1].render(1000.5, 'display'),
+    numero: configuracion.columnDefs[1].render(-25, 'sort'), colores, ajustar,
+    visible: !ocultos.has('contenedor-tabla-beneficio'), indicadorOculto: ocultos.has('cargando-tabla-beneficio'),
+    botones: configuracion.buttons,
+}));
+JS;
+        $proceso = new Process(['node', '-e', $codigo]);
+        $proceso->setInput(json_encode(compact('script'), JSON_THROW_ON_ERROR));
+        $proceso->mustRun();
+        $resultado = json_decode($proceso->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(500, $resultado['cantidad']);
+        $this->assertSame(25, $resultado['pagina']);
+        foreach (['diferido', 'nodosDiferidos', 'ajustar', 'visible', 'indicadorOculto'] as $campo) {
+            $this->assertTrue($resultado[$campo], $campo);
+        }
+        $this->assertSame('1,000.50', $resultado['texto']);
+        $this->assertSame(-25, $resultado['numero']);
+        $this->assertContains('text-danger', $resultado['colores']);
+        $this->assertSame(['copy', 'csv', 'excel', 'pdf', 'print'], $resultado['botones']);
     }
 
     public function test_management_report_counts_unique_terminals_that_sold_each_product(): void

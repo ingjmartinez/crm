@@ -166,22 +166,19 @@ class DistribucionGastoRutaService
      */
     public function terminalesPorMapeo(Collection $mapeos): Collection
     {
-        $centros = $this->centrosActivos();
-
-        return $mapeos->mapWithKeys(function (DistribucionGastoRutaMapeo $mapeo) use ($centros): array {
-            $terminales = $centros
-                ->filter(fn (CentroDeCosto $centro): bool => $this->codigoCampo($centro->company_id) === $mapeo->company_id
-                    && $this->codigoCampo($centro->id_grupo) === $mapeo->id_grupo
-                    && $this->codigoCampo($centro->id_sub_grupo) === $mapeo->id_sub_grupo)
+        $terminalesPorGrupo = $this->centrosActivos()
+            ->groupBy(fn (CentroDeCosto $centro): string => $this->codigoCampo($centro->company_id).'|'.$this->codigoCampo($centro->id_grupo).'|'.$this->codigoCampo($centro->id_sub_grupo))
+            ->map(fn (Collection $centros): array => $centros
                 ->pluck('id_viejo')
                 ->map(fn (mixed $terminal): string => $this->normalizarTerminal($terminal))
                 ->filter()
                 ->unique()
                 ->values()
-                ->all();
+                ->all());
 
-            return [$mapeo->id => $terminales];
-        });
+        return $mapeos->mapWithKeys(fn (DistribucionGastoRutaMapeo $mapeo): array => [
+            $mapeo->id => $terminalesPorGrupo->get($mapeo->company_id.'|'.$mapeo->id_grupo.'|'.$mapeo->id_sub_grupo, []),
+        ]);
     }
 
     /**

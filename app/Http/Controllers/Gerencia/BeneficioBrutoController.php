@@ -156,6 +156,12 @@ class BeneficioBrutoController extends Controller
         $totales = collect($camposNumericos)
             ->mapWithKeys(fn (string $campo): array => [$campo => (float) $filas->sum($campo)])
             ->all();
+        $datosTabla = $filas->map(fn (array $fila): array => [
+            $fila['terminal'],
+            $fila['ciudad'] ?? 'No identificada',
+            $fila['ruta'] ?? 'No identificada',
+            ...array_map(fn (string $campo): float => (float) $fila[$campo], $camposNumericos),
+        ])->values()->all();
         $informeGerencial = $this->crearInformeGerencial($filas, $resumen);
         $cruceAgencias = [
             'identificadas' => $filas->where('agencia_encontrada', true)->count(),
@@ -166,6 +172,7 @@ class BeneficioBrutoController extends Controller
 
         return view('gerencia.beneficio-bruto', [
             'filas' => $filas,
+            'datosTabla' => $datosTabla,
             'totales' => $totales,
             'resumen' => $resumen,
             'resumenPorGrupo' => $resumenPorGrupo,

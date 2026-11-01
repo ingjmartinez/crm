@@ -3,6 +3,7 @@
 namespace App\Services\Operaciones;
 
 use App\Models\CentroCostoCuentaRuta;
+use App\Models\CuentaContable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -13,6 +14,9 @@ class CatalogoCuentasRutaEmpresa
 {
     /** @var array<string, Collection<string, CentroCostoCuentaRuta>> */
     private array $asociacionesPorEmpresa = [];
+
+    /** @var array<string, array<int, array{cuenta: string, descripcion: string}>> */
+    private array $catalogosLocalesPorEmpresa = [];
 
     /** @return array<int, array{cuenta: string, descripcion: string}> */
     public function listar(string $empresaId): array
@@ -59,7 +63,7 @@ class CatalogoCuentasRutaEmpresa
     }
 
     /** @return array{cuenta: string, descripcion: string}|null */
-    public function resolver(string $empresaId, string $nombreGrupo, ?string $idGrupo = null): ?array
+    public function resolver(string $empresaId, string $nombreGrupo, ?string $idGrupo = null, bool $consultarApi = true): ?array
     {
         if ($idGrupo !== null) {
             $asociaciones = $this->asociacionesPorEmpresa[$empresaId] ??= CentroCostoCuentaRuta::query()
@@ -82,7 +86,8 @@ class CatalogoCuentasRutaEmpresa
             return null;
         }
 
-        $coincidencias = collect($this->listar($empresaId))
+        $catalogo = $consultarApi ? $this->listar($empresaId) : $this->listarSinConsultarApi($empresaId);
+        $coincidencias = collect($catalogo)
             ->map(function (array $cuenta) use ($tokensGrupo): array {
                 $tokensCuenta = $this->tokens($cuenta['descripcion']);
                 $exacta = $tokensCuenta !== [] && $tokensCuenta === $tokensGrupo;
@@ -96,6 +101,19 @@ class CatalogoCuentasRutaEmpresa
         $mejores = $coincidencias->where('puntaje', $mayorPuntaje);
 
         return $mejores->count() === 1 ? $mejores->first()['cuenta'] : null;
+    }
+
+    /** @return array<int, array{cuenta: string, descripcion: string}> */
+    private function listarSinConsultarApi(string $empresaId): array
+    {
+        return $this->catalogosLocalesPorEmpresa[$empresaId] ??= CuentaContable::query()
+            ->where('company_id', $empresaId)
+            ->where('cuenta', 'like', '10013%')
+            ->orderBy('cuenta')
+            ->get(['cuenta', 'descripcion'])
+            ->map(fn (CuentaContable $cuenta): array => ['cuenta' => trim($cuenta->cuenta), 'descripcion' => trim((string) $cuenta->descripcion)])
+            ->concat(Cache::get('cuentas_ruta_empresa:'.$empresaId, []))
+            ->unique('cuenta')->values()->all();
     }
 
     /** @return array<int, string> */

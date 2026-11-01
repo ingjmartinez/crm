@@ -53,7 +53,7 @@ class ContabilidadDistribucionGastoRutaController extends Controller
                     'cuentas_credito' => $relaciones->groupBy('company_id')
                         ->map(function (Collection $mapeos, string $companyId): array {
                             try {
-                                $cuenta = $this->catalogoCuentasRuta->resolver($companyId, $mapeos->first()->nombre_grupo, $mapeos->first()->id_grupo);
+                                $cuenta = $this->catalogoCuentasRuta->resolver($companyId, $mapeos->first()->nombre_grupo, $mapeos->first()->id_grupo, consultarApi: false);
                             } catch (ConnectionException|RuntimeException) {
                                 $cuenta = null;
                             }

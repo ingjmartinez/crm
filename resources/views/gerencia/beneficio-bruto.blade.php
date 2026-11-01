@@ -331,7 +331,13 @@
                         @endif
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
+                        @if ($filas->isNotEmpty())
+                            <div id="cargando-tabla-beneficio" class="text-center text-muted py-4" role="status">
+                                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                Preparando tabla de terminales...
+                            </div>
+                        @endif
+                        <div id="contenedor-tabla-beneficio" @class(['table-responsive', 'd-none' => $filas->isNotEmpty()])>
                             <table class="table table-bordered table-striped align-middle w-100" id="tabla-beneficio-bruto">
                                 <thead class="table-light text-center align-middle">
                                     <tr>
@@ -359,23 +365,11 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @forelse ($filas as $fila)
-                                        <tr>
-                                            <td>{{ $fila['terminal'] }}</td>
-                                            <td>{{ $fila['ciudad'] ?? 'No identificada' }}</td>
-                                            <td>{{ $fila['ruta'] ?? 'No identificada' }}</td>
-                                            @foreach (array_keys($totales) as $campo)
-                                                @php($valor = (float) $fila[$campo])
-                                                <td class="text-end {{ str_ends_with($campo, 'resultados') ? ($valor < 0 ? 'text-danger fw-semibold' : 'text-success fw-semibold') : '' }}">
-                                                    {{ number_format($valor, 2) }}
-                                                </td>
-                                            @endforeach
-                                        </tr>
-                                    @empty
+                                    @if ($filas->isEmpty())
                                         <tr>
                                             <td colspan="15" class="text-center text-muted py-4">Carga un documento CSV para generar el reporte.</td>
                                         </tr>
-                                    @endforelse
+                                    @endif
                                 </tbody>
                                 @if ($filas->isNotEmpty())
                                     <tfoot class="table-light fw-semibold">
@@ -1157,13 +1151,22 @@
                 });
             }
 
+            const formatoMontoTabla = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const table = $('#tabla-beneficio-bruto');
+            const datosTabla = {{ Illuminate\Support\Js::from($datosTabla) }};
 
-            if (!table.length || table.find('tbody td[colspan]').length || !$.fn.DataTable) {
+            if (!table.length || !datosTabla.length) {
                 return;
             }
 
-            table.DataTable({
+            if (!$.fn.DataTable) {
+                document.getElementById('cargando-tabla-beneficio').textContent = 'No se pudo mostrar la tabla. Recarga la pagina.';
+                return;
+            }
+
+            requestAnimationFrame(() => setTimeout(() => table.DataTable({
+                data: datosTabla,
+                deferRender: true,
                 scrollX: true,
                 paging: true,
                 pageLength: 25,
@@ -1172,6 +1175,23 @@
                 order: [[0, 'asc']],
                 buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
                 dom: 'Bfrtip',
+                columnDefs: [
+                    { targets: [0, 1, 2], render: $.fn.dataTable.render.text() },
+                    {
+                        targets: Array.from({ length: 12 }, (_, indice) => indice + 3),
+                        className: 'text-end',
+                        render: (valor, tipo) => tipo === 'display' || tipo === 'filter' ? formatoMontoTabla.format(Number(valor)) : Number(valor),
+                    },
+                    {
+                        targets: [6, 10],
+                        createdCell: (celda, valor) => celda.classList.add(Number(valor) < 0 ? 'text-danger' : 'text-success', 'fw-semibold'),
+                    },
+                ],
+                initComplete: function () {
+                    document.getElementById('contenedor-tabla-beneficio').classList.remove('d-none');
+                    document.getElementById('cargando-tabla-beneficio').classList.add('d-none');
+                    this.api().columns.adjust();
+                },
                 language: {
                     search: 'Buscar:',
                     lengthMenu: 'Mostrar _MENU_ registros',
@@ -1185,7 +1205,7 @@
                         previous: 'Anterior',
                     },
                 },
-            });
+            }), 0));
         });
     </script>
 @endsection

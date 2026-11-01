@@ -551,20 +551,13 @@ JS;
         $this->assertSame(2, substr_count($response->getContent(), '<td>1101</td>'));
     }
 
-    public function test_identifica_automaticamente_la_cuenta_de_credito_segun_empresa_y_nombre_del_id_de_ruta(): void
+    public function test_apertura_resuelve_cuentas_desde_catalogo_local_sin_llamar_api(): void
     {
         Cache::forget('cuentas_ruta_empresa:168');
         Cache::forget('cuentas_ruta_empresa:169');
-        Http::fake(function ($request) {
-            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
-            $empresa = (string) ($query['intIdEmpresa'] ?? '');
-
-            return Http::response(['Result' => ['Det' => [
-                ['Cuenta' => '100130007', 'Descripcion' => $empresa === '168' ? 'Ruta Distrito 2' : 'Ruta Bani 8'],
-                ['Cuenta' => '100130003', 'Descripcion' => $empresa === '169' ? 'Ruta Bani 9' : 'Ruta San Carlos'],
-                ['Cuenta' => '100210003', 'Descripcion' => 'Banco'],
-            ]]], 200);
-        });
+        Http::fake(['*' => Http::response([], 500)]);
+        CuentaContable::query()->create(['company_id' => '168', 'cuenta' => '100130007', 'descripcion' => 'Ruta Distrito 2']);
+        CuentaContable::query()->create(['company_id' => '169', 'cuenta' => '100130003', 'descripcion' => 'Ruta Bani 9']);
 
         DB::table('distribucion_gasto_ruta_mapeos')->insert([
             ['ruta_key' => 'RUTA DISTRITO', 'ruta_nombre' => 'Ruta Distrito', 'company_id' => '168',
@@ -586,6 +579,49 @@ JS;
         $this->assertSame('100130007', $rutas['RUTA DISTRITO']['cuentas_credito'][0]['cuenta_codigo']);
         $this->assertSame('100130003', $rutas['RUTA BANI 9']['cuentas_credito'][0]['cuenta_codigo']);
         $this->assertNull($rutas['RUTA SIN CUENTA']['cuentas_credito'][0]['cuenta_codigo']);
+        Http::assertNothingSent();
+    }
+
+    public function test_apertura_con_muchas_rutas_y_cache_vacia_no_depende_del_api(): void
+    {
+        Cache::forget('cuentas_ruta_empresa:168');
+        Cache::forget('cuentas_ruta_empresa:169');
+        Http::fake(['*' => Http::response([], 500)]);
+        foreach (range(1, 40) as $numero) {
+            \App\Models\DistribucionGastoRutaMapeo::query()->create([
+                'ruta_key' => 'RUTA '.$numero, 'ruta_nombre' => 'Ruta '.$numero, 'company_id' => '168',
+                'id_grupo' => (string) $numero, 'nombre_grupo' => 'Ruta '.$numero,
+                'id_sub_grupo' => '65', 'nombre_socio' => 'Socio',
+            ]);
+        }
+        DB::enableQueryLog();
+        try {
+            $response = $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk();
+            $this->assertCount(40, $response->viewData('mapeosAgrupados'));
+            $consultasCatalogo = collect(DB::getQueryLog())->filter(fn (array $consulta): bool => str_contains($consulta['query'], 'from "cuentas_contables"'));
+            $this->assertCount(1, $consultasCatalogo);
+            Http::assertNothingSent();
+        } finally {
+            DB::disableQueryLog();
+        }
+    }
+
+    public function test_indices_de_catalogo_de_rutas_son_reversibles_y_no_reemplazan_indices_existentes(): void
+    {
+        Schema::table('movimientos_rutas_v2_transacciones', function (Blueprint $table): void {
+            $table->index(['fecha', 'ruta_key'], 'mrv2_fecha_ruta_existente');
+        });
+        $archivo = glob(database_path('migrations/*_add_route_catalog_indexes_to_movimientos_rutas_v2_tables.php'))[0];
+        $migracion = require $archivo;
+        $migracion->up();
+        $migracion->up();
+        $this->assertTrue(Schema::hasIndex('movimientos_rutas_v2_transacciones', 'mrv2_transacciones_catalogo_ruta_idx'));
+        $this->assertTrue(Schema::hasIndex('movimientos_rutas_v2_gastos', 'mrv2_gastos_catalogo_ruta_idx'));
+        $migracion->down();
+        $migracion->down();
+        $this->assertFalse(Schema::hasIndex('movimientos_rutas_v2_transacciones', 'mrv2_transacciones_catalogo_ruta_idx'));
+        $this->assertFalse(Schema::hasIndex('movimientos_rutas_v2_gastos', 'mrv2_gastos_catalogo_ruta_idx'));
+        $this->assertTrue(Schema::hasIndex('movimientos_rutas_v2_transacciones', 'mrv2_fecha_ruta_existente'));
     }
 
     public function test_muestra_depositos_aplicados_del_periodo_con_su_centro_de_costo_de_ruta(): void
