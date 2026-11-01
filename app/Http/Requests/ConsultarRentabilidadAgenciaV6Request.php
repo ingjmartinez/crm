@@ -1,0 +1,61 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
+
+class ConsultarRentabilidadAgenciaV6Request extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return Auth::check();
+    }
+
+    public function rules(): array
+    {
+        $detalle = ! $this->routeIs('gerencia.rentabilidad-agencia-v6', 'gerencia.rentabilidad-agencia-v6.informe-ejecutivo');
+
+        return [
+            'anio' => [$detalle ? 'required' : 'nullable', 'required_with:mes_inicio,mes_fin', 'integer', 'between:1900,9998'],
+            'mes_inicio' => [$detalle ? 'required' : 'nullable', 'required_with:anio', 'integer', 'between:1,12'],
+            'mes_fin' => [$detalle ? 'required' : 'nullable', 'required_with:anio', 'integer', 'between:1,12', 'gte:mes_inicio'],
+            'anio_completo' => ['nullable', 'boolean'],
+            'empresa' => ['nullable', 'string', 'max:255'],
+            'alcance' => ['nullable', 'in:todas,terminal'],
+            'terminal' => [$detalle ? 'required' : 'nullable', 'required_if:alcance,terminal', 'string', 'max:100'],
+            'productos_filtrados' => ['nullable', 'boolean'],
+            'productos' => ['nullable', 'array', 'max:3'],
+            'productos.*' => ['distinct', 'in:Tradicional,No Tradicional,Recarga'],
+        ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->boolean('anio_completo')) {
+            $this->merge(['mes_inicio' => 1, 'mes_fin' => 12]);
+        }
+    }
+
+    public function messages(): array
+    {
+        return [
+            'anio.required' => 'Selecciona el año del reporte.',
+            'mes_inicio.required' => 'Selecciona el mes inicial.',
+            'mes_fin.required' => 'Selecciona el mes final.',
+            'anio.required_with' => 'Selecciona el ano del reporte.',
+            'anio.integer' => 'El ano debe ser un numero entero.',
+            'anio.between' => 'Selecciona un ano entre 1900 y 9998.',
+            'mes_inicio.required_with' => 'Selecciona el mes inicial.',
+            'mes_fin.required_with' => 'Selecciona el mes final.',
+            'mes_inicio.between' => 'El mes inicial debe estar entre enero y diciembre.',
+            'mes_fin.between' => 'El mes final debe estar entre enero y diciembre.',
+            'mes_fin.gte' => 'El mes final no puede ser anterior al inicial.',
+            'terminal.required' => 'Indica la terminal que deseas consultar.',
+            'terminal.required_if' => 'Indica la terminal que deseas consultar.',
+            'terminal.max' => 'La terminal es demasiado larga.',
+            'empresa.max' => 'El nombre de empresa es demasiado largo.',
+            'productos.*.in' => 'Selecciona un producto valido.',
+        ];
+    }
+}

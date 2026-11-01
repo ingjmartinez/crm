@@ -936,6 +936,16 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Rentabilidad de Agencia V6',
+                'descripcion' => 'Balances propios y netos por rango de meses y clasificacion mensual.',
+                'url' => '/gerencia/rentabilidad-agencia-v6',
+                'icono' => 'ri-line-chart-line',
+                'categoria' => 'Rentabilidad',
+                'tags' => ['gerencia', 'rentabilidad', 'ventas', 'premios', 'terminales'],
+                'permission' => 'gerencia.rentabilidad_de_agencia.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Gráfico de rentabilidad',
                 'descripcion' => 'Consulta la rentabilidad de V5 por empresa, ruta, terminal y productos para los tableros gráficos.',
                 'url' => '/gerencia/grafico-rentabilidad',
