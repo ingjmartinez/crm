@@ -946,6 +946,16 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Rentabilidad de Agencia V7',
+                'descripcion' => 'Ventas, premios sacados y balance general por rango de meses y clasificación mensual.',
+                'url' => '/gerencia/rentabilidad-agencia-v7',
+                'icono' => 'ri-line-chart-line',
+                'categoria' => 'Rentabilidad',
+                'tags' => ['gerencia', 'rentabilidad', 'ventas', 'premios', 'terminales'],
+                'permission' => 'gerencia.rentabilidad_de_agencia.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Gráfico de rentabilidad',
                 'descripcion' => 'Consulta la rentabilidad de V5 por empresa, ruta, terminal y productos para los tableros gráficos.',
                 'url' => '/gerencia/grafico-rentabilidad',

@@ -39,6 +39,7 @@ use App\Http\Controllers\Gerencia\RentabilidadAgenciaV3Controller;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV4Controller;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV5Controller;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV6Controller;
+use App\Http\Controllers\Gerencia\RentabilidadAgenciaV7Controller;
 use App\Http\Controllers\Gerencia\SeguimientoAgenciaController;
 use App\Http\Controllers\Gerencia\VentasEnVivoController;
 use App\Http\Controllers\GestionAgenciasReporteController;
@@ -179,6 +180,11 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     Route::get('/gerencia/rentabilidad-agencia-v6/detalle', [RentabilidadAgenciaV6Controller::class, 'detalle'])->name('gerencia.rentabilidad-agencia-v6.detalle');
     Route::get('/gerencia/rentabilidad-agencia-v6/cuentas', [RentabilidadAgenciaV6Controller::class, 'cuentas'])->name('gerencia.rentabilidad-agencia-v6.cuentas');
     Route::get('/gerencia/rentabilidad-agencia-v6/informe-ejecutivo', [RentabilidadAgenciaV6Controller::class, 'informeEjecutivo'])->name('gerencia.rentabilidad-agencia-v6.informe-ejecutivo');
+    Route::get('/gerencia/rentabilidad-agencia-v7', [RentabilidadAgenciaV7Controller::class, 'index'])->name('gerencia.rentabilidad-agencia-v7');
+    Route::get('/gerencia/rentabilidad-agencia-v7/resumen', [RentabilidadAgenciaV7Controller::class, 'resumen'])->name('gerencia.rentabilidad-agencia-v7.resumen');
+    Route::get('/gerencia/rentabilidad-agencia-v7/detalle', [RentabilidadAgenciaV7Controller::class, 'detalle'])->name('gerencia.rentabilidad-agencia-v7.detalle');
+    Route::get('/gerencia/rentabilidad-agencia-v7/cuentas', [RentabilidadAgenciaV7Controller::class, 'cuentas'])->name('gerencia.rentabilidad-agencia-v7.cuentas');
+    Route::get('/gerencia/rentabilidad-agencia-v7/informe-ejecutivo', [RentabilidadAgenciaV7Controller::class, 'informeEjecutivo'])->name('gerencia.rentabilidad-agencia-v7.informe-ejecutivo');
     Route::get('/gerencia/grafico-rentabilidad', [GraficoRentabilidadController::class, 'index'])
         ->name('gerencia.grafico-rentabilidad');
     Route::get('/gerencia/grafico-rentabilidad/datos', [GraficoRentabilidadController::class, 'datos'])
