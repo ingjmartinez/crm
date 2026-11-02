@@ -139,7 +139,7 @@ class RentabilidadAgenciaV7Test extends TestCase
             ->assertJsonPath('utilidad', 110)->assertJsonPath('gastos', 87)->assertJsonPath('balance_general', 23)
             ->assertJsonPath('meses.0.utilidad', 10)->assertJsonPath('meses.0.balance_general', -45)
             ->assertJsonPath('meses.1.balance_general', 85)->assertJsonPath('meses.2.balance_general', -17)
-            ->assertJsonPath('clasificacion.nombre', 'Para rescatar')
+            ->assertJsonPath('clasificacion.nombre', 'En evaluación')
             ->assertJsonPath('clasificacion.meses_positivos', 1)->assertJsonPath('clasificacion.meses_con_ventas', 2)
             ->assertJsonCount(3, 'meses')->assertJsonMissingPath('premios_propios')->assertJsonMissingPath('clasificacion_neta');
         $original = app(\App\Services\RentabilidadAgenciaV6Service::class)->reporte($this->filtros())['filas']->first();
@@ -163,8 +163,9 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertSame(120.0, $resultado['filas']->firstWhere('terminal', '1003')['ventas']);
         $this->assertSame(3, $resultado['resumen_clasificaciones']['total']);
         $categorias = collect($resultado['resumen_clasificaciones']['categorias'])->keyBy('nombre');
-        $this->assertSame(2, $categorias['Rentable']['cantidad']);
-        $this->assertSame(1, $categorias['Para rescatar']['cantidad']);
+        $this->assertSame(0, $categorias['Rentable']['cantidad']);
+        $this->assertSame(0, $categorias['Para rescatar']['cantidad']);
+        $this->assertSame(3, $categorias['En evaluación']['cantidad']);
     }
 
     public function test_filtros_anuales_de_productos_empresa_y_terminal(): void
@@ -180,7 +181,7 @@ class RentabilidadAgenciaV7Test extends TestCase
 
     public static function categoriasPorMesesPositivos(): array
     {
-        return [[9, 'Rentable'], [7, 'Buena'], [6, 'Para rescatar'], [5, 'Para rescatar'], [4, 'No rentable'], [2, 'No rentable'], [0, 'No rentable']];
+        return [[9, 'Rentable'], [7, 'Buena'], [6, 'Para rescatar'], [5, 'Para rescatar'], [4, 'Para rescatar'], [3, 'Para rescatar'], [2, 'Para rescatar'], [0, 'No rentable']];
     }
 
     #[DataProvider('categoriasPorMesesPositivos')]
@@ -227,6 +228,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertSame(0.0, $mensual['balance_general']);
         $this->assertSame(0, $mensual['clasificacion']['meses_positivos']);
         $this->assertSame($mensual['balance_general'], $diario['balance_general']);
+        $this->assertSame($mensual['clasificacion'], $diario['clasificacion']);
         $this->get(route('gerencia.rentabilidad-agencia-v7.detalle', $filtros))->assertOk()->assertSee('detalleTerminalRentabilidadV7')->assertSee('Balance general')->assertDontSee('Balance neto');
         $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', $this->filtros()))->assertOk()->assertJsonPath('total', 57.09);
     }
@@ -238,6 +240,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->get(route('gerencia.rentabilidad-agencia-v7', $this->filtros()))->assertOk()
             ->assertSeeInOrder(['Terminal</th>', 'Agencia (nombre)</th>', 'Ventas</th>', 'Premios sacados</th>', 'Utilidad</th>', 'Gastos</th>', 'Balance general</th>', 'Clasificación</th>', 'Acción</th>'], false)
             ->assertSee('categoriaTablaV7')->assertDontSee('clasificacionTablaV7')->assertDontSee('Premios pagados propios');
+        $this->get(route('gerencia.rentabilidad-agencia-v7', $this->filtros()))->assertOk()->assertSee('value="En evaluación"', false);
         foreach (['', '.resumen', '.detalle', '.cuentas', '.informe-ejecutivo'] as $sufijo) {
             $this->assertSame(Route::getRoutes()->getByName('gerencia.rentabilidad-agencia-v6'.$sufijo)->gatherMiddleware(), Route::getRoutes()->getByName('gerencia.rentabilidad-agencia-v7'.$sufijo)->gatherMiddleware());
         }
@@ -282,6 +285,59 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertStringNotContainsString('Clasificación neta', $html);
     }
 
+    public function test_recuperacion_reciente_en_endpoint_y_resumen_sin_modificar_importes(): void
+    {
+        $this->datos();
+        DB::table('agencias')->insert(['terminal' => '05358', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Higuey-1']);
+        $balances = [-52993.06, -76624.06, -7392.16, -5378.87, 15745.22, -61262.07, 59625.64, 33836.37, 10580.58];
+        foreach ($balances as $indice => $balance) {
+            $fecha = sprintf('2026-%02d-01', $indice + 1);
+            DB::table('vt_usuarios_bet')->insert(['agencia_id' => '05358', 'fecha' => $fecha, 'monto' => 1000000]);
+            DB::table('premios_bet')->insert(['agencia_id' => '05358', 'fecha' => $fecha, 'monto' => 1000000 - 10 - $balance]);
+        }
+        $filtros = [...$this->filtros(), 'terminal' => '05358', 'mes_fin' => 9];
+        $response = $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', $filtros))->assertOk();
+        $response->assertJsonPath('clasificacion.nombre', 'Para rescatar')->assertJsonPath('clasificacion.motivo_codigo', 'recuperacion_reciente')
+            ->assertJsonPath('clasificacion.en_deterioro', false)->assertJsonPath('clasificacion.balance_reciente', 104042.59)
+            ->assertJsonPath('balance_general', -83862.41)->assertJsonPath('gastos', 90)->assertJsonPath('ventas', 9000000);
+        foreach ($balances as $indice => $balance) {
+            $this->assertEquals($balance, $response->json('meses.'.$indice.'.balance_general'));
+        }
+        $resultado = app(RentabilidadAgenciaV7Service::class)->reporte($filtros);
+        $this->assertSame(1, collect($resultado['resumen_clasificaciones']['categorias'])->firstWhere('nombre', 'Para rescatar')['cantidad']);
+        $this->assertSame(0, $resultado['resumen_clasificaciones']['en_deterioro']);
+    }
+
+    public function test_cambio_de_configuracion_invalida_el_resumen_cacheado(): void
+    {
+        $this->datos();
+        $servicio = app(RentabilidadAgenciaV7Service::class);
+        $antes = $servicio->resumenEjecutivo($this->filtros(), '1');
+        $this->assertSame(1, collect($antes['resumen_clasificaciones']['categorias'])->firstWhere('nombre', 'En evaluación')['cantidad']);
+        config(['rentabilidad.min_meses' => 1]);
+        $despues = $servicio->resumenEjecutivo($this->filtros(), '1');
+        $this->assertSame(1, collect($despues['resumen_clasificaciones']['categorias'])->firstWhere('nombre', 'Para rescatar')['cantidad']);
+        $this->assertSame($antes['totales'], $despues['totales']);
+    }
+
+    public function test_alerta_de_deterioro_no_altera_la_categoria_ni_los_totales(): void
+    {
+        $this->datos();
+        DB::table('agencias')->insert(['terminal' => '9003', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'En deterioro']);
+        foreach ([...array_fill(0, 8, 100), -250] as $indice => $balance) {
+            $fecha = sprintf('2026-%02d-01', $indice + 1);
+            DB::table('vt_usuarios_bet')->insert(['agencia_id' => '9003', 'fecha' => $fecha, 'monto' => 1000]);
+            DB::table('premios_bet')->insert(['agencia_id' => '9003', 'fecha' => $fecha, 'monto' => 1000 - 10 - $balance]);
+        }
+        $filtros = [...$this->filtros(), 'terminal' => '9003', 'mes_fin' => 9];
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', $filtros))->assertOk()
+            ->assertJsonPath('clasificacion.nombre', 'Buena')->assertJsonPath('clasificacion.en_deterioro', true)
+            ->assertJsonPath('clasificacion.balance_reciente', -50)->assertJsonPath('balance_general', 550);
+        $resultado = app(RentabilidadAgenciaV7Service::class)->reporte($filtros);
+        $this->assertSame(1, $resultado['resumen_clasificaciones']['en_deterioro']);
+        $this->assertSame(1, collect($resultado['resumen_clasificaciones']['categorias'])->firstWhere('nombre', 'Buena')['cantidad']);
+    }
+
     public function test_filtro_local_totales_y_resumen_ajax_en_javascript(): void
     {
         $codigo = <<<'JS'
@@ -295,13 +351,14 @@ function elemento(id) {
 }
 let inicio, opciones, alerta, urlConsultada, cargando = false, envios = 0, prevenidos = 0, filtro = '';
 const eventosVentana = {};
-const clasificacion = {nombre: 'Rentable', color: 'success', meses_positivos: 1, meses_con_ventas: 1, porcentaje: 100};
+const clasificacion = {nombre: 'Rentable', color: 'success', meses_positivos: 1, meses_con_ventas: 1, porcentaje: 100, balance_acumulado: 40, balance_reciente: 40, meses_recientes: 1, motivo: 'Clasificada por porcentaje.', en_deterioro: true};
 const fila = {terminal: '001', nombre: '<Agencia>', empresa: 'Empresa', ventas: 100, premios_sacados: 50, utilidad: 50, gastos: 10, balance_general: 40, clasificacion};
 const otraFila = {...fila, terminal: '002', ventas: 200, premios_sacados: 300, utilidad: -100, gastos: 20, balance_general: -120, clasificacion: {...clasificacion, nombre: 'No rentable', color: 'danger'}};
 const sinVentas = {...fila, terminal: '003', ventas: 0, premios_sacados: 0, utilidad: 0, gastos: 10, balance_general: -10, clasificacion: {...clasificacion, nombre: 'Sin ventas', color: 'secondary'}};
+const enEvaluacion = {...fila, terminal: '004', ventas: 50, premios_sacados: 30, utilidad: 20, balance_general: 10, clasificacion: {...clasificacion, nombre: 'En evaluación', color: 'secondary', en_deterioro: false}};
 const datos = {...fila, meses: [{...fila, mes: '2026-01'}, {...sinVentas, mes: '2026-02'}]};
 global.document = {getElementById: elemento, addEventListener(tipo, fn){inicio = fn;}, body: {appendChild(){}}, createElement(){return {set textContent(v){this.innerHTML = v.replaceAll('<', '&lt;').replaceAll('>', '&gt;');}};}};
-global.window = {rentabilidadV7: {datos: [fila, otraFila, sinVentas], filtros: {anio: 2026, mes_inicio: 1, mes_fin: 3, productos: ['Tradicional']}, urls: {resumen: 'http://localhost/v7/resumen'}}, addEventListener(tipo, fn){eventosVentana[tipo] = fn;}};
+global.window = {rentabilidadV7: {datos: [fila, otraFila, sinVentas, enEvaluacion], filtros: {anio: 2026, mes_inicio: 1, mes_fin: 3, productos: ['Tradicional']}, urls: {resumen: 'http://localhost/v7/resumen'}}, addEventListener(tipo, fn){eventosVentana[tipo] = fn;}};
 window.Swal = {fire(configuracion){alerta = configuracion; configuracion.didOpen();}, showLoading(){cargando = true;}, close(){alerta = undefined;}};
 global.HTMLFormElement = class {submit(){assert.equal(this, elemento('filtrosRentabilidadV7')); envios++;}};
 const filasAplicadas = () => window.rentabilidadV7.datos.filter(fila => !filtro || new RegExp(filtro).test(fila.clasificacion.nombre));
@@ -321,9 +378,13 @@ assert.equal(opciones.columns.length, 9);
 assert.deepEqual(opciones.columns.slice(2, 8).map(c => c.data), ['ventas', 'premios_sacados', 'utilidad', 'gastos', 'balance_general', 'clasificacion']);
 assert.equal(opciones.deferRender, true);
 assert.equal(opciones.pageLength, 25);
+assert.ok(opciones.columns[7].render(clasificacion, 'display').includes('En deterioro'));
+assert.equal(opciones.columns[7].render(clasificacion, 'filter'), 'Rentable');
+assert.equal(opciones.columns[7].render(clasificacion, 'export'), 'Rentable · En deterioro');
+assert.equal(opciones.buttons[0].exportOptions.orthogonal, 'export');
 apiTabla.draw();
-assert.equal(elemento('pie2').textContent, 'RD$ 300.00');
-assert.equal(elemento('pie6').textContent, 'RD$ -90.00');
+assert.equal(elemento('pie2').textContent, 'RD$ 350.00');
+assert.equal(elemento('pie6').textContent, 'RD$ -80.00');
 elemento('categoriaTablaV7').value = 'Rentable';
 elemento('categoriaTablaV7').listeners.change();
 assert.deepEqual(filasAplicadas().map(fila => fila.terminal), ['001']);
@@ -335,9 +396,12 @@ assert.equal(elemento('pie2').textContent, 'RD$ 0.00');
 elemento('categoriaTablaV7').value = 'Sin ventas';
 elemento('categoriaTablaV7').listeners.change();
 assert.deepEqual(filasAplicadas().map(fila => fila.terminal), ['003']);
+elemento('categoriaTablaV7').value = 'En evaluación';
+elemento('categoriaTablaV7').listeners.change();
+assert.deepEqual(filasAplicadas().map(fila => fila.terminal), ['004']);
 elemento('categoriaTablaV7').value = '';
 elemento('categoriaTablaV7').listeners.change();
-assert.equal(filasAplicadas().length, 3);
+assert.equal(filasAplicadas().length, 4);
 assert.equal(urlConsultada, undefined);
 elemento('anioCompletoV7').checked = true;
 elemento('anioCompletoV7').listeners.change();
@@ -373,6 +437,10 @@ assert.equal(prevenidos, 2);
     assert.ok(html.includes('text-danger'));
     assert.ok(!html.includes('Pagados propios'));
     assert.ok(!html.includes('Balance neto'));
+    assert.ok(html.includes('En deterioro'));
+    assert.ok(html.includes('acumulado: RD$ 40.00'));
+    assert.ok(html.includes('Clasificada por porcentaje.'));
+    assert.ok(html.includes('último mes con ventas: +RD$ 40.00'));
     window.rentabilidadV7.datos = [];
     opciones = undefined;
     inicio();

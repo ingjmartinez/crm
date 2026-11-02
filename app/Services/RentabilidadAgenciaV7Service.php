@@ -23,7 +23,7 @@ class RentabilidadAgenciaV7Service
 
     private const MINUTOS_RESUMEN_EJECUTIVO = 10;
 
-    public function __construct(private readonly ClasificadorRentabilidadMensual $clasificador) {}
+    public function __construct(private readonly ClasificadorRentabilidadAgenciaV7 $clasificador) {}
 
     /** @param array<string, mixed> $filtros @return array{0: Carbon, 1: Carbon} */
     public function rango(array $filtros): array
@@ -68,7 +68,7 @@ class RentabilidadAgenciaV7Service
         sort($productos, SORT_STRING);
         $alcance = $filtros['alcance'] ?? 'todas';
 
-        return 'rentabilidad-v7:ejecutivo:v1:'.hash('sha256', json_encode([
+        return 'rentabilidad-v7:ejecutivo:v3:'.$this->clasificador->firmaConfiguracion().':'.hash('sha256', json_encode([
             'usuario' => $usuario,
             'desde' => $desde->toDateString(), 'hasta' => $hasta->toDateString(),
             'empresa' => trim((string) ($filtros['empresa'] ?? '')),
@@ -118,11 +118,16 @@ class RentabilidadAgenciaV7Service
                 ];
             }
             $totales = collect(self::IMPORTES)->mapWithKeys(fn (string $campo): array => [$campo => round(array_sum(array_column($periodos, $campo)), 2)])->all();
+            $mesesClasificacion = $diario
+                ? collect($periodos)->groupBy(fn (array $dia): string => substr($dia['mes'], 0, 7))->map(fn (Collection $dias, string $mes): array => [
+                    'mes' => $mes, 'ventas' => round($dias->sum('ventas'), 2), 'balance_general' => round($dias->sum('balance_general'), 2),
+                ])->values()->all()
+                : $periodos;
 
             return [
                 'terminal' => $terminal, 'nombre' => trim((string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $terminal)),
                 'empresa' => trim((string) $agencia->empresa), 'periodos' => $periodos, ...$totales,
-                'clasificacion' => $this->clasificador->clasificar($periodos, 'balance_general'),
+                'clasificacion' => $this->clasificador->clasificar($mesesClasificacion),
             ];
         });
 
@@ -137,8 +142,7 @@ class RentabilidadAgenciaV7Service
     {
         $terminales = $filas->unique('terminal');
         $clasificaciones = $terminales->countBy('clasificacion.nombre');
-        $categorias = collect(ClasificadorRentabilidadMensual::UMBRALES)
-            ->push(['nombre' => 'Sin ventas', 'color' => 'secondary'])
+        $categorias = collect(ClasificadorRentabilidadAgenciaV7::categorias())
             ->map(fn (array $categoria): array => [
                 'nombre' => $categoria['nombre'],
                 'color' => $categoria['color'],
@@ -146,7 +150,11 @@ class RentabilidadAgenciaV7Service
             ])->all();
         $sinVentas = (int) $clasificaciones->get('Sin ventas', 0);
 
-        return ['total' => $terminales->count(), 'con_ventas' => $terminales->count() - $sinVentas, 'sin_ventas' => $sinVentas, 'categorias' => $categorias];
+        return [
+            'total' => $terminales->count(), 'con_ventas' => $terminales->count() - $sinVentas,
+            'sin_ventas' => $sinVentas, 'categorias' => $categorias,
+            'en_deterioro' => $terminales->where('clasificacion.en_deterioro', true)->count(),
+        ];
     }
 
     private function periodoSql(string $columna, bool $diario): string

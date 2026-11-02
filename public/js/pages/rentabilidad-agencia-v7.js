@@ -11,7 +11,19 @@
     const badge = clasificacion => {
         const colores = ['success', 'primary', 'warning', 'danger', 'secondary'];
         const color = colores.includes(clasificacion.color) ? clasificacion.color : 'secondary';
-        return `<span class="badge bg-${color}${color === 'warning' ? ' text-dark' : ''}">${escapar(clasificacion.nombre)}</span>`;
+        const deterioro = clasificacion.en_deterioro ? ' <span class="badge bg-warning text-dark">En deterioro</span>' : '';
+        return `<span class="badge bg-${color}${color === 'warning' ? ' text-dark' : ''}">${escapar(clasificacion.nombre)}</span>${deterioro}`;
+    };
+    const motivoClasificacion = clasificacion => {
+        const porcentaje = clasificacion.porcentaje === null ? '' : ` (${formato.format(clasificacion.porcentaje)}%)`;
+        const partes = [`${clasificacion.meses_positivos}/${clasificacion.meses_con_ventas} meses positivos${porcentaje}`];
+        if (clasificacion.meses_recientes > 0) {
+            const ventana = clasificacion.meses_recientes === 1 ? 'último mes con ventas' : `últimos ${clasificacion.meses_recientes} meses con ventas`;
+            partes.push(`${ventana}: ${Number(clasificacion.balance_reciente) > 0 ? '+' : ''}${moneda(clasificacion.balance_reciente)}`);
+        }
+        if (clasificacion.balance_acumulado !== undefined) partes.push(`acumulado: ${moneda(clasificacion.balance_acumulado)}`);
+        if (clasificacion.motivo) partes.push(clasificacion.motivo);
+        return partes.map(escapar).join(' · ');
     };
     const celdaBalance = valor => `<td class="text-end ${colorBalance(valor)}">${moneda(valor)}</td>`;
 
@@ -68,7 +80,10 @@
             scrollX: true,
             order: [[0, 'asc']],
             dom: 'Bfrtip',
-            buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+            buttons: ['copy', 'csv', 'excel', 'pdf', 'print'].map(extend => ({
+                extend,
+                exportOptions: { orthogonal: 'export', columns: [0, 1, 2, 3, 4, 5, 6, 7], modifier: { search: 'applied' } },
+            })),
             columns: [
                 { data: 'terminal', render: $.fn.dataTable.render.text() },
                 { data: 'nombre', render: $.fn.dataTable.render.text() },
@@ -76,7 +91,11 @@
                     data: campo, className: 'text-end', render: (valor, tipo) => tipo === 'display' ? moneda(valor) : Number(valor),
                     createdCell: (celda, valor) => { if (campo.startsWith('balance') && colorBalance(valor)) celda.classList.add(colorBalance(valor)); },
                 })),
-                { data: 'clasificacion', render: (valor, tipo) => tipo === 'display' ? badge(valor) : valor.nombre },
+                { data: 'clasificacion', render: (valor, tipo) => {
+                    if (tipo === 'display') return badge(valor);
+                    if (tipo === 'export') return valor.nombre + (valor.en_deterioro ? ' · En deterioro' : '');
+                    return valor.nombre;
+                } },
                 { data: null, orderable: false, searchable: false, render: () => '<div class="d-flex gap-1"><button type="button" class="btn btn-sm btn-outline-primary" data-accion="ver">Ver</button><button type="button" class="btn btn-sm btn-outline-secondary" data-accion="cuentas">Cuentas</button><button type="button" class="btn btn-sm btn-outline-success" data-accion="resumen">Resumen</button></div>' },
             ],
             initComplete: function () {
@@ -143,7 +162,7 @@
                     if (consulta !== controlador) return;
                     if (boton.dataset.accion === 'resumen') {
                         const clasificacion = datos.clasificacion;
-                        contenido.innerHTML = `<div class="mb-3"><h6>Clasificación por balance general</h6>${badge(clasificacion)} <span>${clasificacion.meses_positivos} / ${clasificacion.meses_con_ventas} meses positivos con ventas${clasificacion.porcentaje === null ? '' : ' (' + formato.format(clasificacion.porcentaje) + '%)'}</span></div>
+                        contenido.innerHTML = `<div class="mb-3"><h6>Clasificación por balance general</h6>${badge(clasificacion)}<p class="text-muted small mt-2 mb-0">${motivoClasificacion(clasificacion)}</p></div>
                             <div class="table-responsive"><table class="table table-bordered"><thead><tr><th>Mes</th><th>Ventas</th><th>Premios sacados</th><th>Utilidad</th><th>Gastos</th><th>Balance general</th></tr></thead>
                             <tbody>${datos.meses.map(mes => `<tr><td>${escapar(mes.mes)}</td>${['ventas', 'premios_sacados', 'utilidad', 'gastos'].map(campo => `<td class="text-end">${moneda(mes[campo])}</td>`).join('')}${celdaBalance(mes.balance_general)}</tr>`).join('')}</tbody>
                             <tfoot class="fw-semibold"><tr><td>Totales</td>${['ventas', 'premios_sacados', 'utilidad', 'gastos'].map(campo => `<td class="text-end">${moneda(datos[campo])}</td>`).join('')}${celdaBalance(datos.balance_general)}</tr></tfoot></table></div>`;

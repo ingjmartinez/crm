@@ -62,7 +62,8 @@
             </tbody>
             <tfoot><tr><td>Total terminales</td><td class="right">{{ number_format($resultado['resumen_clasificaciones']['total']) }}</td></tr></tfoot>
         </table>
-        <p class="muted small">Conteos según los filtros consultados. Cada clasificación considera solo meses con ventas mayores que cero y cuenta como positivo un balance mayor que cero. Los meses sin ventas se ignoran para clasificar.</p>
+        <p class="small"><strong>En deterioro: {{ number_format($resultado['resumen_clasificaciones']['en_deterioro']) }}</strong> terminales. Es una alerta adicional; no cambia la categoría.</p>
+        <p class="muted small">Conteos según los filtros consultados. Se requieren {{ config('rentabilidad.min_meses') }} meses con ventas para clasificar. La recuperación y el deterioro consideran los últimos {{ config('rentabilidad.ventana_reciente') }} meses con ventas. Un balance cero no es positivo. Venta mínima mensual para clasificar: RD$ {{ number_format(config('rentabilidad.venta_minima_mes'), 2) }}.</p>
     </div>
 
     <div class="section">

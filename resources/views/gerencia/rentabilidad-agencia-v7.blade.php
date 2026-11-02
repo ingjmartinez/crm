@@ -40,6 +40,7 @@
                         <p class="text-muted mb-1">Terminales evaluadas</p>
                         <div class="fs-2 fw-bold">{{ number_format($resultado['resumen_clasificaciones']['total']) }}</div>
                         <p class="mb-1">Con ventas: <strong>{{ number_format($resultado['resumen_clasificaciones']['con_ventas']) }}</strong> · Sin ventas: <strong>{{ number_format($resultado['resumen_clasificaciones']['sin_ventas']) }}</strong></p>
+                        <p class="mb-1">En deterioro: <strong>{{ number_format($resultado['resumen_clasificaciones']['en_deterioro']) }}</strong></p>
                         <p class="text-muted small mb-0">Período: {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}. Conteos según los filtros consultados.</p>
                     </div>
                     <div class="col-md-8 table-responsive">
@@ -59,7 +60,7 @@
                 <h5 class="mb-0">Rentabilidad por terminal · {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</h5>
                 <a class="btn btn-outline-primary" target="_blank" rel="noopener" href="{{ route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, 'productos_filtrados' => 1, 'productos' => $productos]) }}">Descargar informe ejecutivo PDF</a>
             </div><div class="card-body">
-                <p class="text-muted small">Las clasificaciones consideran solo meses con ventas mayores que cero. Un balance de cero no es positivo. Los gastos de meses sin ventas sí forman parte de los totales del rango.</p>
+                <p class="text-muted small">La clasificación requiere {{ config('rentabilidad.min_meses') }} meses con ventas y considera el porcentaje de meses positivos, el balance acumulado y la recuperación de los últimos {{ config('rentabilidad.ventana_reciente') }} meses con ventas. Un balance cero no es positivo. Los gastos de meses sin ventas permanecen en el acumulado. Venta mínima mensual para clasificar: RD$ {{ number_format(config('rentabilidad.venta_minima_mes'), 2) }}.</p>
                 @if ($resultado['filas']->isEmpty())<div class="alert alert-info">No se encontraron terminales activas con los filtros seleccionados.</div>@else
                     <div id="cargandoV7" role="status" class="text-muted py-3">Preparando tabla...</div>
                     <div id="contenedorTablaV7" class="d-none">
@@ -68,10 +69,9 @@
                                 <label for="categoriaTablaV7" class="form-label">Categoría</label>
                                 <select id="categoriaTablaV7" class="form-select">
                                     <option value="">Todas las categorías</option>
-                                    @foreach (\App\Services\ClasificadorRentabilidadMensual::UMBRALES as $categoria)
+                                    @foreach (\App\Services\ClasificadorRentabilidadAgenciaV7::categorias() as $categoria)
                                         <option value="{{ $categoria['nombre'] }}">{{ $categoria['nombre'] }}</option>
                                     @endforeach
-                                    <option value="Sin ventas">Sin ventas</option>
                                 </select>
                             </div>
                             <div class="col-md-6"><p class="text-muted small mb-0">Filtra las terminales ya consultadas. Los totales al pie y las exportaciones de la tabla se ajustan a las filas filtradas.</p></div>
