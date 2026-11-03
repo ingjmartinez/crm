@@ -90,6 +90,15 @@ class RentabilidadAgenciaV7Service
         if ($ruta !== '' && $filas->isEmpty()) {
             throw ValidationException::withMessages(['ruta_impresion' => 'La ruta seleccionada no pertenece a esta consulta.']);
         }
+        $ordenCategorias = array_flip(array_column(ClasificadorRentabilidadAgenciaV7::categorias(), 'codigo'));
+        $filas = $filas->sort(function (array $primera, array $segunda) use ($ordenCategorias): int {
+            $categoriaPrimera = $ordenCategorias[$primera['clasificacion']['codigo']] ?? count($ordenCategorias);
+            $categoriaSegunda = $ordenCategorias[$segunda['clasificacion']['codigo']] ?? count($ordenCategorias);
+
+            return ($categoriaPrimera <=> $categoriaSegunda)
+                ?: ($segunda['balance_general'] <=> $primera['balance_general'])
+                ?: strcmp($primera['terminal'], $segunda['terminal']);
+        })->values();
         $resultado['terminales'] = $filas->all();
         $resultado['totales'] = collect(self::IMPORTES)->mapWithKeys(fn (string $campo): array => [$campo => round($filas->sum($campo), 2)])->all();
         $resultado['resumen_clasificaciones'] = $this->resumenClasificaciones($filas);

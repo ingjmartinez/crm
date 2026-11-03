@@ -558,6 +558,47 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->travelBack();
     }
 
+    public function test_impresion_organiza_cada_ruta_por_categoria_y_balance_descendente_sin_cambiar_totales(): void
+    {
+        $categorias = collect(\App\Services\ClasificadorRentabilidadAgenciaV7::categorias())->keyBy('codigo');
+        $terminales = collect([
+            ['009', 'no_rentable', -50000, 'Ruta Norte'],
+            ['005', 'regular', 5000, 'Ruta Norte'],
+            ['004', 'regular', 10, 'Ruta Norte'],
+            ['006', 'rentable', 20, 'Ruta Norte'],
+            ['007', 'buena', 1000, 'Ruta Norte'],
+            ['008', 'para_rescatar', -100, 'Ruta Norte'],
+            ['002', 'en_evaluacion', 10000, 'Ruta Norte'],
+            ['001', 'sin_ventas', 0, 'Ruta Norte'],
+            ['003', 'regular', 5000, 'Ruta Norte'],
+            ['010', 'regular', 300, 'Ruta Sur'],
+        ])->map(fn (array $datos): array => [
+            ...array_fill_keys(RentabilidadAgenciaV7Service::IMPORTES, 0.0),
+            'terminal' => $datos[0], 'nombre' => 'Agencia '.$datos[0], 'empresa' => 'Prueba', 'ruta' => $datos[3],
+            'balance_general' => (float) $datos[2], 'clasificacion' => [...$categorias[$datos[1]], 'en_deterioro' => false],
+        ])->all();
+        $resultado = app(RentabilidadAgenciaV7Service::class)->personalizarInforme(['terminales' => $terminales], '');
+
+        $this->assertSame(['Ruta Norte', 'Ruta Sur'], array_column($resultado['rutas_impresion'], 'ruta'));
+        $this->assertSame(['006', '007', '003', '005', '004', '008', '009', '002', '001'], array_column($resultado['rutas_impresion'][0]['terminales'], 'terminal'));
+        $this->assertSame(['010'], array_column($resultado['rutas_impresion'][1]['terminales'], 'terminal'));
+        $this->assertSame(array_sum(array_column($terminales, 'balance_general')), $resultado['totales']['balance_general']);
+        $this->assertSame(10, $resultado['resumen_clasificaciones']['total']);
+        $this->assertSame(4, collect($resultado['resumen_clasificaciones']['categorias'])->firstWhere('nombre', 'Regular')['cantidad']);
+        $filtros = ['empresa' => 'Prueba', 'ruta' => '', 'alcance' => 'todas'];
+        $html = view('gerencia.rentabilidad-agencia-v7-pdf', [
+            'resultado' => [...$resultado, 'desde' => \Carbon\Carbon::parse('2026-01-01'), 'hasta' => \Carbon\Carbon::parse('2026-09-30')],
+            'filtros' => $filtros, 'productos' => RentabilidadAgenciaV7Service::PRODUCTOS, 'contenido' => 'terminales', 'esImpresion' => true,
+        ])->render();
+        $posicionAnterior = -1;
+        foreach (['006', '007', '003', '005', '004', '008', '009', '002', '001', '010'] as $terminal) {
+            $posicion = strpos($html, '<td>'.$terminal.'</td>');
+            $this->assertNotFalse($posicion);
+            $this->assertGreaterThan($posicionAnterior, $posicion);
+            $posicionAnterior = $posicion;
+        }
+    }
+
     public function test_recuperacion_reciente_en_endpoint_y_resumen_sin_modificar_importes(): void
     {
         $this->datos();
