@@ -319,7 +319,7 @@ class RentabilidadAgenciaV7Service
     }
 
     /** @param list<string> $productos */
-    private function mesesConVentas(RentabilidadAgenciaV5 $agencia, Carbon $desde, Carbon $hasta, array $productos): int
+    private function periodosConVentas(RentabilidadAgenciaV5 $agencia, Carbon $desde, Carbon $hasta, array $productos): Collection
     {
         $sistemas = match (mb_strtoupper(trim((string) $agencia->sistema))) {
             'LOTOBET' => ['bet'],
@@ -340,7 +340,7 @@ class RentabilidadAgenciaV7Service
             }
         }
 
-        return DB::query()->fromSub($union, 'ventas_terminal')->select('periodo')->groupBy('periodo')->havingRaw('SUM(ventas) > 0')->get()->count();
+        return DB::query()->fromSub($union, 'ventas_terminal')->select('periodo')->groupBy('periodo')->havingRaw('SUM(ventas) > 0')->pluck('periodo');
     }
 
     /** @param Collection<int, RentabilidadAgenciaV5> $agencias @param list<string> $productos @return Collection<string, object> */
@@ -419,6 +419,7 @@ class RentabilidadAgenciaV7Service
         abort_if($agencia === null, 404, 'No se encontro la terminal solicitada.');
         $clasificaciones = ClasificacionCuenta::clasificacionesActivas();
         $movimientos = collect();
+        $periodo = $this->periodoSql('movimientos.fecha', false);
         if ($clasificaciones->isNotEmpty()) {
             $movimientos = EntradaDiario::query()->from('entradas_diario as movimientos')
                 ->join('cuentas_contables as cuentas', 'cuentas.cuenta', '=', 'movimientos.cuenta')
@@ -426,17 +427,38 @@ class RentabilidadAgenciaV7Service
                 ->whereBetween('movimientos.fecha', [$desde->toDateString(), $hasta->toDateString()])
                 ->whereIn('movimientos.cuenta', $clasificaciones->keys()->all())
                 ->whereIn(DB::raw('LOWER(TRIM(cuentas.tipo))'), ['costo', 'gasto'])
-                ->selectRaw("movimientos.cuenta AS cuenta, COALESCE(NULLIF(TRIM(cuentas.descripcion), ''), 'Sin descripcion') AS descripcion, LOWER(TRIM(cuentas.tipo)) AS tipo, SUM(COALESCE(movimientos.debito, 0) - COALESCE(movimientos.credito, 0)) AS importe")
-                ->groupByRaw('movimientos.cuenta, cuentas.descripcion, LOWER(TRIM(cuentas.tipo))')->orderBy('movimientos.cuenta')
-                ->get()->map(fn ($fila): array => ['cuenta' => (string) $fila->cuenta, 'descripcion' => $fila->descripcion, 'tipo' => $fila->tipo, 'clasificacion' => $clasificaciones->get($fila->cuenta), 'importe' => (float) $fila->importe]);
+                ->selectRaw($periodo." AS mes, movimientos.cuenta AS cuenta, COALESCE(NULLIF(TRIM(cuentas.descripcion), ''), 'Sin descripcion') AS descripcion, LOWER(TRIM(cuentas.tipo)) AS tipo, SUM(COALESCE(movimientos.debito, 0) - COALESCE(movimientos.credito, 0)) AS importe")
+                ->groupByRaw($periodo.', movimientos.cuenta, cuentas.descripcion, LOWER(TRIM(cuentas.tipo))')->orderBy('movimientos.cuenta')
+                ->get()->map(fn ($fila): array => ['mes' => $fila->mes, 'cuenta' => (string) $fila->cuenta, 'descripcion' => $fila->descripcion, 'tipo' => $fila->tipo, 'clasificacion' => $clasificaciones->get($fila->cuenta), 'importe' => (float) $fila->importe]);
         }
-        $meses = $this->mesesConVentas($agencia, $desde, $hasta, $this->productos($filtros));
+        $periodosConVentas = $this->periodosConVentas($agencia, $desde, $hasta, $this->productos($filtros));
         $r20 = (float) RentabilidadAgenciaR20::query()->where('terminal', '*')->orderByRaw('CASE WHEN mes = ? THEN 0 ELSE 1 END', ['GLOBAL'])->orderByDesc('updated_at')->value('monto');
+        $detalleMeses = [];
+        for ($fecha = $desde->copy()->startOfMonth(); $fecha->lte($hasta); $fecha->addMonth()) {
+            $mes = $fecha->format('Y-m');
+            $cuentasMes = $movimientos->where('mes', $mes)->map(function (array $movimiento): array {
+                unset($movimiento['mes']);
+
+                return $movimiento;
+            })->values();
+            if ($periodosConVentas->contains($mes) && $r20 !== 0.0) {
+                $cuentasMes->push(['cuenta' => 'R20', 'descripcion' => 'Gasto R20 manual (1 mes con ventas)', 'tipo' => 'gasto', 'clasificacion' => 'FIJO', 'importe' => round($r20, 2)]);
+            }
+            $detalleMeses[] = ['mes' => $mes, 'movimientos' => $cuentasMes->all(), 'total' => round($cuentasMes->sum('importe'), 2)];
+        }
+        $movimientos = $movimientos->groupBy('cuenta')->map(function (Collection $cuentas): array {
+            $movimiento = $cuentas->first();
+            unset($movimiento['mes']);
+            $movimiento['importe'] = round($cuentas->sum('importe'), 2);
+
+            return $movimiento;
+        })->values();
+        $meses = $periodosConVentas->count();
         if ($meses > 0 && $r20 !== 0.0) {
             $descripcion = $meses === 1 ? '1 mes con ventas' : $meses.' meses con ventas';
             $movimientos->push(['cuenta' => 'R20', 'descripcion' => 'Gasto R20 manual ('.$descripcion.')', 'tipo' => 'gasto', 'clasificacion' => 'FIJO', 'importe' => round($r20 * $meses, 2)]);
         }
 
-        return ['terminal' => $agencia->terminal, 'agencia' => $agencia->nombre_agencia ?: $agencia->agencia ?: $agencia->terminal, 'movimientos' => $movimientos->values()->all(), 'total' => round($movimientos->sum('importe'), 2)];
+        return ['terminal' => $agencia->terminal, 'agencia' => $agencia->nombre_agencia ?: $agencia->agencia ?: $agencia->terminal, 'meses' => $detalleMeses, 'movimientos' => $movimientos->values()->all(), 'total' => round($movimientos->sum('importe'), 2)];
     }
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\ContabilidadClasificacionCuentaController;
+use App\Models\ClasificacionCuenta;
 use App\Models\CuentaContable;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Route;
@@ -86,8 +87,9 @@ class ContabilidadClasificacionCuentaTest extends TestCase
             ->assertRedirect(route('contabilidad.clasificacion-cuentas'));
         $this->assertDatabaseHas('clasificacion_cuentas', ['cuenta' => '999001', 'activo' => 0]);
         $view = app(ContabilidadClasificacionCuentaController::class)->index();
-        $this->assertCount(73, $view->getData()['cuentas']);
-        $this->assertTrue($view->getData()['cuentasDisponibles']->contains('cuenta', '999001'));
+        $this->assertCount(74, $view->getData()['cuentas']);
+        $this->assertFalse($view->getData()['cuentas']->firstWhere('cuenta', '999001')['activo']);
+        $this->assertFalse($view->getData()['cuentasDisponibles']->contains('cuenta', '999001'));
 
         $this->post(route('contabilidad.clasificacion-cuentas.store'), $datos)
             ->assertRedirect(route('contabilidad.clasificacion-cuentas'));
@@ -100,8 +102,8 @@ class ContabilidadClasificacionCuentaTest extends TestCase
 
         $this->withoutMiddleware()->delete(route('contabilidad.clasificacion-cuentas.destroy', '600110001'))
             ->assertRedirect(route('contabilidad.clasificacion-cuentas'));
-        $this->assertNull(app(ContabilidadClasificacionCuentaController::class)->index()
-            ->getData()['cuentas']->firstWhere('cuenta', '600110001'));
+        $this->assertFalse(app(ContabilidadClasificacionCuentaController::class)->index()
+            ->getData()['cuentas']->firstWhere('cuenta', '600110001')['activo']);
 
         $this->post(route('contabilidad.clasificacion-cuentas.store'), [
             'cuenta' => '600110001', 'clasificacion' => 'VARIABLE', 'criterio' => 'VARIABLE',
@@ -125,6 +127,60 @@ class ContabilidadClasificacionCuentaTest extends TestCase
         $this->post(route('contabilidad.clasificacion-cuentas.store'), [
             'cuenta' => '999001', 'clasificacion' => 'OTRA', 'criterio' => 'FIJO',
         ])->assertSessionHasErrors('clasificacion');
+        $this->assertDatabaseCount('clasificacion_cuentas', 0);
+    }
+
+    public function test_base_account_can_be_disabled_and_enabled_without_losing_its_classification(): void
+    {
+        $cuenta = '600220001';
+        $this->assertContains($cuenta, ClasificacionCuenta::cuentasActivas());
+
+        $this->withoutMiddleware()->delete(route('contabilidad.clasificacion-cuentas.destroy', $cuenta))
+            ->assertRedirect(route('contabilidad.clasificacion-cuentas'));
+
+        $guardada = ClasificacionCuenta::query()->where('cuenta', $cuenta)->firstOrFail();
+        $datos = $guardada->only(['id', 'clasificacion', 'criterio', 'observacion']);
+        $this->assertNotContains($cuenta, ClasificacionCuenta::cuentasActivas());
+        $this->assertFalse(app(ContabilidadClasificacionCuentaController::class)->index()
+            ->getData()['cuentas']->firstWhere('cuenta', $cuenta)['activo']);
+
+        $this->patch(route('contabilidad.clasificacion-cuentas.habilitar', $cuenta))
+            ->assertRedirect(route('contabilidad.clasificacion-cuentas'));
+
+        $this->assertDatabaseHas('clasificacion_cuentas', [...$datos, 'cuenta' => $cuenta, 'activo' => true]);
+        $this->assertContains($cuenta, ClasificacionCuenta::cuentasActivas());
+        $this->assertTrue(app(ContabilidadClasificacionCuentaController::class)->index()
+            ->getData()['cuentas']->firstWhere('cuenta', $cuenta)['activo']);
+    }
+
+    public function test_custom_disabled_account_is_visible_and_can_be_enabled_without_the_catalog(): void
+    {
+        $guardada = ClasificacionCuenta::factory()->inactiva()->create([
+            'cuenta' => '999001', 'clasificacion' => 'FIJO', 'criterio' => 'EXCLUIDA', 'observacion' => 'Conservar observación',
+        ]);
+        $cuenta = app(ContabilidadClasificacionCuentaController::class)->index()
+            ->getData()['cuentas']->firstWhere('cuenta', $guardada->cuenta);
+        $this->assertFalse($cuenta['activo']);
+        $this->assertSame('Conservar observación', $cuenta['observacion']);
+
+        $this->withoutMiddleware()->patch(route('contabilidad.clasificacion-cuentas.habilitar', $guardada->cuenta), [
+            'clasificacion' => 'VARIABLE', 'criterio' => 'VARIABLE', 'observacion' => 'Cambiar',
+        ])->assertRedirect(route('contabilidad.clasificacion-cuentas'));
+
+        $this->assertDatabaseHas('clasificacion_cuentas', [
+            'id' => $guardada->id, 'activo' => true, 'clasificacion' => 'FIJO', 'criterio' => 'EXCLUIDA', 'observacion' => 'Conservar observación',
+        ]);
+        $this->assertSame('FIJO', ClasificacionCuenta::clasificacionesActivas()->get('999001'));
+
+        $this->patch(route('contabilidad.clasificacion-cuentas.habilitar', $guardada->cuenta))
+            ->assertRedirect(route('contabilidad.clasificacion-cuentas'));
+        $this->assertDatabaseCount('clasificacion_cuentas', 1);
+    }
+
+    public function test_unknown_account_cannot_be_disabled_or_enabled(): void
+    {
+        $this->withoutMiddleware()->delete(route('contabilidad.clasificacion-cuentas.destroy', '999999'))->assertNotFound();
+        $this->patch(route('contabilidad.clasificacion-cuentas.habilitar', '999999'))->assertNotFound();
         $this->assertDatabaseCount('clasificacion_cuentas', 0);
     }
 }

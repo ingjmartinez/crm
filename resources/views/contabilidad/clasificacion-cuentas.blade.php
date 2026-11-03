@@ -40,6 +40,7 @@
                         @if ($errors->any())
                             <div class="alert alert-danger" role="alert">{{ $errors->first() }}</div>
                         @endif
+                        <p class="text-muted">Las cuentas desactivadas no se incluyen en el reporte. Puedes habilitarlas nuevamente sin perder su clasificación.</p>
                         @if ($cuentasFaltantes !== [])
                             <div class="alert alert-warning" role="alert">
                                 No se encontraron en el catálogo las cuentas: {{ implode(', ', $cuentasFaltantes) }}.
@@ -61,6 +62,7 @@
                                         <th scope="col">Clasificación</th>
                                         <th scope="col">Criterio</th>
                                         <th scope="col">Observación</th>
+                                        <th scope="col">Estado en reporte</th>
                                         <th scope="col">Acciones</th>
                                     </tr>
                                 </thead>
@@ -72,12 +74,21 @@
                                             <td><span class="badge {{ $cuenta['clasificacion'] === 'FIJO' ? 'bg-primary' : 'bg-info' }}">{{ $cuenta['clasificacion'] }}</span></td>
                                             <td>{{ $cuenta['criterio'] }}</td>
                                             <td>{{ $cuenta['observacion'] }}</td>
+                                            <td><span class="badge {{ $cuenta['activo'] ? 'bg-success' : 'bg-secondary' }}">{{ $cuenta['activo'] ? 'Habilitada' : 'Desactivada' }}</span></td>
                                             <td>
-                                                <form method="POST" action="{{ route('contabilidad.clasificacion-cuentas.destroy', $cuenta['cuenta']) }}" onsubmit="return confirm('¿Quitar la cuenta {{ $cuenta['cuenta'] }} de esta clasificación?')">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm">Quitar</button>
-                                                </form>
+                                                @if ($cuenta['activo'])
+                                                    <form method="POST" action="{{ route('contabilidad.clasificacion-cuentas.destroy', $cuenta['cuenta']) }}">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn btn-outline-danger btn-sm" aria-label="Desactivar cuenta {{ $cuenta['cuenta'] }} del reporte">Desactivar</button>
+                                                    </form>
+                                                @else
+                                                    <form method="POST" action="{{ route('contabilidad.clasificacion-cuentas.habilitar', $cuenta['cuenta']) }}">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <button type="submit" class="btn btn-outline-success btn-sm" aria-label="Habilitar cuenta {{ $cuenta['cuenta'] }} en el reporte">Habilitar</button>
+                                                    </form>
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach

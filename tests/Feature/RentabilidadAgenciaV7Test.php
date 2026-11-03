@@ -758,9 +758,14 @@ class RentabilidadAgenciaV7Test extends TestCase
         foreach (range(0, 7) as $indice) {
             $response->assertJsonPath('meses.'.$indice.'.r20', 0)->assertJsonPath('meses.'.$indice.'.gastos', 0)->assertJsonPath('meses.'.$indice.'.balance_general', 0);
         }
-        $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', $filtros))->assertOk()
+        $cuentas = $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', $filtros))->assertOk()
             ->assertJsonPath('total', 13664.87)->assertJsonCount(2, 'movimientos')
-            ->assertJsonPath('movimientos.1.importe', 7966.33)->assertJsonPath('movimientos.1.descripcion', 'Gasto R20 manual (1 mes con ventas)');
+            ->assertJsonPath('movimientos.1.importe', 7966.33)->assertJsonPath('movimientos.1.descripcion', 'Gasto R20 manual (1 mes con ventas)')
+            ->assertJsonCount(9, 'meses')->assertJsonPath('meses.8.total', 13664.87)
+            ->assertJsonPath('meses.8.movimientos.1.cuenta', 'R20')->assertJsonPath('meses.8.movimientos.1.importe', 7966.33);
+        foreach (range(0, 7) as $indice) {
+            $cuentas->assertJsonPath('meses.'.$indice.'.total', 0)->assertJsonCount(0, 'meses.'.$indice.'.movimientos');
+        }
         $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', [...$filtros, 'mes_fin' => 8]))->assertOk()->assertJsonPath('total', 0)->assertJsonCount(0, 'movimientos');
     }
 
@@ -807,6 +812,9 @@ class RentabilidadAgenciaV7Test extends TestCase
         $cuentas = $servicio->cuentas($sinVentas);
         $this->assertSame(5.0, $cuentas['total']);
         $this->assertFalse(collect($cuentas['movimientos'])->contains('cuenta', 'R20'));
+        foreach ($cuentas['meses'] as $mes) {
+            $this->assertFalse(collect($mes['movimientos'])->contains('cuenta', 'R20'));
+        }
     }
 
     public function test_mes_con_ventas_netas_cero_no_genera_r20_en_ningun_detalle(): void
@@ -823,6 +831,33 @@ class RentabilidadAgenciaV7Test extends TestCase
             $this->assertSame(0.0, array_sum(array_column($fila['periodos'], 'r20')));
         }
         $this->assertSame([], $servicio->cuentas($filtros)['movimientos']);
+        $this->assertSame([], $servicio->cuentas($filtros)['meses'][0]['movimientos']);
+    }
+
+    public function test_cuentas_agrupadas_por_mes_concilian_con_el_total_y_respetan_los_filtros(): void
+    {
+        $this->datos();
+        $respuesta = $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', $this->filtros()))
+            ->assertOk()->assertJsonCount(3, 'meses')->assertJsonPath('total', 77)
+            ->assertJsonPath('meses.0.mes', '2026-01')->assertJsonPath('meses.0.total', 55)
+            ->assertJsonCount(3, 'meses.0.movimientos')->assertJsonPath('meses.1.total', 15)
+            ->assertJsonPath('meses.2.total', 7)->assertJsonCount(1, 'meses.2.movimientos');
+        $this->assertEquals($respuesta->json('total'), array_sum(array_column($respuesta->json('meses'), 'total')));
+        $this->assertSame(['5001', '6001', 'R20'], array_column($respuesta->json('meses.0.movimientos'), 'cuenta'));
+        $this->assertSame(['6001'], array_column($respuesta->json('meses.2.movimientos'), 'cuenta'));
+
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', [...$this->filtros(), 'mes_inicio' => 3, 'mes_fin' => 4]))
+            ->assertOk()->assertJsonCount(2, 'meses')->assertJsonPath('meses.0.total', 7)
+            ->assertJsonPath('meses.1.mes', '2026-04')->assertJsonPath('meses.1.total', 10);
+
+        DB::table('clasificacion_cuentas')->insert(['cuenta' => '6001', 'activo' => false]);
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', $this->filtros()))
+            ->assertOk()->assertJsonPath('total', 30)->assertJsonPath('meses.0.total', 20)
+            ->assertJsonPath('meses.1.total', 10)->assertJsonPath('meses.2.total', 0)
+            ->assertJsonCount(0, 'meses.2.movimientos');
+
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', [...$this->filtros(), 'productos_filtrados' => 1, 'productos' => []]))
+            ->assertOk()->assertJsonPath('total', 10)->assertJsonPath('meses.1.total', 0);
     }
 
     public function test_filtro_local_totales_y_resumen_ajax_en_javascript(): void
@@ -866,6 +901,13 @@ global.$ = () => ({DataTable(o){opciones = o; return apiTabla;}});
 $.fn = {dataTable: {render: {text(){return x => x;}}, util: {escapeRegex(valor){return valor.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\$&');}}}};
 global.bootstrap = {Modal: class {show(){}}};
 global.fetch = async url => {urlConsultada = url; return {ok: true, redirected: false, async json(){return datos;}};};
+elemento('contenidoModalV7').querySelectorAll = () => [...elemento('contenidoModalV7').innerHTML.matchAll(/data-mes-cuentas="(\d+)"/g)].map(coincidencia => {
+    const boton = elemento('mes' + coincidencia[1]);
+    boton.dataset = {mesCuentas: coincidencia[1]};
+    return boton;
+});
+elemento('contenidoModalV7').querySelector = () => elemento('volverMeses');
+window.rentabilidadV7.urls.cuentas = 'http://localhost/v7/cuentas';
 vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
 inicio();
 const rutasVisibles = () => elemento('rutaV7').options.map(opcion => opcion.value);
@@ -958,6 +1000,31 @@ assert.equal(prevenidos, 2);
     assert.ok(html.includes('acumulado: RD$ 40.00'));
     assert.ok(html.includes('Clasificada por porcentaje.'));
     assert.ok(html.includes('último mes con ventas: +RD$ 40.00'));
+    datos.total = 12;
+    datos.meses = [
+        {mes: '2026-01', total: 12, movimientos: [{cuenta: '6001', descripcion: '<Cuenta enero>', tipo: 'gasto', clasificacion: 'FIJO', importe: 12}]},
+        {mes: '2026-02', total: 0, movimientos: []},
+    ];
+    boton.dataset.accion = 'cuentas';
+    boton.textContent = 'Cuentas';
+    await elemento('tablaRentabilidadV7').listeners.click({target: {closest(){return boton;}}});
+    const mesesHtml = elemento('contenidoModalV7').innerHTML;
+    assert.ok(mesesHtml.includes('enero de 2026'));
+    assert.ok(mesesHtml.includes('febrero de 2026'));
+    assert.ok(mesesHtml.includes('Ver cuentas'));
+    assert.ok(!mesesHtml.includes('6001'));
+    const ultimaUrl = urlConsultada;
+    elemento('mes0').listeners.click();
+    assert.ok(elemento('contenidoModalV7').innerHTML.includes('Atrás'));
+    assert.ok(elemento('contenidoModalV7').innerHTML.includes('&lt;Cuenta enero&gt;'));
+    assert.ok(!elemento('contenidoModalV7').innerHTML.includes('febrero de 2026'));
+    elemento('volverMeses').listeners.click();
+    assert.equal(elemento('contenidoModalV7').innerHTML, mesesHtml);
+    elemento('mes1').listeners.click();
+    assert.ok(elemento('contenidoModalV7').innerHTML.includes('No hay cuentas con movimientos en este mes.'));
+    assert.ok(!elemento('contenidoModalV7').innerHTML.includes('6001'));
+    elemento('volverMeses').listeners.click();
+    assert.equal(urlConsultada, ultimaUrl);
     window.rentabilidadV7.datos = [];
     opciones = undefined;
     inicio();

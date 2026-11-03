@@ -82,6 +82,16 @@ class ContabilidadGastoAgenciaTest extends TestCase
         $this->assertCount(2, $view->getData()['agencias']);
         $this->assertEquals(80, $montos->get('168|7')->gasto);
         $this->assertEquals(40, $montos->get('169|7')->gasto);
+
+        $this->withoutMiddleware()->delete(route('contabilidad.clasificacion-cuentas.destroy', '600110001'))
+            ->assertRedirect(route('contabilidad.clasificacion-cuentas'));
+        $this->assertCount(0, app(ContabilidadGastoAgenciaController::class)->index($request)->getData()['montos']);
+
+        $this->patch(route('contabilidad.clasificacion-cuentas.habilitar', '600110001'))
+            ->assertRedirect(route('contabilidad.clasificacion-cuentas'));
+        $montos = app(ContabilidadGastoAgenciaController::class)->index($request)->getData()['montos'];
+        $this->assertEquals(80, $montos->get('168|7')->gasto);
+        $this->assertEquals(40, $montos->get('169|7')->gasto);
     }
 
     private function movimiento(string $empresa, string $centroCosto, string $cuenta, int $debito, int $credito): void

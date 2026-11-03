@@ -27,6 +27,21 @@
     };
     const celdaBalance = valor => `<td class="text-end ${colorBalance(valor)}">${moneda(valor)}</td>`;
 
+    function mostrarCuentasPorMes(contenido, datos) {
+        const nombreMes = mes => new Intl.DateTimeFormat('es-DO', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${mes}-01T00:00:00Z`));
+        const mostrarMeses = () => {
+            contenido.innerHTML = `<div class="table-responsive"><table class="table table-bordered align-middle"><thead><tr><th>Mes</th><th class="text-end">Total costos + gastos + R20</th><th>Acción</th></tr></thead><tbody>${datos.meses.map((mes, indice) => `<tr><td>${escapar(nombreMes(mes.mes))}</td><td class="text-end">${moneda(mes.total)}</td><td><button type="button" class="btn btn-sm btn-outline-primary" data-mes-cuentas="${indice}">Ver cuentas</button></td></tr>`).join('')}</tbody><tfoot><tr><th>Total del período</th><th class="text-end">${moneda(datos.total)}</th><th></th></tr></tfoot></table></div>`;
+            contenido.querySelectorAll('[data-mes-cuentas]').forEach(boton => {
+                boton.addEventListener('click', () => mostrarMes(datos.meses[Number(boton.dataset.mesCuentas)]));
+            });
+        };
+        const mostrarMes = mes => {
+            contenido.innerHTML = `<div class="d-flex align-items-center gap-3 mb-3"><button type="button" class="btn btn-outline-secondary" data-volver-meses>Atrás</button><h6 class="mb-0">${escapar(nombreMes(mes.mes))}</h6></div><div class="table-responsive"><table class="table table-bordered"><thead><tr><th>Cuenta</th><th>Descripción</th><th>Tipo</th><th>Clasificación</th><th>Importe</th></tr></thead><tbody>${mes.movimientos.length ? mes.movimientos.map(movimiento => `<tr>${[movimiento.cuenta, movimiento.descripcion, movimiento.tipo, movimiento.clasificacion].map(valor => `<td>${escapar(valor)}</td>`).join('')}<td class="text-end">${moneda(movimiento.importe)}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted">No hay cuentas con movimientos en este mes.</td></tr>'}</tbody><tfoot><tr><th colspan="4">Total costos + gastos + R20</th><th class="text-end">${moneda(mes.total)}</th></tr></tfoot></table></div>`;
+            contenido.querySelector('[data-volver-meses]').addEventListener('click', mostrarMeses);
+        };
+        mostrarMeses();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const configuracion = window.rentabilidadV7;
         const modalImpresion = document.getElementById('modalImpresionV7');
@@ -250,7 +265,7 @@
                             <tbody>${datos.meses.map(mes => `<tr><td>${escapar(mes.mes)}</td>${['ventas', 'premios_sacados', 'utilidad', 'gastos'].map(campo => `<td class="text-end">${moneda(mes[campo])}</td>`).join('')}${celdaBalance(mes.balance_general)}</tr>`).join('')}</tbody>
                             <tfoot class="fw-semibold"><tr><td>Totales</td>${['ventas', 'premios_sacados', 'utilidad', 'gastos'].map(campo => `<td class="text-end">${moneda(datos[campo])}</td>`).join('')}${celdaBalance(datos.balance_general)}</tr></tfoot></table></div>`;
                     } else {
-                        contenido.innerHTML = `<div class="table-responsive"><table class="table table-bordered"><thead><tr><th>Cuenta</th><th>Descripción</th><th>Tipo</th><th>Clasificación</th><th>Importe</th></tr></thead><tbody>${datos.movimientos.map(movimiento => `<tr>${[movimiento.cuenta, movimiento.descripcion, movimiento.tipo, movimiento.clasificacion].map(valor => `<td>${escapar(valor)}</td>`).join('')}<td class="text-end">${moneda(movimiento.importe)}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="4">Total costos + gastos + R20</th><th class="text-end">${moneda(datos.total)}</th></tr></tfoot></table></div>`;
+                        mostrarCuentasPorMes(contenido, datos);
                     }
                 }
             } catch (error) {

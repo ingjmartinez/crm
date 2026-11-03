@@ -238,6 +238,7 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         Route::get('/clasificacion-cuentas', [ContabilidadClasificacionCuentaController::class, 'index'])->name('clasificacion-cuentas');
         Route::post('/clasificacion-cuentas', [ContabilidadClasificacionCuentaController::class, 'store'])->name('clasificacion-cuentas.store');
         Route::delete('/clasificacion-cuentas/{cuenta}', [ContabilidadClasificacionCuentaController::class, 'destroy'])->name('clasificacion-cuentas.destroy');
+        Route::patch('/clasificacion-cuentas/{cuenta}/habilitar', [ContabilidadClasificacionCuentaController::class, 'habilitar'])->name('clasificacion-cuentas.habilitar');
         Route::get('/electricidad', [ContabilidadElectricidadController::class, 'index'])->name('electricidad');
         Route::get('/electricidad/data', [ContabilidadElectricidadController::class, 'data'])->name('electricidad.data');
         Route::post('/electricidad', [ContabilidadElectricidadController::class, 'store'])->name('electricidad.store');

@@ -16,13 +16,12 @@ class ContabilidadClasificacionCuentaController extends Controller
         $clasificaciones = config('clasificacion_cuentas.cuentas', []);
         $guardadas = ClasificacionCuenta::query()->get()->keyBy('cuenta');
         $codigos = array_values(array_unique(array_merge(array_keys($clasificaciones), $guardadas->keys()->all())));
-        $codigosActivos = collect($codigos)->filter(fn (string|int $codigo): bool => $guardadas->get((string) $codigo)?->activo ?? isset($clasificaciones[$codigo]))->values()->all();
         $catalogo = CuentaContable::query()
-            ->whereIn('cuenta', $codigosActivos)
+            ->whereIn('cuenta', $codigos)
             ->get(['cuenta', 'descripcion'])
             ->keyBy('cuenta');
 
-        $cuentas = collect($codigosActivos)->map(function (string|int $codigo) use ($catalogo, $clasificaciones, $guardadas): array {
+        $cuentas = collect($codigos)->map(function (string|int $codigo) use ($catalogo, $clasificaciones, $guardadas): array {
             $codigo = (string) $codigo;
             $guardada = $guardadas->get($codigo);
             $clasificacion = $guardada?->clasificacion ?? $clasificaciones[$codigo];
@@ -35,6 +34,7 @@ class ContabilidadClasificacionCuentaController extends Controller
 
             return [
                 'cuenta' => $codigo,
+                'activo' => $guardada?->activo ?? true,
                 'nombre' => $catalogo->get($codigo)?->descripcion,
                 'clasificacion' => $clasificacion,
                 'criterio' => $criterio,
@@ -47,7 +47,7 @@ class ContabilidadClasificacionCuentaController extends Controller
             'cuentas' => $cuentas,
             'cuentasFaltantes' => $cuentas->whereNull('nombre')->pluck('cuenta')->all(),
             'cuentasConCriterioDistinto' => $cuentas->where('requiere_revision', true)->pluck('cuenta')->all(),
-            'cuentasDisponibles' => CuentaContable::query()->whereNotIn('cuenta', $codigosActivos)
+            'cuentasDisponibles' => CuentaContable::query()->whereNotIn('cuenta', $codigos)
                 ->orderBy('cuenta')->get(['cuenta', 'descripcion']),
         ]);
     }
@@ -83,6 +83,14 @@ class ContabilidadClasificacionCuentaController extends Controller
             'activo' => false,
         ]);
 
-        return to_route('contabilidad.clasificacion-cuentas')->with('mensaje', 'La cuenta se quitó de la clasificación.');
+        return to_route('contabilidad.clasificacion-cuentas')->with('mensaje', 'La cuenta se desactivó del reporte. Puedes volver a habilitarla cuando lo necesites.');
+    }
+
+    public function habilitar(string $cuenta): RedirectResponse
+    {
+        $guardada = ClasificacionCuenta::query()->where('cuenta', $cuenta)->firstOrFail();
+        $guardada->update(['activo' => true]);
+
+        return to_route('contabilidad.clasificacion-cuentas')->with('mensaje', 'La cuenta se habilitó en el reporte.');
     }
 }
