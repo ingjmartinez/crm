@@ -96,7 +96,7 @@
         <div class="modal fade" id="modalImpresionV7" tabindex="-1" aria-labelledby="tituloImpresionV7" aria-hidden="true">
             <div class="modal-dialog"><div class="modal-content">
                 <div class="modal-header"><h5 class="modal-title" id="tituloImpresionV7">Impresión personalizada</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
-                <form method="GET" action="{{ route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo') }}" target="_blank" rel="noopener">
+                <form method="GET" action="{{ route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo') }}" target="_blank" rel="noopener" id="formImpresionV7">
                     @foreach (['anio', 'mes_inicio', 'mes_fin', 'empresa', 'ruta', 'alcance', 'terminal'] as $campo)
                         <input type="hidden" name="{{ $campo }}" value="{{ $filtros[$campo] }}">
                     @endforeach
@@ -115,6 +115,7 @@
                             </select>
                         </div>
                         <p class="text-muted small mt-3 mb-0">Las tablas se separan por ruta e incluyen sus totales. Se incluyen todas las terminales de la ruta, independientemente del buscador o la categoría seleccionada en la tabla.</p>
+                        <div id="estadoImpresionV7" class="mt-3" role="status" aria-live="polite"></div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>

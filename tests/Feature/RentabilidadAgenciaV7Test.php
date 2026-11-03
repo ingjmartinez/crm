@@ -450,6 +450,21 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->travelBack();
     }
 
+    public function test_enlace_pdf_caducado_no_redirige_al_mismo_enlace(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $this->filtros()))->assertOk();
+        $filtros = [...$this->filtros(), 'informe_id' => $pagina->viewData('informeId'), 'personalizado' => 1, 'ruta_impresion' => 'Ruta Norte', 'salida' => 'pdf'];
+        $url = route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $filtros);
+        $this->travel(11)->minutes();
+
+        $this->from($url)->get($url)
+            ->assertRedirect(route('gerencia.rentabilidad-agencia-v7', $this->filtros()))
+            ->assertSessionHasErrors('informe_id');
+
+        $this->travelBack();
+    }
+
     public function test_referencia_pdf_se_aisla_por_usuario_y_filtros(): void
     {
         $this->datos();
@@ -597,6 +612,33 @@ class RentabilidadAgenciaV7Test extends TestCase
             $this->assertGreaterThan($posicionAnterior, $posicion);
             $posicionAnterior = $posicion;
         }
+    }
+
+    public static function volumenesPdf(): array
+    {
+        return [[47], [1524]];
+    }
+
+    #[DataProvider('volumenesPdf')]
+    public function test_pdf_con_terminales_ordenadas_y_alertas_termina_de_generarse(int $cantidad): void
+    {
+        $this->datos();
+        $filtros = [...$this->filtros(), 'alcance' => 'todas'];
+        $servicio = app(RentabilidadAgenciaV7Service::class);
+        $resultado = $servicio->reporte($filtros);
+        $categorias = \App\Services\ClasificadorRentabilidadAgenciaV7::categorias();
+        $base = $resultado['filas']->first();
+        $resultado['filas'] = collect(range(1, $cantidad))->map(fn (int $indice): array => [
+            ...$base, 'terminal' => sprintf('05%04d', $indice), 'nombre' => 'Agencia San Pedro '.$indice,
+            'ruta' => $cantidad === 47 ? '157-San Pedro 2' : 'Ruta '.intdiv($indice - 1, 40), 'ventas' => 5284077.0, 'premios_sacados' => 1371033.0,
+            'utilidad' => 3913044.0, 'gastos' => 1381865.09, 'balance_general' => 2532028.91 - $indice * 100000,
+            'clasificacion' => [...$base['clasificacion'], ...$categorias[$indice % count($categorias)], 'en_deterioro' => $indice % 7 === 1],
+        ]);
+        $informeId = $servicio->guardarResumenEjecutivo($filtros, '1', $resultado);
+        $opciones = [...$filtros, 'informe_id' => $informeId, 'personalizado' => 1, 'ruta_impresion' => $cantidad === 47 ? '157-San Pedro 2' : '', 'salida' => 'pdf'];
+        $pdf = $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $opciones))->assertOk();
+        $this->assertStringStartsWith('%PDF-', $pdf->getContent());
+        $this->assertGreaterThan(1, preg_match_all('/\/Type\s*\/Page\b/', $pdf->getContent()));
     }
 
     public function test_recuperacion_reciente_en_endpoint_y_resumen_sin_modificar_importes(): void
@@ -875,6 +917,98 @@ assert.equal(prevenidos, 2);
     const previos = prevenidos;
     elemento('filtrosRentabilidadV7').listeners.submit(eventoSubmit());
     assert.equal(prevenidos, previos);
+})().catch(error => {console.error(error); process.exitCode = 1;});
+JS;
+        $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v7.js')]);
+        $proceso->setInput($codigo)->setTimeout(15)->run();
+        $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
+    }
+
+    public function test_generacion_en_javascript_descarga_pdf_muestra_errores_y_rehabilita_botones(): void
+    {
+        $codigo = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const elementos = new Map();
+const botones = [{disabled: false}, {disabled: false}];
+const descargas = [];
+const esperas = [];
+function elemento(id) {
+    if (!elementos.has(id)) elementos.set(id, {value: '', checked: false, action: 'http://localhost/informe', listeners: {}, className: '', textContent: '', addEventListener(tipo, fn){this.listeners[tipo] = fn;}, replaceChildren(){}, querySelectorAll(){return botones;}});
+    return elementos.get(id);
+}
+global.document = {getElementById: elemento, addEventListener(tipo, fn){global.iniciar = fn;}, body: {appendChild(){}}, createElement(){return {click(){descargas.push(this.download);}, remove(){}};}};
+global.window = {rentabilidadV7: {datos: [], rutasDisponibles: []}, location: {href: 'http://localhost/reporte'}, addEventListener(){}, open(){return null;}};
+global.Option = class {constructor(text, value){this.value = value;}};
+global.FormData = class extends Map {constructor(){super([['informe_id', 'consulta'], ['personalizado', '1'], ['ruta_impresion', 'Ruta Norte']]);}};
+global.setTimeout = (fn, delay) => {esperas.push(delay); return esperas.length;};
+global.clearTimeout = () => {};
+URL.createObjectURL = () => 'blob:documento';
+URL.revokeObjectURL = () => {};
+let peticiones = 0;
+let respuesta;
+const fetchNormal = async (url, opciones) => {
+    peticiones++;
+    assert.equal(opciones.headers.Accept, 'application/json');
+    assert.equal(url.searchParams.get('ruta_impresion'), 'Ruta Norte');
+    return respuesta;
+};
+global.fetch = fetchNormal;
+const pdf = () => ({ok: true, redirected: false, headers: {get(){return 'application/pdf';}}, async blob(){return {};}});
+vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
+iniciar();
+const generar = elemento('formImpresionV7').listeners.submit;
+const evento = salida => ({preventDefault(){}, submitter: {value: salida}});
+const estado = () => elemento('estadoImpresionV7').textContent;
+const habilitados = () => botones.every(boton => !boton.disabled);
+(async () => {
+    respuesta = pdf();
+    await generar(evento('pdf'));
+    assert.deepEqual(descargas, ['rentabilidad_agencia_v7.pdf']);
+    assert.ok(estado().includes('PDF generado'));
+    assert.ok(habilitados());
+    assert.ok(esperas.includes(180000));
+    respuesta = {ok: false, redirected: false, headers: {get(){return 'application/json';}}, async json(){return {errors: {informe_id: ['La consulta ha caducado.']}};}};
+    await generar(evento('pdf'));
+    assert.equal(estado(), 'La consulta ha caducado.');
+    assert.ok(habilitados());
+    respuesta = {ok: false, redirected: false, headers: {get(){return 'text/html';}}};
+    await generar(evento('pdf'));
+    assert.ok(estado().includes('No se pudo generar'));
+    respuesta = {ok: true, redirected: true, headers: {get(){return 'text/html';}}};
+    await generar(evento('pdf'));
+    assert.ok(estado().includes('Revisa la sesión'));
+    respuesta = {ok: true, redirected: false, headers: {get(){return 'text/html';}}};
+    await generar(evento('pdf'));
+    assert.ok(estado().includes('PDF válido'));
+    global.fetch = async () => {throw Object.assign(new Error(), {name: 'AbortError'});};
+    await generar(evento('pdf'));
+    assert.ok(estado().includes('tiempo de espera'));
+    assert.ok(habilitados());
+    global.fetch = fetchNormal;
+    const antes = peticiones;
+    await generar(evento('imprimir'));
+    assert.ok(estado().includes('bloqueó la ventana'));
+    assert.equal(peticiones, antes);
+    assert.ok(habilitados());
+    let escrito;
+    const ventana = {closed: false, document: {body: {}, open(){}, write(html){escrito = html;}, close(){}}, close(){this.closed = true;}};
+    window.open = () => ventana;
+    respuesta = {ok: true, redirected: false, headers: {get(){return 'text/html';}}, async text(){return '<html>Ruta Norte</html>';}};
+    await generar(evento('imprimir'));
+    assert.equal(escrito, '<html>Ruta Norte</html>');
+    assert.ok(estado().includes('Documento preparado'));
+    assert.equal(ventana.opener, null);
+    let resolver;
+    global.fetch = () => new Promise(resolve => {resolver = resolve;});
+    const pendiente = generar(evento('pdf'));
+    assert.ok(botones.every(boton => boton.disabled));
+    await generar(evento('pdf'));
+    resolver(pdf());
+    await pendiente;
+    assert.equal(descargas.length, 2);
+    assert.ok(habilitados());
 })().catch(error => {console.error(error); process.exitCode = 1;});
 JS;
         $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v7.js')]);
