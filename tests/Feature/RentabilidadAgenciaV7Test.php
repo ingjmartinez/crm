@@ -131,19 +131,23 @@ class RentabilidadAgenciaV7Test extends TestCase
         return ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3, 'terminal' => '1001', 'empresa' => 'Grupo Joselito', 'alcance' => 'terminal'];
     }
 
-    public function test_calcula_con_premios_generados_y_conserva_los_gastos_de_v6(): void
+    public function test_calcula_con_premios_generados_y_conserva_los_gastos_contables(): void
     {
         $this->datos();
         $response = $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', $this->filtros()))->assertOk();
         $response->assertJsonPath('ventas', 200)->assertJsonPath('premios_sacados', 90)
-            ->assertJsonPath('utilidad', 110)->assertJsonPath('gastos', 87)->assertJsonPath('balance_general', 23)
+            ->assertJsonPath('utilidad', 110)->assertJsonPath('gastos', 77)->assertJsonPath('balance_general', 33)
             ->assertJsonPath('meses.0.utilidad', 10)->assertJsonPath('meses.0.balance_general', -45)
-            ->assertJsonPath('meses.1.balance_general', 85)->assertJsonPath('meses.2.balance_general', -17)
+            ->assertJsonPath('meses.1.balance_general', 85)->assertJsonPath('meses.2.balance_general', -7)
+            ->assertJsonPath('meses.2.r20', 0)
             ->assertJsonPath('clasificacion.nombre', 'En evaluación')
             ->assertJsonPath('clasificacion.meses_positivos', 1)->assertJsonPath('clasificacion.meses_con_ventas', 2)
             ->assertJsonCount(3, 'meses')->assertJsonMissingPath('premios_propios')->assertJsonMissingPath('clasificacion_neta');
         $original = app(\App\Services\RentabilidadAgenciaV6Service::class)->reporte($this->filtros())['filas']->first();
-        $this->assertSame($original['gastos'], (float) $response->json('gastos'));
+        foreach ($response->json('meses') as $indice => $mes) {
+            $this->assertSame($original['periodos'][$indice]['costos'], (float) $mes['costos']);
+            $this->assertSame($original['periodos'][$indice]['gastos_contables'], (float) $mes['gastos_contables']);
+        }
         Http::assertNothingSent();
     }
 
@@ -158,7 +162,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertCount(1, $consultas);
         $this->assertStringNotContainsString('pagos_', $consultas->first()['query']);
         $this->assertStringContainsString('group by "terminal", "periodo"', $consultas->first()['query']);
-        $this->assertSame(['ventas' => 520.0, 'premios_sacados' => 90.0, 'utilidad' => 430.0, 'gastos' => 147.0, 'balance_general' => 283.0], $resultado['totales']);
+        $this->assertSame(['ventas' => 520.0, 'premios_sacados' => 90.0, 'utilidad' => 430.0, 'gastos' => 97.0, 'balance_general' => 333.0], $resultado['totales']);
         $this->assertSame(200.0, $resultado['filas']->firstWhere('terminal', '1002')['ventas']);
         $this->assertSame(120.0, $resultado['filas']->firstWhere('terminal', '1003')['ventas']);
         $this->assertSame(3, $resultado['resumen_clasificaciones']['total']);
@@ -172,8 +176,8 @@ class RentabilidadAgenciaV7Test extends TestCase
     {
         $this->datos();
         $filtros = $this->filtros();
-        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'anio_completo' => 1]))->assertOk()->assertJsonCount(12, 'meses')->assertJsonPath('ventas', 1200)->assertJsonPath('gastos', 177)->assertJsonPath('balance_general', 933);
-        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'productos_filtrados' => 1, 'productos' => ['Recarga']]))->assertOk()->assertJsonPath('ventas', 0)->assertJsonPath('premios_sacados', 0)->assertJsonPath('balance_general', -87)->assertJsonPath('clasificacion.nombre', 'Sin ventas');
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'anio_completo' => 1]))->assertOk()->assertJsonCount(12, 'meses')->assertJsonPath('ventas', 1200)->assertJsonPath('gastos', 87)->assertJsonPath('balance_general', 1023)->assertJsonPath('clasificacion.nombre', 'En evaluación');
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'productos_filtrados' => 1, 'productos' => ['Recarga']]))->assertOk()->assertJsonPath('ventas', 0)->assertJsonPath('premios_sacados', 0)->assertJsonPath('balance_general', -57)->assertJsonPath('clasificacion.nombre', 'Sin ventas');
         $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'productos' => ['Tradicional']]))->assertOk()->assertJsonPath('premios_sacados', 90);
         $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'empresa' => 'Negosur']))->assertNotFound();
         $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'terminal' => '99999']))->assertNotFound();
@@ -196,7 +200,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         }
         $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$this->filtros(), 'terminal' => '9001', 'mes_fin' => 12]))->assertOk()
             ->assertJsonPath('clasificacion.nombre', $categoria)->assertJsonPath('clasificacion.meses_positivos', $positivos)
-            ->assertJsonPath('clasificacion.meses_con_ventas', 9)->assertJsonPath('balance_general', $positivos * 70 - 30);
+            ->assertJsonPath('clasificacion.meses_con_ventas', 9)->assertJsonPath('balance_general', $positivos * 70);
     }
 
     public function test_cache_ejecutiva_aisla_usuario_filtros_y_expira(): void
@@ -204,14 +208,14 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->datos();
         $servicio = app(RentabilidadAgenciaV7Service::class);
         $filtros = $this->filtros();
-        $this->assertSame(23.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['balance_general']);
+        $this->assertSame(33.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['balance_general']);
         DB::table('premios_bet')->where('agencia_id', '1001')->update(['monto' => 900]);
-        $this->assertSame(23.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['balance_general']);
-        $this->assertSame(-787.0, $servicio->resumenEjecutivo($filtros, '2')['totales']['balance_general']);
+        $this->assertSame(33.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['balance_general']);
+        $this->assertSame(-777.0, $servicio->resumenEjecutivo($filtros, '2')['totales']['balance_general']);
         $this->assertSame(0.0, $servicio->resumenEjecutivo([...$filtros, 'empresa' => 'Inexistente'], '1')['totales']['ventas']);
         $this->assertSame(0.0, $servicio->resumenEjecutivo([...$filtros, 'productos_filtrados' => 1, 'productos' => []], '1')['totales']['ventas']);
         $this->travel(11)->minutes();
-        $this->assertSame(-787.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['balance_general']);
+        $this->assertSame(-777.0, $servicio->resumenEjecutivo($filtros, '1')['totales']['balance_general']);
         $this->travelBack();
     }
 
@@ -230,7 +234,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertSame($mensual['balance_general'], $diario['balance_general']);
         $this->assertSame($mensual['clasificacion'], $diario['clasificacion']);
         $this->get(route('gerencia.rentabilidad-agencia-v7.detalle', $filtros))->assertOk()->assertSee('detalleTerminalRentabilidadV7')->assertSee('Balance general')->assertDontSee('Balance neto');
-        $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', $this->filtros()))->assertOk()->assertJsonPath('total', 57.09);
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', $this->filtros()))->assertOk()->assertJsonPath('total', 57.06);
     }
 
     public function test_vista_columnas_y_permisos_iguales_a_v6(): void
@@ -273,7 +277,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()));
         $resultado = app(RentabilidadAgenciaV7Service::class)->resumenEjecutivo($this->filtros(), '1');
         $this->assertArrayNotHasKey('filas', $resultado);
-        $this->assertSame(23.0, $resultado['totales']['balance_general']);
+        $this->assertSame(33.0, $resultado['totales']['balance_general']);
         $v6 = app(\App\Services\RentabilidadAgenciaV6Service::class)->resumenEjecutivo($this->filtros(), '1');
         $this->assertSame(-42.0, $v6['totales']['balance_neto']);
         $this->assertArrayNotHasKey('balance_general', $v6['totales']);
@@ -281,6 +285,8 @@ class RentabilidadAgenciaV7Test extends TestCase
         $productos = RentabilidadAgenciaV7Service::PRODUCTOS;
         $html = view('gerencia.rentabilidad-agencia-v7-pdf', compact('resultado', 'filtros', 'productos'))->render();
         $this->assertStringContainsString('Balance general', $html);
+        $this->assertStringContainsString('RD$ 33.00', $html);
+        $this->assertStringContainsString('Se requieren 4 meses con ventas', $html);
         $this->assertStringNotContainsString('Pagados propios', $html);
         $this->assertStringNotContainsString('Clasificación neta', $html);
     }
@@ -336,6 +342,88 @@ class RentabilidadAgenciaV7Test extends TestCase
         $resultado = app(RentabilidadAgenciaV7Service::class)->reporte($filtros);
         $this->assertSame(1, $resultado['resumen_clasificaciones']['en_deterioro']);
         $this->assertSame(1, collect($resultado['resumen_clasificaciones']['categorias'])->firstWhere('nombre', 'Buena')['cantidad']);
+    }
+
+    public function test_terminal_con_ventas_solo_en_septiembre_no_paga_r20_los_otros_meses(): void
+    {
+        $this->datos();
+        DB::table('rentabilidad_agencia_r20')->update(['monto' => 7966.33]);
+        DB::table('agencias')->insert(['terminal' => '052151', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Guayacanes']);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '052151', 'fecha' => '2026-09-01', 'monto' => 45536, 'tipo' => 'Tradicional']);
+        DB::table('premios_bet')->insert(['agencia_id' => '052151', 'fecha' => '2026-09-01', 'monto' => 15600]);
+        DB::table('entradas_diario')->insert(['id_viejo' => '052151', 'fecha' => '2026-09-01', 'cuenta' => '6001', 'debito' => 5698.54, 'credito' => 0]);
+        $filtros = [...$this->filtros(), 'terminal' => '052151', 'mes_fin' => 9];
+        $response = $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', $filtros))->assertOk();
+        $response->assertJsonPath('gastos', 13664.87)->assertJsonPath('balance_general', 16271.13)
+            ->assertJsonPath('clasificacion.nombre', 'En evaluación')->assertJsonPath('meses.8.r20', 7966.33);
+        foreach (range(0, 7) as $indice) {
+            $response->assertJsonPath('meses.'.$indice.'.r20', 0)->assertJsonPath('meses.'.$indice.'.gastos', 0)->assertJsonPath('meses.'.$indice.'.balance_general', 0);
+        }
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', $filtros))->assertOk()
+            ->assertJsonPath('total', 13664.87)->assertJsonCount(2, 'movimientos')
+            ->assertJsonPath('movimientos.1.importe', 7966.33)->assertJsonPath('movimientos.1.descripcion', 'Gasto R20 manual (1 mes con ventas)');
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.cuentas', [...$filtros, 'mes_fin' => 8]))->assertOk()->assertJsonPath('total', 0)->assertJsonCount(0, 'movimientos');
+    }
+
+    public function test_tres_meses_en_evaluacion_y_cuatro_ya_se_clasifican(): void
+    {
+        $this->datos();
+        DB::table('agencias')->insert(['terminal' => '9004', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Nueva']);
+        foreach (range(1, 3) as $mes) {
+            DB::table('vt_usuarios_bet')->insert(['agencia_id' => '9004', 'fecha' => sprintf('2026-%02d-01', $mes), 'monto' => 100]);
+        }
+        $filtros = [...$this->filtros(), 'terminal' => '9004', 'mes_fin' => 9];
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', $filtros))->assertOk()
+            ->assertJsonPath('clasificacion.nombre', 'En evaluación')->assertJsonPath('clasificacion.meses_con_ventas', 3)->assertJsonPath('gastos', 30);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '9004', 'fecha' => '2026-04-01', 'monto' => 100]);
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', $filtros))->assertOk()
+            ->assertJsonPath('clasificacion.nombre', 'Rentable')->assertJsonPath('clasificacion.meses_con_ventas', 4)->assertJsonPath('gastos', 40);
+    }
+
+    public function test_r20_diario_solo_se_reparte_entre_dias_con_ventas_y_concilia_cuentas(): void
+    {
+        $this->datos();
+        DB::table('rentabilidad_agencia_r20')->update(['monto' => 0.03]);
+        DB::table('agencias')->insert(['terminal' => '9005', 'empresa' => 'Grupo Joselito', 'sistema' => 'MIXTO', 'nombre_agencia' => 'Mixta']);
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '9005', 'fecha' => '2026-01-01', 'monto' => 10, 'tipo' => 'Tradicional'],
+            ['agencia_id' => '9005', 'fecha' => '2026-01-03', 'monto' => 10, 'tipo' => 'Tradicional'],
+        ]);
+        DB::table('vt_usuarios_net')->insert(['agencia_id' => '9005', 'fecha' => '2026-01-01', 'monto' => 20, 'tipo' => 'Tradicional']);
+        DB::table('entradas_diario')->insert(['id_viejo' => '9005', 'fecha' => '2026-01-02', 'cuenta' => '6001', 'debito' => 5, 'credito' => 0]);
+        $filtros = [...$this->filtros(), 'terminal' => '9005', 'mes_fin' => 2];
+        $servicio = app(RentabilidadAgenciaV7Service::class);
+        $mensual = $servicio->reporte($filtros)['filas']->first();
+        $diario = $servicio->reporte($filtros, true)['filas']->first();
+        $this->assertSame(0.02, $diario['periodos'][0]['r20']);
+        $this->assertSame(0.0, $diario['periodos'][1]['r20']);
+        $this->assertSame(0.01, $diario['periodos'][2]['r20']);
+        $this->assertSame(0.0, $mensual['periodos'][1]['r20']);
+        $this->assertSame(5.03, $mensual['gastos']);
+        $this->assertSame($mensual['gastos'], $diario['gastos']);
+        $this->assertSame($mensual['balance_general'], $diario['balance_general']);
+        $this->assertSame(5.03, $servicio->cuentas($filtros)['total']);
+        $sinVentas = [...$filtros, 'productos_filtrados' => 1, 'productos' => ['Recarga']];
+        $this->assertSame(5.0, $servicio->reporte($sinVentas)['filas']->first()['gastos']);
+        $cuentas = $servicio->cuentas($sinVentas);
+        $this->assertSame(5.0, $cuentas['total']);
+        $this->assertFalse(collect($cuentas['movimientos'])->contains('cuenta', 'R20'));
+    }
+
+    public function test_mes_con_ventas_netas_cero_no_genera_r20_en_ningun_detalle(): void
+    {
+        $this->datos();
+        DB::table('agencias')->insert(['terminal' => '9006', 'empresa' => 'Grupo Joselito', 'sistema' => 'MIXTO', 'nombre_agencia' => 'Ajustada']);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '9006', 'fecha' => '2026-01-01', 'monto' => 100]);
+        DB::table('vt_usuarios_net')->insert(['agencia_id' => '9006', 'fecha' => '2026-01-02', 'monto' => -100]);
+        $filtros = [...$this->filtros(), 'terminal' => '9006', 'mes_fin' => 1];
+        $servicio = app(RentabilidadAgenciaV7Service::class);
+        foreach ([false, true] as $diario) {
+            $fila = $servicio->reporte($filtros, $diario)['filas']->first();
+            $this->assertSame(0.0, $fila['gastos']);
+            $this->assertSame(0.0, array_sum(array_column($fila['periodos'], 'r20')));
+        }
+        $this->assertSame([], $servicio->cuentas($filtros)['movimientos']);
     }
 
     public function test_filtro_local_totales_y_resumen_ajax_en_javascript(): void

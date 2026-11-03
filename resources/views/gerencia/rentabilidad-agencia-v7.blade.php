@@ -7,7 +7,7 @@
             <a href="{{ route('gerencia.rentabilidad-agencia-v6') }}" class="btn btn-outline-secondary">Ver reporte V6</a>
         </div>
         <div class="card"><div class="card-body">
-            <p class="text-muted">Utilidad = ventas − premios sacados. Balance general = utilidad − gastos. Gastos incluye costos contables, gastos y R20 mensual, con las mismas cuentas activas que V6. La clasificación se calcula con el balance general de los meses con ventas.</p>
+            <p class="text-muted">Utilidad = ventas − premios sacados. Balance general = utilidad − gastos. Gastos incluye costos contables, gastos y R20, con las mismas cuentas activas que V6. R20 se aplica únicamente en los meses con ventas de la terminal. La clasificación se calcula con el balance general de los meses con ventas.</p>
             <form method="GET" action="{{ route('gerencia.rentabilidad-agencia-v7') }}" class="row g-3 align-items-end" id="filtrosRentabilidadV7">
                 <div class="col-md-2"><label for="anioV7" class="form-label">Año</label><input id="anioV7" type="number" name="anio" min="1900" max="9998" class="form-control" value="{{ $filtros['anio'] }}" required></div>
                 @foreach (['mes_inicio' => 'Mes inicio', 'mes_fin' => 'Mes fin'] as $campo => $etiqueta)

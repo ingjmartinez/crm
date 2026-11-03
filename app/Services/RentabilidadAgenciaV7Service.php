@@ -68,7 +68,7 @@ class RentabilidadAgenciaV7Service
         sort($productos, SORT_STRING);
         $alcance = $filtros['alcance'] ?? 'todas';
 
-        return 'rentabilidad-v7:ejecutivo:v3:'.$this->clasificador->firmaConfiguracion().':'.hash('sha256', json_encode([
+        return 'rentabilidad-v7:ejecutivo:v4:'.$this->clasificador->firmaConfiguracion().':'.hash('sha256', json_encode([
             'usuario' => $usuario,
             'desde' => $desde->toDateString(), 'hasta' => $hasta->toDateString(),
             'empresa' => trim((string) ($filtros['empresa'] ?? '')),
@@ -96,7 +96,8 @@ class RentabilidadAgenciaV7Service
         $mediciones = $this->mediciones($agencias, $desde, $hasta, $this->productos($filtros), $diario);
         $r20 = (float) RentabilidadAgenciaR20::query()->where('terminal', '*')
             ->orderByRaw('CASE WHEN mes = ? THEN 0 ELSE 1 END', ['GLOBAL'])->orderByDesc('updated_at')->value('monto');
-        $filas = $agencias->map(function (RentabilidadAgenciaV5 $agencia) use ($desde, $hasta, $mediciones, $r20, $diario): array {
+        $r20PorDia = $diario ? $this->distribuirR20Diario($mediciones, $r20) : [];
+        $filas = $agencias->map(function (RentabilidadAgenciaV5 $agencia) use ($desde, $hasta, $mediciones, $r20, $r20PorDia, $diario): array {
             $terminal = trim((string) $agencia->terminal);
             $periodos = [];
             for ($fecha = $desde->copy(); $fecha->lte($hasta); $diario ? $fecha->addDay() : $fecha->addMonth()) {
@@ -104,10 +105,9 @@ class RentabilidadAgenciaV7Service
                 $datos = (array) $mediciones->get($terminal.'|'.$periodo, []);
                 $ventas = (float) ($datos['ventas'] ?? 0);
                 $premiosSacados = (float) ($datos['premios_sacados'] ?? 0);
-                $centavosR20 = (int) round($r20 * 100);
                 $r20Periodo = $diario
-                    ? (intdiv($centavosR20, $fecha->daysInMonth) + ($fecha->day <= abs($centavosR20 % $fecha->daysInMonth) ? ($centavosR20 <=> 0) : 0)) / 100
-                    : $r20;
+                    ? ($r20PorDia[$terminal.'|'.$periodo] ?? 0.0)
+                    : ($ventas > 0 ? $r20 : 0.0);
                 $gastos = round((float) ($datos['costos'] ?? 0) + (float) ($datos['gastos_contables'] ?? 0) + $r20Periodo, 2);
                 $periodos[] = [
                     'mes' => $periodo, 'ventas' => $ventas, 'premios_sacados' => $premiosSacados,
@@ -171,6 +171,58 @@ class RentabilidadAgenciaV7Service
         return DB::connection()->getDriverName() === 'mysql'
             ? 'CONVERT('.$columna.' USING utf8mb4) COLLATE utf8mb4_unicode_ci'
             : $columna;
+    }
+
+    /**
+     * @param  Collection<string, object>  $mediciones
+     * @return array<string, float>
+     */
+    private function distribuirR20Diario(Collection $mediciones, float $r20): array
+    {
+        $importes = [];
+        $centavos = (int) round($r20 * 100);
+        $meses = $mediciones->groupBy(fn (object $fila): string => $fila->terminal.'|'.substr($fila->periodo, 0, 7));
+        foreach ($meses as $movimientos) {
+            if (round($movimientos->sum('ventas'), 2) <= 0) {
+                continue;
+            }
+            $diasConVentas = $movimientos->filter(fn (object $fila): bool => (float) $fila->ventas > 0)->sortBy('periodo')->values();
+            $cantidad = $diasConVentas->count();
+            if ($cantidad === 0) {
+                continue;
+            }
+            foreach ($diasConVentas as $indice => $fila) {
+                $importe = intdiv($centavos, $cantidad) + ($indice < abs($centavos % $cantidad) ? ($centavos <=> 0) : 0);
+                $importes[$fila->terminal.'|'.$fila->periodo] = $importe / 100;
+            }
+        }
+
+        return $importes;
+    }
+
+    /** @param list<string> $productos */
+    private function mesesConVentas(RentabilidadAgenciaV5 $agencia, Carbon $desde, Carbon $hasta, array $productos): int
+    {
+        $sistemas = match (mb_strtoupper(trim((string) $agencia->sistema))) {
+            'LOTOBET' => ['bet'],
+            'LOTONET', 'LOTENET' => ['net'],
+            default => ['bet', 'net'],
+        };
+        $union = null;
+        $periodo = $this->periodoSql('fecha', false);
+        foreach ($sistemas as $sistema) {
+            $ventas = DB::table('vt_usuarios_'.$sistema)->where('agencia_id', $agencia->terminal)
+                ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+                ->when(count($productos) !== count(self::PRODUCTOS), fn (Builder $query) => $query->whereIn('tipo', $productos))
+                ->selectRaw($periodo.' AS periodo, SUM(COALESCE(monto, 0)) AS ventas')->groupByRaw($periodo);
+            if ($union === null) {
+                $union = $ventas;
+            } else {
+                $union->unionAll($ventas);
+            }
+        }
+
+        return DB::query()->fromSub($union, 'ventas_terminal')->select('periodo')->groupBy('periodo')->havingRaw('SUM(ventas) > 0')->get()->count();
     }
 
     /** @param Collection<int, RentabilidadAgenciaV5> $agencias @param list<string> $productos @return Collection<string, object> */
@@ -260,10 +312,13 @@ class RentabilidadAgenciaV7Service
                 ->groupByRaw('movimientos.cuenta, cuentas.descripcion, LOWER(TRIM(cuentas.tipo))')->orderBy('movimientos.cuenta')
                 ->get()->map(fn ($fila): array => ['cuenta' => (string) $fila->cuenta, 'descripcion' => $fila->descripcion, 'tipo' => $fila->tipo, 'clasificacion' => $clasificaciones->get($fila->cuenta), 'importe' => (float) $fila->importe]);
         }
-        $meses = ($hasta->year - $desde->year) * 12 + $hasta->month - $desde->month + 1;
+        $meses = $this->mesesConVentas($agencia, $desde, $hasta, $this->productos($filtros));
         $r20 = (float) RentabilidadAgenciaR20::query()->where('terminal', '*')->orderByRaw('CASE WHEN mes = ? THEN 0 ELSE 1 END', ['GLOBAL'])->orderByDesc('updated_at')->value('monto');
-        $movimientos->push(['cuenta' => 'R20', 'descripcion' => 'Gasto R20 manual ('.$meses.' meses)', 'tipo' => 'gasto', 'clasificacion' => 'FIJO', 'importe' => $r20 * $meses]);
+        if ($meses > 0 && $r20 !== 0.0) {
+            $descripcion = $meses === 1 ? '1 mes con ventas' : $meses.' meses con ventas';
+            $movimientos->push(['cuenta' => 'R20', 'descripcion' => 'Gasto R20 manual ('.$descripcion.')', 'tipo' => 'gasto', 'clasificacion' => 'FIJO', 'importe' => round($r20 * $meses, 2)]);
+        }
 
-        return ['terminal' => $agencia->terminal, 'agencia' => $agencia->nombre_agencia ?: $agencia->agencia ?: $agencia->terminal, 'movimientos' => $movimientos->values()->all(), 'total' => (float) $movimientos->sum('importe')];
+        return ['terminal' => $agencia->terminal, 'agencia' => $agencia->nombre_agencia ?: $agencia->agencia ?: $agencia->terminal, 'movimientos' => $movimientos->values()->all(), 'total' => round($movimientos->sum('importe'), 2)];
     }
 }

@@ -63,12 +63,13 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
         $meses = array_merge(
             [['ventas' => 100, 'balance_general' => 100]],
             array_fill(0, 2, ['ventas' => 100, 'balance_general' => -1]),
+            [['ventas' => 100, 'balance_general' => -1]],
             [['ventas' => 0, 'balance_general' => -200]],
         );
         $servicio = $this->clasificador();
         $resultado = $servicio->clasificar($meses);
         $this->assertSame('No rentable', $resultado['nombre']);
-        $this->assertSame(3, $resultado['meses_con_ventas']);
+        $this->assertSame(4, $resultado['meses_con_ventas']);
         $this->assertSame('Sin ventas', $servicio->clasificar([['ventas' => 0, 'balance_general' => 100]])['nombre']);
     }
 
@@ -101,7 +102,7 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
 
     public function test_acumulado_negativo_limita_rentable_y_buena(): void
     {
-        foreach ([[10, 10, 10], [10, 10, 10, 10, 10, 10, 10, 10, -1]] as $balances) {
+        foreach ([[10, 10, 10, 10], [10, 10, 10, 10, 10, 10, 10, 10, -1]] as $balances) {
             $meses = $this->meses($balances);
             $meses[] = ['mes' => '2026-12', 'ventas' => 0, 'balance_general' => -1000];
             $resultado = $this->clasificador()->clasificar($meses);
@@ -151,17 +152,28 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
 
     public function test_los_parametros_configurados_controlan_ventas_historial_ventana_y_umbrales(): void
     {
-        $meses = $this->meses([1000, 10, 10, 10]);
+        $meses = $this->meses([1000, 10, 10, 10, 10]);
         $meses[0]['ventas'] = 99;
         $conMinimo = $this->clasificador(['venta_minima_mes' => 100])->clasificar($meses);
-        $this->assertSame(3, $conMinimo['meses_con_ventas']);
-        $this->assertSame(1030.0, $conMinimo['balance_acumulado']);
+        $this->assertSame(4, $conMinimo['meses_con_ventas']);
+        $this->assertSame(1040.0, $conMinimo['balance_acumulado']);
         $this->assertSame('Rentable', $conMinimo['nombre']);
         $this->assertSame('En evaluación', $this->clasificador(['min_meses' => 4])->clasificar($this->meses([10, 10, 10]))['nombre']);
         $this->assertSame('Buena', $this->clasificador(['umbral_buena' => 60])->clasificar($this->meses([...array_fill(0, 6, 10), -1, -1, -1]))['nombre']);
         $balances = [...array_fill(0, 7, -3), 10, -1];
         $this->assertSame('No rentable', $this->clasificador()->clasificar($this->meses($balances))['nombre']);
         $this->assertSame('Para rescatar', $this->clasificador(['ventana_reciente' => 2])->clasificar($this->meses($balances))['nombre']);
-        $this->assertNotSame($this->clasificador()->firmaConfiguracion(), $this->clasificador(['min_meses' => 4])->firmaConfiguracion());
+        $this->assertNotSame($this->clasificador()->firmaConfiguracion(), $this->clasificador(['min_meses' => 5])->firmaConfiguracion());
+    }
+
+    public function test_hasta_tres_meses_con_ventas_permanecen_en_evaluacion(): void
+    {
+        foreach ([1, 2, 3] as $cantidad) {
+            $resultado = $this->clasificador()->clasificar($this->meses(array_fill(0, $cantidad, 100)));
+            $this->assertSame('En evaluación', $resultado['nombre']);
+            $this->assertSame($cantidad, $resultado['meses_con_ventas']);
+        }
+        $this->assertSame('Rentable', $this->clasificador()->clasificar($this->meses([100, 100, 100, 100]))['nombre']);
+        $this->assertSame('Sin ventas', $this->clasificador()->clasificar([])['nombre']);
     }
 }
