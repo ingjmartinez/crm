@@ -60,7 +60,7 @@
         <div class="print-toolbar"><button type="button" onclick="window.print()">Imprimir</button></div>
     @endif
     <div class="report-header">
-    <h1>{{ $contenido === 'resumen' ? 'Informe ejecutivo de rentabilidad de agencia V7' : 'Informe de rentabilidad de agencia V7' }}</h1>
+    <h1>{{ $contenido === 'resumen' ? 'Informe ejecutivo de rentabilidad de agencia' : 'Informe de rentabilidad de agencia' }}</h1>
     <p><strong>Año {{ $resultado['desde']->year }}</strong> · Período: {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</p>
     <p class="muted">Empresa: {{ ($filtros['empresa'] ?? '') ?: 'Todas las empresas' }} · Terminal: {{ ($filtros['alcance'] ?? 'todas') === 'terminal' ? $filtros['terminal'] : 'Todas' }}</p>
     <p class="muted">Ruta: {{ ($filtros['ruta'] ?? '') ?: 'Todas las rutas' }}</p>

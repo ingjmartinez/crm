@@ -372,6 +372,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $productos = RentabilidadAgenciaV7Service::PRODUCTOS;
         $html = view('gerencia.rentabilidad-agencia-v7-pdf', compact('resultado', 'filtros', 'productos'))->render();
         $this->assertStringContainsString('Balance general', $html);
+        $this->assertStringContainsString('<h1>Informe ejecutivo de rentabilidad de agencia</h1>', $html);
         $this->assertStringContainsString('RD$ 33.00', $html);
         $this->assertStringContainsString('Se requieren 4 meses con ventas', $html);
         $this->assertStringNotContainsString('Pagados propios', $html);
@@ -608,6 +609,7 @@ class RentabilidadAgenciaV7Test extends TestCase
             'resultado' => [...$resultado, 'desde' => \Carbon\Carbon::parse('2026-01-01'), 'hasta' => \Carbon\Carbon::parse('2026-09-30')],
             'filtros' => $filtros, 'productos' => RentabilidadAgenciaV7Service::PRODUCTOS, 'contenido' => 'terminales', 'esImpresion' => true,
         ])->render();
+        $this->assertStringContainsString('<h1>Informe de rentabilidad de agencia</h1>', $html);
         $posicionAnterior = -1;
         foreach (['006', '007', '003', '005', '004', '008', '009', '002', '001', '010'] as $terminal) {
             $posicion = strpos($html, '<span class="terminal-referencia">Terminal '.$terminal.'</span>');
