@@ -12,6 +12,8 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class RentabilidadAgenciaV7Service
 {
@@ -40,10 +42,16 @@ class RentabilidadAgenciaV7Service
     }
 
     /** @param array<string, mixed> $filtros @param array<string, mixed> $resultado */
-    public function guardarResumenEjecutivo(array $filtros, string $usuario, array $resultado): void
+    public function guardarResumenEjecutivo(array $filtros, string $usuario, array $resultado): string
     {
         unset($resultado['filas']);
         Cache::put($this->claveResumenEjecutivo($filtros, $usuario), $resultado, now()->addMinutes(self::MINUTOS_RESUMEN_EJECUTIVO));
+
+        $informeId = (string) Str::uuid();
+        $resultado['configuracion_clasificacion'] = config('rentabilidad');
+        Cache::put($this->claveConsultaEjecutiva($filtros, $usuario, $informeId), $resultado, now()->addMinutes(self::MINUTOS_RESUMEN_EJECUTIVO));
+
+        return $informeId;
     }
 
     /**
@@ -52,6 +60,15 @@ class RentabilidadAgenciaV7Service
      */
     public function resumenEjecutivo(array $filtros, string $usuario): array
     {
+        if (! empty($filtros['informe_id'])) {
+            $resultado = Cache::get($this->claveConsultaEjecutiva($filtros, $usuario, $filtros['informe_id']));
+            if ($resultado === null) {
+                throw ValidationException::withMessages(['informe_id' => 'La consulta del informe ha caducado. Vuelve a consultar el reporte y descarga nuevamente el PDF.']);
+            }
+
+            return $resultado;
+        }
+
         return Cache::remember($this->claveResumenEjecutivo($filtros, $usuario), now()->addMinutes(self::MINUTOS_RESUMEN_EJECUTIVO), function () use ($filtros): array {
             $resultado = $this->reporte($filtros);
             unset($resultado['filas']);
@@ -63,15 +80,28 @@ class RentabilidadAgenciaV7Service
     /** @param array<string, mixed> $filtros */
     private function claveResumenEjecutivo(array $filtros, string $usuario): string
     {
+        return 'rentabilidad-v7:ejecutivo:v4:'.$this->clasificador->firmaConfiguracion().':'.$this->huellaFiltrosEjecutivos($filtros, $usuario);
+    }
+
+    /** @param array<string, mixed> $filtros */
+    private function claveConsultaEjecutiva(array $filtros, string $usuario, string $informeId): string
+    {
+        return 'rentabilidad-v7:consulta:'.$this->huellaFiltrosEjecutivos($filtros, $usuario).':'.$informeId;
+    }
+
+    /** @param array<string, mixed> $filtros */
+    private function huellaFiltrosEjecutivos(array $filtros, string $usuario): string
+    {
         [$desde, $hasta] = $this->rango($filtros);
         $productos = $this->productos($filtros);
         sort($productos, SORT_STRING);
         $alcance = $filtros['alcance'] ?? 'todas';
 
-        return 'rentabilidad-v7:ejecutivo:v4:'.$this->clasificador->firmaConfiguracion().':'.hash('sha256', json_encode([
+        return hash('sha256', json_encode([
             'usuario' => $usuario,
             'desde' => $desde->toDateString(), 'hasta' => $hasta->toDateString(),
             'empresa' => trim((string) ($filtros['empresa'] ?? '')),
+            'ruta' => trim((string) ($filtros['ruta'] ?? '')),
             'terminal' => $alcance === 'terminal' ? trim((string) ($filtros['terminal'] ?? '')) : null,
             'productos' => $productos,
         ], JSON_THROW_ON_ERROR));
@@ -81,9 +111,11 @@ class RentabilidadAgenciaV7Service
     public function agencias(array $filtros): Collection
     {
         $empresa = trim((string) ($filtros['empresa'] ?? ''));
+        $ruta = trim((string) ($filtros['ruta'] ?? ''));
 
         return RentabilidadAgenciaV5::query()->activas()->whereNotNull('terminal')->where('terminal', '<>', '')
             ->when($empresa !== '', fn ($query) => $query->whereRaw('TRIM(empresa) = ?', [$empresa]))
+            ->when($ruta !== '', fn ($query) => $query->whereRaw('TRIM(ruta) = ?', [$ruta]))
             ->when(($filtros['alcance'] ?? '') === 'terminal', fn ($query) => $query->where('terminal', trim((string) ($filtros['terminal'] ?? ''))))
             ->orderBy('terminal')->get(['terminal', 'nombre_agencia', 'agencia', 'sistema', 'empresa']);
     }

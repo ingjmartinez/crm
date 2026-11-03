@@ -44,6 +44,7 @@ class ClasificadorRentabilidadAgenciaV7
         $ventana = max(1, (int) $opciones['ventana_reciente']);
         $ventaMinima = max(0, (float) $opciones['venta_minima_mes']);
         $factor = max(0, (float) $opciones['factor_recuperacion']);
+        $perdidaMaximaRescate = max(0, (float) $opciones['perdida_maxima_rescate']);
         $balanceAcumulado = round(array_sum(array_column($meses, 'balance_general')), 2);
         $mesesConVentas = array_values(array_filter($meses, fn (array $mes): bool => (float) $mes['ventas'] > 0 && (float) $mes['ventas'] >= $ventaMinima));
         usort($mesesConVentas, fn (array $a, array $b): int => strcmp((string) ($a['mes'] ?? ''), (string) ($b['mes'] ?? '')));
@@ -88,6 +89,10 @@ class ClasificadorRentabilidadAgenciaV7
                 $codigo = 'para_rescatar';
                 $motivoCodigo = 'rescate_acumulado_positivo';
                 $motivo = 'Rescatada por balance acumulado positivo.';
+            } elseif ($balanceAcumulado < 0 && abs($balanceAcumulado) < $perdidaMaximaRescate) {
+                $codigo = 'para_rescatar';
+                $motivoCodigo = 'perdida_acumulada_limitada';
+                $motivo = 'Rescatada por pérdida acumulada menor de RD$ '.number_format($perdidaMaximaRescate, 2).'.';
             } elseif ($conVentas >= $ventana && $balanceReciente > 0 && $positivosRecientes >= $ventana - 1 && abs($balanceAcumulado) <= round($balanceReciente * $factor, 2)) {
                 $codigo = 'para_rescatar';
                 $motivoCodigo = 'recuperacion_reciente';

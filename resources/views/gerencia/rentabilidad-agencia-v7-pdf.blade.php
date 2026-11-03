@@ -35,10 +35,12 @@
     </style>
 </head>
 <body>
+    @php($configuracionClasificacion = $resultado['configuracion_clasificacion'] ?? config('rentabilidad'))
     <div class="report-header">
     <h1>Informe ejecutivo de rentabilidad de agencia V7</h1>
     <p><strong>Año {{ $resultado['desde']->year }}</strong> · Período: {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</p>
     <p class="muted">Empresa: {{ ($filtros['empresa'] ?? '') ?: 'Todas las empresas' }} · Terminal: {{ ($filtros['alcance'] ?? 'todas') === 'terminal' ? $filtros['terminal'] : 'Todas' }}</p>
+    <p class="muted">Ruta: {{ ($filtros['ruta'] ?? '') ?: 'Todas las rutas' }}</p>
     <p class="muted small">Productos: {{ implode(', ', $productos) ?: 'Ninguno' }}. Generado: {{ now()->format('d/m/Y H:i') }}.</p>
     </div>
 
@@ -63,10 +65,13 @@
             <tfoot><tr><td>Total terminales</td><td class="right">{{ number_format($resultado['resumen_clasificaciones']['total']) }}</td></tr></tfoot>
         </table>
         <p class="small"><strong>En deterioro: {{ number_format($resultado['resumen_clasificaciones']['en_deterioro']) }}</strong> terminales. Es una alerta adicional; no cambia la categoría.</p>
-        <p class="muted small">Conteos según los filtros consultados. Se requieren {{ config('rentabilidad.min_meses') }} meses con ventas para clasificar. La recuperación y el deterioro consideran los últimos {{ config('rentabilidad.ventana_reciente') }} meses con ventas. Un balance cero no es positivo. Venta mínima mensual para clasificar: RD$ {{ number_format(config('rentabilidad.venta_minima_mes'), 2) }}.</p>
+        <p class="muted small">Conteos según los filtros consultados. Se requieren {{ $configuracionClasificacion['min_meses'] }} meses con ventas para clasificar. La recuperación y el deterioro consideran los últimos {{ $configuracionClasificacion['ventana_reciente'] }} meses con ventas. Un balance cero no es positivo. Venta mínima mensual para clasificar: RD$ {{ number_format($configuracionClasificacion['venta_minima_mes'], 2) }}.</p>
     </div>
 
     <div class="section">
+        @if (($configuracionClasificacion['perdida_maxima_rescate'] ?? 0) > 0)
+            <p class="muted small">Con el historial mínimo requerido, una pérdida acumulada menor de RD$ {{ number_format($configuracionClasificacion['perdida_maxima_rescate'], 2) }} también permite clasificar como Para rescatar.</p>
+        @endif
         <h2>Resultados del período</h2>
         <table class="financial">
             @foreach (collect(['ventas' => 'Ventas', 'premios_sacados' => 'Premios sacados', 'utilidad' => 'Utilidad', 'gastos' => 'Costos + gastos + R20', 'balance_general' => 'Balance general'])->chunk(3) as $indicadores)

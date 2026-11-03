@@ -43,11 +43,11 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
 
     public static function balancesAcumulados(): array
     {
-        return [[0.01, 'Para rescatar'], [0.0, 'No rentable'], [-0.01, 'No rentable']];
+        return [[0.01, 'Para rescatar'], [0.0, 'No rentable'], [-0.01, 'Para rescatar']];
     }
 
     #[DataProvider('balancesAcumulados')]
-    public function test_el_ajuste_requiere_un_balance_acumulado_estrictamente_positivo(float $balanceTotal, string $categoria): void
+    public function test_rescata_acumulados_positivos_o_perdidas_menores_al_umbral(float $balanceTotal, string $categoria): void
     {
         $meses = array_merge(
             array_fill(0, 3, ['ventas' => 100, 'balance_general' => 2]),
@@ -68,7 +68,7 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
         );
         $servicio = $this->clasificador();
         $resultado = $servicio->clasificar($meses);
-        $this->assertSame('No rentable', $resultado['nombre']);
+        $this->assertSame('Para rescatar', $resultado['nombre']);
         $this->assertSame(4, $resultado['meses_con_ventas']);
         $this->assertSame('Sin ventas', $servicio->clasificar([['ventas' => 0, 'balance_general' => 100]])['nombre']);
     }
@@ -92,10 +92,11 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
         $this->assertSame($balances[0], $meses[0]['balance_general']);
     }
 
-    public function test_agencia_que_empezo_bien_y_cayo_no_se_rescata(): void
+    public function test_perdida_menor_al_umbral_se_rescata_aunque_no_haya_recuperacion_reciente(): void
     {
         $resultado = $this->clasificador()->clasificar($this->meses([40000, 30000, 10000, -5000, -20000, -35000, -40000]));
-        $this->assertSame('No rentable', $resultado['nombre']);
+        $this->assertSame('Para rescatar', $resultado['nombre']);
+        $this->assertSame('perdida_acumulada_limitada', $resultado['motivo_codigo']);
         $this->assertSame(-20000.0, $resultado['balance_acumulado']);
         $this->assertFalse($resultado['en_deterioro']);
     }
@@ -141,7 +142,7 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
 
     public function test_la_recuperacion_exige_cantidad_de_positivos_y_limite_de_perdida(): void
     {
-        $servicio = $this->clasificador();
+        $servicio = $this->clasificador(['perdida_maxima_rescate' => 0]);
         $limite = [...array_fill(0, 6, -9.5), 10, 10, -1];
         $this->assertSame('Para rescatar', $servicio->clasificar($this->meses($limite))['nombre']);
         $limite[0] = -9.51;
@@ -161,7 +162,7 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
         $this->assertSame('En evaluación', $this->clasificador(['min_meses' => 4])->clasificar($this->meses([10, 10, 10]))['nombre']);
         $this->assertSame('Buena', $this->clasificador(['umbral_buena' => 60])->clasificar($this->meses([...array_fill(0, 6, 10), -1, -1, -1]))['nombre']);
         $balances = [...array_fill(0, 7, -3), 10, -1];
-        $this->assertSame('No rentable', $this->clasificador()->clasificar($this->meses($balances))['nombre']);
+        $this->assertSame('No rentable', $this->clasificador(['perdida_maxima_rescate' => 0])->clasificar($this->meses($balances))['nombre']);
         $this->assertSame('Para rescatar', $this->clasificador(['ventana_reciente' => 2])->clasificar($this->meses($balances))['nombre']);
         $this->assertNotSame($this->clasificador()->firmaConfiguracion(), $this->clasificador(['min_meses' => 5])->firmaConfiguracion());
     }
@@ -175,5 +176,37 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
         }
         $this->assertSame('Rentable', $this->clasificador()->clasificar($this->meses([100, 100, 100, 100]))['nombre']);
         $this->assertSame('Sin ventas', $this->clasificador()->clasificar([])['nombre']);
+    }
+
+    public static function perdidasParaRescate(): array
+    {
+        return [
+            [-0.01, 'Para rescatar'],
+            [-48999.99, 'Para rescatar'],
+            [-49000.0, 'No rentable'],
+            [-49000.01, 'No rentable'],
+            [-100000.0, 'No rentable'],
+            [0.0, 'No rentable'],
+        ];
+    }
+
+    #[DataProvider('perdidasParaRescate')]
+    public function test_rescate_por_perdida_exige_un_importe_estrictamente_menor_a_49000(float $balance, string $categoria): void
+    {
+        $resultado = $this->clasificador()->clasificar($this->meses([-1, -1, -1, $balance + 3]));
+        $this->assertSame($categoria, $resultado['nombre']);
+        $this->assertSame($balance, $resultado['balance_acumulado']);
+        if ($categoria === 'Para rescatar') {
+            $this->assertSame('perdida_acumulada_limitada', $resultado['motivo_codigo']);
+        }
+    }
+
+    public function test_el_umbral_de_perdida_es_configurable_y_respeta_el_historial(): void
+    {
+        $meses = $this->meses([-100, -100, -100, -100]);
+        $this->assertSame('No rentable', $this->clasificador(['perdida_maxima_rescate' => 400])->clasificar($meses)['nombre']);
+        $this->assertSame('Para rescatar', $this->clasificador(['perdida_maxima_rescate' => 401])->clasificar($meses)['nombre']);
+        $this->assertSame('En evaluación', $this->clasificador()->clasificar($this->meses([-100, -100, -100]))['nombre']);
+        $this->assertSame('Sin ventas', $this->clasificador()->clasificar([['ventas' => 0, 'balance_general' => -100]])['nombre']);
     }
 }

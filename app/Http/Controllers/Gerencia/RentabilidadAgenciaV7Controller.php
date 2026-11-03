@@ -17,18 +17,20 @@ class RentabilidadAgenciaV7Controller extends Controller
 
     public function index(ConsultarRentabilidadAgenciaV7Request $request): View
     {
-        $filtros = [...['anio' => now()->year, 'mes_inicio' => 1, 'mes_fin' => now()->month, 'empresa' => '', 'alcance' => 'todas', 'terminal' => ''], ...$request->validated()];
+        $filtros = [...['anio' => now()->year, 'mes_inicio' => 1, 'mes_fin' => now()->month, 'empresa' => '', 'ruta' => '', 'alcance' => 'todas', 'terminal' => ''], ...$request->validated()];
         $productos = $this->reporte->productos($filtros);
         $consultar = $request->filled('anio');
         $resultado = $consultar ? $this->reporte->reporte($filtros) : null;
-        if ($resultado !== null) {
-            $this->reporte->guardarResumenEjecutivo($filtros, (string) $request->user()->getAuthIdentifier(), $resultado);
-        }
+        $informeId = $resultado !== null
+            ? $this->reporte->guardarResumenEjecutivo($filtros, (string) $request->user()->getAuthIdentifier(), $resultado)
+            : null;
         $empresas = RentabilidadAgenciaV5::query()->activas()->whereNotNull('empresa')->whereRaw("TRIM(empresa) <> ''")
             ->selectRaw('TRIM(empresa) AS empresa')->distinct()->orderBy('empresa')->pluck('empresa');
         $datosTabla = $resultado === null ? [] : $resultado['filas']->map(fn (array $fila): array => array_diff_key($fila, ['periodos' => true]))->values()->all();
+        $rutas = RentabilidadAgenciaV5::query()->activas()->whereNotNull('ruta')->whereRaw("TRIM(ruta) <> ''")
+            ->selectRaw('TRIM(ruta) AS ruta')->distinct()->orderBy('ruta')->pluck('ruta');
 
-        return view('gerencia.rentabilidad-agencia-v7', compact('filtros', 'productos', 'consultar', 'resultado', 'empresas', 'datosTabla'));
+        return view('gerencia.rentabilidad-agencia-v7', compact('filtros', 'productos', 'consultar', 'resultado', 'empresas', 'datosTabla', 'rutas', 'informeId'));
     }
 
     public function resumen(ConsultarRentabilidadAgenciaV7Request $request): JsonResponse
@@ -66,6 +68,6 @@ class RentabilidadAgenciaV7Controller extends Controller
         $dompdf = $pdf->getDomPDF();
         $dompdf->getCanvas()->page_text(660, 575, 'Página {PAGE_NUM} de {PAGE_COUNT}', $dompdf->getFontMetrics()->getFont('DejaVu Sans'), 8, [0.4, 0.45, 0.5]);
 
-        return $pdf->download('rentabilidad_agencia_v7.pdf');
+        return $pdf->download('rentabilidad_agencia_v7.pdf')->header('Cache-Control', 'private, no-store');
     }
 }

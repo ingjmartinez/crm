@@ -31,6 +31,7 @@ class RentabilidadAgenciaV7Test extends TestCase
             $table->string('nombre_agencia')->nullable();
             $table->string('agencia')->nullable();
             $table->string('empresa')->nullable();
+            $table->string('ruta')->nullable();
             $table->integer('estatus')->default(1);
         });
         foreach (['vt_usuarios_bet', 'vt_usuarios_net', 'premios_bet', 'premios_net', 'pagos_misma_empresa_bet', 'pagos_porotra_empresa_bet', 'pagos_misma_empresa_net', 'pagos_porotra_empresa_net', 'pagos_aotra_empresa_bet', 'pagos_aotra_empresa_net'] as $tabla) {
@@ -183,6 +184,69 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'terminal' => '99999']))->assertNotFound();
     }
 
+    public function test_filtra_por_ruta_y_empresa_y_conserva_la_seleccion(): void
+    {
+        $this->datos();
+        DB::table('agencias')->whereIn('terminal', ['1001', '1002'])->update(['ruta' => ' Ruta Norte ']);
+        DB::table('agencias')->where('terminal', '1003')->update(['ruta' => 'Ruta Sur']);
+        DB::table('agencias')->insert(['terminal' => '9000', 'ruta' => 'Ruta inactiva', 'estatus' => 0]);
+        $filtros = [...$this->filtros(), 'alcance' => 'todas', 'empresa' => '', 'ruta' => 'Ruta Norte'];
+
+        $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk()
+            ->assertViewHas('rutas', fn ($rutas): bool => $rutas->all() === ['Ruta Norte', 'Ruta Sur'])
+            ->assertViewHas('filtros', fn (array $datos): bool => $datos['ruta'] === 'Ruta Norte')
+            ->assertViewHas('resultado', fn (array $resultado): bool => $resultado['filas']->pluck('terminal')->all() === ['1001', '1002']
+                && $resultado['totales']['ventas'] === 400.0
+                && $resultado['resumen_clasificaciones']['total'] === 2)
+            ->assertSee('name="ruta"', false)
+            ->assertSee('value="Ruta Norte" selected', false);
+
+        $servicio = app(RentabilidadAgenciaV7Service::class);
+        $resultado = $servicio->reporte([...$filtros, 'empresa' => 'Grupo Joselito']);
+        $this->assertSame(['1001'], $resultado['filas']->pluck('terminal')->all());
+        $this->assertSame(200.0, $resultado['totales']['ventas']);
+        $this->assertSame(77.0, $resultado['totales']['gastos']);
+        $this->assertCount(3, $servicio->reporte([...$filtros, 'ruta' => ''])['filas']);
+        $this->assertCount(0, $servicio->reporte([...$filtros, 'ruta' => 'Inexistente'])['filas']);
+    }
+
+    public function test_detalles_y_cuentas_respetan_la_ruta_y_validan_su_formato(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Ruta Norte']);
+        $filtros = [...$this->filtros(), 'ruta' => 'Ruta Norte'];
+
+        foreach (['resumen', 'detalle', 'cuentas'] as $accion) {
+            $this->getJson(route('gerencia.rentabilidad-agencia-v7.'.$accion, $filtros))->assertOk();
+            $this->getJson(route('gerencia.rentabilidad-agencia-v7.'.$accion, [...$filtros, 'ruta' => 'Ruta Sur']))->assertNotFound();
+        }
+
+        foreach ([['Ruta Norte'], str_repeat('a', 256)] as $ruta) {
+            $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'ruta' => $ruta]))
+                ->assertUnprocessable()->assertJsonValidationErrors('ruta');
+        }
+    }
+
+    public function test_resumen_ejecutivo_separa_la_cache_por_ruta(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Ruta Norte']);
+        DB::table('agencias')->where('terminal', '1003')->update(['ruta' => 'Ruta Sur']);
+        $filtros = [...$this->filtros(), 'alcance' => 'todas', 'ruta' => 'Ruta Norte'];
+        $servicio = app(RentabilidadAgenciaV7Service::class);
+        $servicio->guardarResumenEjecutivo($filtros, '1', $servicio->reporte($filtros));
+        $norte = $servicio->resumenEjecutivo($filtros, '1');
+        $sur = $servicio->resumenEjecutivo([...$filtros, 'ruta' => 'Ruta Sur'], '1');
+
+        $this->assertSame(200.0, $norte['totales']['ventas']);
+        $this->assertSame(120.0, $sur['totales']['ventas']);
+        $this->assertSame(10.0, $sur['totales']['gastos']);
+        $html = view('gerencia.rentabilidad-agencia-v7-pdf', [
+            'filtros' => $filtros, 'resultado' => $norte, 'productos' => RentabilidadAgenciaV7Service::PRODUCTOS,
+        ])->render();
+        $this->assertStringContainsString('Ruta: Ruta Norte', $html);
+    }
+
     public static function categoriasPorMesesPositivos(): array
     {
         return [[9, 'Rentable'], [7, 'Buena'], [6, 'Para rescatar'], [5, 'Para rescatar'], [4, 'Para rescatar'], [3, 'Para rescatar'], [2, 'Para rescatar'], [0, 'No rentable']];
@@ -289,6 +353,114 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertStringContainsString('Se requieren 4 meses con ventas', $html);
         $this->assertStringNotContainsString('Pagados propios', $html);
         $this->assertStringNotContainsString('Clasificación neta', $html);
+    }
+
+    public function test_pdf_conserva_las_seis_clasificaciones_y_totales_de_la_pantalla(): void
+    {
+        foreach ([4, 3, 2, 0, 1, null] as $indice => $positivos) {
+            $terminal = (string) (8000 + $indice);
+            DB::table('agencias')->insert([
+                'terminal' => $terminal, 'empresa' => 'Prueba PDF', 'ruta' => 'Ruta PDF',
+                'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia '.$terminal,
+            ]);
+            $meses = $indice === 4 ? 1 : ($positivos === null ? 0 : 4);
+            for ($mes = 1; $mes <= $meses; $mes++) {
+                $fecha = sprintf('2026-%02d-01', $mes);
+                DB::table('vt_usuarios_bet')->insert(['agencia_id' => $terminal, 'fecha' => $fecha, 'monto' => 1000, 'tipo' => 'Tradicional']);
+                DB::table('premios_bet')->insert(['agencia_id' => $terminal, 'fecha' => $fecha, 'monto' => $mes <= $positivos ? 900 : ($indice === 3 ? 21000 : 1100)]);
+            }
+        }
+        $filtros = [...$this->filtros(), 'empresa' => 'Prueba PDF', 'ruta' => 'Ruta PDF', 'alcance' => 'todas', 'mes_fin' => 4];
+        $pantalla = $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk()->viewData('resultado');
+        $this->assertSame([1, 1, 1, 1, 1, 1], array_column($pantalla['resumen_clasificaciones']['categorias'], 'cantidad'));
+        $datosPdf = null;
+        app('view')->composer('gerencia.rentabilidad-agencia-v7-pdf', function (\Illuminate\View\View $vista) use (&$datosPdf): void {
+            $datosPdf = $vista->getData()['resultado'];
+        });
+
+        $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $filtros))->assertOk();
+
+        $this->assertNotNull($datosPdf);
+        $this->assertSame($pantalla['resumen_clasificaciones'], $datosPdf['resumen_clasificaciones']);
+        $this->assertSame($pantalla['totales'], $datosPdf['totales']);
+    }
+
+    public function test_pdf_conserva_la_consulta_original_aunque_otra_pestana_actualice_las_clasificaciones(): void
+    {
+        $this->datos();
+        $filtros = [...$this->filtros(), 'mes_fin' => 4];
+        $primeraPagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk();
+        $original = $primeraPagina->viewData('resultado');
+        $informeId = $primeraPagina->viewData('informeId');
+        $primeraPagina->assertSee('informe_id='.$informeId, false);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-03-01', 'monto' => 100, 'tipo' => 'Tradicional']);
+        $actual = $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk()->viewData('resultado');
+        $this->assertNotSame($original['resumen_clasificaciones'], $actual['resumen_clasificaciones']);
+        config(['rentabilidad.min_meses' => 5]);
+        $datosPdf = null;
+        app('view')->composer('gerencia.rentabilidad-agencia-v7-pdf', function (\Illuminate\View\View $vista) use (&$datosPdf): void {
+            $datosPdf = $vista->getData()['resultado'];
+        });
+
+        $respuesta = $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, 'informe_id' => $informeId]))->assertOk();
+        $this->assertTrue($respuesta->headers->hasCacheControlDirective('no-store'));
+
+        $this->assertSame($original['resumen_clasificaciones'], $datosPdf['resumen_clasificaciones']);
+        $this->assertSame($original['totales'], $datosPdf['totales']);
+        $this->assertSame(4, $datosPdf['configuracion_clasificacion']['min_meses']);
+    }
+
+    public function test_pdf_caducado_no_recalcula_otras_clasificaciones_silenciosamente(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $this->filtros()))->assertOk();
+        $filtros = [...$this->filtros(), 'informe_id' => $pagina->viewData('informeId')];
+        $this->travel(11)->minutes();
+
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $filtros))
+            ->assertUnprocessable()->assertJsonValidationErrors('informe_id');
+
+        $this->travelBack();
+    }
+
+    public function test_referencia_pdf_se_aisla_por_usuario_y_filtros(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $this->filtros()))->assertOk();
+        $filtros = [...$this->filtros(), 'informe_id' => $pagina->viewData('informeId')];
+        foreach ([['empresa' => 'Negosur'], ['ruta' => 'Otra ruta'], ['informe_id' => 'invalido']] as $cambio) {
+            $this->getJson(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, ...$cambio]))
+                ->assertUnprocessable()->assertJsonValidationErrors('informe_id');
+        }
+        auth()->user()->id = 2;
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $filtros))
+            ->assertUnprocessable()->assertJsonValidationErrors('informe_id');
+    }
+
+    public function test_perdida_menor_a_49000_se_rescata_en_resumen_pantalla_y_pdf(): void
+    {
+        $this->datos();
+        DB::table('agencias')->insert(['terminal' => '9010', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET']);
+        foreach ([-12000, -12000, -12000, -12999.99] as $indice => $balance) {
+            $fecha = sprintf('2026-%02d-01', $indice + 1);
+            DB::table('vt_usuarios_bet')->insert(['agencia_id' => '9010', 'fecha' => $fecha, 'monto' => 100000, 'tipo' => 'Tradicional']);
+            DB::table('premios_bet')->insert(['agencia_id' => '9010', 'fecha' => $fecha, 'monto' => 100000 - 10 - $balance]);
+        }
+        $filtros = [...$this->filtros(), 'terminal' => '9010', 'mes_fin' => 4];
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', $filtros))->assertOk()
+            ->assertJsonPath('balance_general', -48999.99)
+            ->assertJsonPath('clasificacion.nombre', 'Para rescatar')
+            ->assertJsonPath('clasificacion.motivo_codigo', 'perdida_acumulada_limitada');
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk();
+        $pantalla = $pagina->viewData('resultado');
+        $datosPdf = null;
+        app('view')->composer('gerencia.rentabilidad-agencia-v7-pdf', function (\Illuminate\View\View $vista) use (&$datosPdf): void {
+            $datosPdf = $vista->getData()['resultado'];
+        });
+        $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, 'informe_id' => $pagina->viewData('informeId')]))->assertOk();
+        $this->assertSame($pantalla['resumen_clasificaciones'], $datosPdf['resumen_clasificaciones']);
+        $this->assertSame(1, collect($datosPdf['resumen_clasificaciones']['categorias'])->firstWhere('nombre', 'Para rescatar')['cantidad']);
+        $this->assertSame(-48999.99, $datosPdf['totales']['balance_general']);
     }
 
     public function test_recuperacion_reciente_en_endpoint_y_resumen_sin_modificar_importes(): void
@@ -446,7 +618,7 @@ const sinVentas = {...fila, terminal: '003', ventas: 0, premios_sacados: 0, util
 const enEvaluacion = {...fila, terminal: '004', ventas: 50, premios_sacados: 30, utilidad: 20, balance_general: 10, clasificacion: {...clasificacion, nombre: 'En evaluación', color: 'secondary', en_deterioro: false}};
 const datos = {...fila, meses: [{...fila, mes: '2026-01'}, {...sinVentas, mes: '2026-02'}]};
 global.document = {getElementById: elemento, addEventListener(tipo, fn){inicio = fn;}, body: {appendChild(){}}, createElement(){return {set textContent(v){this.innerHTML = v.replaceAll('<', '&lt;').replaceAll('>', '&gt;');}};}};
-global.window = {rentabilidadV7: {datos: [fila, otraFila, sinVentas, enEvaluacion], filtros: {anio: 2026, mes_inicio: 1, mes_fin: 3, productos: ['Tradicional']}, urls: {resumen: 'http://localhost/v7/resumen'}}, addEventListener(tipo, fn){eventosVentana[tipo] = fn;}};
+global.window = {rentabilidadV7: {datos: [fila, otraFila, sinVentas, enEvaluacion], filtros: {anio: 2026, mes_inicio: 1, mes_fin: 3, ruta: 'Ruta Norte', productos: ['Tradicional']}, urls: {resumen: 'http://localhost/v7/resumen'}}, addEventListener(tipo, fn){eventosVentana[tipo] = fn;}};
 window.Swal = {fire(configuracion){alerta = configuracion; configuracion.didOpen();}, showLoading(){cargando = true;}, close(){alerta = undefined;}};
 global.HTMLFormElement = class {submit(){assert.equal(this, elemento('filtrosRentabilidadV7')); envios++;}};
 const filasAplicadas = () => window.rentabilidadV7.datos.filter(fila => !filtro || new RegExp(filtro).test(fila.clasificacion.nombre));
@@ -516,6 +688,7 @@ assert.equal(prevenidos, 2);
     assert.equal(urlConsultada.pathname, '/v7/resumen');
     assert.equal(urlConsultada.searchParams.get('terminal'), '001');
     assert.equal(urlConsultada.searchParams.get('mes_fin'), '3');
+    assert.equal(urlConsultada.searchParams.get('ruta'), 'Ruta Norte');
     assert.equal(urlConsultada.searchParams.get('productos[]'), 'Tradicional');
     const html = elemento('contenidoModalV7').innerHTML;
     assert.ok(html.includes('<th>Premios sacados</th>'));

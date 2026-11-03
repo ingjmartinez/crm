@@ -21,7 +21,9 @@ class ConsultarRentabilidadAgenciaV7Request extends FormRequest
             'mes_inicio' => [$detalle ? 'required' : 'nullable', 'required_with:anio', 'integer', 'between:1,12'],
             'mes_fin' => [$detalle ? 'required' : 'nullable', 'required_with:anio', 'integer', 'between:1,12', 'gte:mes_inicio'],
             'anio_completo' => ['nullable', 'boolean'],
+            'informe_id' => ['nullable', 'uuid'],
             'empresa' => ['nullable', 'string', 'max:255'],
+            'ruta' => ['nullable', 'string', 'max:255'],
             'alcance' => ['nullable', 'in:todas,terminal'],
             'terminal' => [$detalle ? 'required' : 'nullable', 'required_if:alcance,terminal', 'string', 'max:100'],
             'productos_filtrados' => ['nullable', 'boolean'],
@@ -55,6 +57,9 @@ class ConsultarRentabilidadAgenciaV7Request extends FormRequest
             'terminal.required_if' => 'Indica la terminal que deseas consultar.',
             'terminal.max' => 'La terminal es demasiado larga.',
             'empresa.max' => 'El nombre de empresa es demasiado largo.',
+            'ruta.string' => 'Selecciona una ruta valida.',
+            'ruta.max' => 'El nombre de ruta es demasiado largo.',
+            'informe_id.uuid' => 'La referencia del informe no es valida. Vuelve a consultar el reporte.',
             'productos.*.in' => 'Selecciona un producto valido.',
         ];
     }

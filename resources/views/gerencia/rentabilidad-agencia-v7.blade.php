@@ -8,6 +8,7 @@
         </div>
         <div class="card"><div class="card-body">
             <p class="text-muted">Utilidad = ventas − premios sacados. Balance general = utilidad − gastos. Gastos incluye costos contables, gastos y R20, con las mismas cuentas activas que V6. R20 se aplica únicamente en los meses con ventas de la terminal. La clasificación se calcula con el balance general de los meses con ventas.</p>
+            <p class="text-muted small">Con el historial mínimo requerido, una pérdida acumulada menor de RD$ {{ number_format(config('rentabilidad.perdida_maxima_rescate'), 2) }} también permite clasificar como Para rescatar.</p>
             <form method="GET" action="{{ route('gerencia.rentabilidad-agencia-v7') }}" class="row g-3 align-items-end" id="filtrosRentabilidadV7">
                 <div class="col-md-2"><label for="anioV7" class="form-label">Año</label><input id="anioV7" type="number" name="anio" min="1900" max="9998" class="form-control" value="{{ $filtros['anio'] }}" required></div>
                 @foreach (['mes_inicio' => 'Mes inicio', 'mes_fin' => 'Mes fin'] as $campo => $etiqueta)
@@ -21,6 +22,7 @@
                 @endforeach
                 <div class="col-md-2"><label class="form-check"><input type="checkbox" name="anio_completo" id="anioCompletoV7" value="1" class="form-check-input" @checked(!empty($filtros['anio_completo']))> <span class="form-check-label">Año completo</span></label></div>
                 <div class="col-md-3"><label for="empresaV7" class="form-label">Empresa</label><select id="empresaV7" name="empresa" class="form-select"><option value="">Todas las empresas</option>@foreach ($empresas as $empresa)<option value="{{ $empresa }}" @selected($filtros['empresa'] === $empresa)>{{ $empresa }}</option>@endforeach</select></div>
+                <div class="col-md-3"><label for="rutaV7" class="form-label">Ruta</label><select id="rutaV7" name="ruta" class="form-select"><option value="">Todas las rutas</option>@foreach ($rutas as $ruta)<option value="{{ $ruta }}" @selected($filtros['ruta'] === $ruta)>{{ $ruta }}</option>@endforeach</select></div>
                 <div class="col-md-2"><label for="alcanceV7" class="form-label">Consultar</label><select id="alcanceV7" name="alcance" class="form-select"><option value="todas" @selected($filtros['alcance'] === 'todas')>Todas las terminales</option><option value="terminal" @selected($filtros['alcance'] === 'terminal')>Una terminal</option></select></div>
                 <div class="col-md-3"><label for="terminalV7" class="form-label">Número de terminal</label><input id="terminalV7" name="terminal" class="form-control" value="{{ $filtros['terminal'] }}" placeholder="Ej.: 052232"></div>
                 <div class="col-md-auto"><button class="btn btn-primary" type="submit">Consultar</button></div>
@@ -58,7 +60,7 @@
             </div>
             <div class="card"><div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <h5 class="mb-0">Rentabilidad por terminal · {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</h5>
-                <a class="btn btn-outline-primary" target="_blank" rel="noopener" href="{{ route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, 'productos_filtrados' => 1, 'productos' => $productos]) }}">Descargar informe ejecutivo PDF</a>
+                <a class="btn btn-outline-primary" target="_blank" rel="noopener" href="{{ route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, 'productos_filtrados' => 1, 'productos' => $productos, 'informe_id' => $informeId]) }}">Descargar informe ejecutivo PDF</a>
             </div><div class="card-body">
                 <p class="text-muted small">La clasificación requiere {{ config('rentabilidad.min_meses') }} meses con ventas y considera el porcentaje de meses positivos, el balance acumulado y la recuperación de los últimos {{ config('rentabilidad.ventana_reciente') }} meses con ventas. Un balance cero no es positivo. Los gastos de meses sin ventas permanecen en el acumulado. Venta mínima mensual para clasificar: RD$ {{ number_format(config('rentabilidad.venta_minima_mes'), 2) }}.</p>
                 @if ($resultado['filas']->isEmpty())<div class="alert alert-info">No se encontraron terminales activas con los filtros seleccionados.</div>@else
