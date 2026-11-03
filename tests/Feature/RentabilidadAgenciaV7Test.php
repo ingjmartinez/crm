@@ -458,9 +458,11 @@ class RentabilidadAgenciaV7Test extends TestCase
         $url = route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $filtros);
         $this->travel(11)->minutes();
 
-        $this->from($url)->get($url)
-            ->assertRedirect(route('gerencia.rentabilidad-agencia-v7', $this->filtros()))
-            ->assertSessionHasErrors('informe_id');
+        $respuesta = $this->from($url)->get($url)->assertRedirect()->assertSessionHasErrors('informe_id');
+        $destino = $respuesta->headers->get('Location');
+        $this->assertStringStartsWith(route('gerencia.rentabilidad-agencia-v7').'?', $destino);
+        parse_str(parse_url($destino, PHP_URL_QUERY), $parametros);
+        $this->assertEquals($this->filtros(), $parametros);
 
         $this->travelBack();
     }
@@ -522,7 +524,8 @@ class RentabilidadAgenciaV7Test extends TestCase
             ->assertViewHas('resultado', fn (array $resultado): bool => array_column($resultado['terminales'], 'terminal') === ['1001']
                 && $resultado['totales']['ventas'] === 200.0 && $resultado['totales']['gastos'] === 77.0
                 && $resultado['resumen_clasificaciones']['total'] === 1)
-            ->assertSee('<td>1001</td>', false)->assertDontSee('<td>1002</td>', false)->assertDontSee('<td>1003</td>', false)
+            ->assertSee('Terminal 1001')->assertDontSee('Terminal 1002')->assertDontSee('Terminal 1003')
+            ->assertSee('<th class="observaciones">Observación</th>', false)->assertDontSee('<th>Terminal</th>', false)->assertDontSee('<th>Empresa</th>', false)
             ->assertSee('Totales de la ruta')->assertSee('window.print()', false)
             ->assertDontSee('Terminales evaluadas en el período')->assertDontSee('Resultados del período');
         $consultas = collect(DB::getQueryLog())->filter(fn (array $consulta): bool => str_contains(strtolower($consulta['query']), 'union all'));
@@ -607,7 +610,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         ])->render();
         $posicionAnterior = -1;
         foreach (['006', '007', '003', '005', '004', '008', '009', '002', '001', '010'] as $terminal) {
-            $posicion = strpos($html, '<td>'.$terminal.'</td>');
+            $posicion = strpos($html, '<span class="terminal-referencia">Terminal '.$terminal.'</span>');
             $this->assertNotFalse($posicion);
             $this->assertGreaterThan($posicionAnterior, $posicion);
             $posicionAnterior = $posicion;
@@ -617,6 +620,50 @@ class RentabilidadAgenciaV7Test extends TestCase
     public static function volumenesPdf(): array
     {
         return [[47], [1524]];
+    }
+
+    public function test_observaciones_comparan_ventas_y_peso_de_gastos_por_ruta_sin_cambiar_importes(): void
+    {
+        $categoria = \App\Services\ClasificadorRentabilidadAgenciaV7::categorias()[2];
+        $filas = collect([
+            ['001', 'Norte', 1000, 100, 100],
+            ['002', 'Norte', 100, 80, 60],
+            ['003', 'Norte', 0, 0, 50],
+            ['004', 'Norte', 500, 600, 25],
+            ['005', 'Sur', 10, 0, 1],
+            ['006', 'Sin actividad', 0, 0, 0],
+        ])->map(fn (array $datos): array => [
+            'terminal' => $datos[0], 'nombre' => 'Agencia '.$datos[0], 'empresa' => 'Prueba', 'ruta' => $datos[1],
+            'ventas' => (float) $datos[2], 'premios_sacados' => (float) $datos[3], 'gastos' => (float) $datos[4],
+            'utilidad' => (float) ($datos[2] - $datos[3]), 'balance_general' => (float) ($datos[2] - $datos[3] - $datos[4]),
+            'clasificacion' => [...$categoria, 'en_deterioro' => false],
+        ]);
+        $servicio = app(RentabilidadAgenciaV7Service::class);
+        $resultado = $servicio->personalizarInforme(['terminales' => $filas->all()], '');
+        $observaciones = collect($resultado['rutas_impresion'])->flatMap(fn (array $ruta): array => $ruta['terminales'])->keyBy('terminal');
+        $this->assertSame(['Mantener seguimiento.'], array_column($observaciones['001']['observaciones'], 'texto'));
+        $this->assertSame(['Premios elevados.', 'Revisar gastos elevados.', 'Levantar ventas.'], array_column($observaciones['002']['observaciones'], 'texto'));
+        $this->assertSame(['Sin ventas registradas.', 'Gastos sin ventas; revisar actividad.'], array_column($observaciones['003']['observaciones'], 'texto'));
+        $this->assertSame(['Premios superan las ventas.'], array_column($observaciones['004']['observaciones'], 'texto'));
+        $this->assertSame(['Mantener seguimiento.'], array_column($observaciones['005']['observaciones'], 'texto'));
+        $this->assertSame(['Sin ventas registradas.'], array_column($observaciones['006']['observaciones'], 'texto'));
+        $this->assertSame((float) $filas->sum('ventas'), $resultado['totales']['ventas']);
+        $this->assertSame((float) $filas->sum('gastos'), $resultado['totales']['gastos']);
+        $this->assertSame((float) $filas->sum('balance_general'), $resultado['totales']['balance_general']);
+        $this->assertArrayNotHasKey('promedio_ventas', $resultado['rutas_impresion'][0]);
+        $alerta = $filas->first();
+        $alerta['clasificacion']['en_deterioro'] = true;
+        $conAlerta = $servicio->personalizarInforme(['terminales' => [$alerta]], 'Norte');
+        $this->assertSame('Caída reciente del balance.', $conAlerta['rutas_impresion'][0]['terminales'][0]['observaciones'][0]['texto']);
+        config([
+            'rentabilidad.observaciones.ventas_bajas_promedio' => 1,
+            'rentabilidad.observaciones.premios_elevados_ventas' => 99,
+            'rentabilidad.observaciones.gastos_elevados_ventas' => 99,
+            'rentabilidad.observaciones.factor_gastos_ruta' => 100,
+        ]);
+        $ajustado = $servicio->personalizarInforme(['terminales' => $filas->all()], 'Norte');
+        $revisar = collect($ajustado['rutas_impresion'][0]['terminales'])->firstWhere('terminal', '002');
+        $this->assertSame(['Revisar balance negativo.'], array_column($revisar['observaciones'], 'texto'));
     }
 
     #[DataProvider('volumenesPdf')]

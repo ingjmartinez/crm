@@ -8,8 +8,11 @@ use App\Models\RentabilidadAgenciaV5;
 use App\Services\RentabilidadAgenciaV7Service;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class RentabilidadAgenciaV7Controller extends Controller
@@ -61,19 +64,28 @@ class RentabilidadAgenciaV7Controller extends Controller
         return response()->json($this->reporte->cuentas($request->validated()));
     }
 
-    public function informeEjecutivo(ConsultarRentabilidadAgenciaV7Request $request): Response
+    public function informeEjecutivo(ConsultarRentabilidadAgenciaV7Request $request): Response|RedirectResponse
     {
         abort_unless($request->filled('anio'), 422, 'Selecciona un rango.');
         $filtros = $request->validated();
         $productos = $this->reporte->productos($filtros);
-        $resultado = $this->reporte->resumenEjecutivo($filtros, (string) $request->user()->getAuthIdentifier());
         $contenido = 'resumen';
         $esImpresion = $request->validated('salida') === 'imprimir';
-        if ($request->boolean('personalizado')) {
-            $ruta = trim((string) $request->validated('ruta_impresion', ''));
-            $resultado = $this->reporte->personalizarInforme($resultado, $ruta);
-            $filtros['ruta'] = $ruta !== '' ? $ruta : ($filtros['ruta'] ?? '');
-            $contenido = 'terminales';
+        try {
+            $resultado = $this->reporte->resumenEjecutivo($filtros, (string) $request->user()->getAuthIdentifier());
+            if ($request->boolean('personalizado')) {
+                $ruta = trim((string) $request->validated('ruta_impresion', ''));
+                $resultado = $this->reporte->personalizarInforme($resultado, $ruta);
+                $filtros['ruta'] = $ruta !== '' ? $ruta : ($filtros['ruta'] ?? '');
+                $contenido = 'terminales';
+            }
+        } catch (ValidationException $exception) {
+            if ($request->expectsJson()) {
+                throw $exception;
+            }
+
+            return redirect()->route('gerencia.rentabilidad-agencia-v7', Arr::except($filtros, ['informe_id', 'personalizado', 'ruta_impresion', 'salida']))
+                ->withErrors($exception->errors());
         }
         $datos = compact('resultado', 'filtros', 'productos', 'contenido', 'esImpresion');
         if ($esImpresion) {

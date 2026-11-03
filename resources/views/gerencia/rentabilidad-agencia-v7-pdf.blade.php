@@ -34,9 +34,19 @@
         .danger { color: #b42318; background: #fee4e2; }
         .secondary { color: #475467; background: #f2f4f7; }
         .nueva-pagina { page-break-before: always; }
-        .terminales { font-size: 9px; }
-        .terminales td, .terminales th { padding: 4px; }
+        .terminales { font-size: 9px; table-layout: fixed; }
+        .terminales td, .terminales th { padding: 3px; }
         .terminales .right { white-space: nowrap; }
+        .terminales .agencia { width: 17%; }
+        .terminales .importe { width: 10.5%; }
+        .terminales .clasificacion { width: 11.5%; }
+        .terminales .observaciones { width: 19%; }
+        .terminales .agencia, .terminales .observaciones { overflow-wrap: break-word; }
+        .terminal-referencia { display: block; margin-top: 1px; color: #667085; font-size: 8px; }
+        .observacion { margin: 0 0 1px; font-size: 8.5px; line-height: 1.3; }
+        .obs-alerta { color: #b42318; font-weight: bold; }
+        .obs-atencion { color: #854a0e; }
+        .obs-normal { color: #475467; }
         .print-toolbar { margin-bottom: 20px; font-family: sans-serif; font-size: 14px; }
         .print-toolbar button { padding: 10px 18px; cursor: pointer; }
         @media screen { body.print-preview { max-width: 1120px; margin: 24px auto; padding: 20px; } }
@@ -55,6 +65,9 @@
     <p class="muted">Empresa: {{ ($filtros['empresa'] ?? '') ?: 'Todas las empresas' }} · Terminal: {{ ($filtros['alcance'] ?? 'todas') === 'terminal' ? $filtros['terminal'] : 'Todas' }}</p>
     <p class="muted">Ruta: {{ ($filtros['ruta'] ?? '') ?: 'Todas las rutas' }}</p>
     <p class="muted small">Productos: {{ implode(', ', $productos) ?: 'Ninguno' }}. Generado: {{ now()->format('d/m/Y H:i') }}.</p>
+    @if ($muestra ?? false)
+        <p class="muted small">Muestra de formato con observaciones orientativas para revisión.</p>
+    @endif
     </div>
 
     @if ($contenido !== 'terminales')
@@ -113,24 +126,30 @@
                 @unless ($loop->first)
                     <p class="muted small">Empresa: {{ ($filtros['empresa'] ?? '') ?: 'Todas las empresas' }} · Período: {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</p>
                 @endunless
+                <p class="muted small">Importes en RD$.</p>
                 <table class="terminales">
-                    <thead><tr><th>Terminal</th><th>Agencia</th><th>Empresa</th><th class="right">Ventas</th><th class="right">Premios sacados</th><th class="right">Utilidad</th><th class="right">Gastos</th><th class="right">Balance general</th><th>Clasificación</th></tr></thead>
+                    <thead><tr><th class="agencia">Agencia</th><th class="right importe">Ventas</th><th class="right importe">Premios sacados</th><th class="right importe">Utilidad</th><th class="right importe">Gastos</th><th class="right importe">Balance general</th><th class="clasificacion">Clasificación</th><th class="observaciones">Observación</th></tr></thead>
                     <tbody>
                         @foreach ($grupo['terminales'] as $fila)
                             <tr>
-                                <td>{{ $fila['terminal'] }}</td><td>{{ $fila['nombre'] }}</td><td>{{ $fila['empresa'] }}</td>
+                                <td class="agencia">{{ $fila['nombre'] }}<span class="terminal-referencia">Terminal {{ $fila['terminal'] }}</span></td>
                                 @foreach (\App\Services\RentabilidadAgenciaV7Service::IMPORTES as $campo)
-                                    <td class="right {{ $campo === 'balance_general' ? ($fila[$campo] > 0 ? 'positivo' : ($fila[$campo] < 0 ? 'negativo' : '')) : '' }}">RD$ {{ number_format($fila[$campo], 2) }}</td>
+                                    <td class="right importe {{ $campo === 'balance_general' ? ($fila[$campo] > 0 ? 'positivo' : ($fila[$campo] < 0 ? 'negativo' : '')) : '' }}">{{ number_format($fila[$campo], 2) }}</td>
                                 @endforeach
-                                <td><span class="badge {{ $fila['clasificacion']['color'] }}">{{ $fila['clasificacion']['nombre'] }}</span>
+                                <td class="clasificacion"><span class="badge {{ $fila['clasificacion']['color'] }}">{{ $fila['clasificacion']['nombre'] }}</span>
                                     @if ($fila['clasificacion']['en_deterioro'])
                                         <br>En deterioro
                                     @endif
                                 </td>
+                                <td class="observaciones">
+                                    @foreach ($fila['observaciones'] as $observacion)
+                                        <p class="observacion obs-{{ $observacion['nivel'] }}">{{ $observacion['texto'] }}</p>
+                                    @endforeach
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
-                    <tfoot><tr><td colspan="3">Totales de la ruta</td>@foreach (\App\Services\RentabilidadAgenciaV7Service::IMPORTES as $campo)<td class="right">RD$ {{ number_format($grupo['totales'][$campo], 2) }}</td>@endforeach<td></td></tr></tfoot>
+                    <tfoot><tr><td class="agencia">Totales de la ruta</td>@foreach (\App\Services\RentabilidadAgenciaV7Service::IMPORTES as $campo)<td class="right importe">{{ number_format($grupo['totales'][$campo], 2) }}</td>@endforeach<td colspan="2"></td></tr></tfoot>
                 </table>
             </div>
         @empty

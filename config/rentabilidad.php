@@ -10,4 +10,10 @@ return [
     'factor_recuperacion' => 2,
     'perdida_maxima_rescate' => 49000,
     'venta_minima_mes' => 0,
+    'observaciones' => [
+        'ventas_bajas_promedio' => 70,
+        'premios_elevados_ventas' => 70,
+        'gastos_elevados_ventas' => 50,
+        'factor_gastos_ruta' => 1.25,
+    ],
 ];

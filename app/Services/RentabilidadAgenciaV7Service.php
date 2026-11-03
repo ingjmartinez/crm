@@ -102,13 +102,65 @@ class RentabilidadAgenciaV7Service
         $resultado['terminales'] = $filas->all();
         $resultado['totales'] = collect(self::IMPORTES)->mapWithKeys(fn (string $campo): array => [$campo => round($filas->sum($campo), 2)])->all();
         $resultado['resumen_clasificaciones'] = $this->resumenClasificaciones($filas);
-        $resultado['rutas_impresion'] = $filas->groupBy('ruta')->sortKeys()->map(fn (Collection $terminales, string $nombre): array => [
-            'ruta' => $nombre,
-            'terminales' => $terminales->all(),
-            'totales' => collect(self::IMPORTES)->mapWithKeys(fn (string $campo): array => [$campo => round($terminales->sum($campo), 2)])->all(),
-        ])->values()->all();
+        $resultado['rutas_impresion'] = $filas->groupBy('ruta')->sortKeys()->map(function (Collection $terminales, string $nombre): array {
+            $conVentas = $terminales->filter(fn (array $fila): bool => $fila['ventas'] > 0);
+            $promedioVentas = (float) $conVentas->avg('ventas');
+            $ventasRuta = (float) $conVentas->sum('ventas');
+            $proporcionGastosRuta = $ventasRuta > 0 ? $conVentas->sum('gastos') / $ventasRuta : 0.0;
+
+            return [
+                'ruta' => $nombre,
+                'terminales' => $terminales->map(fn (array $fila): array => [
+                    ...$fila, 'observaciones' => $this->observacionesTerminal($fila, $promedioVentas, $proporcionGastosRuta),
+                ])->all(),
+                'totales' => collect(self::IMPORTES)->mapWithKeys(fn (string $campo): array => [$campo => round($terminales->sum($campo), 2)])->all(),
+            ];
+        })->values()->all();
 
         return $resultado;
+    }
+
+    /** @param array<string, mixed> $fila @return list<array{texto: string, nivel: string}> */
+    private function observacionesTerminal(array $fila, float $promedioVentas, float $proporcionGastosRuta): array
+    {
+        $ventas = (float) $fila['ventas'];
+        $gastos = (float) $fila['gastos'];
+        $premios = (float) $fila['premios_sacados'];
+        if ($ventas <= 0) {
+            $observaciones = [['texto' => $ventas < 0 ? 'Ventas netas negativas; revisar ajustes.' : 'Sin ventas registradas.', 'nivel' => 'alerta']];
+            if ($gastos > 0) {
+                $observaciones[] = ['texto' => 'Gastos sin ventas; revisar actividad.', 'nivel' => 'alerta'];
+            }
+            if ($premios > 0) {
+                $observaciones[] = ['texto' => 'Premios sin ventas; revisar registros.', 'nivel' => 'alerta'];
+            }
+
+            return $observaciones;
+        }
+        $observaciones = [];
+        if ($premios / $ventas * 100 >= (float) config('rentabilidad.observaciones.premios_elevados_ventas', 70)) {
+            $observaciones[] = ['texto' => $premios > $ventas ? 'Premios superan las ventas.' : 'Premios elevados.', 'nivel' => $premios > $ventas ? 'alerta' : 'atencion'];
+        }
+        $proporcionGastos = $gastos / $ventas;
+        if ($gastos > 0 && ($proporcionGastos * 100 >= (float) config('rentabilidad.observaciones.gastos_elevados_ventas', 50)
+            || $proporcionGastos > $proporcionGastosRuta * (float) config('rentabilidad.observaciones.factor_gastos_ruta', 1.25))) {
+            $observaciones[] = ['texto' => 'Revisar gastos elevados.', 'nivel' => 'atencion'];
+        }
+        if ($ventas < $promedioVentas * (float) config('rentabilidad.observaciones.ventas_bajas_promedio', 70) / 100) {
+            $observaciones[] = ['texto' => 'Levantar ventas.', 'nivel' => 'atencion'];
+        }
+        if ($fila['clasificacion']['en_deterioro']) {
+            $observaciones[] = ['texto' => 'Caída reciente del balance.', 'nivel' => 'alerta'];
+        }
+        if ($observaciones === []) {
+            $observaciones[] = match (true) {
+                $fila['balance_general'] < 0 => ['texto' => 'Revisar balance negativo.', 'nivel' => 'alerta'],
+                $fila['clasificacion']['codigo'] === 'en_evaluacion' => ['texto' => 'Completar historial para evaluar.', 'nivel' => 'normal'],
+                default => ['texto' => 'Mantener seguimiento.', 'nivel' => 'normal'],
+            };
+        }
+
+        return array_slice($observaciones, 0, 3);
     }
 
     /** @param array<string, mixed> $filtros */
