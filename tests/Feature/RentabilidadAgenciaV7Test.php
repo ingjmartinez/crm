@@ -7,6 +7,8 @@ use App\Http\Middleware\ForcePasswordChange;
 use App\Models\User;
 use App\Services\RentabilidadAgenciaV7Service;
 use App\ViewPermissionCatalog;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Query\Grammars\MySqlGrammar;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -832,6 +834,66 @@ class RentabilidadAgenciaV7Test extends TestCase
         }
         $this->assertSame([], $servicio->cuentas($filtros)['movimientos']);
         $this->assertSame([], $servicio->cuentas($filtros)['meses'][0]['movimientos']);
+    }
+
+    public function test_mysql_conserva_el_indice_de_cuentas_solo_para_varias_terminales(): void
+    {
+        $this->datos();
+        $conexionOriginal = DB::getDefaultConnection();
+        $conexion = new Connection(DB::connection()->getPdo(), ':memory:', '', ['driver' => 'mysql']);
+        $conexion->setQueryGrammar(new MySqlGrammar($conexion));
+        config(['database.connections.mysql_plan_prueba' => ['driver' => 'mysql_plan_prueba']]);
+        DB::extend('mysql_plan_prueba', fn (): Connection => $conexion);
+        $consultas = [];
+        $conexion->beforeExecuting(function (string $sql) use (&$consultas): void {
+            if (str_contains($sql, 'union all')) {
+                $consultas[] = $sql;
+                throw new \RuntimeException('Consulta capturada sin ejecutar.');
+            }
+        });
+
+        try {
+            DB::setDefaultConnection('mysql_plan_prueba');
+            foreach ([$this->filtros(), ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3]] as $filtros) {
+                try {
+                    app(RentabilidadAgenciaV7Service::class)->reporte($filtros);
+                    $this->fail('No se capturó la consulta del reporte.');
+                } catch (\RuntimeException $exception) {
+                    $this->assertSame('Consulta capturada sin ejecutar.', $exception->getMessage());
+                }
+            }
+        } finally {
+            DB::setDefaultConnection($conexionOriginal);
+            DB::purge('mysql_plan_prueba');
+        }
+
+        $this->assertCount(2, $consultas);
+        $this->assertStringNotContainsString('force index', $consultas[0]);
+        $this->assertStringContainsString('force index (entradas_diario_cuenta_index)', $consultas[1]);
+    }
+
+    public function test_consulta_general_e_individual_concilian_sin_agregar_consultas_por_terminal(): void
+    {
+        $this->datos();
+        $servicio = app(RentabilidadAgenciaV7Service::class);
+        DB::enableQueryLog();
+        try {
+            DB::flushQueryLog();
+            $individual = $servicio->reporte($this->filtros());
+            $consultasIndividuales = DB::getQueryLog();
+            DB::flushQueryLog();
+            $general = $servicio->reporte(['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3]);
+            $consultasGenerales = DB::getQueryLog();
+        } finally {
+            DB::disableQueryLog();
+        }
+
+        $this->assertCount(3, $general['filas']);
+        $this->assertSame($individual['filas']->first(), $general['filas']->firstWhere('terminal', '1001'));
+        $this->assertCount(count($consultasIndividuales), $consultasGenerales);
+        $this->assertCount(1, collect($consultasGenerales)->filter(fn (array $consulta): bool => str_contains(strtolower($consulta['query']), 'union all')));
+        $this->assertSame(77.0, $individual['totales']['gastos']);
+        $this->assertSame(97.0, $general['totales']['gastos']);
     }
 
     public function test_cuentas_agrupadas_por_mes_concilian_con_el_total_y_respetan_los_filtros(): void

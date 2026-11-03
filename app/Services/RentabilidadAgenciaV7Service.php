@@ -396,8 +396,8 @@ class RentabilidadAgenciaV7Service
                 };
                 $costos->selectRaw($expresion.' AS '.$medida);
             }
-            if (DB::connection()->getDriverName() === 'mysql') {
-                $costos->forceIndex($agencias->pluck('terminal')->unique()->count() === 1 ? 'entradas_diario_id_viejo_index' : 'entradas_diario_cuenta_index');
+            if (DB::connection()->getDriverName() === 'mysql' && $agencias->pluck('terminal')->unique()->count() > 1) {
+                $costos->forceIndex('entradas_diario_cuenta_index');
             }
             $ramas[] = $costos->groupByRaw('movimientos.id_viejo, '.$periodo)->toBase();
         }
