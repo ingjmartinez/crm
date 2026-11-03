@@ -227,6 +227,29 @@ class RentabilidadAgenciaV7Test extends TestCase
         }
     }
 
+    public function test_selector_de_rutas_solo_incluye_rutas_activas_de_la_empresa_seleccionada(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['empresa' => ' Grupo Joselito ', 'ruta' => ' Ruta Norte ']);
+        DB::table('agencias')->where('terminal', '1002')->update(['ruta' => 'Ruta Sur']);
+        DB::table('agencias')->where('terminal', '1003')->update(['ruta' => 'Ruta Compartida']);
+        DB::table('agencias')->insert([
+            ['terminal' => '1004', 'empresa' => 'Negosur', 'ruta' => 'Ruta Compartida', 'estatus' => 1],
+            ['terminal' => '1005', 'empresa' => 'Grupo Joselito', 'ruta' => 'Ruta Inactiva', 'estatus' => 0],
+            ['terminal' => '1006', 'empresa' => 'Grupo Joselito', 'ruta' => '  ', 'estatus' => 1],
+        ]);
+        foreach ([
+            '' => ['Ruta Compartida', 'Ruta Norte', 'Ruta Sur'],
+            'Grupo Joselito' => ['Ruta Compartida', 'Ruta Norte'],
+            'Negosur' => ['Ruta Compartida', 'Ruta Sur'],
+            'Sin rutas' => [],
+        ] as $empresa => $esperadas) {
+            $this->get(route('gerencia.rentabilidad-agencia-v7', ['empresa' => $empresa]))->assertOk()
+                ->assertViewHas('rutas', fn ($rutas): bool => $rutas->all() === $esperadas)
+                ->assertViewHas('rutasDisponibles', fn ($rutas): bool => $rutas->count() === 4);
+        }
+    }
+
     public function test_resumen_ejecutivo_separa_la_cache_por_ruta(): void
     {
         $this->datos();
@@ -467,6 +490,74 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertSame(-48999.99, $datosPdf['totales']['balance_general']);
     }
 
+    public function test_impresion_personalizada_solo_muestra_terminales_y_totales_de_la_ruta_consultada(): void
+    {
+        $this->datos();
+        DB::table('agencias')->whereIn('terminal', ['1001', '1002'])->update(['ruta' => 'Ruta Norte']);
+        DB::table('agencias')->where('terminal', '1003')->update(['ruta' => 'Ruta Sur']);
+        $filtros = [...$this->filtros(), 'alcance' => 'todas'];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk()
+            ->assertSee('Impresión personalizada')->assertSee('name="ruta_impresion"', false)
+            ->assertSee('name="salida" value="imprimir"', false)->assertSee('name="salida" value="pdf"', false);
+        DB::table('vt_usuarios_bet')->where('agencia_id', '1001')->update(['monto' => 999999]);
+        $opciones = [...$filtros, 'informe_id' => $pagina->viewData('informeId'), 'personalizado' => 1, 'ruta_impresion' => 'Ruta Norte', 'salida' => 'imprimir'];
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $opciones))->assertOk()
+            ->assertViewHas('resultado', fn (array $resultado): bool => array_column($resultado['terminales'], 'terminal') === ['1001']
+                && $resultado['totales']['ventas'] === 200.0 && $resultado['totales']['gastos'] === 77.0
+                && $resultado['resumen_clasificaciones']['total'] === 1)
+            ->assertSee('<td>1001</td>', false)->assertDontSee('<td>1002</td>', false)->assertDontSee('<td>1003</td>', false)
+            ->assertSee('Totales de la ruta')->assertSee('window.print()', false)
+            ->assertDontSee('Terminales evaluadas en el período')->assertDontSee('Resultados del período');
+        $consultas = collect(DB::getQueryLog())->filter(fn (array $consulta): bool => str_contains(strtolower($consulta['query']), 'union all'));
+        DB::disableQueryLog();
+        $this->assertCount(0, $consultas);
+    }
+
+    public function test_pdf_personalizado_separa_rutas_y_conserva_terminales_sin_ruta(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Ruta Norte']);
+        DB::table('agencias')->where('terminal', '1003')->update(['ruta' => 'Ruta Sur']);
+        DB::table('agencias')->insert(['terminal' => '1004', 'nombre_agencia' => 'Sin ruta', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET']);
+        $filtros = [...$this->filtros(), 'alcance' => 'todas'];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk();
+        $opciones = [...$filtros, 'informe_id' => $pagina->viewData('informeId'), 'personalizado' => 1, 'salida' => 'pdf'];
+        $datosPdf = null;
+        app('view')->composer('gerencia.rentabilidad-agencia-v7-pdf', function (\Illuminate\View\View $vista) use (&$datosPdf): void {
+            $datosPdf = $vista->getData()['resultado'];
+        });
+        $pdf = $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $opciones))->assertOk();
+        $this->assertStringStartsWith('%PDF-', $pdf->getContent());
+        $this->assertSame(3, preg_match_all('/\/Type\s*\/Page\b/', $pdf->getContent()));
+        $this->assertSame(['', 'Ruta Norte', 'Ruta Sur'], array_column($datosPdf['rutas_impresion'], 'ruta'));
+        $this->assertSame(320.0, $datosPdf['totales']['ventas']);
+        $this->assertSame(87.0, $datosPdf['totales']['gastos']);
+        $porRuta = $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$opciones, 'ruta_impresion' => 'Ruta Norte']))->assertOk();
+        $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $porRuta->getContent()));
+        $this->assertSame(['Ruta Norte'], array_column($datosPdf['rutas_impresion'], 'ruta'));
+        $this->assertSame(200.0, $datosPdf['totales']['ventas']);
+    }
+
+    public function test_impresion_personalizada_rechaza_opciones_invalidas_y_rutas_fuera_de_la_consulta(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $this->filtros()))->assertOk();
+        $opciones = [...$this->filtros(), 'informe_id' => $pagina->viewData('informeId'), 'personalizado' => 1, 'salida' => 'imprimir'];
+        foreach ([
+            ['informe_id' => null], ['salida' => 'excel'], ['personalizado' => 'invalido'],
+            ['ruta_impresion' => ['Ruta Norte']], ['ruta_impresion' => str_repeat('a', 256)], ['ruta_impresion' => 'Fuera de consulta'],
+        ] as $cambio) {
+            $this->getJson(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$opciones, ...$cambio]))
+                ->assertUnprocessable()->assertJsonValidationErrors(array_key_first($cambio));
+        }
+        $this->travel(11)->minutes();
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $opciones))
+            ->assertUnprocessable()->assertJsonValidationErrors('informe_id');
+        $this->travelBack();
+    }
+
     public function test_recuperacion_reciente_en_endpoint_y_resumen_sin_modificar_importes(): void
     {
         $this->datos();
@@ -610,7 +701,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const elementos = new Map();
 function elemento(id) {
-    if (!elementos.has(id)) elementos.set(id, {value: '', checked: false, listeners: {}, classList: {add(){}, remove(){}, contains(){return true;}}, addEventListener(tipo, fn){this.listeners[tipo] = fn;}, textContent: '', innerHTML: ''});
+    if (!elementos.has(id)) elementos.set(id, {value: '', checked: false, listeners: {}, classList: {add(){}, remove(){}, contains(){return true;}}, addEventListener(tipo, fn){this.listeners[tipo] = fn;}, replaceChildren(...opciones){this.options = opciones; this.value = opciones[0]?.value ?? '';}, textContent: '', innerHTML: ''});
     return elementos.get(id);
 }
 let inicio, opciones, alerta, urlConsultada, cargando = false, envios = 0, prevenidos = 0, filtro = '';
@@ -625,6 +716,13 @@ global.document = {getElementById: elemento, addEventListener(tipo, fn){inicio =
 global.window = {rentabilidadV7: {datos: [fila, otraFila, sinVentas, enEvaluacion], filtros: {anio: 2026, mes_inicio: 1, mes_fin: 3, ruta: 'Ruta Norte', productos: ['Tradicional']}, urls: {resumen: 'http://localhost/v7/resumen'}}, addEventListener(tipo, fn){eventosVentana[tipo] = fn;}};
 window.Swal = {fire(configuracion){alerta = configuracion; configuracion.didOpen();}, showLoading(){cargando = true;}, close(){alerta = undefined;}};
 global.HTMLFormElement = class {submit(){assert.equal(this, elemento('filtrosRentabilidadV7')); envios++;}};
+global.Option = class {constructor(text, value){this.text = text; this.value = value;}};
+window.rentabilidadV7.rutasDisponibles = [
+    {empresa: 'Empresa A', ruta: 'Ruta Compartida'},
+    {empresa: 'Empresa B', ruta: 'Ruta Compartida'},
+    {empresa: 'Empresa A', ruta: 'Ruta Norte'},
+    {empresa: 'Empresa B', ruta: 'Ruta Sur'},
+];
 const filasAplicadas = () => window.rentabilidadV7.datos.filter(fila => !filtro || new RegExp(filtro).test(fila.clasificacion.nombre));
 const apiTabla = {
     row(){return {data(){return fila;}};},
@@ -636,8 +734,28 @@ global.$ = () => ({DataTable(o){opciones = o; return apiTabla;}});
 $.fn = {dataTable: {render: {text(){return x => x;}}, util: {escapeRegex(valor){return valor.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\$&');}}}};
 global.bootstrap = {Modal: class {show(){}}};
 global.fetch = async url => {urlConsultada = url; return {ok: true, redirected: false, async json(){return datos;}};};
-vm.runInThisContext(fs.readFileSync(process.argv[1], 'utf8'));
+vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
 inicio();
+const rutasVisibles = () => elemento('rutaV7').options.map(opcion => opcion.value);
+assert.deepEqual(rutasVisibles(), ['', 'Ruta Compartida', 'Ruta Norte', 'Ruta Sur']);
+elemento('rutaV7').value = 'Ruta Norte';
+elemento('empresaV7').value = 'Empresa A';
+elemento('empresaV7').listeners.change();
+assert.deepEqual(rutasVisibles(), ['', 'Ruta Compartida', 'Ruta Norte']);
+assert.equal(elemento('rutaV7').value, 'Ruta Norte');
+elemento('empresaV7').value = 'Empresa B';
+elemento('empresaV7').listeners.change();
+assert.deepEqual(rutasVisibles(), ['', 'Ruta Compartida', 'Ruta Sur']);
+assert.equal(elemento('rutaV7').value, '');
+elemento('rutaV7').value = 'Ruta Compartida';
+elemento('empresaV7').value = '';
+elemento('empresaV7').listeners.change();
+assert.deepEqual(rutasVisibles(), ['', 'Ruta Compartida', 'Ruta Norte', 'Ruta Sur']);
+assert.equal(elemento('rutaV7').value, 'Ruta Compartida');
+elemento('empresaV7').value = 'Sin rutas';
+elemento('empresaV7').listeners.change();
+assert.deepEqual(rutasVisibles(), ['']);
+assert.equal(elemento('rutaV7').value, '');
 assert.equal(opciones.columns.length, 9);
 assert.deepEqual(opciones.columns.slice(2, 8).map(c => c.data), ['ventas', 'premios_sacados', 'utilidad', 'gastos', 'balance_general', 'clasificacion']);
 assert.equal(opciones.deferRender, true);
@@ -718,8 +836,8 @@ assert.equal(prevenidos, 2);
     assert.equal(prevenidos, previos);
 })().catch(error => {console.error(error); process.exitCode = 1;});
 JS;
-        $proceso = new Process(['node', '-e', $codigo, public_path('js/pages/rentabilidad-agencia-v7.js')]);
-        $proceso->setTimeout(15)->run();
+        $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v7.js')]);
+        $proceso->setInput($codigo)->setTimeout(15)->run();
         $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
     }
 }

@@ -9,6 +9,7 @@ use App\Services\RentabilidadAgenciaV7Service;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class RentabilidadAgenciaV7Controller extends Controller
@@ -27,10 +28,14 @@ class RentabilidadAgenciaV7Controller extends Controller
         $empresas = RentabilidadAgenciaV5::query()->activas()->whereNotNull('empresa')->whereRaw("TRIM(empresa) <> ''")
             ->selectRaw('TRIM(empresa) AS empresa')->distinct()->orderBy('empresa')->pluck('empresa');
         $datosTabla = $resultado === null ? [] : $resultado['filas']->map(fn (array $fila): array => array_diff_key($fila, ['periodos' => true]))->values()->all();
-        $rutas = RentabilidadAgenciaV5::query()->activas()->whereNotNull('ruta')->whereRaw("TRIM(ruta) <> ''")
-            ->selectRaw('TRIM(ruta) AS ruta')->distinct()->orderBy('ruta')->pluck('ruta');
+        $rutasDisponibles = RentabilidadAgenciaV5::query()->activas()->whereNotNull('ruta')->whereRaw("TRIM(ruta) <> ''")
+            ->selectRaw("COALESCE(TRIM(empresa), '') AS empresa, TRIM(ruta) AS ruta")->distinct()->orderBy('ruta')->get();
+        $empresaSeleccionada = trim((string) $filtros['empresa']);
+        $rutas = $rutasDisponibles
+            ->when($empresaSeleccionada !== '', fn (Collection $filas): Collection => $filas->where('empresa', $empresaSeleccionada))
+            ->pluck('ruta')->unique()->values();
 
-        return view('gerencia.rentabilidad-agencia-v7', compact('filtros', 'productos', 'consultar', 'resultado', 'empresas', 'datosTabla', 'rutas', 'informeId'));
+        return view('gerencia.rentabilidad-agencia-v7', compact('filtros', 'productos', 'consultar', 'resultado', 'empresas', 'datosTabla', 'rutas', 'rutasDisponibles', 'informeId'));
     }
 
     public function resumen(ConsultarRentabilidadAgenciaV7Request $request): JsonResponse
@@ -62,8 +67,20 @@ class RentabilidadAgenciaV7Controller extends Controller
         $filtros = $request->validated();
         $productos = $this->reporte->productos($filtros);
         $resultado = $this->reporte->resumenEjecutivo($filtros, (string) $request->user()->getAuthIdentifier());
+        $contenido = 'resumen';
+        $esImpresion = $request->validated('salida') === 'imprimir';
+        if ($request->boolean('personalizado')) {
+            $ruta = trim((string) $request->validated('ruta_impresion', ''));
+            $resultado = $this->reporte->personalizarInforme($resultado, $ruta);
+            $filtros['ruta'] = $ruta !== '' ? $ruta : ($filtros['ruta'] ?? '');
+            $contenido = 'terminales';
+        }
+        $datos = compact('resultado', 'filtros', 'productos', 'contenido', 'esImpresion');
+        if ($esImpresion) {
+            return response()->view('gerencia.rentabilidad-agencia-v7-pdf', $datos)->header('Cache-Control', 'private, no-store');
+        }
 
-        $pdf = Pdf::loadView('gerencia.rentabilidad-agencia-v7-pdf', compact('resultado', 'filtros', 'productos'))->setPaper('a4', 'landscape');
+        $pdf = Pdf::loadView('gerencia.rentabilidad-agencia-v7-pdf', $datos)->setPaper('a4', 'landscape');
         $pdf->render();
         $dompdf = $pdf->getDomPDF();
         $dompdf->getCanvas()->page_text(660, 575, 'Página {PAGE_NUM} de {PAGE_COUNT}', $dompdf->getFontMetrics()->getFont('DejaVu Sans'), 8, [0.4, 0.45, 0.5]);

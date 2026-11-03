@@ -60,7 +60,10 @@
             </div>
             <div class="card"><div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <h5 class="mb-0">Rentabilidad por terminal · {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</h5>
-                <a class="btn btn-outline-primary" target="_blank" rel="noopener" href="{{ route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, 'productos_filtrados' => 1, 'productos' => $productos, 'informe_id' => $informeId]) }}">Descargar informe ejecutivo PDF</a>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImpresionV7">Impresión personalizada</button>
+                    <a class="btn btn-outline-primary" target="_blank" rel="noopener" href="{{ route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, 'productos_filtrados' => 1, 'productos' => $productos, 'informe_id' => $informeId]) }}">Descargar informe ejecutivo PDF</a>
+                </div>
             </div><div class="card-body">
                 <p class="text-muted small">La clasificación requiere {{ config('rentabilidad.min_meses') }} meses con ventas y considera el porcentaje de meses positivos, el balance acumulado y la recuperación de los últimos {{ config('rentabilidad.ventana_reciente') }} meses con ventas. Un balance cero no es positivo. Los gastos de meses sin ventas permanecen en el acumulado. Venta mínima mensual para clasificar: RD$ {{ number_format(config('rentabilidad.venta_minima_mes'), 2) }}.</p>
                 @if ($resultado['filas']->isEmpty())<div class="alert alert-info">No se encontraron terminales activas con los filtros seleccionados.</div>@else
@@ -89,12 +92,46 @@
         @endif
     </div></div></div>
     <div class="modal fade" id="modalRentabilidadV7" tabindex="-1" aria-labelledby="tituloModalV7" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="tituloModalV7">Resumen</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body" id="contenidoModalV7"></div></div></div></div>
+    @if ($resultado !== null)
+        <div class="modal fade" id="modalImpresionV7" tabindex="-1" aria-labelledby="tituloImpresionV7" aria-hidden="true">
+            <div class="modal-dialog"><div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title" id="tituloImpresionV7">Impresión personalizada</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+                <form method="GET" action="{{ route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo') }}" target="_blank" rel="noopener">
+                    @foreach (['anio', 'mes_inicio', 'mes_fin', 'empresa', 'ruta', 'alcance', 'terminal'] as $campo)
+                        <input type="hidden" name="{{ $campo }}" value="{{ $filtros[$campo] }}">
+                    @endforeach
+                    <input type="hidden" name="informe_id" value="{{ $informeId }}">
+                    <input type="hidden" name="personalizado" value="1">
+                    <input type="hidden" name="productos_filtrados" value="1">
+                    @foreach ($productos as $producto)<input type="hidden" name="productos[]" value="{{ $producto }}">@endforeach
+                    <div class="modal-body">
+                        <p class="text-muted">Empresa: {{ $filtros['empresa'] ?: 'Todas las empresas' }}. Período: {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}. Se utilizan los datos de esta consulta.</p>
+                        <div class="mb-3"><label for="rutaImpresionV7" class="form-label">Ruta a imprimir</label>
+                            <select id="rutaImpresionV7" name="ruta_impresion" class="form-select">
+                                <option value="">Todas las rutas de esta consulta</option>
+                                @foreach ($resultado['filas']->pluck('ruta')->filter(fn ($ruta) => $ruta !== '')->unique()->sort()->values() as $ruta)
+                                    <option value="{{ $ruta }}">{{ $ruta }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <p class="text-muted small mt-3 mb-0">Las tablas se separan por ruta e incluyen sus totales. Se incluyen todas las terminales de la ruta, independientemente del buscador o la categoría seleccionada en la tabla.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" name="salida" value="imprimir" class="btn btn-outline-primary">Imprimir</button>
+                        <button type="submit" name="salida" value="pdf" class="btn btn-primary">Generar PDF</button>
+                    </div>
+                </form>
+            </div></div>
+        </div>
+    @endif
 @endsection
 
 @section('script')
     <script>
         window.rentabilidadV7 = {
             datos: {{ Illuminate\Support\Js::from($datosTabla) }},
+            rutasDisponibles: {{ Illuminate\Support\Js::from($rutasDisponibles) }},
             filtros: {{ Illuminate\Support\Js::from([...$filtros, 'productos_filtrados' => 1, 'productos' => $productos]) }},
             urls: {{ Illuminate\Support\Js::from(['resumen' => route('gerencia.rentabilidad-agencia-v7.resumen'), 'ver' => route('gerencia.rentabilidad-agencia-v7.detalle'), 'cuentas' => route('gerencia.rentabilidad-agencia-v7.cuentas')]) }},
         };

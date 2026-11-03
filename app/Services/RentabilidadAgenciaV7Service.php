@@ -44,11 +44,13 @@ class RentabilidadAgenciaV7Service
     /** @param array<string, mixed> $filtros @param array<string, mixed> $resultado */
     public function guardarResumenEjecutivo(array $filtros, string $usuario, array $resultado): string
     {
+        $terminales = $resultado['filas']->map(fn (array $fila): array => array_diff_key($fila, ['periodos' => true]))->values()->all();
         unset($resultado['filas']);
         Cache::put($this->claveResumenEjecutivo($filtros, $usuario), $resultado, now()->addMinutes(self::MINUTOS_RESUMEN_EJECUTIVO));
 
         $informeId = (string) Str::uuid();
         $resultado['configuracion_clasificacion'] = config('rentabilidad');
+        $resultado['terminales'] = $terminales;
         Cache::put($this->claveConsultaEjecutiva($filtros, $usuario, $informeId), $resultado, now()->addMinutes(self::MINUTOS_RESUMEN_EJECUTIVO));
 
         return $informeId;
@@ -75,6 +77,29 @@ class RentabilidadAgenciaV7Service
 
             return $resultado;
         });
+    }
+
+    /** @param array<string, mixed> $resultado @return array<string, mixed> */
+    public function personalizarInforme(array $resultado, string $ruta): array
+    {
+        if (! array_key_exists('terminales', $resultado)) {
+            throw ValidationException::withMessages(['informe_id' => 'Vuelve a consultar el reporte para personalizar su impresión.']);
+        }
+        $filas = collect($resultado['terminales'])
+            ->when($ruta !== '', fn (Collection $filas): Collection => $filas->where('ruta', $ruta))->values();
+        if ($ruta !== '' && $filas->isEmpty()) {
+            throw ValidationException::withMessages(['ruta_impresion' => 'La ruta seleccionada no pertenece a esta consulta.']);
+        }
+        $resultado['terminales'] = $filas->all();
+        $resultado['totales'] = collect(self::IMPORTES)->mapWithKeys(fn (string $campo): array => [$campo => round($filas->sum($campo), 2)])->all();
+        $resultado['resumen_clasificaciones'] = $this->resumenClasificaciones($filas);
+        $resultado['rutas_impresion'] = $filas->groupBy('ruta')->sortKeys()->map(fn (Collection $terminales, string $nombre): array => [
+            'ruta' => $nombre,
+            'terminales' => $terminales->all(),
+            'totales' => collect(self::IMPORTES)->mapWithKeys(fn (string $campo): array => [$campo => round($terminales->sum($campo), 2)])->all(),
+        ])->values()->all();
+
+        return $resultado;
     }
 
     /** @param array<string, mixed> $filtros */
@@ -117,7 +142,7 @@ class RentabilidadAgenciaV7Service
             ->when($empresa !== '', fn ($query) => $query->whereRaw('TRIM(empresa) = ?', [$empresa]))
             ->when($ruta !== '', fn ($query) => $query->whereRaw('TRIM(ruta) = ?', [$ruta]))
             ->when(($filtros['alcance'] ?? '') === 'terminal', fn ($query) => $query->where('terminal', trim((string) ($filtros['terminal'] ?? ''))))
-            ->orderBy('terminal')->get(['terminal', 'nombre_agencia', 'agencia', 'sistema', 'empresa']);
+            ->orderBy('terminal')->get(['terminal', 'nombre_agencia', 'agencia', 'sistema', 'empresa', 'ruta']);
     }
 
     /** @param array<string, mixed> $filtros @return array{filas: Collection, totales: array<string, float>, desde: Carbon, hasta: Carbon} */
@@ -158,7 +183,7 @@ class RentabilidadAgenciaV7Service
 
             return [
                 'terminal' => $terminal, 'nombre' => trim((string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $terminal)),
-                'empresa' => trim((string) $agencia->empresa), 'periodos' => $periodos, ...$totales,
+                'empresa' => trim((string) $agencia->empresa), 'ruta' => trim((string) $agencia->ruta), 'periodos' => $periodos, ...$totales,
                 'clasificacion' => $this->clasificador->clasificar($mesesClasificacion),
             ];
         });

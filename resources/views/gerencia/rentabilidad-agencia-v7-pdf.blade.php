@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <style>
-        @page { margin: 28px 26px 40px; }
+        @page { size: A4 landscape; margin: 28px 26px 40px; }
         body { margin: 0; font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #243047; }
         .report-header { padding-top: 8px; }
         h1 { font-size: 19px; margin: 0 0 6px; color: #17365d; }
@@ -33,18 +33,31 @@
         .warning { color: #854a0e; background: #fef0c7; }
         .danger { color: #b42318; background: #fee4e2; }
         .secondary { color: #475467; background: #f2f4f7; }
+        .nueva-pagina { page-break-before: always; }
+        .terminales { font-size: 9px; }
+        .terminales td, .terminales th { padding: 4px; }
+        .terminales .right { white-space: nowrap; }
+        .print-toolbar { margin-bottom: 20px; font-family: sans-serif; font-size: 14px; }
+        .print-toolbar button { padding: 10px 18px; cursor: pointer; }
+        @media screen { body.print-preview { max-width: 1120px; margin: 24px auto; padding: 20px; } }
+        @media print { .print-toolbar { display: none !important; } }
     </style>
 </head>
-<body>
+<body @class(['print-preview' => $esImpresion ?? false])>
     @php($configuracionClasificacion = $resultado['configuracion_clasificacion'] ?? config('rentabilidad'))
+    @php($contenido = $contenido ?? 'resumen')
+    @if ($esImpresion ?? false)
+        <div class="print-toolbar"><button type="button" onclick="window.print()">Imprimir</button></div>
+    @endif
     <div class="report-header">
-    <h1>Informe ejecutivo de rentabilidad de agencia V7</h1>
+    <h1>{{ $contenido === 'resumen' ? 'Informe ejecutivo de rentabilidad de agencia V7' : 'Informe de rentabilidad de agencia V7' }}</h1>
     <p><strong>Año {{ $resultado['desde']->year }}</strong> · Período: {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</p>
     <p class="muted">Empresa: {{ ($filtros['empresa'] ?? '') ?: 'Todas las empresas' }} · Terminal: {{ ($filtros['alcance'] ?? 'todas') === 'terminal' ? $filtros['terminal'] : 'Todas' }}</p>
     <p class="muted">Ruta: {{ ($filtros['ruta'] ?? '') ?: 'Todas las rutas' }}</p>
     <p class="muted small">Productos: {{ implode(', ', $productos) ?: 'Ninguno' }}. Generado: {{ now()->format('d/m/Y H:i') }}.</p>
     </div>
 
+    @if ($contenido !== 'terminales')
     <div class="section">
         <h2>Terminales evaluadas en el período</h2>
         <table class="cards">
@@ -90,6 +103,42 @@
         <p class="muted small">Utilidad = ventas - premios sacados. Balance general = utilidad - gastos. Gastos incluye costos contables, gastos y R20 mensual. La clasificación utiliza el balance general de los meses con ventas.</p>
     </div>
 
-    <p class="muted small">Los totales incluyen todas las terminales evaluadas del período. El detalle por terminal está disponible en la tabla del reporte y sus exportaciones.</p>
+    <p class="muted small">Los totales incluyen las terminales evaluadas con los filtros indicados.</p>
+    @endif
+
+    @if ($contenido !== 'resumen')
+        @forelse ($resultado['rutas_impresion'] as $grupo)
+            <div @class(['nueva-pagina' => ! $loop->first])>
+                <h2>Ruta: {{ $grupo['ruta'] ?: 'Sin ruta asignada' }} · {{ count($grupo['terminales']) }} {{ count($grupo['terminales']) === 1 ? 'terminal' : 'terminales' }}</h2>
+                @unless ($loop->first)
+                    <p class="muted small">Empresa: {{ ($filtros['empresa'] ?? '') ?: 'Todas las empresas' }} · Período: {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</p>
+                @endunless
+                <table class="terminales">
+                    <thead><tr><th>Terminal</th><th>Agencia</th><th>Empresa</th><th class="right">Ventas</th><th class="right">Premios sacados</th><th class="right">Utilidad</th><th class="right">Gastos</th><th class="right">Balance general</th><th>Clasificación</th></tr></thead>
+                    <tbody>
+                        @foreach ($grupo['terminales'] as $fila)
+                            <tr>
+                                <td>{{ $fila['terminal'] }}</td><td>{{ $fila['nombre'] }}</td><td>{{ $fila['empresa'] }}</td>
+                                @foreach (\App\Services\RentabilidadAgenciaV7Service::IMPORTES as $campo)
+                                    <td class="right {{ $campo === 'balance_general' ? ($fila[$campo] > 0 ? 'positivo' : ($fila[$campo] < 0 ? 'negativo' : '')) : '' }}">RD$ {{ number_format($fila[$campo], 2) }}</td>
+                                @endforeach
+                                <td><span class="badge {{ $fila['clasificacion']['color'] }}">{{ $fila['clasificacion']['nombre'] }}</span>
+                                    @if ($fila['clasificacion']['en_deterioro'])
+                                        <br>En deterioro
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot><tr><td colspan="3">Totales de la ruta</td>@foreach (\App\Services\RentabilidadAgenciaV7Service::IMPORTES as $campo)<td class="right">RD$ {{ number_format($grupo['totales'][$campo], 2) }}</td>@endforeach<td></td></tr></tfoot>
+                </table>
+            </div>
+        @empty
+            <p>No se encontraron terminales para imprimir.</p>
+        @endforelse
+    @endif
+    @if ($esImpresion ?? false)
+        <script>window.addEventListener('load', () => window.print());</script>
+    @endif
 </body>
 </html>

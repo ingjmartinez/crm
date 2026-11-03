@@ -29,6 +29,20 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         const configuracion = window.rentabilidadV7;
+        const modalImpresion = document.getElementById('modalImpresionV7');
+        if (modalImpresion) document.body.appendChild(modalImpresion);
+        const empresa = document.getElementById('empresaV7');
+        const ruta = document.getElementById('rutaV7');
+        const actualizarRutas = () => {
+            const seleccionada = ruta.value;
+            const rutas = [...new Set((configuracion.rutasDisponibles ?? [])
+                .filter(fila => !empresa.value || fila.empresa === empresa.value)
+                .map(fila => fila.ruta))];
+            ruta.replaceChildren(new Option('Todas las rutas', ''), ...rutas.map(nombre => new Option(nombre, nombre)));
+            ruta.value = rutas.includes(seleccionada) ? seleccionada : '';
+        };
+        empresa.addEventListener('change', actualizarRutas);
+        actualizarRutas();
         const completo = document.getElementById('anioCompletoV7');
         const alcance = document.getElementById('alcanceV7');
         const terminal = document.getElementById('terminalV7');

@@ -21,7 +21,10 @@ class ConsultarRentabilidadAgenciaV7Request extends FormRequest
             'mes_inicio' => [$detalle ? 'required' : 'nullable', 'required_with:anio', 'integer', 'between:1,12'],
             'mes_fin' => [$detalle ? 'required' : 'nullable', 'required_with:anio', 'integer', 'between:1,12', 'gte:mes_inicio'],
             'anio_completo' => ['nullable', 'boolean'],
-            'informe_id' => ['nullable', 'uuid'],
+            'informe_id' => ['nullable', 'required_if:personalizado,1', 'uuid'],
+            'personalizado' => ['nullable', 'boolean'],
+            'ruta_impresion' => ['nullable', 'string', 'max:255'],
+            'salida' => ['nullable', 'in:pdf,imprimir'],
             'empresa' => ['nullable', 'string', 'max:255'],
             'ruta' => ['nullable', 'string', 'max:255'],
             'alcance' => ['nullable', 'in:todas,terminal'],
@@ -60,6 +63,11 @@ class ConsultarRentabilidadAgenciaV7Request extends FormRequest
             'ruta.string' => 'Selecciona una ruta valida.',
             'ruta.max' => 'El nombre de ruta es demasiado largo.',
             'informe_id.uuid' => 'La referencia del informe no es valida. Vuelve a consultar el reporte.',
+            'informe_id.required_if' => 'Consulta el reporte antes de personalizar la impresión.',
+            'personalizado.boolean' => 'La opción de impresión no es valida.',
+            'ruta_impresion.string' => 'Selecciona una ruta valida para imprimir.',
+            'ruta_impresion.max' => 'El nombre de ruta es demasiado largo.',
+            'salida.in' => 'Selecciona imprimir o generar PDF.',
             'productos.*.in' => 'Selecciona un producto valido.',
         ];
     }
