@@ -9,10 +9,10 @@
     const moneda = valor => 'RD$ ' + formato.format(Number(valor || 0));
     const colorBalance = valor => Number(valor) > 0 ? 'text-success' : Number(valor) < 0 ? 'text-danger' : '';
     const badge = clasificacion => {
-        const colores = ['success', 'primary', 'warning', 'danger', 'secondary'];
+        const colores = ['success', 'primary', 'info', 'warning', 'danger', 'secondary'];
         const color = colores.includes(clasificacion.color) ? clasificacion.color : 'secondary';
         const deterioro = clasificacion.en_deterioro ? ' <span class="badge bg-warning text-dark">En deterioro</span>' : '';
-        return `<span class="badge bg-${color}${color === 'warning' ? ' text-dark' : ''}">${escapar(clasificacion.nombre)}</span>${deterioro}`;
+        return `<span class="badge bg-${color}${['warning', 'info'].includes(color) ? ' text-dark' : ''}">${escapar(clasificacion.nombre)}</span>${deterioro}`;
     };
     const motivoClasificacion = clasificacion => {
         const porcentaje = clasificacion.porcentaje === null ? '' : ` (${formato.format(clasificacion.porcentaje)}%)`;

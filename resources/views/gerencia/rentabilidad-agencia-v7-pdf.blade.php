@@ -5,9 +5,9 @@
     <style>
         @page { margin: 28px 26px 40px; }
         body { margin: 0; font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #243047; }
-        .report-header { padding-top: 12px; }
+        .report-header { padding-top: 8px; }
         h1 { font-size: 19px; margin: 0 0 6px; color: #17365d; }
-        h2 { font-size: 13px; margin: 10px 0 6px; color: #17365d; }
+        h2 { font-size: 13px; margin: 6px 0 4px; color: #17365d; }
         p { margin: 4px 0; }
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #d7dfe8; padding: 6px; vertical-align: middle; }
@@ -20,15 +20,16 @@
         .right { text-align: right; }
         .positivo { color: #067647; }
         .negativo { color: #b42318; }
-        .cards td { width: 25%; padding: 9px; }
+        .cards td { width: 25%; padding: 7px; }
         .cards strong { display: block; font-size: 15px; margin-top: 5px; }
-        .summary { font-size: 11px; }
-        .summary td, .summary th { padding: 4px 6px; }
+        .summary { font-size: 10px; }
+        .summary td, .summary th { padding: 2px 6px; }
         .financial td { width: 33.33%; padding: 4px 6px; }
         .financial strong { display: block; font-size: 13px; margin-top: 3px; }
         .badge { display: inline-block; border-radius: 3px; padding: 1px 6px; }
         .success { color: #067647; background: #dcfae6; }
         .primary { color: #175cd3; background: #eff4ff; }
+        .info { color: #0e5968; background: #cff4fc; }
         .warning { color: #854a0e; background: #fef0c7; }
         .danger { color: #b42318; background: #fee4e2; }
         .secondary { color: #475467; background: #f2f4f7; }
@@ -71,6 +72,9 @@
     <div class="section">
         @if (($configuracionClasificacion['perdida_maxima_rescate'] ?? 0) > 0)
             <p class="muted small">Con el historial mínimo requerido, una pérdida acumulada menor de RD$ {{ number_format($configuracionClasificacion['perdida_maxima_rescate'], 2) }} también permite clasificar como Para rescatar.</p>
+        @endif
+        @if (isset($configuracionClasificacion['umbral_regular']))
+            <p class="muted small">Regular requiere balance acumulado positivo y al menos {{ $configuracionClasificacion['umbral_regular'] }}% de meses positivos, sin alcanzar Buena.</p>
         @endif
         <h2>Resultados del período</h2>
         <table class="financial">

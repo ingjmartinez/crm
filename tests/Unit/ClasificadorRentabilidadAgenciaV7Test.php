@@ -21,7 +21,7 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
     {
         $meses = [];
         foreach ($balances as $indice => $balance) {
-            $meses[] = ['mes' => sprintf('2026-%02d', $indice + 1), 'ventas' => 100, 'balance_general' => $balance];
+            $meses[] = ['mes' => sprintf('%04d-%02d', 2026 + intdiv($indice, 12), $indice % 12 + 1), 'ventas' => 100, 'balance_general' => $balance];
         }
 
         return $meses;
@@ -208,5 +208,43 @@ class ClasificadorRentabilidadAgenciaV7Test extends TestCase
         $this->assertSame('Para rescatar', $this->clasificador(['perdida_maxima_rescate' => 401])->clasificar($meses)['nombre']);
         $this->assertSame('En evaluación', $this->clasificador()->clasificar($this->meses([-100, -100, -100]))['nombre']);
         $this->assertSame('Sin ventas', $this->clasificador()->clasificar([['ventas' => 0, 'balance_general' => -100]])['nombre']);
+    }
+
+    public function test_veron_es_regular_y_guzman_permanece_para_rescatar(): void
+    {
+        $veron = $this->clasificador()->clasificar($this->meses([76643.77, 105006.63, -3907.77, 174976.94, 128306.32, 56225.05, -24519.58, -22342.51, 54359.36]));
+        $this->assertSame('Regular', $veron['nombre']);
+        $this->assertSame('regular', $veron['codigo']);
+        $this->assertSame('info', $veron['color']);
+        $this->assertSame(6, $veron['meses_positivos']);
+        $this->assertSame(544748.21, $veron['balance_acumulado']);
+        $guzman = $this->clasificador()->clasificar($this->meses([-25161.21, -19382.46, -3054.95, 57394.88, 20410.38, -14946.85, 45661.10, 42336.49, -124232.48]));
+        $this->assertSame('Para rescatar', $guzman['nombre']);
+        $this->assertSame(4, $guzman['meses_positivos']);
+        $this->assertSame(-20975.1, $guzman['balance_acumulado']);
+    }
+
+    public static function porcentajesParaRegular(): array
+    {
+        return [[10, 'Para rescatar'], [11, 'Regular'], [13, 'Regular'], [14, 'Buena'], [20, 'Rentable']];
+    }
+
+    #[DataProvider('porcentajesParaRegular')]
+    public function test_regular_empieza_en_55_por_ciento_sin_reemplazar_buena_o_rentable(int $positivos, string $categoria): void
+    {
+        $balances = [...array_fill(0, $positivos, 100), ...array_fill(0, 20 - $positivos, -1)];
+        $this->assertSame($categoria, $this->clasificador()->clasificar($this->meses($balances))['nombre']);
+    }
+
+    public function test_regular_exige_balance_positivo_y_respeta_historial_y_configuracion(): void
+    {
+        foreach ([0, -1] as $balanceTotal) {
+            $resultado = $this->clasificador()->clasificar($this->meses([10, 10, 10, 10, -20, $balanceTotal - 20]));
+            $this->assertSame('Para rescatar', $resultado['nombre']);
+        }
+        $balances = [10, 10, 10, 10, -1, -1];
+        $this->assertSame('En evaluación', $this->clasificador(['min_meses' => 7])->clasificar($this->meses($balances))['nombre']);
+        $this->assertSame('Para rescatar', $this->clasificador(['umbral_regular' => 68])->clasificar($this->meses($balances))['nombre']);
+        $this->assertNotSame($this->clasificador()->firmaConfiguracion(), $this->clasificador(['umbral_regular' => 60])->firmaConfiguracion());
     }
 }

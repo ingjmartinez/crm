@@ -8,7 +8,7 @@
         </div>
         <div class="card"><div class="card-body">
             <p class="text-muted">Utilidad = ventas − premios sacados. Balance general = utilidad − gastos. Gastos incluye costos contables, gastos y R20, con las mismas cuentas activas que V6. R20 se aplica únicamente en los meses con ventas de la terminal. La clasificación se calcula con el balance general de los meses con ventas.</p>
-            <p class="text-muted small">Con el historial mínimo requerido, una pérdida acumulada menor de RD$ {{ number_format(config('rentabilidad.perdida_maxima_rescate'), 2) }} también permite clasificar como Para rescatar.</p>
+            <p class="text-muted small">Regular requiere balance acumulado positivo y al menos {{ config('rentabilidad.umbral_regular') }}% de meses positivos, sin alcanzar Buena. Con el historial mínimo requerido, una pérdida acumulada menor de RD$ {{ number_format(config('rentabilidad.perdida_maxima_rescate'), 2) }} también permite clasificar como Para rescatar.</p>
             <form method="GET" action="{{ route('gerencia.rentabilidad-agencia-v7') }}" class="row g-3 align-items-end" id="filtrosRentabilidadV7">
                 <div class="col-md-2"><label for="anioV7" class="form-label">Año</label><input id="anioV7" type="number" name="anio" min="1900" max="9998" class="form-control" value="{{ $filtros['anio'] }}" required></div>
                 @foreach (['mes_inicio' => 'Mes inicio', 'mes_fin' => 'Mes fin'] as $campo => $etiqueta)
@@ -50,7 +50,7 @@
                             <thead class="table-light"><tr><th>Categoría</th><th class="text-end">Terminales</th></tr></thead>
                             <tbody>
                                 @foreach ($resultado['resumen_clasificaciones']['categorias'] as $categoria)
-                                    <tr><td><span class="badge bg-{{ $categoria['color'] }} {{ $categoria['color'] === 'warning' ? 'text-dark' : '' }}">{{ $categoria['nombre'] }}</span></td><td class="text-end">{{ number_format($categoria['cantidad']) }}</td></tr>
+                                    <tr><td><span class="badge bg-{{ $categoria['color'] }} {{ in_array($categoria['color'], ['warning', 'info'], true) ? 'text-dark' : '' }}">{{ $categoria['nombre'] }}</span></td><td class="text-end">{{ number_format($categoria['cantidad']) }}</td></tr>
                                 @endforeach
                             </tbody>
                             <tfoot class="table-light fw-semibold"><tr><td>Total terminales</td><td class="text-end">{{ number_format($resultado['resumen_clasificaciones']['total']) }}</td></tr></tfoot>

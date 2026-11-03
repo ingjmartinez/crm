@@ -249,7 +249,7 @@ class RentabilidadAgenciaV7Test extends TestCase
 
     public static function categoriasPorMesesPositivos(): array
     {
-        return [[9, 'Rentable'], [7, 'Buena'], [6, 'Para rescatar'], [5, 'Para rescatar'], [4, 'Para rescatar'], [3, 'Para rescatar'], [2, 'Para rescatar'], [0, 'No rentable']];
+        return [[9, 'Rentable'], [7, 'Buena'], [6, 'Regular'], [5, 'Regular'], [4, 'Para rescatar'], [3, 'Para rescatar'], [2, 'Para rescatar'], [0, 'No rentable']];
     }
 
     #[DataProvider('categoriasPorMesesPositivos')]
@@ -355,30 +355,34 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertStringNotContainsString('Clasificación neta', $html);
     }
 
-    public function test_pdf_conserva_las_seis_clasificaciones_y_totales_de_la_pantalla(): void
+    public function test_pdf_conserva_las_siete_clasificaciones_y_totales_de_la_pantalla(): void
     {
-        foreach ([4, 3, 2, 0, 1, null] as $indice => $positivos) {
+        foreach ([4, 3, 2, 0, 1, null, 6] as $indice => $positivos) {
             $terminal = (string) (8000 + $indice);
             DB::table('agencias')->insert([
                 'terminal' => $terminal, 'empresa' => 'Prueba PDF', 'ruta' => 'Ruta PDF',
                 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Agencia '.$terminal,
             ]);
-            $meses = $indice === 4 ? 1 : ($positivos === null ? 0 : 4);
+            $meses = $indice === 6 ? 9 : ($indice === 4 ? 1 : ($positivos === null ? 0 : 4));
             for ($mes = 1; $mes <= $meses; $mes++) {
                 $fecha = sprintf('2026-%02d-01', $mes);
                 DB::table('vt_usuarios_bet')->insert(['agencia_id' => $terminal, 'fecha' => $fecha, 'monto' => 1000, 'tipo' => 'Tradicional']);
                 DB::table('premios_bet')->insert(['agencia_id' => $terminal, 'fecha' => $fecha, 'monto' => $mes <= $positivos ? 900 : ($indice === 3 ? 21000 : 1100)]);
             }
         }
-        $filtros = [...$this->filtros(), 'empresa' => 'Prueba PDF', 'ruta' => 'Ruta PDF', 'alcance' => 'todas', 'mes_fin' => 4];
-        $pantalla = $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk()->viewData('resultado');
-        $this->assertSame([1, 1, 1, 1, 1, 1], array_column($pantalla['resumen_clasificaciones']['categorias'], 'cantidad'));
+        $filtros = [...$this->filtros(), 'empresa' => 'Prueba PDF', 'ruta' => 'Ruta PDF', 'alcance' => 'todas', 'mes_fin' => 9];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v7', $filtros))->assertOk()->assertSee('value="Regular"', false);
+        $pantalla = $pagina->viewData('resultado');
+        $this->assertSame([1, 1, 1, 1, 1, 1, 1], array_column($pantalla['resumen_clasificaciones']['categorias'], 'cantidad'));
+        $this->getJson(route('gerencia.rentabilidad-agencia-v7.resumen', [...$filtros, 'terminal' => '8006']))->assertOk()
+            ->assertJsonPath('clasificacion.nombre', 'Regular')->assertJsonPath('clasificacion.color', 'info');
         $datosPdf = null;
         app('view')->composer('gerencia.rentabilidad-agencia-v7-pdf', function (\Illuminate\View\View $vista) use (&$datosPdf): void {
             $datosPdf = $vista->getData()['resultado'];
         });
 
-        $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', $filtros))->assertOk();
+        $pdf = $this->get(route('gerencia.rentabilidad-agencia-v7.informe-ejecutivo', [...$filtros, 'informe_id' => $pagina->viewData('informeId')]))->assertOk();
+        $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $pdf->getContent()));
 
         $this->assertNotNull($datosPdf);
         $this->assertSame($pantalla['resumen_clasificaciones'], $datosPdf['resumen_clasificaciones']);
@@ -641,6 +645,8 @@ assert.equal(opciones.pageLength, 25);
 assert.ok(opciones.columns[7].render(clasificacion, 'display').includes('En deterioro'));
 assert.equal(opciones.columns[7].render(clasificacion, 'filter'), 'Rentable');
 assert.equal(opciones.columns[7].render(clasificacion, 'export'), 'Rentable · En deterioro');
+assert.ok(opciones.columns[7].render({...clasificacion, nombre: 'Regular', color: 'info', en_deterioro: false}, 'display').includes('bg-info text-dark'));
+assert.equal(opciones.columns[7].render({...clasificacion, nombre: 'Regular', en_deterioro: false}, 'export'), 'Regular');
 assert.equal(opciones.buttons[0].exportOptions.orthogonal, 'export');
 apiTabla.draw();
 assert.equal(elemento('pie2').textContent, 'RD$ 350.00');

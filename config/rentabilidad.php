@@ -3,6 +3,7 @@
 return [
     'umbral_rentable' => 100,
     'umbral_buena' => 70,
+    'umbral_regular' => 55,
     'umbral_rescatar' => 45,
     'min_meses' => 4,
     'ventana_reciente' => 3,

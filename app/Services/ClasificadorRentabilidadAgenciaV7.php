@@ -9,6 +9,7 @@ class ClasificadorRentabilidadAgenciaV7
     private const CATEGORIAS = [
         'rentable' => ['nombre' => 'Rentable', 'color' => 'success'],
         'buena' => ['nombre' => 'Buena', 'color' => 'primary'],
+        'regular' => ['nombre' => 'Regular', 'color' => 'info'],
         'para_rescatar' => ['nombre' => 'Para rescatar', 'color' => 'warning'],
         'no_rentable' => ['nombre' => 'No rentable', 'color' => 'danger'],
         'en_evaluacion' => ['nombre' => 'En evaluación', 'color' => 'secondary'],
@@ -69,14 +70,16 @@ class ClasificadorRentabilidadAgenciaV7
         }
 
         $codigo = 'no_rentable';
-        foreach (['rentable' => 'umbral_rentable', 'buena' => 'umbral_buena', 'para_rescatar' => 'umbral_rescatar'] as $categoria => $umbral) {
-            if ($positivos * 100 >= $conVentas * (float) $opciones[$umbral]) {
+        foreach (['rentable' => 'umbral_rentable', 'buena' => 'umbral_buena', 'regular' => 'umbral_regular', 'para_rescatar' => 'umbral_rescatar'] as $categoria => $umbral) {
+            if ($positivos * 100 >= $conVentas * (float) $opciones[$umbral] && ($categoria !== 'regular' || $balanceAcumulado > 0)) {
                 $codigo = $categoria;
                 break;
             }
         }
         $motivoCodigo = 'porcentaje_meses_positivos';
-        $motivo = 'Clasificada por el porcentaje de meses positivos.';
+        $motivo = $codigo === 'regular'
+            ? 'Clasificada Regular por el porcentaje de meses positivos y balance acumulado positivo.'
+            : 'Clasificada por el porcentaje de meses positivos.';
 
         if (in_array($codigo, ['rentable', 'buena'], true) && $balanceAcumulado < 0) {
             $codigo = 'para_rescatar';
