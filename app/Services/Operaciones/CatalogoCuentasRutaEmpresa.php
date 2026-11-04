@@ -5,6 +5,7 @@ namespace App\Services\Operaciones;
 use App\Models\CentroCostoCuentaRuta;
 use App\Models\CentroDeCosto;
 use App\Models\CuentaContable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -26,16 +27,20 @@ class CatalogoCuentasRutaEmpresa
             $cuentasPorRuta = CentroDeCosto::query()
                 ->where('inactivo', false)
                 ->where('ocultar', false)
-                ->get(['company_id', 'id_grupo', 'atributos'])
+                ->get(['company_id', 'id_grupo', 'descripcion', 'atributos'])
                 ->groupBy(fn (CentroDeCosto $centro): string => substr(trim((string) $centro->company_id), 0, 3).'|'.CentroCostoCuentaRuta::claveRuta($centro->id_grupo))
-                ->map(fn ($centros): array => $centros
-                    ->map(function (CentroDeCosto $centro): string {
-                        $atributos = array_change_key_case($centro->atributos ?? [], CASE_LOWER);
+                ->map(function (Collection $centros): array {
+                    $grupos = $centros->filter(fn (CentroDeCosto $centro): bool => str_starts_with(mb_strtoupper(ltrim((string) $centro->descripcion)), 'GRUPO:'));
 
-                        return trim((string) ($atributos['atr8'] ?? ''));
-                    })
-                    ->filter(fn (string $cuenta): bool => $cuenta !== '')
-                    ->unique()->values()->all());
+                    return ($grupos->isNotEmpty() ? $grupos : $centros)
+                        ->map(function (CentroDeCosto $centro): string {
+                            $atributos = array_change_key_case($centro->atributos ?? [], CASE_LOWER);
+
+                            return trim((string) ($atributos['atr8'] ?? ''));
+                        })
+                        ->filter(fn (string $cuenta): bool => $cuenta !== '')
+                        ->unique()->values()->all();
+                });
             $solicitud->attributes->set($claveCache, $cuentasPorRuta);
         }
 

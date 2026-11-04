@@ -549,6 +549,7 @@ JS;
         $this->assertSame([1101], $grupoMapeo['centros_costo_ruta']);
         $this->assertSame([1101], $grupoMapeo['socios'][0]['centros_costo_ruta']);
         $this->assertSame(2, substr_count($response->getContent(), '<td>1101</td>'));
+        $response->assertDontSee('form-centro-costo-ruta', false)->assertDontSee('Guardar centro');
     }
 
     public function test_apertura_no_asigna_cuentas_por_nombre_si_no_fueron_configuradas(): void
@@ -717,6 +718,12 @@ JS;
         $centro = \App\Models\CentroDeCosto::query()->create([
             'id_centro_costo' => 1101, 'company_id' => '169-Negosur',
             'id_grupo' => '113 - Ruta San Cristobal 1', 'atributos' => ['atr8' => '00100130020'],
+            'descripcion' => 'Grupo: Ruta San Cristobal 1',
+        ]);
+        \App\Models\CentroDeCosto::query()->create([
+            'id_centro_costo' => 1103, 'company_id' => '169',
+            'id_grupo' => '113', 'atributos' => ['Atr8' => '100130019'],
+            'descripcion' => 'Agencia con otra cuenta',
         ]);
         \App\Models\CentroDeCosto::query()->create([
             'id_centro_costo' => 1102, 'company_id' => '168',
@@ -783,6 +790,29 @@ JS;
             $this->assertNull($catalogo->resolverDesdeCentroCosto('168', $grupo));
         }
         $this->assertNull($catalogo->resolverDesdeCentroCosto('169', '1'));
+    }
+
+    public function test_cuenta_ruta_prioriza_el_grupo_y_deja_pendientes_grupos_sin_cuenta_o_con_conflicto(): void
+    {
+        foreach ([
+            [1, '84', '  grupo: Haina 5 Jose Luis Flores', '100130031', false],
+            [2, '84', 'Ole-6', '100130019', false],
+            [3, '84', 'Grupo: Anterior', '100130019', true],
+            [4, '85', 'Grupo: Sin cuenta', null, false],
+            [5, '85', 'Agencia', '100130031', false],
+            [6, '86', 'Grupo: Uno', '100130031', false],
+            [7, '86', 'Grupo: Dos', '100130019', false],
+        ] as [$id, $grupo, $descripcion, $cuenta, $inactivo]) {
+            \App\Models\CentroDeCosto::query()->create([
+                'id_centro_costo' => $id, 'company_id' => '168', 'id_grupo' => $grupo,
+                'descripcion' => $descripcion, 'atributos' => ['Atr8' => $cuenta], 'inactivo' => $inactivo,
+            ]);
+        }
+
+        $catalogo = app(\App\Services\Operaciones\CatalogoCuentasRutaEmpresa::class);
+        $this->assertSame('100130031', $catalogo->resolverDesdeCentroCosto('168', '84')['cuenta']);
+        $this->assertNull($catalogo->resolverDesdeCentroCosto('168', '85'));
+        $this->assertNull($catalogo->resolverDesdeCentroCosto('168', '86'));
     }
 
     public function test_credito_del_deposito_queda_pendiente_sin_asociacion_aunque_exista_en_cache(): void
