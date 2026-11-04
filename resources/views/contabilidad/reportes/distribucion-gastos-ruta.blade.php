@@ -176,7 +176,7 @@
                                             <td>{{ $grupoMapeo['centros_costo_ruta'] ? implode(', ', $grupoMapeo['centros_costo_ruta']) : '—' }}</td>
                                             <td>
                                                 @foreach ($grupoMapeo['cuentas_credito'] as $cuentaRuta)
-                                                    <div>{{ $cuentaRuta['company_id'] }}: {{ $cuentaRuta['cuenta_codigo'] ? $cuentaRuta['cuenta_codigo'].' - '.$cuentaRuta['cuenta_descripcion'] : 'Sin cuenta asignada en Centros de costo' }}</div>
+                                                    <div>{{ $cuentaRuta['company_id'] }}: {{ $cuentaRuta['cuenta_codigo'] ?: 'Sin Cuenta Ruta (Atr8) única en Centros de costo' }}</div>
                                                 @endforeach
                                             </td>
                                             <td class="text-center"><span class="badge bg-primary-subtle text-primary fs-6">{{ count($grupoMapeo['socios']) }}</span></td>

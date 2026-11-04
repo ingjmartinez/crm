@@ -55,7 +55,36 @@ class CentroCostoRutaFilterTest extends TestCase
 
         $this->assertSame(1, $xpath->query("//*[@id='filtroEstadoCentroCosto']/parent::div/following-sibling::div[1]//*[@id='filtroRutaCentroCosto']")->length);
         $this->assertSame('Cuenta contable de la ruta', $xpath->query("//*[@id='tableCentrosCosto']/thead/tr/th[3]")->item(0)->textContent);
-        $this->assertSame('Centro de costo ruta', $xpath->query("//*[@id='tableCentrosCosto']/thead/tr/th[normalize-space()='Ruta Empresa']/following-sibling::th[1]")->item(0)->textContent);
+        $this->assertSame('Cuenta Ruta', $xpath->query("//*[@id='tableCentrosCosto']/thead/tr/th[normalize-space()='Ruta Empresa']/following-sibling::th[1]")->item(0)->textContent);
+        $this->assertSame('Centro de costo ruta', $xpath->query("//*[@id='tableCentrosCosto']/thead/tr/th[normalize-space()='Cuenta Ruta']/following-sibling::th[1]")->item(0)->textContent);
+        $response->assertSee('<td>${escaparHtmlCentro(item.Atrib8 ?? \'\')}</td>', false);
+    }
+
+    public function test_route_account_attribute_is_returned_with_empty_fallback(): void
+    {
+        $this->crearTablaCentros();
+
+        try {
+            foreach ([['Atr8' => '00100130011'], ['atr8' => '100130032'], ['Atr8' => null], []] as $index => $atributos) {
+                CentroDeCosto::query()->create([
+                    'company_id' => '168',
+                    'id_centro_costo' => $index + 1,
+                    'atributos' => $atributos,
+                ]);
+            }
+
+            $this->withoutMiddleware()->getJson('/api-centros-costo?empresa=todas')
+                ->assertOk()
+                ->assertJsonCount(4)
+                ->assertJsonPath('0.Atrib8', '00100130011')
+                ->assertJsonPath('1.Atrib8', '100130032')
+                ->assertJsonPath('2.Atrib8', '')
+                ->assertJsonPath('3.Atrib8', '')
+                ->assertJsonPath('0.CuentaRuta', '');
+        } finally {
+            Schema::dropIfExists('centro_costo_cuenta_rutas');
+            Schema::dropIfExists('centros_de_costo');
+        }
     }
 
     public function test_route_cost_center_is_reported_separately_from_terminal_and_company(): void
@@ -154,6 +183,7 @@ class CentroCostoRutaFilterTest extends TestCase
             $table->boolean('ocultar')->default(false);
             $table->unsignedBigInteger('cuenta_ruta_id')->nullable();
             $table->timestamps();
+            $table->json('atributos')->nullable();
         });
     }
 }

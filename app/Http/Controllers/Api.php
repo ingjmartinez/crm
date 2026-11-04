@@ -164,6 +164,7 @@ class Api extends Controller
                     'VariosLocales' => $c->varios_locales,
                     'AplicaParaPonderar' => $c->aplica_para_ponderar,
                     'ValorPonderar' => $c->valor_ponderar,
+                    'Atrib8' => $this->getAtributo($c->atributos, 'Atr8'),
                     'Atrib75' => $this->getAtributo($c->atributos, 'Atr75'),
                     'Atrib103' => $this->getAtributo($c->atributos, 'Atr103'),
                     'FechaGrabado' => optional($c->fecha_grabado)->toDateTimeString(),

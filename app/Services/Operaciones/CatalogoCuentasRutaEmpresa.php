@@ -3,6 +3,7 @@
 namespace App\Services\Operaciones;
 
 use App\Models\CentroCostoCuentaRuta;
+use App\Models\CentroDeCosto;
 use App\Models\CuentaContable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -13,6 +14,35 @@ class CatalogoCuentasRutaEmpresa
 {
     /** @var array<string, array<int, array{cuenta: string, descripcion: string}>> */
     private array $catalogosLocalesPorEmpresa = [];
+
+    /** @return array{cuenta: string, descripcion: string}|null */
+    public function resolverDesdeCentroCosto(string $empresaId, string $idGrupo): ?array
+    {
+        $solicitud = request();
+        $claveCache = self::class.':cuentas_atr8';
+        $cuentasPorRuta = $solicitud->attributes->get($claveCache);
+
+        if ($cuentasPorRuta === null) {
+            $cuentasPorRuta = CentroDeCosto::query()
+                ->where('inactivo', false)
+                ->where('ocultar', false)
+                ->get(['company_id', 'id_grupo', 'atributos'])
+                ->groupBy(fn (CentroDeCosto $centro): string => substr(trim((string) $centro->company_id), 0, 3).'|'.CentroCostoCuentaRuta::claveRuta($centro->id_grupo))
+                ->map(fn ($centros): array => $centros
+                    ->map(function (CentroDeCosto $centro): string {
+                        $atributos = array_change_key_case($centro->atributos ?? [], CASE_LOWER);
+
+                        return trim((string) ($atributos['atr8'] ?? ''));
+                    })
+                    ->filter(fn (string $cuenta): bool => $cuenta !== '')
+                    ->unique()->values()->all());
+            $solicitud->attributes->set($claveCache, $cuentasPorRuta);
+        }
+
+        $cuentas = $cuentasPorRuta->get($empresaId.'|'.CentroCostoCuentaRuta::claveRuta($idGrupo), []);
+
+        return count($cuentas) === 1 ? ['cuenta' => $cuentas[0], 'descripcion' => ''] : null;
+    }
 
     /** @return array{cuenta: string, descripcion: string}|null */
     public function resolverAsignada(string $empresaId, string $idGrupo): ?array

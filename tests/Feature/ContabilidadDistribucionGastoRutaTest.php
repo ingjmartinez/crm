@@ -573,7 +573,7 @@ JS;
 
         $response = $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()
             ->assertSee('Cuenta contable de ruta (crédito)')
-            ->assertSee('Sin cuenta asignada en Centros de costo')
+            ->assertSee('Sin Cuenta Ruta (Atr8) única en Centros de costo')
             ->assertDontSee('100130007 - Ruta Distrito 2')
             ->assertDontSee('100130003 - Ruta Bani 9');
         $rutas = $response->viewData('mapeosAgrupados')->keyBy('ruta_key');
@@ -683,6 +683,7 @@ JS;
                 'id_centro_costo' => $centroId, 'company_id' => '168', 'id_grupo' => '61',
                 'id_sub_grupo' => '45', 'id_viejo' => (string) $terminal,
                 'descripcion' => "Agencia {$terminal}", 'inactivo' => false, 'ocultar' => false,
+                'atributos' => json_encode(['Atr8' => '100130010']),
             ]);
         }
         DB::table('movimientos_rutas_v2_gastos')->insert([
@@ -700,19 +701,27 @@ JS;
         $this->assertEqualsWithDelta(100.01, $asiento->sum('debito'), 0.001);
         $this->assertEqualsWithDelta(100.01, $asiento->sum('credito'), 0.001);
         $this->assertSame(['000101', '000102'], $asiento->pluck('centro_costo')->unique()->values()->all());
-        $this->assertSame(['600120005', '100130099'], $asiento->take(2)->pluck('cuenta')->all());
+        $this->assertSame(['600120005', '100130010'], $asiento->take(2)->pluck('cuenta')->all());
         $this->assertSame('2026-08-11', $asiento->first()['fecha']);
         $plantilla = file_get_contents(resource_path('views/contabilidad/reportes/distribucion-gastos-ruta.blade.php'));
         $this->assertStringContainsString('Gasto ruta</button>', $plantilla);
         $this->assertStringContainsString('id="tablaGastosRuta"', $plantilla);
     }
 
-    public function test_muestra_cuenta_asociada_manualmente_y_la_usa_en_credito_del_deposito(): void
+    public function test_muestra_cuenta_ruta_del_api_y_la_usa_en_credito_del_deposito(): void
     {
         $cuenta = CuentaContable::query()->create(['company_id' => '169', 'cuenta' => '100130017', 'descripcion' => 'Ruta San Cristobal 1 Rafaela']);
         CentroCostoCuentaRuta::factory()->create(['company_id' => '169', 'ruta_key' => '113', 'cuenta_ruta_id' => $cuenta->id]);
         $otraCuenta = CuentaContable::query()->create(['company_id' => '168', 'cuenta' => '100139999', 'descripcion' => 'Cuenta de otra empresa']);
         CentroCostoCuentaRuta::factory()->create(['company_id' => '168', 'ruta_key' => '113', 'cuenta_ruta_id' => $otraCuenta->id]);
+        $centro = \App\Models\CentroDeCosto::query()->create([
+            'id_centro_costo' => 1101, 'company_id' => '169-Negosur',
+            'id_grupo' => '113 - Ruta San Cristobal 1', 'atributos' => ['atr8' => '00100130020'],
+        ]);
+        \App\Models\CentroDeCosto::query()->create([
+            'id_centro_costo' => 1102, 'company_id' => '168',
+            'id_grupo' => '113', 'atributos' => ['Atr8' => '100139999'],
+        ]);
         Cache::put('cuentas_ruta_empresa:169', [['cuenta' => '100130099', 'descripcion' => 'Ruta San Cristobal 1']], now()->addMinute());
         DB::table('distribucion_gasto_ruta_mapeos')->insert([
             'ruta_key' => '05 - NG RUTA SAN CRISTOBAL 1', 'ruta_nombre' => '05 - NG RUTA SAN CRISTOBAL 1',
@@ -725,20 +734,21 @@ JS;
         ]);
 
         $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()
-            ->assertSee('100130017')->assertSee('Ruta San Cristobal 1 Rafaela')->assertDontSee('100130099');
+            ->assertSee('00100130020')->assertDontSee('100130017')->assertDontSee('100130099');
         $depositos = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
             'fecha_ini' => '2026-10-08', 'fecha_fin' => '2026-10-08', 'empresa' => 'todas',
         ]))->assertOk()->json('depositos_ruta');
-        $this->assertSame('100130017', $depositos[1]['cuenta']);
+        $this->assertSame('00100130020', $depositos[1]['cuenta']);
         $this->assertSame(100.0, (float) $depositos[1]['credito']);
         $cuentaNueva = CuentaContable::query()->create(['company_id' => '169', 'cuenta' => '100130018', 'descripcion' => 'Cuenta manual actualizada']);
         CentroCostoCuentaRuta::query()->where('company_id', '169')->where('ruta_key', '113')->update(['cuenta_ruta_id' => $cuentaNueva->id]);
+        $centro->update(['atributos' => ['Atr8' => '100130021']]);
         $this->get(route('operaciones.distribucion-gastos-ruta'))->assertOk()
-            ->assertSee('100130018 - Cuenta manual actualizada')->assertDontSee('100130017');
+            ->assertSee('100130021')->assertDontSee('100130018');
         $depositosActualizados = $this->getJson(route('operaciones.distribucion-gastos-ruta.data', [
             'fecha_ini' => '2026-10-08', 'fecha_fin' => '2026-10-08', 'empresa' => 'todas',
         ]))->assertOk()->json('depositos_ruta');
-        $this->assertSame('100130018', $depositosActualizados[1]['cuenta']);
+        $this->assertSame('100130021', $depositosActualizados[1]['cuenta']);
         Http::assertNothingSent();
     }
 
@@ -747,6 +757,32 @@ JS;
         CentroCostoCuentaRuta::factory()->create(['company_id' => '169', 'ruta_key' => '113', 'cuenta_ruta_id' => null]);
         Cache::put('cuentas_ruta_empresa:169', [['cuenta' => '100130099', 'descripcion' => 'Ruta San Cristobal 1']], now()->addMinute());
         $this->assertNull(app(\App\Services\Operaciones\CatalogoCuentasRutaEmpresa::class)->resolverAsignada('169', '113'));
+    }
+
+    public function test_cuenta_ruta_del_api_requiere_un_valor_unico_y_omite_centros_inactivos_y_ocultos(): void
+    {
+        foreach ([
+            [1, '1', ['Atr8' => '100130001'], false, false],
+            [2, '1', ['Atr8' => '100130001'], false, false],
+            [3, '1', ['Atr8' => 'OTRA'], true, false],
+            [4, '1', ['Atr8' => 'OTRA'], false, true],
+            [5, '2', ['Atr8' => '100130002'], false, false],
+            [6, '2', ['Atr8' => '100130003'], false, false],
+            [7, '3', ['Atr8' => null], false, false],
+            [8, '4', [], false, false],
+        ] as [$id, $grupo, $atributos, $inactivo, $ocultar]) {
+            \App\Models\CentroDeCosto::query()->create([
+                'id_centro_costo' => $id, 'company_id' => '168', 'id_grupo' => $grupo,
+                'atributos' => $atributos, 'inactivo' => $inactivo, 'ocultar' => $ocultar,
+            ]);
+        }
+
+        $catalogo = app(\App\Services\Operaciones\CatalogoCuentasRutaEmpresa::class);
+        $this->assertSame('100130001', $catalogo->resolverDesdeCentroCosto('168', '1')['cuenta']);
+        foreach (['2', '3', '4', '5'] as $grupo) {
+            $this->assertNull($catalogo->resolverDesdeCentroCosto('168', $grupo));
+        }
+        $this->assertNull($catalogo->resolverDesdeCentroCosto('169', '1'));
     }
 
     public function test_credito_del_deposito_queda_pendiente_sin_asociacion_aunque_exista_en_cache(): void
@@ -1015,6 +1051,7 @@ JS;
             $table->string('descripcion')->nullable();
             $table->boolean('inactivo')->default(false);
             $table->boolean('ocultar')->default(false);
+            $table->json('atributos')->nullable();
             $table->timestamps();
         });
         Schema::create('distribucion_gasto_ruta_mapeos', function (Blueprint $table): void {

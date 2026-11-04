@@ -134,6 +134,7 @@
                                                 <th>Nombre Agencia</th>
                                                 <th>Estado</th>
                                                 <th>Ruta Empresa</th>
+                                                <th>Cuenta Ruta</th>
                                                 <th>Centro de costo ruta</th>
                                                 <th>Id SubGrupo</th>
                                                 <th>Ciudad</th>
@@ -380,6 +381,7 @@
                             <td>${item.Descripcion ?? ''}</td>
                             <td data-search="${estadoTexto}">${estadoBadge}</td>
                             <td>${item.IdGrupo ?? ''}</td>
+                            <td>${escaparHtmlCentro(item.Atrib8 ?? '')}</td>
                             <td>${(item.CentrosCostoRuta ?? []).join(', ') || '—'}</td>
                             <td>${item.IdSubGrupo ?? ''}</td>
                             <td>${item.IdDivision ?? ''}</td>
