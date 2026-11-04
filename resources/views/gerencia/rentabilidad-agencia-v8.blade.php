@@ -7,7 +7,7 @@
         #tablaRentabilidadV8 th.grupo-mes { background: var(--vz-light, #f3f6f9); text-transform: capitalize; }
         #tablaRentabilidadV8 .porcentaje { display: inline-block; margin-top: 3px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
         #tablaRentabilidadV8 .porcentaje-premios { background: #fff3cd; color: #77520a; }
-        #tablaRentabilidadV8 .porcentaje-balance { background: #dcece4; color: #285541; }
+        #tablaRentabilidadV8 .porcentaje-utilidad { background: #dcece4; color: #285541; }
     </style>
     <div class="main-content"><div class="page-content"><div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -48,7 +48,7 @@
                     @if ($informeId)<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImpresionV8">Impresión personalizada</button>@endif
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small">Utilidad = ventas − premios sacados. Balance = utilidad − gastos. Gastos incluye costos, gastos contables y R20; R20 se aplica en los meses con ventas. El porcentaje de premios usa solo ventas Tradicionales y No Tradicionales; el de balance usa las ventas totales del mes, según los productos seleccionados. Sin ventas en la base correspondiente se muestra —.</p>
+                    <p class="text-muted small">Utilidad = ventas − premios sacados. Balance = utilidad − gastos. Gastos incluye costos, gastos contables y R20; R20 se aplica en los meses con ventas. % Premios = premios sacados ÷ ventas. % Utilidad = utilidad ÷ ventas. Ambos usan las ventas totales del mes según los productos seleccionados. Sin ventas se muestra —.</p>
                     @if ($resultado['filas']->isEmpty())
                         <div class="alert alert-info">No se encontraron terminales activas con los filtros seleccionados.</div>
                     @else

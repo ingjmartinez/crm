@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[caracter]);
     const conPorcentaje = (campo, importe, ventas) => {
         const porcentaje = Number(ventas) === 0 ? '—' : `${(Number(importe) / Number(ventas) * 100).toFixed(2)}%`;
-        const clase = campo === 'premios_sacados' ? 'porcentaje-premios' : 'porcentaje-balance';
+        const clase = campo === 'premios_sacados' ? 'porcentaje-premios' : 'porcentaje-utilidad';
         return `<div>${moneda(importe)}</div><small class="porcentaje ${clase}">${porcentaje}</small>`;
     };
     const encabezados = [porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia', ...configuracion.meses.flatMap(mes => etiquetas.map(etiqueta => `${etiqueta} · ${mes.codigo}`))];
@@ -94,8 +94,8 @@ document.addEventListener('DOMContentLoaded', function () {
             className: `text-end fw-bold${indiceCampo === 0 ? ' inicio-mes' : ''}`,
             render: (valor, tipo, fila) => {
                 if (tipo !== 'display') return Number(valor || 0);
-                return ['premios_sacados', 'balance_general'].includes(campo)
-                    ? conPorcentaje(campo, valor, campo === 'premios_sacados' ? (fila.periodos[indiceMes].ventas_loterias || 0) : fila.periodos[indiceMes].ventas)
+                return ['premios_sacados', 'utilidad'].includes(campo)
+                    ? conPorcentaje(campo, valor, fila.periodos[indiceMes].ventas)
                     : moneda(valor);
             },
             createdCell: (celda, valor) => {
@@ -134,9 +134,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 const total = Math.round(filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.[campo] || 0), 0) * 100) / 100;
                 const celda = api.column(1 + indiceMes * medidas.length + indiceCampo).footer();
                 celda.textContent = moneda(total);
-                if (['premios_sacados', 'balance_general'].includes(campo)) {
-                    const baseVentas = campo === 'premios_sacados' ? 'ventas_loterias' : 'ventas';
-                    const ventas = filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.[baseVentas] || 0), 0);
+                if (['premios_sacados', 'utilidad'].includes(campo)) {
+                    const ventas = filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.ventas || 0), 0);
                     celda.innerHTML = conPorcentaje(campo, total, ventas);
                 }
                 celda.classList.remove('text-success', 'text-danger');
