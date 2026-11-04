@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pageLength: 25,
         scrollX: true,
         autoWidth: false,
-        order: [[0, 'asc']],
+        order: [...configuracion.meses.map((mes, indiceMes) => [1 + indiceMes * medidas.length, 'desc']), [0, 'asc']],
         dom: 'Bfrtip',
         buttons: ['copy', 'csv', 'excel', 'print'].map(extend => ({
             extend,

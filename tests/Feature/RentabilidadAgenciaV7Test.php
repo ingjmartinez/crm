@@ -218,6 +218,30 @@ $.fn = {dataTable: {render: {text(){return 'texto-escapado';}}}};
 vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
 iniciar();
 assert.equal(opciones.columns.length, 16);
+assert.deepEqual(opciones.order, [[1, 'desc'], [6, 'desc'], [11, 'desc'], [0, 'asc']]);
+const ordenar = filas => [...filas].sort((a, b) => {
+    for (const [indice, direccion] of opciones.order) {
+        const columna = opciones.columns[indice];
+        const valor = fila => indice === 0
+            ? columna.render(fila.terminal, 'sort', fila)
+            : columna.render(fila.periodos[(indice - 1) / 5]?.ventas, 'sort', fila);
+        const primero = valor(a);
+        const segundo = valor(b);
+        const comparacion = primero < segundo ? -1 : primero > segundo ? 1 : 0;
+        if (comparacion) return direccion === 'desc' ? -comparacion : comparacion;
+    }
+    return 0;
+});
+const venta = (terminal, ...ventas) => ({terminal, periodos: ventas.map(ventas => ({ventas}))});
+assert.deepEqual(ordenar([
+    venta('001', 0, 9999, 0),
+    venta('002', 100, 20, 0),
+    venta('003', 1000, 0, 0),
+    venta('004', 100, 30, 5),
+    venta('005', 100, 30, 10),
+    venta('006', 0, 0, 0),
+    venta('007', 100, 30, 10),
+]).map(fila => fila.terminal), ['003', '005', '007', '004', '002', '001', '006']);
 assert.equal(opciones.columns[1].data, 'periodos.0.ventas');
 assert.ok(opciones.columns[1].className.includes('fw-bold'));
 assert.equal(opciones.columns[6].data, 'periodos.1.ventas');
