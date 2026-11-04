@@ -21,7 +21,7 @@ class RentabilidadAgenciaV7Service
 
     public const IMPORTES = ['ventas', 'premios_sacados', 'utilidad', 'gastos', 'balance_general'];
 
-    private const MEDIDAS = ['ventas', 'premios_sacados', 'costos', 'gastos_contables'];
+    private const MEDIDAS = ['ventas', 'ventas_loterias', 'premios_sacados', 'costos', 'gastos_contables'];
 
     private const MINUTOS_RESUMEN_EJECUTIVO = 10;
 
@@ -229,6 +229,7 @@ class RentabilidadAgenciaV7Service
                 $gastos = round((float) ($datos['costos'] ?? 0) + (float) ($datos['gastos_contables'] ?? 0) + $r20Periodo, 2);
                 $periodos[] = [
                     'mes' => $periodo, 'ventas' => $ventas, 'premios_sacados' => $premiosSacados,
+                    'ventas_loterias' => (float) ($datos['ventas_loterias'] ?? 0),
                     'utilidad' => round($ventas - $premiosSacados, 2),
                     'costos' => (float) ($datos['costos'] ?? 0), 'gastos_contables' => (float) ($datos['gastos_contables'] ?? 0),
                     'r20' => $r20Periodo, 'gastos' => $gastos,
@@ -362,7 +363,10 @@ class RentabilidadAgenciaV7Service
                 continue;
             }
             $fuentes = [
-                ['vt_usuarios_'.$sistema, ['ventas' => 'COALESCE(monto, 0)'], count($productos) === count(self::PRODUCTOS) ? null : $productos, 'tipo'],
+                ['vt_usuarios_'.$sistema, [
+                    'ventas' => 'COALESCE(monto, 0)',
+                    'ventas_loterias' => "CASE WHEN tipo IN ('Tradicional', 'No Tradicional') THEN COALESCE(monto, 0) ELSE 0 END",
+                ], count($productos) === count(self::PRODUCTOS) ? null : $productos, 'tipo'],
                 ['premios_'.$sistema, ['premios_sacados' => 'COALESCE(monto, 0)'], $premiosFiltro, 'producto_id'],
             ];
             foreach ($fuentes as [$tabla, $medidas, $filtro, $columna]) {

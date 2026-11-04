@@ -2,132 +2,61 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Token;
+use App\Http\Requests\ConsultarPremiosLotobetRequest;
 use App\Models\Premio;
 use App\Models\PremioNet;
+use App\Services\Lotobet\LotobetSessionService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class PremioController extends Controller
 {
-    public function getPremiosLotobet(Request $request)
+    public function getPremiosLotobet(ConsultarPremiosLotobetRequest $request): JsonResponse
     {
-        header('Content-Type: application/json');
-
-        $curl = curl_init();
-
-        $fecha = $request->query('fecha');
-
-        $token = Token::find(1);
-
-        if (!$token) {
-            return response()->json(['error' => 'Genere un token'], 404);
+        try {
+            $data = app(LotobetSessionService::class)->getPremios($request->validated('fecha'));
+        } catch (RuntimeException $exception) {
+            return response()->json(['error' => strip_tags($exception->getMessage())], 502);
         }
 
-        $fechaActual = now();
-        if ($fechaActual->greaterThan($token->fecha)) {
-            return response()->json(['error' => 'El token ha expirado, genere uno nuevo'], 401);
-        }
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => "https://ltkadapi.lotobet.bet/api/V1/YhJ23fkZyVNDVy4ilB/{$token->token}/{$fecha}/05",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_HTTPHEADER => array(
-                'AhfCC: yB0tt5KW3wVVCYYtCpen',
-                'AhfVB: xSzdgtOKbGRhUhtv1ois'
-            ),
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ));
-
-        $response = curl_exec($curl);
-
-        curl_close($curl);
-
-        $ventas = json_decode($response, true);
-
-        return response()->json(['premios' => $ventas['Content'], 'code' => $ventas['code'], 'message' => $ventas['msg']]);
+        return response()->json(['premios' => $data['Content'], 'code' => 0, 'message' => 'Datos obtenidos correctamente.']);
     }
 
-    public function savePremiosLotobet(Request $request)
+    public function savePremiosLotobet(ConsultarPremiosLotobetRequest $request): JsonResponse
     {
         ini_set('memory_limit', '1G');
-        ini_set('max_execution_time', 300); // 300 segundos = 5 minutos
-        set_time_limit(300);                // alternativa equivalente
-        header('Content-Type: application/json');
-
-        $curl = curl_init();
-
-        $fecha = $request->query('fecha');
-
-        $token = Token::find(1);
-
-        if (!$token) {
-            return response()->json(['error' => 'Genere un token'], 404);
+        set_time_limit(300);
+        $fecha = $request->validated('fecha');
+        if (Premio::query()->whereDate('fecha', $fecha)->exists()) {
+            return response()->json(['message' => 'Ya hay data guardada en la fecha: '.$fecha]);
         }
 
-        $fechaActual = now();
-        if ($fechaActual->greaterThan($token->fecha)) {
-            return response()->json(['error' => 'El token ha expirado, genere uno nuevo'], 401);
+        try {
+            $response = app(LotobetSessionService::class)->getPremios($fecha);
+        } catch (RuntimeException $exception) {
+            return response()->json(['error' => strip_tags($exception->getMessage())], 502);
         }
 
-        $existe = Premio::whereDate('fecha', $fecha)->exists();
+        $data = array_map(fn (array $premio): array => [
+            'consorcio_id' => $premio['consorcio_id'] ?? null,
+            'agencia_id' => $premio['agencia_id'] ?? null,
+            'producto_id' => $premio['producto_id'] ?? null,
+            'descripcion' => $premio['descripcion'] ?? null,
+            'monto' => $premio['monto'] ?? null,
+            'fecha' => $premio['fecha'] ?? null,
+        ], $response['Content']);
 
-        if ($existe) {
-            return response()->json(['message' => 'Ya hay data guardada en la fecha: ' . $fecha]);
-        }
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => "https://ltkadapi.lotobet.bet/api/V1/YhJ23fkZyVNDVy4ilB/{$token->token}/{$fecha}/05",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'GET',
-            CURLOPT_HTTPHEADER => array(
-                'AhfCC: yB0tt5KW3wVVCYYtCpen',
-                'AhfVB: xSzdgtOKbGRhUhtv1ois'
-            ),
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ));
-
-        $response = curl_exec($curl);
-
-        curl_close($curl);
-
-        $ventas = json_decode($response, true);
-
-        $data = [];
-
-        foreach ($ventas['Content'] as $v) {
-            $data[] = [
-                'consorcio_id'  => $v['consorcio_id'] ?? null,
-                'agencia_id'    => $v['agencia_id'] ?? null,
-                'producto_id'   => $v['producto_id'] ?? null,
-                'descripcion'   => $v['descripcion'] ?? null,
-                'monto'         => $v['monto'] ?? null,
-                'fecha'         => $v['fecha'] ?? null,
-            ];
-        }
-
-        if (!empty($data)) {
+        (new Premio)->getConnection()->transaction(function () use ($data): void {
             foreach (array_chunk($data, 5000) as $chunk) {
-                DB::table('premios_bet')->insert($chunk);
+                Premio::query()->insert($chunk);
             }
-        }
+        });
 
         return response()->json([
-            'message' => 'Datos guardados correctamente. Total insertados: ' . count($data),
-            'total'   => count($data)
+            'message' => 'Datos guardados correctamente. Total insertados: '.count($data),
+            'total' => count($data),
         ]);
     }
 
@@ -154,7 +83,7 @@ class PremioController extends Controller
 
         $curl = curl_init();
 
-        curl_setopt_array($curl, array(
+        curl_setopt_array($curl, [
             CURLOPT_URL => "http://contable.apploteka.com/api/finan/premios/{$fecha}/5",
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
@@ -169,12 +98,12 @@ class PremioController extends Controller
                 "password": "RUHTe9t9ZEUzHsyT"
             }
             }',
-            CURLOPT_HTTPHEADER => array(
+            CURLOPT_HTTPHEADER => [
                 'token: ZFozLWdBYyqERusVdTsW',
                 'Content-Type: application/json',
-                'Cookie: _orkapi_session=QkViaFBzMmJPTEU0U3YxWEEyd0k4eVZuR2RkTFV2bktWY0srZ2NyaWc1Y2J1eGhhdTRxZXZ3VDByTG9vT3VFL0ZpTlNvalgzK3dOcG5EZGNHTDAxbE5OMGU3dUFzaHYxYVlkSzhFc241eE52YXpaaHNOcmFtbUVPdnVTSUZ1L1A3UEVoSDhtV3QvUVZJUy9USU45WUU4OU03SUUxZ0JjQXNVUFBRY2Z6VlFRPS0tc1ZQNDA1NExkWldOTDluU2lLVzhLdz09--384f330e993c1c076f324f7ed51ee9439ccf2a85'
-            ),
-        ));
+                'Cookie: _orkapi_session=QkViaFBzMmJPTEU0U3YxWEEyd0k4eVZuR2RkTFV2bktWY0srZ2NyaWc1Y2J1eGhhdTRxZXZ3VDByTG9vT3VFL0ZpTlNvalgzK3dOcG5EZGNHTDAxbE5OMGU3dUFzaHYxYVlkSzhFc241eE52YXpaaHNOcmFtbUVPdnVTSUZ1L1A3UEVoSDhtV3QvUVZJUy9USU45WUU4OU03SUUxZ0JjQXNVUFBRY2Z6VlFRPS0tc1ZQNDA1NExkWldOTDluU2lLVzhLdz09--384f330e993c1c076f324f7ed51ee9439ccf2a85',
+            ],
+        ]);
 
         $response = curl_exec($curl);
 
@@ -201,10 +130,10 @@ class PremioController extends Controller
         $existe = PremioNet::whereDate('fecha', $fecha)->exists();
 
         if ($existe) {
-            return response()->json(['message' => 'Ya hay data guardada en la fecha: ' . $fecha]);
+            return response()->json(['message' => 'Ya hay data guardada en la fecha: '.$fecha]);
         }
 
-        curl_setopt_array($curl, array(
+        curl_setopt_array($curl, [
             CURLOPT_URL => "http://contable.apploteka.com/api/finan/premios/{$fecha}/5",
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
@@ -219,12 +148,12 @@ class PremioController extends Controller
                 "password": "RUHTe9t9ZEUzHsyT"
             }
             }',
-            CURLOPT_HTTPHEADER => array(
+            CURLOPT_HTTPHEADER => [
                 'token: ZFozLWdBYyqERusVdTsW',
                 'Content-Type: application/json',
-                'Cookie: _orkapi_session=QkViaFBzMmJPTEU0U3YxWEEyd0k4eVZuR2RkTFV2bktWY0srZ2NyaWc1Y2J1eGhhdTRxZXZ3VDByTG9vT3VFL0ZpTlNvalgzK3dOcG5EZGNHTDAxbE5OMGU3dUFzaHYxYVlkSzhFc241eE52YXpaaHNOcmFtbUVPdnVTSUZ1L1A3UEVoSDhtV3QvUVZJUy9USU45WUU4OU03SUUxZ0JjQXNVUFBRY2Z6VlFRPS0tc1ZQNDA1NExkWldOTDluU2lLVzhLdz09--384f330e993c1c076f324f7ed51ee9439ccf2a85'
-            ),
-        ));
+                'Cookie: _orkapi_session=QkViaFBzMmJPTEU0U3YxWEEyd0k4eVZuR2RkTFV2bktWY0srZ2NyaWc1Y2J1eGhhdTRxZXZ3VDByTG9vT3VFL0ZpTlNvalgzK3dOcG5EZGNHTDAxbE5OMGU3dUFzaHYxYVlkSzhFc241eE52YXpaaHNOcmFtbUVPdnVTSUZ1L1A3UEVoSDhtV3QvUVZJUy9USU45WUU4OU03SUUxZ0JjQXNVUFBRY2Z6VlFRPS0tc1ZQNDA1NExkWldOTDluU2lLVzhLdz09--384f330e993c1c076f324f7ed51ee9439ccf2a85',
+            ],
+        ]);
 
         $response = curl_exec($curl);
 
@@ -234,15 +163,15 @@ class PremioController extends Controller
 
         $data = $items['data']['result'];
 
-        if (!empty($data)) {
+        if (! empty($data)) {
             foreach (array_chunk($data, 5000) as $chunk) {
                 DB::table('premios_net')->insert($chunk);
             }
         }
 
         return response()->json([
-            'message' => 'Datos guardados correctamente. Total insertados: ' . count($data),
-            'total' => count($data)
+            'message' => 'Datos guardados correctamente. Total insertados: '.count($data),
+            'total' => count($data),
         ]);
     }
 
@@ -251,6 +180,7 @@ class PremioController extends Controller
         header('Content-Type: application/json');
         $fecha = $request->query('fecha');
         PremioNet::whereDate('fecha', $fecha)->delete();
+
         return response()->json([
             'message' => 'Datos eliminados correctamente',
         ]);

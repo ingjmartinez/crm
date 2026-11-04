@@ -102,6 +102,43 @@ class LotobetSessionServiceTest extends TestCase
         Token::query()->create(['id' => 1, 'token' => 'old-token', 'fecha' => now()->addHour()->toDateTimeString()]);
     }
 
+    public function test_premios_renueva_la_sesion_rechazada_y_consulta_el_endpoint_correcto(): void
+    {
+        $this->storeOldToken();
+        $this->lotobet->queue(
+            ['status' => 401, 'body' => 'Unauthorized'],
+            $this->tokenResponse(),
+            ['status' => 200, 'body' => json_encode(['code' => 0, 'Content' => [['monto' => 100]]])],
+        );
+
+        $this->assertSame(100, $this->lotobet->getPremios('2026-11-03')['Content'][0]['monto']);
+        $this->assertStringContainsString('/YhJ23fkZyVNDVy4ilB/new-token/2026-11-03/05', $this->lotobet->urls[2]);
+    }
+
+    public function test_premios_rechaza_content_nulo_o_ausente_sin_tratarlo_como_lista_vacia(): void
+    {
+        $this->storeOldToken();
+        foreach ([['code' => 0], ['code' => 0, 'Content' => null], ['code' => 0, 'Content' => 'error'], ['code' => 0, 'Content' => [null]]] as $payload) {
+            $this->lotobet->queue(['status' => 200, 'body' => json_encode($payload)]);
+            try {
+                $this->lotobet->getPremios('2026-11-03');
+                $this->fail('Una lista de premios inválida debe rechazarse.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('premios', $exception->getMessage());
+            }
+        }
+    }
+
+    public function test_premios_acepta_lista_vacia_y_rechaza_html_del_proveedor(): void
+    {
+        $this->storeOldToken();
+        $this->lotobet->queue(['status' => 200, 'body' => '{"code":0,"Content":[]}']);
+        $this->assertSame([], $this->lotobet->getPremios('2026-11-03')['Content']);
+        $this->lotobet->queue(['status' => 200, 'body' => '<!DOCTYPE html><html>Error</html>']);
+        $this->expectException(RuntimeException::class);
+        $this->lotobet->getPremios('2026-11-03');
+    }
+
     /** @return array{status: int, body: string} */
     private function tokenResponse(): array
     {

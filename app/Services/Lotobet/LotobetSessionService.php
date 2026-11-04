@@ -65,9 +65,31 @@ class LotobetSessionService
 
     public function getVentasProducto(string $fecha): array
     {
+        return $this->getReporte('kotFQlCe5XVFoJcjEz', $fecha);
+    }
+
+    /** @return array<string, mixed> */
+    public function getPremios(string $fecha): array
+    {
+        $data = $this->getReporte('YhJ23fkZyVNDVy4ilB', $fecha);
+        if (! is_array($data['Content'] ?? null) || ! array_is_list($data['Content'])) {
+            throw new RuntimeException('LotoBet no devolvió una lista válida de premios. Intente consultar la fecha nuevamente.');
+        }
+        foreach ($data['Content'] as $premio) {
+            if (! is_array($premio)) {
+                throw new RuntimeException('LotoBet devolvió registros de premios inválidos. No se guardó la fecha.');
+            }
+        }
+
+        return $data;
+    }
+
+    /** @return array<string, mixed> */
+    private function getReporte(string $endpoint, string $fecha): array
+    {
         for ($intento = 0; $intento < 2; $intento++) {
             $token = $this->getToken();
-            $url = self::BASE_URL."/kotFQlCe5XVFoJcjEz/{$token->token}/{$fecha}/05";
+            $url = self::BASE_URL."/{$endpoint}/{$token->token}/{$fecha}/05";
             $response = $this->request($url);
             $data = json_decode($response['body'], true);
             unset($response['body']);

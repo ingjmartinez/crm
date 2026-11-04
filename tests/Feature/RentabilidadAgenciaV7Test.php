@@ -134,6 +134,409 @@ class RentabilidadAgenciaV7Test extends TestCase
         return ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3, 'terminal' => '1001', 'empresa' => 'Grupo Joselito', 'alcance' => 'terminal'];
     }
 
+    public function test_v8_muestra_cada_mes_sin_acumular_y_conserva_meses_sin_ventas(): void
+    {
+        $this->datos();
+        $response = $this->get(route('gerencia.rentabilidad-agencia-v8', $this->filtros()))
+            ->assertOk()->assertViewIs('gerencia.rentabilidad-agencia-v8')
+            ->assertSee('enero 2026')->assertSee('febrero 2026')->assertSee('marzo 2026')
+            ->assertSee('tablaRentabilidadV8')->assertSee('Balance general');
+        $this->assertSame(['2026-01', '2026-02', '2026-03'], array_column($response->viewData('meses'), 'codigo'));
+        $filas = $response->viewData('datosTabla');
+        $this->assertCount(1, $filas);
+        $this->assertSame('Agencia A', $filas[0]['nombre']);
+        $this->assertArrayNotHasKey('ventas', $filas[0]);
+        $this->assertSame([100.0, 100.0, 0.0], array_column($filas[0]['periodos'], 'ventas'));
+        $this->assertSame([-45.0, 85.0, -7.0], array_column($filas[0]['periodos'], 'balance_general'));
+        $this->assertSame([55.0, 15.0, 7.0], array_column($filas[0]['periodos'], 'gastos'));
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($documento);
+        $this->assertCount(3, $xpath->query('//*[@id="tablaRentabilidadV8"]/thead/tr[1]/th[@colspan="5"]'));
+        $this->assertCount(15, $xpath->query('//*[@id="tablaRentabilidadV8"]/thead/tr[2]/th'));
+        $this->assertCount(16, $xpath->query('//*[@id="tablaRentabilidadV8"]/tfoot/tr/td'));
+        $this->assertCount(1, $xpath->query('//*[@id="tablaRentabilidadV8"]/thead/tr[1]/th[@rowspan="2"]'));
+        Http::assertNothingSent();
+    }
+
+    public function test_v8_carga_sin_consultar_y_valida_rango_y_terminal(): void
+    {
+        $this->get(route('gerencia.rentabilidad-agencia-v8'))->assertOk()->assertViewHas('resultado', null)->assertViewHas('meses', []);
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8', [...$this->filtros(), 'mes_inicio' => 4, 'mes_fin' => 2]))
+            ->assertUnprocessable()->assertJsonValidationErrors('mes_fin');
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8', [...$this->filtros(), 'terminal' => '']))
+            ->assertUnprocessable()->assertJsonValidationErrors('terminal');
+        $this->get(route('gerencia.rentabilidad-agencia-v8', [...$this->filtros(), 'terminal' => 'INEXISTENTE']))
+            ->assertOk()->assertSee('No se encontraron terminales activas');
+    }
+
+    public function test_v8_respeta_filtros_de_empresa_ruta_y_productos_y_muestra_un_solo_mes(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Ruta Norte']);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-01-15', 'monto' => 50, 'tipo' => 'Recarga']);
+        $filtros = [...$this->filtros(), 'mes_fin' => 1, 'alcance' => 'todas', 'ruta' => 'Ruta Norte', 'productos_filtrados' => 1, 'productos' => ['Recarga']];
+        $response = $this->get(route('gerencia.rentabilidad-agencia-v8', $filtros))->assertOk();
+        $this->assertCount(1, $response->viewData('meses'));
+        $this->assertCount(1, $response->viewData('datosTabla'));
+        $this->assertSame(50.0, $response->viewData('datosTabla')[0]['periodos'][0]['ventas']);
+        $this->get(route('gerencia.rentabilidad-agencia-v8', [...$filtros, 'anio_completo' => 1]))
+            ->assertOk()->assertViewHas('meses', fn (array $meses): bool => count($meses) === 12);
+        $item = app(ViewPermissionCatalog::class)->items()->firstWhere('path', '/gerencia/rentabilidad-agencia-v8');
+        $this->assertSame('gerencia.rentabilidad_de_agencia.view', $item['permission']);
+        $this->withMiddleware(EnsureViewPermission::class);
+        $this->usuario(false);
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8', $filtros))->assertForbidden();
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8.impresion', ['informe_id' => (string) \Illuminate\Support\Str::uuid(), 'salida' => 'pdf']))->assertForbidden();
+    }
+
+    public function test_v8_javascript_construye_columnas_mensuales_totales_filtrados_y_exportacion(): void
+    {
+        $codigo = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const elementos = new Map();
+const boton = {disabled: false, textContent: 'Consultar'};
+function elemento(id) {
+    if (!elementos.has(id)) elementos.set(id, {value: '', checked: false, disabled: false, required: false, listeners: {}, textContent: '', classList: {add(){},remove(){}}, addEventListener(tipo, fn){this.listeners[tipo] = fn;}, replaceChildren(){}, querySelector(){return boton;}});
+    return elementos.get(id);
+}
+global.document = {getElementById: elemento, querySelector(){return boton;}, addEventListener(tipo, fn){global.iniciar = fn;}};
+global.Option = class {constructor(texto, valor){this.value = valor;}};
+const meses = [{codigo: '2026-01'}, {codigo: '2026-02'}, {codigo: '2026-03'}];
+const fila = {terminal: '001', nombre: '<Agencia>', periodos: [
+    {ventas: 100, ventas_loterias: 100, premios_sacados: 80, utilidad: 20, gastos: 30, balance_general: -10},
+    {ventas: 200, ventas_loterias: 200, premios_sacados: 0, utilidad: 200, gastos: 10, balance_general: 190},
+    {ventas: 0, ventas_loterias: 0, premios_sacados: 0, utilidad: 0, gastos: 7, balance_general: -7},
+]};
+const eventosVentana = {};
+global.window = {rentabilidadV8: {datos: [fila], meses, rutasDisponibles: [{empresa: 'GJ', ruta: 'Norte'}, {empresa: 'NG', ruta: 'Sur'}]}, addEventListener(tipo, fn){eventosVentana[tipo] = fn;}};
+let opciones;
+global.$ = () => ({DataTable(config){opciones = config;}});
+$.fn = {dataTable: {render: {text(){return 'texto-escapado';}}}};
+vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
+iniciar();
+assert.equal(opciones.columns.length, 16);
+assert.equal(opciones.columns[1].data, 'periodos.0.ventas');
+assert.ok(opciones.columns[1].className.includes('fw-bold'));
+assert.equal(opciones.columns[6].data, 'periodos.1.ventas');
+assert.equal(opciones.columns[15].data, 'periodos.2.balance_general');
+assert.equal(opciones.columns[0].render('001', 'export', fila), '001 - <Agencia>');
+assert.equal(opciones.columns[0].render('001', 'filter', fila), '001 - <Agencia>');
+assert.equal(opciones.columns[0].render('001', 'sort', fila), '001');
+assert.ok(opciones.columns[0].render('001', 'display', fila).includes('&lt;Agencia&gt;'));
+assert.ok(opciones.columns[0].render('001', 'display', fila).includes('Terminal: 001'));
+assert.equal(opciones.columns[1].render(100, 'export'), 100);
+assert.ok(opciones.columns[2].render(80, 'display', fila).includes('80.00%'));
+assert.ok(opciones.columns[2].render(80, 'display', fila).includes('porcentaje-premios'));
+assert.ok(opciones.columns[5].render(-10, 'display', fila).includes('-10.00%'));
+assert.ok(opciones.columns[10].render(190, 'display', fila).includes('95.00%'));
+assert.ok(opciones.columns[15].render(-7, 'display', fila).includes('—'));
+const conRecargas = {...fila, periodos: [{...fila.periodos[0], ventas: 200, ventas_loterias: 100}]};
+assert.ok(opciones.columns[2].render(80, 'display', conRecargas).includes('80.00%'));
+assert.ok(opciones.columns[5].render(20, 'display', conRecargas).includes('10.00%'));
+assert.ok(opciones.columns[2].render(0, 'display', {...fila, periodos: [{ventas: 100, ventas_loterias: 0}]}).includes('—'));
+assert.equal(opciones.columns[2].render(80, 'export', fila), 80);
+assert.equal(opciones.buttons[0].exportOptions.format.header('', 0), 'Terminal / Agencia');
+assert.equal(opciones.buttons[0].exportOptions.format.header('', 6), 'Ventas · 2026-02');
+const pies = Array.from({length: 16}, () => ({textContent: '', classList: {add(){},remove(){}}}));
+let filasFiltradas = [fila];
+const api = {rows(filtro){assert.equal(filtro.search, 'applied');return {data(){return {toArray(){return filasFiltradas;}};}};}, column(indice){return {footer(){return pies[indice];}};}};
+opciones.footerCallback.call({api(){return api;}});
+const moneda = valor => new Intl.NumberFormat('es-DO', {style: 'currency', currency: 'DOP'}).format(valor);
+assert.equal(pies[0].textContent, 'Totales filtrados · 1 terminales');
+assert.equal(pies[1].textContent, moneda(100));
+assert.equal(pies[6].textContent, moneda(200));
+assert.equal(pies[15].textContent, moneda(-7));
+assert.ok(pies[2].innerHTML.includes('80.00%'));
+assert.ok(pies[5].innerHTML.includes('-10.00%'));
+filasFiltradas = [fila, {...fila, periodos: [{ventas: 500, ventas_loterias: 300, premios_sacados: 120, balance_general: 90}, {}, {}]}];
+opciones.footerCallback.call({api(){return api;}});
+assert.ok(pies[2].innerHTML.includes('50.00%'));
+assert.ok(pies[5].innerHTML.includes('13.33%'));
+filasFiltradas = [];
+opciones.footerCallback.call({api(){return api;}});
+assert.ok(pies[2].innerHTML.includes('—'));
+assert.ok(pies[5].innerHTML.includes('—'));
+elemento('anioCompletoV8').checked = true;
+elemento('anioCompletoV8').listeners.change();
+assert.equal(elemento('mes_inicioV8').value, '1');
+assert.equal(elemento('mes_finV8').value, '12');
+elemento('alcanceV8').value = 'terminal';
+elemento('alcanceV8').listeners.change();
+assert.equal(elemento('terminalV8').required, true);
+assert.equal(elemento('terminalV8').disabled, false);
+let alerta;
+let cargas = 0;
+let cierres = 0;
+let envios = 0;
+let prevenidos = 0;
+let enviarPendiente;
+window.Swal = {fire(opciones){alerta = opciones;}, showLoading(){cargas++;}, close(){cierres++;}};
+global.HTMLFormElement = {prototype: {submit(){assert.equal(this, elemento('filtrosRentabilidadV8'));envios++;}}};
+global.setTimeout = (fn, demora) => {assert.equal(demora, 50);enviarPendiente = fn;};
+const formulario = elemento('filtrosRentabilidadV8');
+const evento = {preventDefault(){prevenidos++;}};
+formulario.listeners.submit.call(formulario, evento);
+assert.equal(alerta.title, 'Consultando datos...');
+assert.equal(alerta.allowOutsideClick, false);
+assert.equal(alerta.allowEscapeKey, false);
+assert.equal(alerta.showConfirmButton, false);
+assert.equal(boton.disabled, true);
+assert.equal(envios, 0);
+alerta.didOpen();
+assert.equal(cargas, 1);
+enviarPendiente();
+assert.equal(envios, 1);
+formulario.listeners.submit.call(formulario, evento);
+assert.equal(envios, 1);
+assert.equal(prevenidos, 2);
+eventosVentana.pageshow();
+assert.equal(cierres, 1);
+assert.equal(boton.disabled, false);
+assert.equal(boton.textContent, 'Consultar');
+delete window.Swal;
+formulario.listeners.submit.call(formulario, evento);
+assert.equal(prevenidos, 2);
+window.rentabilidadV8.agrupacion = 'ruta';
+const rutaAgrupada = {...fila, terminal: '', nombre: '<Ruta Norte>', empresa: 'Grupo Joselito', cantidad_terminales: 2};
+window.rentabilidadV8.datos = [rutaAgrupada];
+iniciar();
+assert.equal(opciones.buttons[0].exportOptions.format.header('', 0), 'Ruta / Empresa');
+assert.ok(opciones.columns[0].render('', 'display', rutaAgrupada).includes('&lt;Ruta Norte&gt;'));
+assert.ok(opciones.columns[0].render('', 'display', rutaAgrupada).includes('2 terminales'));
+assert.equal(opciones.columns[0].render('', 'export', rutaAgrupada), '<Ruta Norte> - Grupo Joselito');
+elemento('agrupacionV8').value = 'ruta';
+elemento('agrupacionV8').listeners.change();
+assert.equal(elemento('alcanceV8').disabled, true);
+assert.equal(elemento('terminalV8').disabled, true);
+assert.equal(elemento('terminalV8').required, false);
+opciones.footerCallback.call({api(){return api;}});
+assert.equal(pies[0].textContent, 'Totales filtrados · 0 rutas');
+elemento('agrupacionV8').value = 'terminal';
+elemento('agrupacionV8').listeners.change();
+assert.equal(elemento('alcanceV8').disabled, false);
+assert.equal(elemento('terminalV8').required, true);
+JS;
+        $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v8.js')]);
+        $proceso->setInput($codigo)->setTimeout(15)->run();
+        $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
+    }
+
+    public function test_v8_impresion_personalizada_conserva_meses_y_datos_de_la_consulta(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Ruta Norte']);
+        DB::table('agencias')->where('terminal', '1002')->update(['ruta' => 'Ruta Sur']);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3]))
+            ->assertOk()->assertSee('Impresión personalizada')->assertSee('formImpresionV8')->assertSee('Generar PDF');
+        $informeId = $pagina->viewData('informeId');
+        DB::table('vt_usuarios_bet')->where('agencia_id', '1001')->update(['monto' => 999999]);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $respuesta = $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $informeId, 'ruta_impresion' => 'Ruta Norte', 'salida' => 'imprimir',
+        ]))->assertOk()->assertSee('Ruta Norte')->assertDontSee('Ruta Sur')->assertDontSee('Agencia B')
+            ->assertSee('enero 2026')->assertSee('febrero 2026')->assertSee('marzo 2026')
+            ->assertSee('Terminal: 1001')->assertSee('>-45<', false)->assertSee('>85<', false)->assertSee('>-7<', false)->assertDontSee('>-45.00<', false)
+            ->assertDontSee('999,999')->assertSee('window.print()', false)->assertSee('Totales de la ruta');
+        $this->assertCount(0, collect(DB::getQueryLog())->filter(fn (array $query): bool => str_contains($query['query'], 'vt_usuarios_')));
+        DB::disableQueryLog();
+        $this->assertTrue($respuesta->headers->hasCacheControlDirective('private'));
+        $this->assertTrue($respuesta->headers->hasCacheControlDirective('no-store'));
+        $this->assertCount(1, $respuesta->viewData('bloquesMeses'));
+        $this->assertCount(1, $respuesta->viewData('grupos'));
+        $this->assertSame([100.0, 100.0, 0.0], array_column($respuesta->viewData('grupos')['Ruta Norte']->first()['periodos'], 'ventas'));
+        $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', ['informe_id' => $informeId, 'salida' => 'imprimir']))
+            ->assertOk()->assertSee('Ruta Norte')->assertSee('Ruta Sur')->assertSee('Sin ruta')->assertSee('Agencia B');
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $informeId, 'ruta_impresion' => 'No pertenece', 'salida' => 'imprimir',
+        ]))->assertUnprocessable()->assertJsonValidationErrors('ruta_impresion');
+    }
+
+    public function test_v8_impresion_valida_referencia_usuario_y_caducidad(): void
+    {
+        $this->datos();
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8.impresion', ['salida' => 'pdf']))
+            ->assertUnprocessable()->assertJsonValidationErrors('informe_id');
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', $this->filtros()))->assertOk();
+        $opciones = ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir'];
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8.impresion', [...$opciones, 'salida' => 'incorrecta']))
+            ->assertUnprocessable()->assertJsonValidationErrors('salida');
+        auth()->user()->id = 2;
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8.impresion', $opciones))->assertUnprocessable()->assertJsonValidationErrors('informe_id');
+        auth()->user()->id = 1;
+        $this->travel(11)->minutes();
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8.impresion', $opciones))->assertUnprocessable()->assertJsonValidationErrors('informe_id');
+        $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', $opciones))
+            ->assertRedirect(route('gerencia.rentabilidad-agencia-v8'))->assertSessionHasErrors('informe_id');
+        $this->travelBack();
+    }
+
+    public function test_v8_agrupa_por_ruta_y_empresa_sumando_cada_mes_sin_promediar_porcentajes(): void
+    {
+        $this->datos();
+        DB::table('agencias')->update(['ruta' => 'Ruta Norte']);
+        DB::table('agencias')->insert(['terminal' => '1004', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Sin ventas', 'ruta' => 'Ruta Sur']);
+        $filtros = ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3, 'agrupacion' => 'ruta', 'alcance' => 'terminal', 'terminal' => '1001'];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', $filtros))->assertOk()->assertSee('Agrupar por')->assertSee('Ruta / Empresa');
+        $filas = collect($pagina->viewData('datosTabla'));
+        $this->assertCount(3, $filas);
+        $norte = $filas->first(fn (array $fila): bool => $fila['empresa'] === 'Grupo Joselito' && $fila['ruta'] === 'Ruta Norte');
+        $this->assertSame(2, $norte['cantidad_terminales']);
+        $this->assertSame('', $norte['terminal']);
+        $this->assertSame([220.0, 100.0, 0.0], array_column($norte['periodos'], 'ventas'));
+        $this->assertSame([65.0, 85.0, -7.0], array_column($norte['periodos'], 'balance_general'));
+        $this->assertSame(20.0, $norte['periodos'][0]['r20']);
+        $this->assertSame(65.0, $norte['periodos'][0]['gastos']);
+        $this->assertSame(220.0, $norte['periodos'][0]['ventas_loterias']);
+        $this->assertSame(200.0, $filas->firstWhere('empresa', 'Negosur')['periodos'][0]['ventas']);
+        $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir',
+        ]))->assertOk()->assertSee('Resumen por ruta')->assertSee('2 terminales')->assertSee('40.91%')->assertSee('29.55%')
+            ->assertDontSee('Agencia A')->assertDontSee('Terminal: 1001')->assertSee('Totales de rutas');
+        $terminales = $this->get(route('gerencia.rentabilidad-agencia-v8', ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3]))->assertOk()->viewData('datosTabla');
+        $this->assertCount(4, $terminales);
+        foreach (range(0, 2) as $indice) {
+            foreach (['ventas', 'premios_sacados', 'gastos', 'balance_general'] as $campo) {
+                $this->assertEqualsWithDelta(collect($terminales)->sum(fn ($fila) => $fila['periodos'][$indice][$campo]), $filas->sum(fn ($fila) => $fila['periodos'][$indice][$campo]), 0.001);
+            }
+        }
+        $this->get(route('gerencia.rentabilidad-agencia-v8', [...$filtros, 'empresa' => 'Grupo Joselito', 'ruta' => 'Ruta Norte']))
+            ->assertOk()->assertViewHas('datosTabla', fn (array $filas): bool => count($filas) === 1 && $filas[0]['cantidad_terminales'] === 2);
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8', [...$filtros, 'agrupacion' => 'invalida']))
+            ->assertUnprocessable()->assertJsonValidationErrors('agrupacion');
+    }
+
+    public function test_v8_pdf_agrupado_muestra_rutas_con_importes_y_porcentajes_mensuales(): void
+    {
+        $this->datos();
+        DB::table('agencias')->update(['ruta' => 'Ruta Norte']);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3, 'agrupacion' => 'ruta']))->assertOk();
+        $response = $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $pagina->viewData('informeId'), 'salida' => 'pdf',
+        ]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()));
+        \Illuminate\Support\Facades\File::ensureDirectoryExists(storage_path('framework/testing'));
+        file_put_contents(storage_path('framework/testing/rentabilidad-v8-rutas-qa.pdf'), $response->getContent());
+    }
+
+    public function test_v8_porcentaje_premios_excluye_recargas_de_la_base_como_beneficio_bruto(): void
+    {
+        $this->datos();
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-01-15', 'monto' => 50, 'tipo' => 'No Tradicional'],
+            ['agencia_id' => '1001', 'fecha' => '2026-01-15', 'monto' => 150, 'tipo' => 'Recarga'],
+        ]);
+        $filtros = [...$this->filtros(), 'mes_fin' => 1];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', $filtros))->assertOk();
+        $periodo = $pagina->viewData('datosTabla')[0]['periodos'][0];
+        $this->assertSame(300.0, $periodo['ventas']);
+        $this->assertSame(150.0, $periodo['ventas_loterias']);
+        $this->assertSame(90.0, $periodo['premios_sacados']);
+        $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir',
+        ]))->assertOk()->assertSee('60.00%')->assertDontSee('30.00%');
+        $recargas = $this->get(route('gerencia.rentabilidad-agencia-v8', [...$filtros, 'productos_filtrados' => 1, 'productos' => ['Recarga']]))->assertOk();
+        $this->assertSame(0.0, $recargas->viewData('datosTabla')[0]['periodos'][0]['ventas_loterias']);
+        $this->assertSame(150.0, $recargas->viewData('datosTabla')[0]['periodos'][0]['ventas']);
+        $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $recargas->viewData('informeId'), 'salida' => 'imprimir',
+        ]))->assertOk()->assertSee('porcentaje porcentaje-premios">—</div>', false);
+    }
+
+    public function test_v8_impide_imprimir_consultas_antiguas_sin_base_de_porcentajes(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', $this->filtros()))->assertOk();
+        $informeId = $pagina->viewData('informeId');
+        $clave = 'rentabilidad-v8:impresion:'.$informeId;
+        $consulta = \Illuminate\Support\Facades\Cache::get($clave);
+        unset($consulta['version']);
+        foreach ($consulta['filas'] as &$fila) {
+            foreach ($fila['periodos'] as &$periodo) {
+                unset($periodo['ventas_loterias']);
+            }
+        }
+        \Illuminate\Support\Facades\Cache::put($clave, $consulta, now()->addMinutes(10));
+        $this->getJson(route('gerencia.rentabilidad-agencia-v8.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))
+            ->assertUnprocessable()->assertJsonValidationErrors('informe_id')->assertSee('Pulsa Consultar nuevamente');
+        $nueva = $this->get(route('gerencia.rentabilidad-agencia-v8', $this->filtros()))->assertOk();
+        $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', ['informe_id' => $nueva->viewData('informeId'), 'salida' => 'imprimir']))
+            ->assertOk()->assertSee('90.00%')->assertSee('font-weight: bold; color: #203852;', false);
+    }
+
+    public function test_v8_porcentajes_se_apilan_en_premios_y_balance_y_totales_usan_ventas_totales(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', $this->filtros()))->assertOk();
+        $informeId = $pagina->viewData('informeId');
+        $clave = 'rentabilidad-v8:impresion:'.$informeId;
+        $consulta = \Illuminate\Support\Facades\Cache::get($clave);
+        $base = $consulta['filas'][0];
+        $base['ruta'] = 'Ruta Norte';
+        $base['periodos'][0] = [...$base['periodos'][0], 'ventas' => 10000.49, 'ventas_loterias' => 10000.49, 'premios_sacados' => 6310.30, 'utilidad' => 3690.19, 'gastos' => 261.02, 'balance_general' => 3429.17];
+        $otra = [...$base, 'terminal' => '1004', 'nombre' => 'Otra agencia'];
+        $otra['periodos'][0] = [...$base['periodos'][0], 'ventas' => 30000, 'ventas_loterias' => 30000, 'premios_sacados' => 3000, 'utilidad' => 27000, 'gastos' => 21000, 'balance_general' => 6000];
+        $consulta['filas'] = [$base, $otra];
+        \Illuminate\Support\Facades\Cache::put($clave, $consulta, now()->addMinutes(10));
+        $response = $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $informeId, 'salida' => 'imprimir',
+        ]))->assertOk()->assertSee('63.10%')->assertSee('34.29%')->assertSee('23.28%')->assertSee('23.57%');
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($documento);
+        $this->assertStringContainsString('63.10%', $xpath->query('//tbody/tr[1]/td[3]')->item(0)->textContent);
+        $this->assertStringContainsString('34.29%', $xpath->query('//tbody/tr[1]/td[6]')->item(0)->textContent);
+        $this->assertSame(16, $xpath->query('//tbody/tr[1]/td')->length);
+        $this->assertStringContainsString('—', $xpath->query('//tbody/tr[1]/td[16]')->item(0)->textContent);
+        $this->assertSame(6310.30, $response->viewData('grupos')['Ruta Norte']->first()['periodos'][0]['premios_sacados']);
+    }
+
+    public function test_v8_pdf_mensual_genera_paginas_y_conserva_terminal_y_agencia(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Ruta Norte']);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', $this->filtros()))->assertOk();
+        $response = $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $pagina->viewData('informeId'), 'salida' => 'pdf',
+        ]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+        $this->assertStringContainsString('rentabilidad_agencia_v8.pdf', $response->headers->get('Content-Disposition'));
+        $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()));
+        \Illuminate\Support\Facades\File::ensureDirectoryExists(storage_path('framework/testing'));
+        file_put_contents(storage_path('framework/testing/rentabilidad-v8-qa.pdf'), $response->getContent());
+    }
+
+    public function test_v8_pdf_con_varias_paginas_repite_encabezados_y_admite_importes_grandes(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v8', $this->filtros()))->assertOk();
+        $informeId = $pagina->viewData('informeId');
+        $clave = 'rentabilidad-v8:impresion:'.$informeId;
+        $consulta = \Illuminate\Support\Facades\Cache::get($clave);
+        $base = $consulta['filas'][0];
+        $consulta['filas'] = array_map(function (int $indice) use ($base): array {
+            $fila = [...$base, 'terminal' => sprintf('05%04d', $indice), 'nombre' => 'Agencia San Cristóbal sector Juan Pablo Duarte '.$indice, 'ruta' => 'Ruta San Cristóbal'];
+            foreach ($fila['periodos'] as &$periodo) {
+                $periodo = [...$periodo, 'ventas' => 5284077.50, 'ventas_loterias' => 5284077.50, 'premios_sacados' => 1371033.25, 'utilidad' => 3913044.25, 'gastos' => 1381865.09, 'balance_general' => 2531179.16];
+            }
+
+            return $fila;
+        }, range(1, 35));
+        \Illuminate\Support\Facades\Cache::put($clave, $consulta, now()->addMinutes(10));
+        $impresion = $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $informeId, 'salida' => 'imprimir',
+        ]))->assertOk()->assertSee('5,284,078')->assertSee('184,942,713')->assertDontSee('5,284,077.50');
+        $this->assertSame(5284077.50, $impresion->viewData('grupos')['Ruta San Cristóbal']->first()['periodos'][0]['ventas']);
+        $response = $this->get(route('gerencia.rentabilidad-agencia-v8.impresion', [
+            'informe_id' => $informeId, 'salida' => 'pdf',
+        ]))->assertOk();
+        $this->assertGreaterThanOrEqual(2, preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()));
+        file_put_contents(storage_path('framework/testing/rentabilidad-v8-volumen-qa.pdf'), $response->getContent());
+    }
+
     public function test_calcula_con_premios_generados_y_conserva_los_gastos_contables(): void
     {
         $this->datos();
@@ -1190,6 +1593,98 @@ const habilitados = () => botones.every(boton => !boton.disabled);
 })().catch(error => {console.error(error); process.exitCode = 1;});
 JS;
         $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v7.js')]);
+        $proceso->setInput($codigo)->setTimeout(15)->run();
+        $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
+    }
+
+    public function test_v8_impresion_en_javascript_descarga_pdf_muestra_errores_y_rehabilita_botones(): void
+    {
+        $codigo = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const elementos = new Map();
+const botones = [{disabled: false}, {disabled: false}];
+const descargas = [];
+const esperas = [];
+function elemento(id) {
+    if (!elementos.has(id)) elementos.set(id, {value: '', checked: false, action: 'http://localhost/informe', listeners: {}, className: '', textContent: '', addEventListener(tipo, fn){this.listeners[tipo] = fn;}, replaceChildren(){}, querySelectorAll(){return botones;}});
+    return elementos.get(id);
+}
+global.document = {getElementById: elemento, addEventListener(tipo, fn){global.iniciar = fn;}, body: {appendChild(){}}, createElement(){return {click(){descargas.push(this.download);}, remove(){}};}};
+global.window = {rentabilidadV8: {datos: [], rutasDisponibles: []}, location: {href: 'http://localhost/reporte'}, addEventListener(){}, open(){return null;}};
+global.Option = class {constructor(text, value){this.value = value;}};
+global.FormData = class extends Map {constructor(){super([['informe_id', 'consulta'], ['personalizado', '1'], ['ruta_impresion', 'Ruta Norte']]);}};
+global.setTimeout = (fn, delay) => {esperas.push(delay); return esperas.length;};
+global.clearTimeout = () => {};
+URL.createObjectURL = () => 'blob:documento';
+URL.revokeObjectURL = () => {};
+let peticiones = 0;
+let respuesta;
+const fetchNormal = async (url, opciones) => {
+    peticiones++;
+    assert.equal(opciones.headers.Accept, 'application/json');
+    assert.equal(url.searchParams.get('ruta_impresion'), 'Ruta Norte');
+    return respuesta;
+};
+global.fetch = fetchNormal;
+const pdf = () => ({ok: true, redirected: false, headers: {get(){return 'application/pdf';}}, async blob(){return {};}});
+vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
+iniciar();
+const generar = elemento('formImpresionV8').listeners.submit;
+const evento = salida => ({preventDefault(){}, submitter: {value: salida}});
+const estado = () => elemento('estadoImpresionV8').textContent;
+const habilitados = () => botones.every(boton => !boton.disabled);
+(async () => {
+    respuesta = pdf();
+    await generar(evento('pdf'));
+    assert.deepEqual(descargas, ['rentabilidad_agencia_v8.pdf']);
+    assert.ok(estado().includes('PDF generado'));
+    assert.ok(habilitados());
+    assert.ok(esperas.includes(180000));
+    respuesta = {ok: false, redirected: false, headers: {get(){return 'application/json';}}, async json(){return {errors: {informe_id: ['La consulta ha caducado.']}};}};
+    await generar(evento('pdf'));
+    assert.equal(estado(), 'La consulta ha caducado.');
+    assert.ok(habilitados());
+    respuesta = {ok: false, redirected: false, headers: {get(){return 'text/html';}}};
+    await generar(evento('pdf'));
+    assert.ok(estado().includes('No se pudo generar'));
+    respuesta = {ok: true, redirected: true, headers: {get(){return 'text/html';}}};
+    await generar(evento('pdf'));
+    assert.ok(estado().includes('Revisa la sesión'));
+    respuesta = {ok: true, redirected: false, headers: {get(){return 'text/html';}}};
+    await generar(evento('pdf'));
+    assert.ok(estado().includes('PDF válido'));
+    global.fetch = async () => {throw Object.assign(new Error(), {name: 'AbortError'});};
+    await generar(evento('pdf'));
+    assert.ok(estado().includes('tiempo de espera'));
+    assert.ok(habilitados());
+    global.fetch = fetchNormal;
+    const antes = peticiones;
+    await generar(evento('imprimir'));
+    assert.ok(estado().includes('bloqueó la ventana'));
+    assert.equal(peticiones, antes);
+    assert.ok(habilitados());
+    let escrito;
+    const ventana = {closed: false, document: {body: {}, open(){}, write(html){escrito = html;}, close(){}}, close(){this.closed = true;}};
+    window.open = () => ventana;
+    respuesta = {ok: true, redirected: false, headers: {get(){return 'text/html';}}, async text(){return '<html>Ruta Norte</html>';}};
+    await generar(evento('imprimir'));
+    assert.equal(escrito, '<html>Ruta Norte</html>');
+    assert.ok(estado().includes('Documento preparado'));
+    assert.equal(ventana.opener, null);
+    let resolver;
+    global.fetch = () => new Promise(resolve => {resolver = resolve;});
+    const pendiente = generar(evento('pdf'));
+    assert.ok(botones.every(boton => boton.disabled));
+    await generar(evento('pdf'));
+    resolver(pdf());
+    await pendiente;
+    assert.equal(descargas.length, 2);
+    assert.ok(habilitados());
+})().catch(error => {console.error(error); process.exitCode = 1;});
+JS;
+        $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v8-impresion.js')]);
         $proceso->setInput($codigo)->setTimeout(15)->run();
         $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
     }

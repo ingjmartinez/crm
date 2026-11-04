@@ -956,6 +956,16 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Rentabilidad de Agencia V8',
+                'descripcion' => 'Compara ventas, premios, utilidad, gastos y balance de cada agencia mes a mes.',
+                'url' => '/gerencia/rentabilidad-agencia-v8',
+                'icono' => 'ri-calendar-line',
+                'categoria' => 'Rentabilidad',
+                'tags' => ['gerencia', 'rentabilidad', 'mensual', 'comparacion', 'terminales'],
+                'permission' => 'gerencia.rentabilidad_de_agencia.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Gráfico de rentabilidad',
                 'descripcion' => 'Consulta la rentabilidad de V5 por empresa, ruta, terminal y productos para los tableros gráficos.',
                 'url' => '/gerencia/grafico-rentabilidad',

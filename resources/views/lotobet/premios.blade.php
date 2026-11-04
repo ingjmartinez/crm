@@ -121,11 +121,11 @@
 @endsection
 
 @section('script')
+    <script src="{{ asset('js/pages/premios-lotobet-response.js') }}?v={{ hash_file('sha256', public_path('js/pages/premios-lotobet-response.js')) }}"></script>
     <script>
         const btnGenerarToken = document.getElementById('btnGenerarToken');
         btnGenerarToken.addEventListener('click', () => {
-            fetch("/generar-token")
-                .then(response => response.json())
+            consultarPremiosJson("/generar-token")
                 .then(data => {
                     Swal.fire({
                         title: "Listo",
@@ -133,7 +133,7 @@
                         icon: "success"
                     });
                 })
-                .catch(error => console.error('Error fetching data:', error));
+                .catch(error => Swal.fire({ title: "Error", text: error.message, icon: "error" }));
         });
 
         const btnGenerarData = document.getElementById('btnGenerarData');
@@ -161,8 +161,7 @@
             const tableBody = document.querySelector('#tableRecargas tbody');
             tableBody.innerHTML = '';
 
-            fetch(`/get-premios-lotobet?fecha=${fecha}`)
-                .then(response => response.json())
+            consultarPremiosJson(`/get-premios-lotobet?fecha=${fecha}`)
                 .then(data => {
                     if (data.code != 0) {
                         Swal.fire({
@@ -202,7 +201,7 @@
                         });
                     }
                 })
-                .catch(error => console.error('Error fetching data:', error));
+                .catch(error => Swal.fire({ title: "Error", text: error.message, icon: "error" }));
         });
 
         const btnGuardarData = document.getElementById('btnGuardarData');
@@ -225,8 +224,7 @@
                 timerProgressBar: true,
                 didOpen: () => Swal.showLoading()
             });
-            fetch(`/save-premios-lotobet?fecha=${fecha}`)
-                .then(response => response.json())
+            consultarPremiosJson(`/save-premios-lotobet?fecha=${fecha}`)
                 .then(data => {
                     Swal.fire({
                         title: "Listo",
@@ -234,7 +232,7 @@
                         icon: "success"
                     });
                 })
-                .catch(error => console.error('Error fetching data:', error));
+                .catch(error => Swal.fire({ title: "Error", text: error.message, icon: "error" }));
         });
 
         const btnEliminarData = document.getElementById('btnEliminarData');
@@ -257,8 +255,7 @@
                 timerProgressBar: true,
                 didOpen: () => Swal.showLoading()
             });
-            fetch(`/delete-premios-lotobet?fecha=${fecha}`)
-                .then(response => response.json())
+            consultarPremiosJson(`/delete-premios-lotobet?fecha=${fecha}`)
                 .then(data => {
                     Swal.fire({
                         title: "Listo",
@@ -266,7 +263,7 @@
                         icon: "success"
                     });
                 })
-                .catch(error => console.error('Error fetching data:', error));
+                .catch(error => Swal.fire({ title: "Error", text: error.message, icon: "error" }));
         });
 
         const btnGuardarDataFecha = document.getElementById('btnGuardarDataFecha');
@@ -323,12 +320,7 @@
                         html: `Procesando ${date} (${i + 1} / ${dates.length})`
                     });
 
-                    const response = await fetch(`/save-premios-lotobet?fecha=${date}`);
-                    if (!response.ok) {
-                        const text = await response.text().catch(() => null);
-                        throw new Error(text || `Error HTTP ${response.status}`);
-                    }
-                    const data = await response.json().catch(() => null);
+                    const data = await consultarPremiosJson(`/save-premios-lotobet?fecha=${date}`);
 
                     // Si tu API devuelve un código de error, puedes manejarlo aquí
                     if (data && data.code !== undefined && data.code !== 0) {
@@ -348,7 +340,7 @@
                 document.getElementById('btnClose').click();
                 Swal.fire({
                     title: "Listo",
-                    html: responses.join('<br>'),
+                    text: responses.join('\n'),
                     icon: "success"
                 });
             } catch (error) {
@@ -422,12 +414,7 @@
                         html: `Eliminando ${date} (${i + 1} / ${dates.length})`
                     });
 
-                    const response = await fetch(`/delete-premios-lotobet?fecha=${date}`);
-                    if (!response.ok) {
-                        const text = await response.text().catch(() => null);
-                        throw new Error(text || `Error HTTP ${response.status}`);
-                    }
-                    const data = await response.json().catch(() => null);
+                    const data = await consultarPremiosJson(`/delete-premios-lotobet?fecha=${date}`);
 
                     if (data && data.code !== undefined && data.code !== 0) {
                         throw new Error(data.message || `Error eliminando fecha ${date}`);
@@ -443,7 +430,7 @@
                 document.getElementById('btnClose').click();
                 Swal.fire({
                     title: "Listo",
-                    html: responses.join('<br>'),
+                    text: responses.join('\n'),
                     icon: "success"
                 });
             } catch (error) {

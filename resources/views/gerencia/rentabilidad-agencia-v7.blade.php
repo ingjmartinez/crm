@@ -4,7 +4,7 @@
     <div class="main-content"><div class="page-content"><div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
             <h4>Rentabilidad de agencia V7</h4>
-            <a href="{{ route('gerencia.rentabilidad-agencia-v6') }}" class="btn btn-outline-secondary">Ver reporte V6</a>
+            <div class="d-flex gap-2"><a href="{{ route('gerencia.rentabilidad-agencia-v8') }}" class="btn btn-outline-primary">Comparar por mes · V8</a><a href="{{ route('gerencia.rentabilidad-agencia-v6') }}" class="btn btn-outline-secondary">Ver reporte V6</a></div>
         </div>
         <div class="card"><div class="card-body">
             <p class="text-muted">Utilidad = ventas − premios sacados. Balance general = utilidad − gastos. Gastos incluye costos contables, gastos y R20, con las mismas cuentas activas que V6. R20 se aplica únicamente en los meses con ventas de la terminal. La clasificación se calcula con el balance general de los meses con ventas.</p>

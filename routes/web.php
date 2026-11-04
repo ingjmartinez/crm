@@ -40,6 +40,7 @@ use App\Http\Controllers\Gerencia\RentabilidadAgenciaV4Controller;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV5Controller;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV6Controller;
 use App\Http\Controllers\Gerencia\RentabilidadAgenciaV7Controller;
+use App\Http\Controllers\Gerencia\RentabilidadAgenciaV8Controller;
 use App\Http\Controllers\Gerencia\SeguimientoAgenciaController;
 use App\Http\Controllers\Gerencia\VentasEnVivoController;
 use App\Http\Controllers\GestionAgenciasReporteController;
@@ -181,6 +182,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
     Route::get('/gerencia/rentabilidad-agencia-v6/cuentas', [RentabilidadAgenciaV6Controller::class, 'cuentas'])->name('gerencia.rentabilidad-agencia-v6.cuentas');
     Route::get('/gerencia/rentabilidad-agencia-v6/informe-ejecutivo', [RentabilidadAgenciaV6Controller::class, 'informeEjecutivo'])->name('gerencia.rentabilidad-agencia-v6.informe-ejecutivo');
     Route::get('/gerencia/rentabilidad-agencia-v7', [RentabilidadAgenciaV7Controller::class, 'index'])->name('gerencia.rentabilidad-agencia-v7');
+    Route::get('/gerencia/rentabilidad-agencia-v8', [RentabilidadAgenciaV8Controller::class, 'index'])->name('gerencia.rentabilidad-agencia-v8');
+    Route::get('/gerencia/rentabilidad-agencia-v8/impresion', [RentabilidadAgenciaV8Controller::class, 'imprimir'])->name('gerencia.rentabilidad-agencia-v8.impresion');
     Route::get('/gerencia/rentabilidad-agencia-v7/resumen', [RentabilidadAgenciaV7Controller::class, 'resumen'])->name('gerencia.rentabilidad-agencia-v7.resumen');
     Route::get('/gerencia/rentabilidad-agencia-v7/detalle', [RentabilidadAgenciaV7Controller::class, 'detalle'])->name('gerencia.rentabilidad-agencia-v7.detalle');
     Route::get('/gerencia/rentabilidad-agencia-v7/cuentas', [RentabilidadAgenciaV7Controller::class, 'cuentas'])->name('gerencia.rentabilidad-agencia-v7.cuentas');
