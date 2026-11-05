@@ -43,6 +43,7 @@
         $porRuta = ($filtros['agrupacion'] ?? 'terminal') === 'ruta';
         $porcentajeGlobal = static fn (array $referencia, string $campo): string => ($referencia[$campo] ?? null) === null ? '—' : number_format($referencia[$campo], 2, '.', '').'%';
         $ventasMenosPremios = static fn (float $ventas, array $referencia): string => ($referencia['premios_sacados'] ?? null) === null ? '—' : number_format($ventas * (1 - $referencia['premios_sacados'] / 100), 0);
+        $ventasPorPremios = static fn (float $ventas, array $referencia): string => ($referencia['premios_sacados'] ?? null) === null ? '—' : number_format($ventas * $referencia['premios_sacados'] / 100, 0);
     @endphp
     @foreach ($grupos as $ruta => $filas)
         @foreach ($bloquesMeses as $bloque)
@@ -80,6 +81,8 @@
                                             @endif
                                             @if ($campo === 'utilidad')
                                                 <div class="importe-general">{{ $ventasMenosPremios($fila['periodos'][$indiceMes]['ventas'], $referenciaEmpresa['meses'][$mes['codigo']] ?? []) }}</div>
+                                            @elseif ($campo === 'premios_sacados')
+                                                <div class="importe-general">{{ $ventasPorPremios($fila['periodos'][$indiceMes]['ventas'], $referenciaEmpresa['meses'][$mes['codigo']] ?? []) }}</div>
                                             @endif
                                         </td>
                                     @endforeach
@@ -92,6 +95,9 @@
                                     <div>{{ number_format($resultadoBruto, 0) }}</div>
                                     @foreach (['premios_sacados' => '% Premios', 'utilidad' => '% Utilidad'] as $campo => $etiqueta)
                                         <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $etiqueta }}: {{ $porcentajeGlobal($referenciaEmpresa['periodo'], $campo) }}</div>
+                                        @if ($campo === 'premios_sacados')
+                                            <div class="importe-general">{{ $ventasPorPremios($periodos->sum('ventas'), $referenciaEmpresa['periodo']) }}</div>
+                                        @endif
                                     @endforeach
                                     <div class="importe-general">{{ $ventasMenosPremios($periodos->sum('ventas'), $referenciaEmpresa['periodo']) }}</div>
                                 </td>
@@ -109,6 +115,8 @@
                                         @endif
                                         @if ($campo === 'utilidad')
                                             <div class="importe-general">{{ $ventasMenosPremios($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas']), $referenciasGlobales['total']['meses'][$mes['codigo']] ?? []) }}</div>
+                                        @elseif ($campo === 'premios_sacados')
+                                            <div class="importe-general">{{ $ventasPorPremios($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas']), $referenciasGlobales['total']['meses'][$mes['codigo']] ?? []) }}</div>
                                         @endif
                                     </td>
                                 @endforeach
@@ -121,6 +129,9 @@
                                 <div>{{ number_format($resultadoBruto, 0) }}</div>
                                 @foreach (['premios_sacados' => '% Premios', 'utilidad' => '% Utilidad'] as $campo => $etiqueta)
                                     <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $etiqueta }}: {{ $porcentajeGlobal($referenciasGlobales['total']['periodo'], $campo) }}</div>
+                                    @if ($campo === 'premios_sacados')
+                                        <div class="importe-general">{{ $ventasPorPremios($periodos->sum('ventas'), $referenciasGlobales['total']['periodo']) }}</div>
+                                    @endif
                                 @endforeach
                                 <div class="importe-general">{{ $ventasMenosPremios($periodos->sum('ventas'), $referenciasGlobales['total']['periodo']) }}</div>
                             </td>

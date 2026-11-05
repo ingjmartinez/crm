@@ -90,10 +90,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const importe = referencia?.premios_sacados == null ? '—' : moneda(Number(ventas || 0) * (1 - Number(referencia.premios_sacados) / 100));
         return `<div class="importe-general" title="Ventas menos el porcentaje global de premios">${importe}</div>`;
     };
+    const ventasPorPremios = (ventas, referencia) => {
+        const importe = referencia?.premios_sacados == null ? '—' : moneda(Number(ventas || 0) * Number(referencia.premios_sacados) / 100);
+        return `<div class="importe-general" title="Ventas por el porcentaje global de premios">${importe}</div>`;
+    };
     const conPorcentaje = (campo, importe, referencia, ventas) => {
         const porcentaje = porcentajeGlobal(referencia, campo);
         const clase = campo === 'premios_sacados' ? 'porcentaje-premios' : 'porcentaje-utilidad';
-        return `<div>${moneda(importe)}</div><small class="porcentaje ${clase}">${porcentaje}</small>${campo === 'utilidad' ? ventasMenosPremios(ventas, referencia) : ''}`;
+        return `<div>${moneda(importe)}</div><small class="porcentaje ${clase}">${porcentaje}</small>${campo === 'utilidad' ? ventasMenosPremios(ventas, referencia) : ventasPorPremios(ventas, referencia)}`;
     };
     const resumenPeriodo = filas => {
         const totales = { ventas: 0, premios_sacados: 0, utilidad: 0, balance_general: 0 };
@@ -106,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const mostrarResultadoBruto = (resumen, referencia) => {
         const porcentaje = campo => porcentajeGlobal(referencia, campo);
         const clase = resumen.balance_general > 0 ? 'text-success' : resumen.balance_general < 0 ? 'text-danger' : '';
-        return `<div class="${clase}">${moneda(resumen.balance_general)}</div><div><small class="porcentaje porcentaje-premios">% Premios: ${porcentaje('premios_sacados')}</small></div><div><small class="porcentaje porcentaje-utilidad">% Utilidad: ${porcentaje('utilidad')}</small></div>${ventasMenosPremios(resumen.ventas, referencia)}`;
+        return `<div class="${clase}">${moneda(resumen.balance_general)}</div><div><small class="porcentaje porcentaje-premios">% Premios: ${porcentaje('premios_sacados')}</small></div>${ventasPorPremios(resumen.ventas, referencia)}<div><small class="porcentaje porcentaje-utilidad">% Utilidad: ${porcentaje('utilidad')}</small></div>${ventasMenosPremios(resumen.ventas, referencia)}`;
     };
     const encabezados = [porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia', ...configuracion.meses.flatMap(mes => etiquetas.map(etiqueta => `${etiqueta} · ${mes.codigo}`)), 'Resultado Bruto'];
     const columnas = [

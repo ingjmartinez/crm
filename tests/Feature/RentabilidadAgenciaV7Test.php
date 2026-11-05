@@ -184,6 +184,8 @@ class RentabilidadAgenciaV7Test extends TestCase
             ->assertOk()->assertSee('40.91%')->assertSee('59.09%')->assertSee('% Premios: 28.13%')->assertSee('% Utilidad: 71.88%')
             ->assertSee('Resultado Bruto')->assertDontSee('90.00%');
         $impresion->assertSee('<div class="importe-general">59</div>', false)
+            ->assertSee('<div class="importe-general">41</div>', false)
+            ->assertSee('<div class="importe-general">56</div>', false)
             ->assertSee('<div class="importe-general">144</div>', false)
             ->assertSee('<div class="importe-general">—</div>', false);
         $this->assertSame($pagina->viewData('referenciasGlobales'), $impresion->viewData('referenciasGlobales'));
@@ -237,6 +239,12 @@ assert.equal(opciones.columns[11].render(null,'export',fila),-52);
 assert.ok(opciones.columns[11].render(null,'display',fila).includes('% Premios: 28.13%'));
 const moneda = valor => new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP'}).format(valor);
 const importeGeneral = valor => `<div class="importe-general" title="Ventas menos el porcentaje global de premios">${moneda(valor)}</div>`;
+const importePremios = valor => `<div class="importe-general" title="Ventas por el porcentaje global de premios">${moneda(valor)}</div>`;
+assert.ok(opciones.columns[2].render(90,'display',fila).endsWith(importePremios(40.9090909)));
+assert.ok(opciones.columns[2].render(0,'display',otra).endsWith(importePremios(49.09090908)));
+assert.ok(opciones.columns[2].render(0,'display',{...fila,periodos:[{ventas:0}]}).endsWith(importePremios(0)));
+assert.ok(opciones.columns[7].render(0,'display',fila).endsWith('>—</div>'));
+assert.ok(opciones.columns[11].render(null,'display',fila).includes(importePremios(28.125)));
 assert.ok(opciones.columns[3].render(10,'display',fila).endsWith(importeGeneral(59.0909091)));
 assert.ok(opciones.columns[3].render(120,'display',otra).endsWith(importeGeneral(70.90909092)));
 assert.ok(opciones.columns[3].render(0,'display',{...fila,periodos:[{ventas:0}]}).endsWith(importeGeneral(0)));
@@ -244,6 +252,7 @@ assert.ok(opciones.columns[8].render(0,'display',fila).endsWith('>—</div>'));
 assert.ok(opciones.columns[11].render(null,'display',fila).endsWith(importeGeneral(71.875)));
 assert.equal(opciones.columns[3].render(10,'export',fila),10);
 referencia.meses['2026-01'].premios_sacados = 150;
+assert.ok(opciones.columns[2].render(90,'display',fila).endsWith(importePremios(150)));
 assert.ok(opciones.columns[3].render(10,'display',fila).endsWith(importeGeneral(-50)));
 referencia.meses['2026-01'].premios_sacados = 40.9090909;
 assert.deepEqual(opciones.order,[[1,'desc'],[6,'desc'],[0,'asc']]);
@@ -253,11 +262,14 @@ opciones.footerCallback.call({api(){return api;}});
 assert.ok(pies[2].innerHTML.includes('40.91%'));
 assert.ok(pies[11].innerHTML.includes('28.13%'));
 assert.ok(pies[3].innerHTML.endsWith(importeGeneral(59.0909091)));
+assert.ok(pies[2].innerHTML.endsWith(importePremios(40.9090909)));
+assert.ok(pies[11].innerHTML.includes(importePremios(28.125)));
 assert.ok(pies[11].innerHTML.endsWith(importeGeneral(71.875)));
 assert.equal(pies[1].textContent, new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP'}).format(100));
 window.rentabilidadV9.agrupacion='ruta';
 iniciar();
 assert.equal(opciones.buttons[0].exportOptions.format.header('',0),'Ruta / Empresa');
+assert.ok(opciones.columns[2].render(90,'display',fila).endsWith(importePremios(40.9090909)));
 assert.ok(opciones.columns[2].render(90,'display',fila).includes('40.91%'));
 assert.ok(opciones.columns[3].render(10,'display',fila).endsWith(importeGeneral(59.0909091)));
 JS;
