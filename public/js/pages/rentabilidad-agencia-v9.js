@@ -86,10 +86,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const unidad = porRuta ? 'rutas' : 'terminales';
     const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[caracter]);
     const porcentajeGlobal = (referencia, campo) => referencia?.[campo] == null ? '—' : `${Number(referencia[campo]).toFixed(2)}%`;
-    const conPorcentaje = (campo, importe, referencia) => {
+    const ventasMenosPremios = (ventas, referencia) => {
+        const importe = referencia?.premios_sacados == null ? '—' : moneda(Number(ventas || 0) * (1 - Number(referencia.premios_sacados) / 100));
+        return `<div class="importe-general" title="Ventas menos el porcentaje global de premios">${importe}</div>`;
+    };
+    const conPorcentaje = (campo, importe, referencia, ventas) => {
         const porcentaje = porcentajeGlobal(referencia, campo);
         const clase = campo === 'premios_sacados' ? 'porcentaje-premios' : 'porcentaje-utilidad';
-        return `<div>${moneda(importe)}</div><small class="porcentaje ${clase}">${porcentaje}</small>`;
+        return `<div>${moneda(importe)}</div><small class="porcentaje ${clase}">${porcentaje}</small>${campo === 'utilidad' ? ventasMenosPremios(ventas, referencia) : ''}`;
     };
     const resumenPeriodo = filas => {
         const totales = { ventas: 0, premios_sacados: 0, utilidad: 0, balance_general: 0 };
@@ -102,7 +106,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const mostrarResultadoBruto = (resumen, referencia) => {
         const porcentaje = campo => porcentajeGlobal(referencia, campo);
         const clase = resumen.balance_general > 0 ? 'text-success' : resumen.balance_general < 0 ? 'text-danger' : '';
-        return `<div class="${clase}">${moneda(resumen.balance_general)}</div><div><small class="porcentaje porcentaje-premios">% Premios: ${porcentaje('premios_sacados')}</small></div><div><small class="porcentaje porcentaje-utilidad">% Utilidad: ${porcentaje('utilidad')}</small></div>`;
+        return `<div class="${clase}">${moneda(resumen.balance_general)}</div><div><small class="porcentaje porcentaje-premios">% Premios: ${porcentaje('premios_sacados')}</small></div><div><small class="porcentaje porcentaje-utilidad">% Utilidad: ${porcentaje('utilidad')}</small></div>${ventasMenosPremios(resumen.ventas, referencia)}`;
     };
     const encabezados = [porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia', ...configuracion.meses.flatMap(mes => etiquetas.map(etiqueta => `${etiqueta} · ${mes.codigo}`)), 'Resultado Bruto'];
     const columnas = [
@@ -122,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
             render: (valor, tipo, fila) => {
                 if (tipo !== 'display') return Number(valor || 0);
                 return ['premios_sacados', 'utilidad'].includes(campo)
-                    ? conPorcentaje(campo, valor, configuracion.referenciasGlobales.empresas[fila.empresa]?.meses[mes.codigo])
+                    ? conPorcentaje(campo, valor, configuracion.referenciasGlobales.empresas[fila.empresa]?.meses[mes.codigo], fila.periodos[indiceMes]?.ventas)
                     : moneda(valor);
             },
             createdCell: (celda, valor) => {
@@ -173,7 +177,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const celda = api.column(1 + indiceMes * medidas.length + indiceCampo).footer();
                     celda.textContent = moneda(total);
                     if (['premios_sacados', 'utilidad'].includes(campo)) {
-                        celda.innerHTML = conPorcentaje(campo, total, configuracion.referenciasGlobales.total.meses[mes.codigo]);
+                        const ventas = filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.ventas || 0), 0);
+                        celda.innerHTML = conPorcentaje(campo, total, configuracion.referenciasGlobales.total.meses[mes.codigo], ventas);
                     }
                     celda.classList.remove('text-success', 'text-danger');
                     if (campo === 'balance_general' && total !== 0) celda.classList.add(total > 0 ? 'text-success' : 'text-danger');

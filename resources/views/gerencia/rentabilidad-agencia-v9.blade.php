@@ -8,6 +8,7 @@
         #tablaRentabilidadV9 .porcentaje { display: inline-block; margin-top: 3px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
         #tablaRentabilidadV9 .porcentaje-premios { background: #fff3cd; color: #77520a; }
         #tablaRentabilidadV9 .porcentaje-utilidad { background: #dcece4; color: #285541; }
+        #tablaRentabilidadV9 .importe-general { color: #0d6efd; margin-top: 3px; }
     </style>
     <div class="main-content"><div class="page-content"><div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
