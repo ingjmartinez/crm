@@ -966,6 +966,16 @@ return [
                 'activo' => true,
             ],
             [
+                'nombre' => 'Rentabilidad de Agencia V9',
+                'descripcion' => 'Comparación mensual con porcentajes globales de premios y utilidad por empresa.',
+                'url' => '/gerencia/rentabilidad-agencia-v9',
+                'icono' => 'ri-calendar-line',
+                'categoria' => 'Rentabilidad',
+                'tags' => ['gerencia', 'rentabilidad', 'mensual', 'global', 'terminales'],
+                'permission' => 'gerencia.rentabilidad_de_agencia.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Gráfico de rentabilidad',
                 'descripcion' => 'Consulta la rentabilidad de V5 por empresa, ruta, terminal y productos para los tableros gráficos.',
                 'url' => '/gerencia/grafico-rentabilidad',
