@@ -67,6 +67,19 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     if (!configuracion.datos.length || !document.getElementById('tablaRentabilidadV8')) return;
 
+    const mostrarErrorCarga = error => {
+        const estado = document.getElementById('cargandoV8');
+        estado.classList.remove('d-none');
+        estado.classList.add('text-danger');
+        estado.setAttribute('role', 'alert');
+        estado.textContent = `No se pudo preparar la tabla: ${error.message}. Recarga la página para volver a intentar.`;
+        console.error('Error al preparar rentabilidad V8:', error);
+    };
+    if (typeof window.jQuery !== 'function' || typeof window.jQuery.fn?.DataTable !== 'function') {
+        mostrarErrorCarga(new Error('no se pudo cargar DataTables desde su servidor'));
+        return;
+    }
+
     const medidas = ['ventas', 'premios_sacados', 'utilidad', 'gastos', 'balance_general'];
     const etiquetas = ['Ventas', 'Premios sacados', 'Utilidad', 'Gastos', 'Balance general'];
     const porRuta = configuracion.agrupacion === 'ruta';
@@ -124,46 +137,52 @@ document.addEventListener('DOMContentLoaded', function () {
             },
         },
     ];
-    $('#tablaRentabilidadV8').DataTable({
-        data: configuracion.datos,
-        columns: columnas,
-        deferRender: true,
-        pageLength: 25,
-        scrollX: true,
-        autoWidth: false,
-        order: [...configuracion.meses.map((mes, indiceMes) => [1 + indiceMes * medidas.length, 'desc']), [0, 'asc']],
-        dom: 'Bfrtip',
-        buttons: ['copy', 'csv', 'excel', 'print'].map(extend => ({
-            extend,
-            title: 'Rentabilidad mensual V8',
-            exportOptions: {
-                orthogonal: 'export',
-                modifier: { search: 'applied' },
-                format: { header: (contenido, indice) => encabezados[indice] },
+    try {
+        const tabla = document.getElementById('tablaRentabilidadV8');
+        tabla.createTFoot().innerHTML = `<tr>${columnas.map((columna, indice) => `<td class="${indice === 0 ? '' : 'text-end'}${indice === columnas.length - 1 ? ' inicio-mes' : ''}">${indice === 0 ? 'Totales' : ''}</td>`).join('')}</tr>`;
+        $('#tablaRentabilidadV8').DataTable({
+            data: configuracion.datos,
+            columns: columnas,
+            deferRender: true,
+            pageLength: 25,
+            scrollX: true,
+            autoWidth: false,
+            order: [...configuracion.meses.map((mes, indiceMes) => [1 + indiceMes * medidas.length, 'desc']), [0, 'asc']],
+            dom: 'Bfrtip',
+            buttons: ['copy', 'csv', 'excel', 'print'].map(extend => ({
+                extend,
+                title: 'Rentabilidad mensual V8',
+                exportOptions: {
+                    orthogonal: 'export',
+                    modifier: { search: 'applied' },
+                    format: { header: (contenido, indice) => encabezados[indice] },
+                },
+            })),
+            initComplete: function () {
+                document.getElementById('cargandoV8').classList.add('d-none');
+                document.getElementById('contenedorTablaV8').classList.remove('d-none');
+                this.api().columns.adjust();
             },
-        })),
-        initComplete: function () {
-            document.getElementById('cargandoV8').classList.add('d-none');
-            document.getElementById('contenedorTablaV8').classList.remove('d-none');
-            this.api().columns.adjust();
-        },
-        footerCallback: function () {
-            const api = this.api();
-            const filas = api.rows({ search: 'applied' }).data().toArray();
-            api.column(0).footer().textContent = `Totales filtrados · ${filas.length} ${unidad}`;
-            configuracion.meses.forEach((mes, indiceMes) => medidas.forEach((campo, indiceCampo) => {
-                const total = Math.round(filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.[campo] || 0), 0) * 100) / 100;
-                const celda = api.column(1 + indiceMes * medidas.length + indiceCampo).footer();
-                celda.textContent = moneda(total);
-                if (['premios_sacados', 'utilidad'].includes(campo)) {
-                    const ventas = filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.ventas || 0), 0);
-                    celda.innerHTML = conPorcentaje(campo, total, ventas);
-                }
-                celda.classList.remove('text-success', 'text-danger');
-                if (campo === 'balance_general' && total !== 0) celda.classList.add(total > 0 ? 'text-success' : 'text-danger');
-            }));
-            api.column(columnas.length - 1).footer().innerHTML = mostrarResultadoBruto(resumenPeriodo(filas));
-        },
-        language: { search: porRuta ? 'Buscar ruta o empresa:' : 'Buscar agencia o terminal:', info: `Mostrando _START_ a _END_ de _TOTAL_ ${unidad}`, infoEmpty: `Sin ${unidad}`, zeroRecords: 'Sin coincidencias', emptyTable: 'Sin datos', paginate: { next: 'Siguiente', previous: 'Anterior' } },
-    });
+            footerCallback: function () {
+                const api = this.api();
+                const filas = api.rows({ search: 'applied' }).data().toArray();
+                api.column(0).footer().textContent = `Totales filtrados · ${filas.length} ${unidad}`;
+                configuracion.meses.forEach((mes, indiceMes) => medidas.forEach((campo, indiceCampo) => {
+                    const total = Math.round(filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.[campo] || 0), 0) * 100) / 100;
+                    const celda = api.column(1 + indiceMes * medidas.length + indiceCampo).footer();
+                    celda.textContent = moneda(total);
+                    if (['premios_sacados', 'utilidad'].includes(campo)) {
+                        const ventas = filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.ventas || 0), 0);
+                        celda.innerHTML = conPorcentaje(campo, total, ventas);
+                    }
+                    celda.classList.remove('text-success', 'text-danger');
+                    if (campo === 'balance_general' && total !== 0) celda.classList.add(total > 0 ? 'text-success' : 'text-danger');
+                }));
+                api.column(columnas.length - 1).footer().innerHTML = mostrarResultadoBruto(resumenPeriodo(filas));
+            },
+            language: { search: porRuta ? 'Buscar ruta o empresa:' : 'Buscar agencia o terminal:', info: `Mostrando _START_ a _END_ de _TOTAL_ ${unidad}`, infoEmpty: `Sin ${unidad}`, zeroRecords: 'Sin coincidencias', emptyTable: 'Sin datos', paginate: { next: 'Siguiente', previous: 'Anterior' } },
+        });
+    } catch (error) {
+        mostrarErrorCarga(error);
+    }
 });
