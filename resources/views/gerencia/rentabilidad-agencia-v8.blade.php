@@ -48,6 +48,7 @@
                     @if ($informeId)<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImpresionV8">Impresión personalizada</button>@endif
                 </div>
                 <div class="card-body">
+                    <p class="text-muted small">Resultado Bruto = suma de los balances de los meses consultados. Debajo se muestran % Premios (amarillo) y % Utilidad (verde), calculados sobre las ventas totales del período.</p>
                     <p class="text-muted small">Utilidad = ventas − premios sacados. Balance = utilidad − gastos. Gastos incluye costos, gastos contables y R20; R20 se aplica en los meses con ventas. % Premios = premios sacados ÷ ventas. % Utilidad = utilidad ÷ ventas. Ambos usan las ventas totales del mes según los productos seleccionados. Sin ventas se muestra —.</p>
                     @if ($resultado['filas']->isEmpty())
                         <div class="alert alert-info">No se encontraron terminales activas con los filtros seleccionados.</div>
@@ -60,6 +61,7 @@
                                     <tr>
                                         <th rowspan="2">{{ $filtros['agrupacion'] === 'ruta' ? 'Ruta / Empresa' : 'Terminal / Agencia' }}</th>
                                         @foreach ($meses as $mes)<th colspan="5" class="text-center grupo-mes">{{ $mes['nombre'] }}</th>@endforeach
+                                        <th rowspan="2" class="inicio-mes">Resultado Bruto</th>
                                     </tr>
                                     <tr>
                                         @foreach ($meses as $mes)
@@ -70,7 +72,7 @@
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
-                                <tfoot class="table-light fw-semibold"><tr><td>Totales</td>@foreach ($meses as $mes)@foreach (range(1, 5) as $columna)<td class="text-end"></td>@endforeach @endforeach</tr></tfoot>
+                                <tfoot class="table-light fw-semibold"><tr><td>Totales</td>@foreach ($meses as $mes)@foreach (range(1, 5) as $columna)<td class="text-end"></td>@endforeach @endforeach<td class="text-end inicio-mes"></td></tr></tfoot>
                             </table>
                         </div>
                     @endif

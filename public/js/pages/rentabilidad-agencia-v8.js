@@ -77,7 +77,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const clase = campo === 'premios_sacados' ? 'porcentaje-premios' : 'porcentaje-utilidad';
         return `<div>${moneda(importe)}</div><small class="porcentaje ${clase}">${porcentaje}</small>`;
     };
-    const encabezados = [porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia', ...configuracion.meses.flatMap(mes => etiquetas.map(etiqueta => `${etiqueta} · ${mes.codigo}`))];
+    const resumenPeriodo = filas => {
+        const totales = { ventas: 0, premios_sacados: 0, utilidad: 0, balance_general: 0 };
+        filas.forEach(fila => configuracion.meses.forEach((mes, indiceMes) => {
+            Object.keys(totales).forEach(campo => { totales[campo] += Number(fila.periodos[indiceMes]?.[campo] || 0); });
+        }));
+        Object.keys(totales).forEach(campo => { totales[campo] = Math.round(totales[campo] * 100) / 100; });
+        return totales;
+    };
+    const mostrarResultadoBruto = resumen => {
+        const porcentaje = campo => resumen.ventas === 0 ? '—' : `${(resumen[campo] / resumen.ventas * 100).toFixed(2)}%`;
+        const clase = resumen.balance_general > 0 ? 'text-success' : resumen.balance_general < 0 ? 'text-danger' : '';
+        return `<div class="${clase}">${moneda(resumen.balance_general)}</div><div><small class="porcentaje porcentaje-premios">% Premios: ${porcentaje('premios_sacados')}</small></div><div><small class="porcentaje porcentaje-utilidad">% Utilidad: ${porcentaje('utilidad')}</small></div>`;
+    };
+    const encabezados = [porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia', ...configuracion.meses.flatMap(mes => etiquetas.map(etiqueta => `${etiqueta} · ${mes.codigo}`)), 'Resultado Bruto'];
     const columnas = [
         { data: 'terminal', render: (valor, tipo, fila) => {
             if (porRuta) {
@@ -102,6 +115,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (campo === 'balance_general' && Number(valor) !== 0) celda.classList.add(Number(valor) > 0 ? 'text-success' : 'text-danger');
             },
         }))),
+        {
+            data: null,
+            className: 'text-end fw-bold inicio-mes',
+            render: (valor, tipo, fila) => {
+                const resumen = resumenPeriodo([fila]);
+                return tipo === 'display' ? mostrarResultadoBruto(resumen) : resumen.balance_general;
+            },
+        },
     ];
     $('#tablaRentabilidadV8').DataTable({
         data: configuracion.datos,
@@ -141,6 +162,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 celda.classList.remove('text-success', 'text-danger');
                 if (campo === 'balance_general' && total !== 0) celda.classList.add(total > 0 ? 'text-success' : 'text-danger');
             }));
+            api.column(columnas.length - 1).footer().innerHTML = mostrarResultadoBruto(resumenPeriodo(filas));
         },
         language: { search: porRuta ? 'Buscar ruta o empresa:' : 'Buscar agencia o terminal:', info: `Mostrando _START_ a _END_ de _TOTAL_ ${unidad}`, infoEmpty: `Sin ${unidad}`, zeroRecords: 'Sin coincidencias', emptyTable: 'Sin datos', paginate: { next: 'Siguiente', previous: 'Anterior' } },
     });

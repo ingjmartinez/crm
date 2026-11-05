@@ -154,8 +154,9 @@ class RentabilidadAgenciaV7Test extends TestCase
         $xpath = new \DOMXPath($documento);
         $this->assertCount(3, $xpath->query('//*[@id="tablaRentabilidadV8"]/thead/tr[1]/th[@colspan="5"]'));
         $this->assertCount(15, $xpath->query('//*[@id="tablaRentabilidadV8"]/thead/tr[2]/th'));
-        $this->assertCount(16, $xpath->query('//*[@id="tablaRentabilidadV8"]/tfoot/tr/td'));
-        $this->assertCount(1, $xpath->query('//*[@id="tablaRentabilidadV8"]/thead/tr[1]/th[@rowspan="2"]'));
+        $this->assertCount(17, $xpath->query('//*[@id="tablaRentabilidadV8"]/tfoot/tr/td'));
+        $this->assertCount(2, $xpath->query('//*[@id="tablaRentabilidadV8"]/thead/tr[1]/th[@rowspan="2"]'));
+        $response->assertSee('Resultado Bruto');
         Http::assertNothingSent();
     }
 
@@ -217,7 +218,18 @@ global.$ = () => ({DataTable(config){opciones = config;}});
 $.fn = {dataTable: {render: {text(){return 'texto-escapado';}}}};
 vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
 iniciar();
-assert.equal(opciones.columns.length, 16);
+assert.equal(opciones.columns.length, 17);
+const bruto = opciones.columns[16];
+assert.equal(bruto.render(null, 'sort', fila), 173);
+assert.equal(bruto.render(null, 'export', fila), 173);
+assert.ok(bruto.render(null, 'display', fila).includes('% Premios: 26.67%'));
+assert.ok(bruto.render(null, 'display', fila).includes('% Utilidad: 73.33%'));
+assert.ok(bruto.render(null, 'display', fila).includes('text-success'));
+const sinVentas = {...fila, periodos: [{ventas: 0, balance_general: -7}]};
+assert.equal(bruto.render(null, 'export', sinVentas), -7);
+assert.ok(bruto.render(null, 'display', sinVentas).includes('% Premios: —'));
+assert.ok(bruto.render(null, 'display', sinVentas).includes('% Utilidad: —'));
+assert.ok(bruto.render(null, 'display', sinVentas).includes('text-danger'));
 assert.deepEqual(opciones.order, [[1, 'desc'], [6, 'desc'], [11, 'desc'], [0, 'asc']]);
 const ordenar = filas => [...filas].sort((a, b) => {
     for (const [indice, direccion] of opciones.order) {
@@ -269,7 +281,8 @@ assert.ok(opciones.columns[3].render(302321, 'display', captura).includes('34.08
 assert.equal(opciones.columns[2].render(80, 'export', fila), 80);
 assert.equal(opciones.buttons[0].exportOptions.format.header('', 0), 'Terminal / Agencia');
 assert.equal(opciones.buttons[0].exportOptions.format.header('', 6), 'Ventas · 2026-02');
-const pies = Array.from({length: 16}, () => ({textContent: '', classList: {add(){},remove(){}}}));
+assert.equal(opciones.buttons[0].exportOptions.format.header('', 16), 'Resultado Bruto');
+const pies = Array.from({length: 17}, () => ({textContent: '', classList: {add(){},remove(){}}}));
 let filasFiltradas = [fila];
 const api = {rows(filtro){assert.equal(filtro.search, 'applied');return {data(){return {toArray(){return filasFiltradas;}};}};}, column(indice){return {footer(){return pies[indice];}};}};
 opciones.footerCallback.call({api(){return api;}});
@@ -278,16 +291,25 @@ assert.equal(pies[0].textContent, 'Totales filtrados · 1 terminales');
 assert.equal(pies[1].textContent, moneda(100));
 assert.equal(pies[6].textContent, moneda(200));
 assert.equal(pies[15].textContent, moneda(-7));
+assert.ok(pies[16].innerHTML.includes(moneda(173)));
+assert.ok(pies[16].innerHTML.includes('% Premios: 26.67%'));
+assert.ok(pies[16].innerHTML.includes('% Utilidad: 73.33%'));
 assert.ok(pies[2].innerHTML.includes('80.00%'));
 assert.ok(pies[3].innerHTML.includes('20.00%'));
 filasFiltradas = [fila, {...fila, periodos: [{ventas: 500, ventas_loterias: 300, premios_sacados: 120, utilidad: 380, balance_general: 90}, {}, {}]}];
 opciones.footerCallback.call({api(){return api;}});
 assert.ok(pies[2].innerHTML.includes('33.33%'));
 assert.ok(pies[3].innerHTML.includes('66.67%'));
+assert.ok(pies[16].innerHTML.includes(moneda(263)));
+assert.ok(pies[16].innerHTML.includes('% Premios: 25.00%'));
+assert.ok(pies[16].innerHTML.includes('% Utilidad: 75.00%'));
 filasFiltradas = [];
 opciones.footerCallback.call({api(){return api;}});
 assert.ok(pies[2].innerHTML.includes('—'));
 assert.ok(pies[3].innerHTML.includes('—'));
+assert.ok(pies[16].innerHTML.includes(moneda(0)));
+assert.ok(pies[16].innerHTML.includes('% Premios: —'));
+assert.ok(pies[16].innerHTML.includes('% Utilidad: —'));
 elemento('anioCompletoV8').checked = true;
 elemento('anioCompletoV8').listeners.change();
 assert.equal(elemento('mes_inicioV8').value, '1');
@@ -336,6 +358,7 @@ assert.equal(opciones.buttons[0].exportOptions.format.header('', 0), 'Ruta / Emp
 assert.ok(opciones.columns[0].render('', 'display', rutaAgrupada).includes('&lt;Ruta Norte&gt;'));
 assert.ok(opciones.columns[0].render('', 'display', rutaAgrupada).includes('2 terminales'));
 assert.equal(opciones.columns[0].render('', 'export', rutaAgrupada), '<Ruta Norte> - Grupo Joselito');
+assert.equal(opciones.columns[16].render(null, 'export', rutaAgrupada), 173);
 elemento('agrupacionV8').value = 'ruta';
 elemento('agrupacionV8').listeners.change();
 assert.equal(elemento('alcanceV8').disabled, true);
