@@ -24,6 +24,8 @@
         .porcentaje { margin-top: 3px; padding: 2px; font-size: 7px; font-weight: bold; }
         .porcentaje-premios { background: #fff3cd; color: #77520a; }
         .porcentaje-utilidad { background: #dcece4; color: #285541; }
+        .resultado-bruto { border-left: 2px solid #8ba0b9; }
+        .resultado-bruto .porcentaje { font-size: 6px; white-space: normal; }
         .positivo { color: #167047; }
         .negativo { color: #b32636; }
         .totales td { background: #edf2f8; font-weight: bold; border-top: 2px solid #8ba0b9; }
@@ -41,15 +43,20 @@
     @endphp
     @foreach ($grupos as $ruta => $filas)
         @foreach ($bloquesMeses as $bloque)
-            @php($anchoAgencia = count($bloque) === 3 ? 18 : 20)
+            @php
+                $anchoAgencia = count($bloque) === 3 ? 16 : 20;
+                $anchoResultado = 12;
+                $anchoMeses = 100 - $anchoAgencia - $anchoResultado;
+            @endphp
             <div @class(['bloque-nuevo' => !$primero])>
                 <h1>Rentabilidad mensual de agencias V8</h1>
                 <p class="subtitulo">Empresa: {{ $filtros['empresa'] ?: 'Todas las empresas' }} | Año: {{ $filtros['anio'] }} | Productos: {{ $productos ? implode(', ', $productos) : 'Ninguno' }}<br>Importes en RD$, redondeados a enteros. % Premios = premios sacados / ventas. % Utilidad = utilidad / ventas. Base: ventas totales del mes. Sin ventas: —.</p>
                 <h2 class="ruta">{{ $ruta }} | {{ $filas->count() }} {{ $porRuta ? 'rutas' : ($filas->count() === 1 ? 'agencia' : 'agencias') }}</h2>
+                <p class="subtitulo">Resultado Bruto: suma de los balances de todo el período consultado. Las tarjetas amarilla (% Premios) y verde (% Utilidad) usan las ventas totales del período.</p>
                 <table @class(['tres-meses' => count($bloque) === 3])>
-                    <colgroup><col style="width:{{ $anchoAgencia }}%">@foreach ($bloque as $mes)@foreach ($campos as $campo => $etiqueta)<col style="width:{{ (100 - $anchoAgencia) / (count($bloque) * 5) }}%">@endforeach @endforeach</colgroup>
+                    <colgroup><col style="width:{{ $anchoAgencia }}%">@foreach ($bloque as $mes)@foreach ($campos as $campo => $etiqueta)<col style="width:{{ $anchoMeses / (count($bloque) * 5) }}%">@endforeach @endforeach<col style="width:{{ $anchoResultado }}%"></colgroup>
                     <thead>
-                        <tr><th rowspan="2" class="agencia" style="width:{{ $anchoAgencia }}%">{{ $porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia' }}<br>{{ $ruta }}</th>@foreach ($bloque as $mes)<th colspan="5" style="width:{{ (100 - $anchoAgencia) / count($bloque) }}%">{{ $mes['nombre'] }}</th>@endforeach</tr>
+                        <tr><th rowspan="2" class="agencia" style="width:{{ $anchoAgencia }}%">{{ $porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia' }}<br>{{ $ruta }}</th>@foreach ($bloque as $mes)<th colspan="5" style="width:{{ $anchoMeses / count($bloque) }}%">{{ $mes['nombre'] }}</th>@endforeach<th rowspan="2" class="resultado-bruto" style="width:{{ $anchoResultado }}%">Resultado Bruto<br>Todo el período</th></tr>
                         <tr>@foreach ($bloque as $mes)@foreach ($campos as $campo => $etiqueta)<th>{{ $etiqueta }}</th>@endforeach @endforeach</tr>
                     </thead>
                     <tbody>
@@ -57,9 +64,13 @@
                             <tr>
                                 <td class="agencia"><strong>{{ $fila['nombre'] }}</strong><div class="terminal">@if ($porRuta){{ $fila['empresa'] }} | {{ $fila['cantidad_terminales'] }} terminales @else Terminal: {{ $fila['terminal'] }} @endif</div></td>
                                 @foreach ($bloque as $indiceMes => $mes)
-                                    @php($ventasMes = $fila['periodos'][$indiceMes]['ventas'])
+                                    @php
+                                        $ventasMes = $fila['periodos'][$indiceMes]['ventas'];
+                                    @endphp
                                     @foreach ($campos as $campo => $etiqueta)
-                                        @php($valor = $fila['periodos'][$indiceMes][$campo])
+                                        @php
+                                            $valor = $fila['periodos'][$indiceMes][$campo];
+                                        @endphp
                                         <td @class(['importe', 'positivo' => $campo === 'balance_general' && $valor > 0, 'negativo' => $campo === 'balance_general' && $valor < 0])><div>{{ number_format($valor, 0) }}</div>
                                             @if (in_array($campo, ['premios_sacados', 'utilidad'], true))
                                                 <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $ventasMes != 0 ? number_format($valor / $ventasMes * 100, 2, '.', '').'%' : '—' }}</div>
@@ -67,13 +78,28 @@
                                         </td>
                                     @endforeach
                                 @endforeach
+                                @php
+                                    $periodos = collect($fila['periodos']);
+                                    $resultadoBruto = round($periodos->sum('balance_general'), 2);
+                                    $ventasPeriodo = $periodos->sum('ventas');
+                                @endphp
+                                <td @class(['importe', 'resultado-bruto', 'positivo' => $resultadoBruto > 0, 'negativo' => $resultadoBruto < 0])>
+                                    <div>{{ number_format($resultadoBruto, 0) }}</div>
+                                    @foreach (['premios_sacados' => '% Premios', 'utilidad' => '% Utilidad'] as $campo => $etiqueta)
+                                        <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $etiqueta }}: {{ $ventasPeriodo != 0 ? number_format($periodos->sum($campo) / $ventasPeriodo * 100, 2, '.', '').'%' : '—' }}</div>
+                                    @endforeach
+                                </td>
                             </tr>
                         @endforeach
                         <tr class="totales"><td>{{ $porRuta ? 'Totales de rutas' : 'Totales de la ruta' }}</td>
                             @foreach ($bloque as $indiceMes => $mes)
-                                @php($ventasMes = $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas']))
+                                @php
+                                    $ventasMes = $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas']);
+                                @endphp
                                 @foreach ($campos as $campo => $etiqueta)
-                                    @php($total = $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes][$campo]))
+                                    @php
+                                        $total = $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes][$campo]);
+                                    @endphp
                                     <td @class(['importe', 'positivo' => $campo === 'balance_general' && $total > 0, 'negativo' => $campo === 'balance_general' && $total < 0])><div>{{ number_format($total, 0) }}</div>
                                         @if (in_array($campo, ['premios_sacados', 'utilidad'], true))
                                             <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $ventasMes != 0 ? number_format($total / $ventasMes * 100, 2, '.', '').'%' : '—' }}</div>
@@ -81,11 +107,24 @@
                                     </td>
                                 @endforeach
                             @endforeach
+                            @php
+                                $periodos = $filas->flatMap(fn (array $fila): array => $fila['periodos']);
+                                $resultadoBruto = round($periodos->sum('balance_general'), 2);
+                                $ventasPeriodo = $periodos->sum('ventas');
+                            @endphp
+                            <td @class(['importe', 'resultado-bruto', 'positivo' => $resultadoBruto > 0, 'negativo' => $resultadoBruto < 0])>
+                                <div>{{ number_format($resultadoBruto, 0) }}</div>
+                                @foreach (['premios_sacados' => '% Premios', 'utilidad' => '% Utilidad'] as $campo => $etiqueta)
+                                    <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $etiqueta }}: {{ $ventasPeriodo != 0 ? number_format($periodos->sum($campo) / $ventasPeriodo * 100, 2, '.', '').'%' : '—' }}</div>
+                                @endforeach
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-            @php($primero = false)
+            @php
+                $primero = false;
+            @endphp
         @endforeach
     @endforeach
     @if ($esImpresion)<script>window.addEventListener('load', function () { window.print(); });</script>@endif

@@ -561,7 +561,7 @@ JS;
         $this->assertStringContainsString('63.10%', $xpath->query('//tbody/tr[1]/td[3]')->item(0)->textContent);
         $this->assertStringContainsString('36.90%', $xpath->query('//tbody/tr[1]/td[4]')->item(0)->textContent);
         $this->assertStringNotContainsString('%', $xpath->query('//tbody/tr[1]/td[6]')->item(0)->textContent);
-        $this->assertSame(16, $xpath->query('//tbody/tr[1]/td')->length);
+        $this->assertSame(17, $xpath->query('//tbody/tr[1]/td')->length);
         $this->assertStringContainsString('—', $xpath->query('//tbody/tr[1]/td[14]')->item(0)->textContent);
         $this->assertSame(6310.30, $response->viewData('grupos')['Ruta Norte']->first()['periodos'][0]['premios_sacados']);
     }
@@ -579,6 +579,55 @@ JS;
         $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()));
         \Illuminate\Support\Facades\File::ensureDirectoryExists(storage_path('framework/testing'));
         file_put_contents(storage_path('framework/testing/rentabilidad-v8-qa.pdf'), $response->getContent());
+    }
+
+    public function test_v8_impresion_incluye_resultado_bruto_de_todo_el_periodo_en_cada_bloque(): void
+    {
+        $meses = array_map(fn (int $mes): array => ['codigo' => '2026-0'.$mes, 'nombre' => 'Mes '.$mes], range(1, 4));
+        $fila = [
+            'terminal' => '1001', 'nombre' => 'Agencia A', 'empresa' => 'Grupo Joselito', 'cantidad_terminales' => 1,
+            'periodos' => [
+                ['ventas' => 100, 'premios_sacados' => 80, 'utilidad' => 20, 'gastos' => 10, 'balance_general' => 10],
+                ['ventas' => 300, 'premios_sacados' => 60, 'utilidad' => 240, 'gastos' => 40, 'balance_general' => 200],
+                ['ventas' => 0, 'premios_sacados' => 0, 'utilidad' => 0, 'gastos' => 7, 'balance_general' => -7],
+                ['ventas' => 50, 'premios_sacados' => 10, 'utilidad' => 40, 'gastos' => 10, 'balance_general' => 30],
+            ],
+        ];
+        $sinVentas = [...$fila, 'terminal' => '1002', 'nombre' => 'Sin ventas', 'periodos' => array_fill(0, 4, [
+            'ventas' => 0, 'premios_sacados' => 0, 'utilidad' => 0, 'gastos' => 1, 'balance_general' => -1,
+        ])];
+
+        foreach (['terminal', 'ruta'] as $agrupacion) {
+            $html = view('gerencia.rentabilidad-agencia-v8-impresion', [
+                'grupos' => collect(['Ruta Norte' => collect([$fila, $sinVentas])]),
+                'bloquesMeses' => array_chunk($meses, 3, true),
+                'filtros' => ['agrupacion' => $agrupacion, 'anio' => 2026, 'empresa' => 'Grupo Joselito'],
+                'productos' => ['Tradicional'], 'esImpresion' => false,
+            ])->render();
+            $documento = new \DOMDocument;
+            @$documento->loadHTML('<?xml encoding="UTF-8">'.$html);
+            $xpath = new \DOMXPath($documento);
+            $this->assertSame(2, $xpath->query('//thead/tr/th[contains(@class, "resultado-bruto")]')->length);
+            $this->assertSame(17, $xpath->query('(//table)[1]/tbody/tr[1]/td')->length);
+            $this->assertSame(7, $xpath->query('(//table)[2]/tbody/tr[1]/td')->length);
+            foreach ($xpath->query('//tbody/tr[1]/td[last()]') as $celda) {
+                $this->assertStringContainsString('233', $celda->textContent);
+                $this->assertStringContainsString('% Premios: 33.33%', $celda->textContent);
+                $this->assertStringContainsString('% Utilidad: 66.67%', $celda->textContent);
+                $this->assertStringContainsString('positivo', $celda->getAttribute('class'));
+            }
+            foreach ($xpath->query('//tbody/tr[2]/td[last()]') as $celda) {
+                $this->assertStringContainsString('-4', $celda->textContent);
+                $this->assertStringContainsString('% Premios: —', $celda->textContent);
+                $this->assertStringContainsString('% Utilidad: —', $celda->textContent);
+                $this->assertStringContainsString('negativo', $celda->getAttribute('class'));
+            }
+            foreach ($xpath->query('//tr[@class="totales"]/td[last()]') as $celda) {
+                $this->assertStringContainsString('229', $celda->textContent);
+                $this->assertStringContainsString('% Premios: 33.33%', $celda->textContent);
+                $this->assertStringContainsString('% Utilidad: 66.67%', $celda->textContent);
+            }
+        }
     }
 
     public function test_v8_pdf_con_varias_paginas_repite_encabezados_y_admite_importes_grandes(): void
