@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ConsultarMovimientoMayorRequest;
 use App\Http\Requests\ContabilidadEmpresaRequest;
 use App\Http\Requests\GuardarCuentaContableRequest;
 use App\Http\Requests\SincronizarCuentasRequest;
@@ -278,7 +279,7 @@ class Api extends Controller
         ]);
     }
 
-    public function getEntradasDiario(Request $request)
+    public function getEntradasDiario(ConsultarMovimientoMayorRequest $request)
     {
         $validated = $this->validateEntradasDiarioRequest($request);
         if (isset($validated['response'])) {
@@ -341,7 +342,7 @@ class Api extends Controller
         ]);
     }
 
-    public function exportEntradasDiarioCsv(Request $request): StreamedResponse|JsonResponse
+    public function exportEntradasDiarioCsv(ConsultarMovimientoMayorRequest $request): StreamedResponse|JsonResponse
     {
         $validated = $this->validateEntradasDiarioRequest($request);
         if (isset($validated['response'])) {
@@ -441,7 +442,7 @@ class Api extends Controller
         ]);
     }
 
-    public function syncEntradasDiario(Request $request)
+    public function syncEntradasDiario(ConsultarMovimientoMayorRequest $request)
     {
         $validated = $this->validateEntradasDiarioRequest($request, 7);
         if (isset($validated['response'])) {
@@ -462,7 +463,7 @@ class Api extends Controller
             ]);
         }
 
-        $result = $this->syncEntradasDiarioFromExternal($validated['empresa'], $validated['inicio'], $validated['fin'], $validated['cuentas_filtro']);
+        $result = $this->syncEntradasDiarioFromExternal($validated['empresa'], $validated['inicio'], $validated['fin'], $validated['cuentas_filtro'], $validated['cuentas_consulta']);
 
         if (! $result['ok']) {
             return response()->json([
@@ -485,7 +486,7 @@ class Api extends Controller
         ]);
     }
 
-    public function deleteEntradasDiario(Request $request)
+    public function deleteEntradasDiario(ConsultarMovimientoMayorRequest $request)
     {
         $validated = $this->validateEntradasDiarioRequest($request);
         if (isset($validated['response'])) {
@@ -662,6 +663,7 @@ class Api extends Controller
         $tipos = $this->normalizeEntradaDiarioTipos($request->input('tipos', $request->query('tipos', [])));
         $cuenta = trim((string) $request->input('cuenta', $request->query('cuenta', '')));
         $cuentasTipo = $this->resolveEntradaDiarioCuentasPorTipo($tipos);
+        $cuentasFiltro = $this->resolveEntradaDiarioCuentasFiltro($cuenta, $cuentasTipo, $request->input('cuentas'));
 
         return [
             'empresa' => $empresa,
@@ -671,7 +673,8 @@ class Api extends Controller
             'centro_costo' => trim((string) $request->input('centro_costo', $request->query('centro_costo', ''))),
             'tipos' => $tipos,
             'cuentas_tipo' => $cuentasTipo,
-            'cuentas_filtro' => $this->resolveEntradaDiarioCuentasFiltro($cuenta, $cuentasTipo),
+            'cuentas_filtro' => $cuentasFiltro,
+            'cuentas_consulta' => $request->has('cuentas') || $cuenta !== '' ? $cuentasFiltro : null,
         ];
     }
 
@@ -731,8 +734,11 @@ class Api extends Controller
             ->all();
     }
 
-    private function resolveEntradaDiarioCuentasFiltro(string $cuenta, ?array $cuentasTipo): ?array
+    private function resolveEntradaDiarioCuentasFiltro(string $cuenta, ?array $cuentasTipo, ?array $cuentas = null): ?array
     {
+        if ($cuentas !== null) {
+            return $cuentasTipo === null ? $cuentas : array_values(array_intersect($cuentas, $cuentasTipo));
+        }
         if ($cuenta !== '') {
             if ($cuentasTipo === null) {
                 return [$cuenta];
@@ -1276,7 +1282,7 @@ class Api extends Controller
         return [];
     }
 
-    private function syncEntradasDiarioFromExternal(string $empresa, Carbon $inicio, Carbon $fin, ?array $cuentasPermitidas = null): array
+    private function syncEntradasDiarioFromExternal(string $empresa, Carbon $inicio, Carbon $fin, ?array $cuentasPermitidas = null, ?array $cuentasConsulta = null): array
     {
         $created = 0;
         $updated = 0;
@@ -1287,26 +1293,28 @@ class Api extends Controller
         $fechaActual = $inicio->copy();
 
         while ($fechaActual->lte($fin)) {
-            $fetch = $this->fetchEntradasDiarioByDate($empresa, $fechaActual->toDateString());
+            foreach ($cuentasConsulta ?? [null] as $cuenta) {
+                $fetch = $this->fetchEntradasDiarioByDate($empresa, $fechaActual->toDateString(), $cuenta);
 
-            if (! $fetch['ok']) {
-                return $fetch + [
-                    'total_recibidos' => $received,
-                    'creados' => $created,
-                    'actualizados' => $updated,
-                    'sin_cambios' => $unchanged,
-                    'omitidos' => $skipped,
-                ];
+                if (! $fetch['ok']) {
+                    return $fetch + [
+                        'total_recibidos' => $received,
+                        'creados' => $created,
+                        'actualizados' => $updated,
+                        'sin_cambios' => $unchanged,
+                        'omitidos' => $skipped,
+                    ];
+                }
+
+                $items = $fetch['items'];
+                unset($fetch);
+                $procesados = $this->procesarEntradasDiarioItems($items, $empresa, $fechaActual->toDateString(), $cuentasPermitidasSet);
+                $received += $procesados['total_recibidos'];
+                $created += $procesados['creados'];
+                $updated += $procesados['actualizados'];
+                $unchanged += $procesados['sin_cambios'];
+                $skipped += $procesados['omitidos'];
             }
-
-            $items = $fetch['items'];
-            unset($fetch);
-            $procesados = $this->procesarEntradasDiarioItems($items, $empresa, $fechaActual->toDateString(), $cuentasPermitidasSet);
-            $received += $procesados['total_recibidos'];
-            $created += $procesados['creados'];
-            $updated += $procesados['actualizados'];
-            $unchanged += $procesados['sin_cambios'];
-            $skipped += $procesados['omitidos'];
 
             $fechaActual->addDay();
         }
@@ -1517,72 +1525,35 @@ class Api extends Controller
         ];
     }
 
-    private function fetchEntradasDiarioByDate(string $empresa, string $fecha): array
+    private function fetchEntradasDiarioByDate(string $empresa, string $fecha, ?string $cuenta = null): array
     {
-        $url = 'https://apisj.azurewebsites.net/ApiSJ/EntradaDiario/Listar?strToken=87eb2d56-25f3-4d46-9cb0-73c07a550bd2&intIdEmpresa='.urlencode($empresa).'&dtFecha='.urlencode($fecha);
-
-        $curl = curl_init();
-        curl_setopt_array($curl, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_HTTPHEADER => [
-                'Accept: application/text',
-            ],
-            CURLOPT_PROXY => '',
-            CURLOPT_NOPROXY => '*',
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-        ]);
-
-        $response = curl_exec($curl);
-
-        if ($response === false) {
-            $error = curl_error($curl);
-            curl_close($curl);
-
-            return [
-                'ok' => false,
-                'message' => 'Error consultando API externa de entradas de diario.',
-                'error' => $error,
-                'status' => 500,
-                'items' => [],
-            ];
+        $parametros = ['strToken' => config('services.apisj.token'), 'intIdEmpresa' => $empresa, 'dtFecha' => $fecha];
+        if ($cuenta !== null) {
+            $parametros['strCuenta'] = $cuenta;
         }
 
-        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
-
-        if ($httpCode < 200 || $httpCode >= 300) {
-            return [
-                'ok' => false,
-                'message' => 'La API externa de entradas de diario respondio con error.',
-                'status' => 502,
-                'items' => [],
-            ];
+        try {
+            $response = Http::withOptions(['verify' => false, 'proxy' => ''])->timeout(60)
+                ->accept('application/text')
+                ->post('https://apisj.azurewebsites.net/ApiSJ/EntradaDiario/Listar?'.http_build_query($parametros));
+        } catch (ConnectionException) {
+            return ['ok' => false, 'message' => 'Error consultando API externa de entradas de diario.', 'status' => 502, 'items' => []];
         }
 
-        $decoded = json_decode($response, true);
+        if (! $response->successful()) {
+            return ['ok' => false, 'message' => 'La API externa de entradas de diario respondio con error.', 'status' => 502, 'items' => []];
+        }
 
+        if (str_starts_with(trim($response->body()), 'No existen datos para la empresa Id')) {
+            return ['ok' => true, 'items' => [], 'status' => 200];
+        }
+
+        $decoded = $response->json();
         if (! is_array($decoded)) {
-            return [
-                'ok' => false,
-                'message' => 'Respuesta invalida de API externa de entradas de diario.',
-                'status' => 502,
-                'items' => [],
-            ];
+            return ['ok' => false, 'message' => 'Respuesta invalida de API externa de entradas de diario.', 'status' => 502, 'items' => []];
         }
 
-        return [
-            'ok' => true,
-            'items' => $this->extractExternalEntradasDiario($decoded),
-            'status' => 200,
-        ];
+        return ['ok' => true, 'items' => $this->extractExternalEntradasDiario($decoded), 'status' => 200];
     }
 
     private function extractExternalEntradasDiario(array $payload): array

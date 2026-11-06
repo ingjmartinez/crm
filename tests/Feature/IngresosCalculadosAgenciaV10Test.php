@@ -2,13 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\ConsultarPorcentajesIngresosAgenciaV10;
+use App\Models\EntradaDiario;
 use App\Services\IngresosCalculadosAgenciaV10Service;
-use Illuminate\Http\Client\Request;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
+use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class IngresosCalculadosAgenciaV10Test extends TestCase
@@ -18,103 +19,107 @@ class IngresosCalculadosAgenciaV10Test extends TestCase
         parent::setUp();
         Http::preventStrayRequests();
         Bus::fake();
+        Schema::create('entradas_diario', function (Blueprint $table): void {
+            $table->id();
+            $table->string('company_id');
+            $table->string('id_viejo')->nullable();
+            $table->date('fecha');
+            $table->string('cuenta');
+            $table->decimal('credito', 15, 2);
+            $table->decimal('debito', 15, 2)->default(0);
+            $table->timestamps();
+        });
     }
 
-    public function test_consulta_todos_los_dias_y_usa_creditos_globales_sin_redondear_el_porcentaje(): void
+    public function test_suma_creditos_globales_locales_de_ambas_cuentas_sin_filtrar_terminal(): void
     {
-        $this->apiContable();
-        (new ConsultarPorcentajesIngresosAgenciaV10('168', '2026-05'))->handle(app(IngresosCalculadosAgenciaV10Service::class));
-        Http::assertSentCount(62);
-        $service = app(IngresosCalculadosAgenciaV10Service::class);
-        $porcentaje = $service->porcentaje('Grupo Joselito', '2026-05');
-        $this->assertSame('listo', $porcentaje['estado']);
-        $this->assertEqualsWithDelta(29095.02 / 559858, $porcentaje['porcentaje'], 0.000000000001);
-        $this->assertSame(559858.0, $porcentaje['base']);
-        $this->assertSame(['porcentaje' => null, 'estado' => 'sin_datos', 'base' => 0.0], $service->porcentaje('Otra empresa', '2026-05'));
-        Bus::assertNothingDispatched();
-    }
-
-    public function test_encola_una_sola_consulta_por_empresa_y_mes_y_no_mezcla_porcentajes(): void
-    {
-        $clave = IngresosCalculadosAgenciaV10Service::clave('168', '2026-05');
-        Cache::put($clave, ['estado' => 'listo', 'porcentaje' => 0.051979977, 'base' => 559158.0], now()->addHour());
-        $service = app(IngresosCalculadosAgenciaV10Service::class);
-        $this->assertSame(0.051979977, $service->porcentaje('Grupo Joselito', '2026-05')['porcentaje']);
-        $this->assertSame('pendiente', $service->porcentaje('Negosur', '2026-05')['estado']);
-        $this->assertSame('pendiente', (new IngresosCalculadosAgenciaV10Service)->porcentaje('Negosur', '2026-05')['estado']);
-        $this->assertSame('pendiente', $service->porcentaje('Grupo Joselito', '2026-06')['estado']);
-        Bus::assertDispatchedTimes(ConsultarPorcentajesIngresosAgenciaV10::class, 2);
-        Bus::assertDispatched(ConsultarPorcentajesIngresosAgenciaV10::class, fn ($job): bool => $job->empresa === '169' && $job->mes === '2026-05' && $job->queue === 'rentabilidad-v10' && $job->connection === 'rentabilidad-v10');
-        $this->assertGreaterThan((new ConsultarPorcentajesIngresosAgenciaV10('168', '2026-05'))->timeout, config('queue.connections.rentabilidad-v10.retry_after'));
-    }
-
-    public function test_un_error_de_api_no_guarda_porcentajes_parciales_y_permite_reintentar_despues(): void
-    {
-        $this->apiContable(fallar: true);
-        $job = new ConsultarPorcentajesIngresosAgenciaV10('168', '2026-05');
-        $clave = IngresosCalculadosAgenciaV10Service::clave('168', '2026-05');
-        $fallo = false;
-        try {
-            $job->handle(app(IngresosCalculadosAgenciaV10Service::class));
-        } catch (RuntimeException $exception) {
-            $fallo = true;
-            $this->assertNull(Cache::get($clave));
-            $job->failed($exception);
+        foreach ([
+            ['050001', '200111001', 559158], ['050001', '400120001', 29065.02],
+            ['otra-agencia', '200111001', 200], ['otra-agencia', '400120001', 10],
+            [null, '200111001', 500], [null, '400120001', 20],
+            ['050001', '999999999', 999999],
+        ] as [$terminal, $cuenta, $credito]) {
+            EntradaDiario::query()->insert([
+                'company_id' => '168', 'id_viejo' => $terminal, 'fecha' => '2026-05-31',
+                'cuenta' => $cuenta, 'credito' => $credito, 'debito' => 999999,
+            ]);
         }
-        $this->assertTrue($fallo, 'La consulta incompleta no debe generar un porcentaje.');
-        $this->assertSame(['porcentaje' => null, 'estado' => 'error', 'base' => 0.0], (new IngresosCalculadosAgenciaV10Service)->porcentaje('Grupo Joselito', '2026-05'));
-        $this->travel(6)->minutes();
-        $this->assertSame('pendiente', (new IngresosCalculadosAgenciaV10Service)->porcentaje('Grupo Joselito', '2026-05')['estado']);
+        $this->cuentas('169', '2026-05-31', 1000, 900);
+        $this->cuentas('168', '2026-04-30', 1000, 800);
+        $this->cuentas('168', '2026-06-01', 1000, 700);
+        $resultado = app(IngresosCalculadosAgenciaV10Service::class)->porcentaje('Grupo Joselito', '2026-05');
+        $this->assertSame('listo', $resultado['estado']);
+        $this->assertSame(559858.0, $resultado['base']);
+        $this->assertEqualsWithDelta(29095.02 / 559858, $resultado['porcentaje'], 0.000000000001);
+        Bus::assertNothingDispatched();
+        Http::assertNothingSent();
     }
 
-    public function test_rechaza_movimientos_de_otra_empresa_o_periodo(): void
+    public function test_separa_los_porcentajes_por_empresa_y_mes(): void
     {
-        Http::fake(fn () => Http::response(['Result' => ['Det' => [[
-            'CUENTA' => '200111001', 'COMPANYID' => '169', 'FECHA' => '2026-04-30',
-            'IDVIEJO' => '050001', 'CREDITO' => '100.00',
-        ]]]]));
-        $this->expectException(RuntimeException::class);
-        app(IngresosCalculadosAgenciaV10Service::class)->consultarMes('168', '2026-05');
-    }
-
-    public function test_distingue_una_tasa_global_cero_de_una_base_global_sin_datos(): void
-    {
-        $base = '100.00';
-        Http::fake(function (Request $request) use (&$base) {
-            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $consulta);
-
-            return Http::response(['Result' => ['Det' => [[
-                'CUENTA' => $consulta['strCuenta'], 'COMPANYID' => '168', 'FECHA' => $consulta['dtFecha'],
-                'CREDITO' => $consulta['strCuenta'] === '200111001' ? $base : '0.00',
-            ]]]]);
-        });
+        $this->cuentas('168', '2026-05-31', 1000, 100);
+        $this->cuentas('168', '2026-06-30', 1000, 200);
+        $this->cuentas('169', '2026-05-31', 2000, 600);
         $service = app(IngresosCalculadosAgenciaV10Service::class);
-        $this->assertSame(['porcentaje' => 0.0, 'base' => 3100.0], $service->consultarMes('168', '2026-05'));
-        $base = '0.00';
-        $this->assertSame(['porcentaje' => null, 'base' => 0.0], $service->consultarMes('168', '2026-05'));
+        $this->assertSame(0.1, $service->porcentaje('Grupo Joselito', '2026-05')['porcentaje']);
+        $this->assertSame(0.2, $service->porcentaje('Grupo Joselito', '2026-06')['porcentaje']);
+        $this->assertSame(0.3, $service->porcentaje('Negosur', '2026-05')['porcentaje']);
+        $this->assertSame(['porcentaje' => null, 'estado' => 'sin_datos', 'base' => 0.0], $service->porcentaje('Otra empresa', '2026-05'));
     }
 
-    private function apiContable(bool $fallar = false): void
+    #[DataProvider('cuentasSinDatos')]
+    public function test_distingue_porcentaje_cero_de_cuentas_o_base_faltantes(?float $ventas, ?float $ingresos, ?float $esperado): void
     {
-        Http::fake(function (Request $request) use ($fallar) {
-            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $consulta);
-            $cuenta = $consulta['strCuenta'];
-            $fecha = $consulta['dtFecha'];
-            if ($fallar && $fecha === '2026-05-02') {
-                return Http::response('Servicio no disponible', 503);
-            }
-            if ($fecha !== '2026-05-31') {
-                return Http::response('No existen datos para la empresa Id "168" en fecha '.$fecha, 200);
-            }
-            $importes = $cuenta === '200111001'
-                ? ['050001' => '559,158.00', 'sin-base' => '0.00', 'sin-ingreso' => '100.00', 'cero' => '100.00', '' => '500.00']
-                : ['050001' => '29,065.02', 'sin-base' => '10.00', 'cero' => '0.00', '' => '20.00'];
-            $filas = [];
-            foreach ($importes as $terminal => $credito) {
-                $filas[] = ['Cuenta' => $cuenta, 'CompanyID' => '168', 'Fecha' => $fecha.'T00:00:00', 'IdViejo' => $terminal, 'Credito' => $credito, 'Debito' => '999999.00'];
-            }
+        $this->cuentas('168', '2026-05-31', $ventas, $ingresos);
+        $resultado = app(IngresosCalculadosAgenciaV10Service::class)->porcentaje('Grupo Joselito', '2026-05');
+        $this->assertSame($esperado, $resultado['porcentaje']);
+        $this->assertSame($esperado === null ? 'sin_datos' : 'listo', $resultado['estado']);
+        Bus::assertNothingDispatched();
+        Http::assertNothingSent();
+    }
 
-            return Http::response(['Result' => ['Det' => $filas]]);
-        });
+    public static function cuentasSinDatos(): array
+    {
+        return [
+            'ingreso cero' => [1000.0, 0.0, 0.0],
+            'base cero' => [0.0, 100.0, null],
+            'sin cuenta de ingresos' => [1000.0, null, null],
+            'sin cuenta de ventas' => [null, 100.0, null],
+            'sin movimientos' => [null, null, null],
+        ];
+    }
+
+    public function test_ignora_la_cache_anterior_y_refleja_las_sincronizaciones_en_la_siguiente_consulta(): void
+    {
+        Cache::put(IngresosCalculadosAgenciaV10Service::clave('168', '2026-05'), ['estado' => 'pendiente'], now()->addDay());
+        $this->cuentas('168', '2026-05-31', 1000, 100);
+        $this->assertSame(0.1, (new IngresosCalculadosAgenciaV10Service)->porcentaje('Grupo Joselito', '2026-05')['porcentaje']);
+        EntradaDiario::query()->where('cuenta', '400120001')->update(['credito' => 200]);
+        $this->assertSame(0.2, (new IngresosCalculadosAgenciaV10Service)->porcentaje('Grupo Joselito', '2026-05')['porcentaje']);
+        Bus::assertNothingDispatched();
+        Http::assertNothingSent();
+    }
+
+    public function test_reutiliza_una_sola_consulta_por_empresa_y_mes_dentro_de_la_peticion(): void
+    {
+        $this->cuentas('168', '2026-05-31', 1000, 100);
+        $connection = (new EntradaDiario)->getConnection();
+        $connection->enableQueryLog();
+        $connection->flushQueryLog();
+        $service = new IngresosCalculadosAgenciaV10Service;
+        for ($i = 0; $i < 25; $i++) {
+            $this->assertSame(0.1, $service->porcentaje('Grupo Joselito', '2026-05')['porcentaje']);
+        }
+        $this->assertCount(1, $connection->getQueryLog());
+        $connection->disableQueryLog();
+    }
+
+    private function cuentas(string $empresa, string $fecha, ?float $ventas, ?float $ingresos): void
+    {
+        foreach (['200111001' => $ventas, '400120001' => $ingresos] as $cuenta => $credito) {
+            if ($credito !== null) {
+                EntradaDiario::query()->insert(['company_id' => $empresa, 'fecha' => $fecha, 'cuenta' => $cuenta, 'credito' => $credito]);
+            }
+        }
     }
 }

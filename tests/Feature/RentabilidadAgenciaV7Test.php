@@ -60,6 +60,7 @@ class RentabilidadAgenciaV7Test extends TestCase
             $table->string('tipo');
         });
         Schema::create('entradas_diario', function (Blueprint $table): void {
+            $table->string('company_id')->default('168');
             $table->id();
             $table->string('id_viejo');
             $table->date('fecha');
@@ -282,9 +283,10 @@ JS;
     public function test_v10_calcula_ingresos_por_producto_con_porcentaje_global_contable_de_cada_mes(): void
     {
         $this->datos();
-        \Illuminate\Support\Facades\Cache::put(\App\Services\IngresosCalculadosAgenciaV10Service::clave('168', '2026-05'), [
-            'estado' => 'listo', 'porcentaje' => 29065.02 / 559158, 'base' => 559158.0,
-        ], now()->addHour());
+        DB::table('entradas_diario')->insert([
+            ['id_viejo' => 'otra-agencia', 'company_id' => '168', 'fecha' => '2026-05-01', 'cuenta' => '200111001', 'credito' => 559158, 'debito' => 0],
+            ['id_viejo' => 'otra-agencia', 'company_id' => '168', 'fecha' => '2026-05-31', 'cuenta' => '400120001', 'credito' => 29065.02, 'debito' => 0],
+        ]);
         foreach (['Tradicional' => 943694, 'No Tradicional' => 313154, 'Recarga' => 82391] as $tipo => $monto) {
             DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-05-15', 'tipo' => $tipo, 'monto' => $monto]);
         }
@@ -328,17 +330,18 @@ JS;
         $this->assertArrayNotHasKey('ingresos_calculados', $v9->viewData('datosTabla')[0]['periodos'][0]);
     }
 
-    public function test_v10_muestra_ingresos_pendientes_sin_tratarlos_como_cero(): void
+    public function test_v10_muestra_sin_porcentaje_si_faltan_cuentas_locales_sin_encolar_trabajos(): void
     {
         \Illuminate\Support\Facades\Bus::fake();
         $this->datos();
         DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-05-15', 'tipo' => 'No Tradicional', 'monto' => 313154]);
         $filtros = [...$this->filtros(), 'mes_inicio' => 5, 'mes_fin' => 5];
-        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $filtros))->assertOk()->assertSee('Consultando los porcentajes contables');
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $filtros))->assertOk()->assertDontSee('Consultando los porcentajes contables');
         $periodo = $pagina->viewData('datosTabla')[0]['periodos'][0];
         $this->assertNull($periodo['ingresos_calculados']);
-        $this->assertSame('pendiente', $periodo['estado_ingresos']);
-        \Illuminate\Support\Facades\Bus::assertDispatchedTimes(\App\Jobs\ConsultarPorcentajesIngresosAgenciaV10::class, 1);
+        $this->assertSame('sin_datos', $periodo['estado_ingresos']);
+        \Illuminate\Support\Facades\Bus::assertNothingDispatched();
+        Http::assertNothingSent();
         $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
             ->assertOk()->assertDontSee('Total incompleto')->assertSee('Sin porcentaje');
     }

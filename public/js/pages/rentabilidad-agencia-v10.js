@@ -1,14 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
     const configuracion = window.rentabilidadV10;
-    if (configuracion.ingresosPendientes) {
-        setTimeout(() => {
-            const formulario = document.getElementById('filtrosRentabilidadV10');
-            const editado = Array.from(formulario.elements).some(campo => campo.tagName === 'SELECT'
-                ? Array.from(campo.options).some(opcion => opcion.selected !== opcion.defaultSelected)
-                : ['checkbox', 'radio'].includes(campo.type) ? campo.checked !== campo.defaultChecked : campo.value !== campo.defaultValue);
-            if (!editado) window.location.reload();
-        }, 15000);
-    }
     const moneda = valor => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(Number(valor || 0));
     const empresa = document.getElementById('empresaV10');
     const ruta = document.getElementById('rutaV10');
@@ -108,7 +99,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     const desgloseProductos = (campo, periodo) => {
         const prefijo = campo === 'ventas' ? 'ventas_' : 'ingresos_';
-        const sinPorcentaje = periodo.estado_ingresos === 'pendiente' ? 'Pendiente' : 'Sin porcentaje contable';
+        const sinPorcentaje = 'Sin porcentaje contable';
         const lineas = productos.map(([clave, etiqueta]) => {
             const importe = periodo[prefijo + clave];
             const texto = importe == null && prefijo === 'ingresos_' && clave === 'no_tradicionales' ? sinPorcentaje : moneda(importe);

@@ -65,7 +65,7 @@
             @endphp
             <div @class(['bloque-nuevo' => !$primero])>
                 <h1>Rentabilidad mensual de agencias V10</h1>
-                <p class="subtitulo">Ingresos calculado: tradicional 100%; recargas 7.5%; no tradicional según créditos globales 400120001 / 200111001 de cada empresa y mes. El porcentaje no cambia al filtrar agencia o ruta. Sin porcentaje contable: cálculo pendiente o no disponible.</p>
+                <p class="subtitulo">Ingresos calculado: tradicional 100%; recargas 7.5%; no tradicional según créditos globales guardados de las cuentas 400120001 / 200111001 de cada empresa y mes. El porcentaje no cambia al filtrar agencia o ruta. Sin porcentaje contable: faltan movimientos de las cuentas o una base de ventas positiva.</p>
                 <p class="subtitulo">Empresa: {{ $filtros['empresa'] ?: 'Todas las empresas' }} | Año: {{ $filtros['anio'] }} | Productos: {{ $productos ? implode(', ', $productos) : 'Ninguno' }}<br>Importes en RD$, redondeados a enteros. % Premios y % Utilidad: globales de la empresa en cada mes, sobre ventas totales. Sin ventas globales: —.</p>
                 <h2 class="ruta">{{ $ruta }} | {{ $filas->count() }} {{ $porRuta ? 'rutas' : ($filas->count() === 1 ? 'agencia' : 'agencias') }}</h2>
                 <p class="subtitulo">Resultado Bruto: suma de los balances de todo el período. Las tarjetas usan porcentajes globales de la empresa para el período completo. Los filtros de ruta o terminal no cambian estos porcentajes.</p>

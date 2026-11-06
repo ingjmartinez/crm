@@ -8,6 +8,9 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
 
+/**
+ * @deprecated Conservado para trabajos ya encolados; la v10 consulta las cuentas locales directamente.
+ */
 class ConsultarPorcentajesIngresosAgenciaV10 implements ShouldQueue
 {
     use Queueable;

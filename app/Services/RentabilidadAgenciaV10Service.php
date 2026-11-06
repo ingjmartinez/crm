@@ -227,7 +227,7 @@ class RentabilidadAgenciaV10Service
                 $ventasRecargas = (float) ($datos['ventas_recargas'] ?? 0);
                 $porcentaje = $this->ingresos->porcentaje(trim((string) $agencia->empresa), substr($periodo, 0, 7));
                 $ingresosCalculados = $porcentaje['porcentaje'] === null && $ventasNoTradicionales != 0 ? null
-                    : round($ventasTradicionales + $ventasNoTradicionales * $porcentaje['porcentaje'] + $ventasRecargas * 0.075, 2);
+                    : round($ventasTradicionales + $ventasNoTradicionales * ($porcentaje['porcentaje'] ?? 0) + $ventasRecargas * 0.075, 2);
                 $premiosSacados = (float) ($datos['premios_sacados'] ?? 0);
                 $r20Periodo = $diario
                     ? ($r20PorDia[$terminal.'|'.$periodo] ?? 0.0)

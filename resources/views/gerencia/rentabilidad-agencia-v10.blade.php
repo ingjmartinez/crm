@@ -53,10 +53,7 @@
                     @if ($informeId)<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImpresionV10">Impresión personalizada</button>@endif
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small">Ingresos calculado = ventas tradicionales al 100% + ventas no tradicionales por su porcentaje contable global (créditos 400120001 / créditos 200111001, de la empresa y mes) + recargas al 7.5%. El % ing no cambia al filtrar agencia, ruta o productos. Esta columna no modifica la utilidad ni el balance.</p>
-                    @if ($resultado['filas']->contains(fn (array $fila): bool => collect($fila['periodos'])->contains('estado_ingresos', 'pendiente')))
-                        <div class="alert alert-info" role="status">Consultando los porcentajes contables. La tabla se actualizará al terminar. Las celdas pendientes no se incluyen como cero en los totales.</div>
-                    @endif
+                    <p class="text-muted small">Ingresos calculado = ventas tradicionales al 100% + ventas no tradicionales por su porcentaje contable global de los datos guardados (créditos 400120001 / créditos 200111001, de la empresa y mes) + recargas al 7.5%. El % ing no cambia al filtrar agencia, ruta o productos. Esta columna no modifica la utilidad ni el balance.</p>
                     <p class="text-muted small">Resultado Bruto = suma de los balances de los meses consultados. Sus tarjetas muestran los porcentajes globales de la empresa para todo el período, calculados sobre las ventas totales del período.</p>
                     <p class="text-muted small">Utilidad = ventas - premios sacados. Balance = utilidad - gastos. Los importes son de cada terminal o ruta. Los porcentajes son globales de su empresa para cada mes: premios o utilidad totales / ventas totales. No cambian al filtrar ruta, terminal o buscar en la tabla. Se respetan los productos seleccionados. Sin ventas globales se muestra —.</p>
                     @if ($resultado['filas']->isEmpty())
@@ -123,7 +120,6 @@
 @section('script')
     <script>
         window.rentabilidadV10 = {
-            ingresosPendientes: @json($resultado !== null && $resultado['filas']->contains(fn (array $fila): bool => collect($fila['periodos'])->contains('estado_ingresos', 'pendiente'))),
             datos: {{ Illuminate\Support\Js::from($datosTabla) }},
             referenciasGlobales: {{ Illuminate\Support\Js::from($referenciasGlobales) }},
             agrupacion: {{ Illuminate\Support\Js::from($filtros['agrupacion']) }},

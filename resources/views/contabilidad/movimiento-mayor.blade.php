@@ -62,12 +62,28 @@
                                         <input type="date" class="form-control form-control-sm" id="entradaDiarioFechaFin" value="<?php echo date('Y-m-d'); ?>">
                                     </div>
                                     <div class="col-12 col-md-3">
-                                        <label class="form-label">Cuenta</label>
-                                        <input type="text" class="form-control form-control-sm" id="entradaDiarioCuenta" placeholder="Opcional">
-                                    </div>
-                                    <div class="col-12 col-md-3">
                                         <label class="form-label">Centro costo</label>
                                         <input type="text" class="form-control form-control-sm" id="entradaDiarioCentroCosto" placeholder="Opcional">
+                                    </div>
+                                    <div class="col-12">
+                                        <fieldset class="border rounded p-3 mt-2">
+                                            <legend class="float-none w-auto px-2 fs-6">Cuentas a consultar y sincronizar</legend>
+                                            <div class="row g-2 align-items-end">
+                                                <div class="col-md-3">
+                                                    <label for="entradaDiarioAlcanceCuentas" class="form-label">Seleccionar cuentas</label>
+                                                    <select id="entradaDiarioAlcanceCuentas" class="form-select form-select-sm">
+                                                        <option value="todas">Todas las cuentas</option>
+                                                        <option value="seleccionadas">Una o varias cuentas</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-5">
+                                                    <label for="entradaDiarioCuenta" class="form-label">Números de cuenta</label>
+                                                    <input type="text" class="form-control form-control-sm" id="entradaDiarioCuenta" placeholder="Ej.: 200111001, 400120001" disabled aria-describedby="ayudaCuentasMayor">
+                                                </div>
+                                                <div class="col-md-4"><button type="button" class="btn btn-outline-primary btn-sm" id="btnCuentasNoTradicional">Usar las 2 cuentas de no tradicional · V10</button></div>
+                                            </div>
+                                            <p id="ayudaCuentasMayor" class="form-text mb-0">Separa las cuentas con comas. El filtro se aplica a la consulta local, sincronización y CSV. El acceso V10 selecciona 200111001 y 400120001, todos los tipos y sin centro de costo, para la empresa y fechas elegidas.</p>
+                                        </fieldset>
                                     </div>
                                     <div class="col-12">
                                         <label class="form-label">Tipos contables</label>
@@ -160,9 +176,22 @@
         document.getElementById('btnExportarEntradasDiarioCsv').addEventListener('click', exportarEntradasDiarioCsv);
         document.getElementById('btnSincronizarEntradasDiario').addEventListener('click', sincronizarEntradasDiario);
         document.getElementById('btnEliminarEntradasDiario').addEventListener('click', eliminarEntradasDiario);
+        document.getElementById('entradaDiarioAlcanceCuentas').addEventListener('change', actualizarAlcanceCuentas);
+        document.getElementById('btnCuentasNoTradicional').addEventListener('click', function () {
+            document.getElementById('entradaDiarioAlcanceCuentas').value = 'seleccionadas';
+            document.getElementById('entradaDiarioCuenta').value = '200111001, 400120001';
+            document.getElementById('entradaDiarioCentroCosto').value = '';
+            document.getElementById('entrada-tipo-todos').checked = true;
+            document.querySelectorAll('.check-entrada-tipo:not(#entrada-tipo-todos)').forEach(check => check.checked = false);
+            actualizarAlcanceCuentas();
+        });
         document.querySelectorAll('.check-entrada-tipo').forEach(check => {
             check.addEventListener('change', sincronizarChecksTipos);
         });
+
+        function actualizarAlcanceCuentas() {
+            document.getElementById('entradaDiarioCuenta').disabled = document.getElementById('entradaDiarioAlcanceCuentas').value === 'todas';
+        }
 
         function sincronizarChecksTipos(event) {
             const checkTodos = document.getElementById('entrada-tipo-todos');
@@ -198,9 +227,15 @@
             const empresa = document.getElementById('entradaDiarioEmpresa').value;
             const fechaInicio = document.getElementById('entradaDiarioFechaInicio').value;
             const fechaFin = document.getElementById('entradaDiarioFechaFin').value;
-            const cuenta = document.getElementById('entradaDiarioCuenta').value.trim();
+            const cuentas = document.getElementById('entradaDiarioAlcanceCuentas').value === 'todas' ? []
+                : [...new Set(document.getElementById('entradaDiarioCuenta').value.split(/[,;\s]+/).map(cuenta => cuenta.trim()).filter(Boolean))];
+            const cuenta = '';
             const centroCosto = document.getElementById('entradaDiarioCentroCosto').value.trim();
             const tipos = obtenerTiposEntradasDiario();
+            if (document.getElementById('entradaDiarioAlcanceCuentas').value !== 'todas' && cuentas.length === 0) {
+                throw new Error('Indica al menos una cuenta o selecciona Todas las cuentas.');
+            }
+            if (cuentas.length > 50) throw new Error('Puedes seleccionar hasta 50 cuentas.');
 
             if (!fechaInicio || !fechaFin) {
                 throw new Error('Selecciona fecha inicio y fecha fin.');
@@ -212,11 +247,11 @@
 
             const params = new URLSearchParams({ empresa, fecha_inicio: fechaInicio, fecha_fin: fechaFin });
 
-            if (cuenta !== '') params.set('cuenta', cuenta);
+            cuentas.forEach(cuenta => params.append('cuentas[]', cuenta));
             if (centroCosto !== '') params.set('centro_costo', centroCosto);
             tipos.forEach(tipo => params.append('tipos[]', tipo));
 
-            return { empresa, fechaInicio, fechaFin, cuenta, centroCosto, tipos, params };
+            return { empresa, fechaInicio, fechaFin, cuenta, cuentas, centroCosto, tipos, params };
         }
 
         async function parseJsonResponse(response, fallbackMessage) {
@@ -361,6 +396,7 @@
                     fecha_inicio: bloque.inicio,
                     fecha_fin: bloque.fin,
                     cuenta: filtros.cuenta,
+                    ...(filtros.cuentas.length ? { cuentas: filtros.cuentas } : {}),
                     centro_costo: filtros.centroCosto,
                     tipos: filtros.tipos,
                 }),
@@ -475,7 +511,7 @@
                 ? await Swal.fire({
                     icon: 'question',
                     title: 'Sincronizar movimiento del mayor',
-                    html: `Esto consultara el API por bloques y actualizara registros locales si detecta cambios.<br><strong>Dias a procesar: ${totalDias.toLocaleString('es-DO')}</strong>`,
+                    html: `Esto consultara el API por bloques y actualizara registros locales si detecta cambios.<br>${filtros.cuentas.length ? 'Cuentas seleccionadas: ' + filtros.cuentas.length : 'Todas las cuentas, respetando los tipos seleccionados.'}<br><strong>Dias a procesar: ${totalDias.toLocaleString('es-DO')}</strong>`,
                     showCancelButton: true,
                     confirmButtonText: 'Sincronizar',
                     cancelButtonText: 'Cancelar',
@@ -613,6 +649,7 @@
                         fecha_inicio: filtros.fechaInicio,
                         fecha_fin: filtros.fechaFin,
                         cuenta: filtros.cuenta,
+                        ...(filtros.cuentas.length ? { cuentas: filtros.cuentas } : {}),
                         centro_costo: filtros.centroCosto,
                         tipos: filtros.tipos,
                     }),

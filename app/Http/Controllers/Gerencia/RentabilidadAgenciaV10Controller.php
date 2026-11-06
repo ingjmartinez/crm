@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RentabilidadAgenciaV10Controller extends Controller
 {
-    private const VERSION_IMPRESION = 5;
+    private const VERSION_IMPRESION = 6;
 
     public function __construct(private readonly RentabilidadAgenciaV10Service $reporte) {}
 
@@ -179,7 +179,7 @@ class RentabilidadAgenciaV10Controller extends Controller
                     $incompletos = $terminales->filter(fn (array $fila): bool => $fila['periodos'][$indice]['ingresos_calculados'] === null);
                     $mes['ingresos_no_tradicionales'] = $incompletos->isEmpty() ? $terminales->sum(fn (array $fila): float => $fila['periodos'][$indice]['ingresos_no_tradicionales']) : null;
                     $mes['ingresos_calculados'] = $incompletos->isEmpty() ? round($terminales->sum(fn (array $fila): float => $fila['periodos'][$indice]['ingresos_calculados']), 2) : null;
-                    $mes['estado_ingresos'] = $incompletos->contains(fn (array $fila): bool => $fila['periodos'][$indice]['estado_ingresos'] === 'pendiente') ? 'pendiente' : ($incompletos->isEmpty() ? 'listo' : 'sin_datos');
+                    $mes['estado_ingresos'] = $incompletos->isEmpty() ? 'listo' : 'sin_datos';
                     $periodos[] = $mes;
                 }
 
