@@ -360,10 +360,10 @@ JS;
         $impresion->assertSee('Premios sacados 2');
         $documento = new \DOMDocument;
         @$documento->loadHTML($impresion->getContent());
-        $this->assertSame('63.00', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[6]/div[1]')->item(0)->textContent));
-        $this->assertSame('37.00', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[8]/div[1]')->item(0)->textContent));
-        $this->assertSame('63%', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[6]/div[contains(@class,"porcentaje-premios")]')->item(0)->textContent));
-        $this->assertSame('37%', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[8]/div[contains(@class,"porcentaje-utilidad")]')->item(0)->textContent));
+        $this->assertSame('63.00', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[4]/div[1]')->item(0)->textContent));
+        $this->assertSame('37.00', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[5]/div[1]')->item(0)->textContent));
+        $this->assertSame('63%', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[4]/div[contains(@class,"porcentaje-premios")]')->item(0)->textContent));
+        $this->assertSame('37%', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[5]/div[contains(@class,"porcentaje-utilidad")]')->item(0)->textContent));
         $sinVentasNoTradicionales = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'empresa' => 'Grupo Joselito', 'alcance' => 'terminal', 'terminal' => '1001', 'productos_filtrados' => 1, 'productos' => ['Recarga']]))->assertOk();
         $this->assertSame(0.0, $sinVentasNoTradicionales->viewData('datosTabla')[0]['periodos'][0]['ventas']);
         $this->assertSame((float) $esperados['1001'], $sinVentasNoTradicionales->viewData('datosTabla')[0]['periodos'][0]['premios_sacados']);
@@ -453,7 +453,7 @@ JS;
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
             ->assertOk()->assertSee('Ingresos calculado')->assertDontSee('966,151.06')
             ->assertSeeInOrder(['Tradicional', 'No tradicional', 'Recargas'])
-            ->assertSee('16,277.74')->assertSee('6,179.33')->assertSee('% ing')->assertSee('10.77%')->assertDontSee('5.20%')->assertSee('100.00%')->assertSee('7.50%');
+            ->assertSee('16,277.74')->assertSee('6,179.33')->assertDontSee('% ing')->assertDontSee('10.77%')->assertSee('63%')->assertSee('37%');
         $this->assertSame(966151.06, $impresion->viewData('grupos')->first()->first()['periodos'][0]['ingresos_calculados']);
         $ruta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
         $this->assertSame(966151.06, $ruta->viewData('datosTabla')[0]['periodos'][0]['ingresos_calculados']);
@@ -540,13 +540,10 @@ JS;
         $informeId = $pagina->viewData('informeId');
         DB::table('premios_bet')->update(['monto' => 999999]);
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'imprimir']))
-            ->assertOk()->assertSee('40.91%')->assertSee('59.09%')->assertSee('% Premios: 63%')->assertSee('% Utilidad: 37%')
+            ->assertOk()->assertDontSee('40.91%')->assertDontSee('59.09%')->assertSee('% Premios: 63%')->assertSee('% Utilidad: 37%')
             ->assertSee('Resultado Bruto')->assertDontSee('90.00%');
-        $impresion->assertSee('<div class="importe-general">59</div>', false)
-            ->assertSee('<div class="importe-general">41</div>', false)
-            ->assertSee('<div class="importe-general">126.00</div>', false)
-            ->assertSee('<div class="importe-general">74.00</div>', false)
-            ->assertSee('<div class="importe-general">—</div>', false);
+        $impresion->assertSee('<div class="importe-general">126.00</div>', false)
+            ->assertSee('<div class="importe-general">74.00</div>', false);
         $this->assertSame($pagina->viewData('referenciasGlobales'), $impresion->viewData('referenciasGlobales'));
         $pdf = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))
             ->assertOk()->assertHeader('Content-Type', 'application/pdf');
@@ -583,6 +580,42 @@ JS;
         }
     }
 
+    public function test_v10_impresion_ajusta_carta_y_legal_con_importes_uniformes(): void
+    {
+        $this->datos();
+        foreach (['2026-01-15', '2026-02-15'] as $fecha) {
+            DB::table('vt_usuarios_bet')->insert([
+                ['agencia_id' => '1001', 'fecha' => $fecha, 'tipo' => 'Tradicional', 'monto' => 1977456],
+                ['agencia_id' => '1003', 'fecha' => $fecha, 'tipo' => 'Tradicional', 'monto' => 9876543.21],
+            ]);
+        }
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'alcance' => 'todas', 'terminal' => '']))
+            ->assertOk()->assertSee('name="tamano_hoja"', false)->assertSee('Carta (8.5 x 11 pulgadas)')->assertSee('Legal (8.5 x 14 pulgadas)');
+        $parametros = ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir'];
+        $fuentes = [];
+        foreach (['letter' => 792, 'legal' => 1008] as $tamano => $ancho) {
+            $html = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'tamano_hoja' => $tamano]))
+                ->assertOk()->assertViewHas('tamanoHoja', $tamano)->assertDontSee('% ing')->assertSee('1,977,556.00');
+            $fuentes[$tamano] = $html->viewData('tamanoFuenteImportes');
+            $this->assertGreaterThan(0, $fuentes[$tamano]);
+            $documento = new \DOMDocument;
+            @$documento->loadHTML($html->getContent());
+            $xpath = new \DOMXPath($documento);
+            $this->assertSame(12, $xpath->query('(//thead)[1]/tr[2]/th')->length);
+            $this->assertSame(0, $xpath->query('//th[normalize-space(.)="Premios sacados" or normalize-space(.)="Utilidad"]')->length);
+            $pdf = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'salida' => 'pdf', 'tamano_hoja' => $tamano]))
+                ->assertOk()->assertHeader('Content-Type', 'application/pdf');
+            $this->assertSame(1, preg_match('/\/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]/', $pdf->getContent(), $dimensiones));
+            $this->assertEqualsWithDelta($ancho, (float) $dimensiones[3], 0.1);
+            $this->assertEqualsWithDelta(612, (float) $dimensiones[4], 0.1);
+        }
+        $this->assertGreaterThan($fuentes['letter'], $fuentes['legal']);
+        $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', $parametros))->assertOk()->assertViewHas('tamanoHoja', 'letter');
+        foreach (['a3', '', ['legal']] as $invalido) {
+            $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'tamano_hoja' => $invalido]))->assertUnprocessable()->assertJsonValidationErrors('tamano_hoja');
+        }
+    }
+
     public function test_v10_balance_y_resultado_bruto_usan_utilidad_2_por_terminal_y_ruta(): void
     {
         $this->datos();
@@ -611,7 +644,7 @@ JS;
         $documento = new \DOMDocument;
         @$documento->loadHTML($impresion->getContent());
         $xpath = new \DOMXPath($documento);
-        $this->assertSame('731,638', trim($xpath->query('//tbody/tr[1]/td[last()]/div[1]')->item(0)->textContent));
+        $this->assertSame('731,638.12', trim($xpath->query('//tbody/tr[1]/td[last()]/div[1]')->item(0)->textContent));
         $this->assertSame('1,245,872.88', trim($xpath->query('//tbody/tr[1]/td[last()]/div[2]')->item(0)->textContent));
         $this->assertSame('731,703.12', trim($xpath->query('//tbody/tr[1]/td[last()]/div[3]')->item(0)->textContent));
     }

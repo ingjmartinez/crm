@@ -116,7 +116,12 @@
                                 <option value="{{ $ruta }}">{{ $ruta }}</option>
                             @endforeach
                         </select>
-                        <p class="text-muted small mt-3 mb-0">Agrupación: {{ $filtros['agrupacion'] === 'ruta' ? 'Por ruta y empresa' : 'Por terminal' }}. Se incluyen los resultados consultados con importes y totales por mes, en bloques de tres meses y sin decimales. La búsqueda de la tabla no limita la impresión. La consulta permanece disponible durante 10 minutos.</p>
+                        <label for="tamanoHojaImpresionV10" class="form-label mt-3">Tamaño de hoja</label>
+                        <select id="tamanoHojaImpresionV10" name="tamano_hoja" class="form-select">
+                            <option value="letter">Carta (8.5 x 11 pulgadas)</option>
+                            <option value="legal">Legal (8.5 x 14 pulgadas)</option>
+                        </select>
+                        <p class="text-muted small mt-3 mb-0">Agrupación: {{ $filtros['agrupacion'] === 'ruta' ? 'Por ruta y empresa' : 'Por terminal' }}. Impresión horizontal, en bloques de dos meses, con dos decimales y las columnas visibles del reporte. El tamaño de los montos se ajusta a la hoja seleccionada. La búsqueda de la tabla no limita la impresión. La consulta permanece disponible durante 10 minutos.</p>
                         <div id="estadoImpresionV10" class="mt-3" role="status" aria-live="polite"></div>
                     </div>
                     <div class="modal-footer">

@@ -96,16 +96,47 @@ class RentabilidadAgenciaV10Controller extends Controller
         $productosPremios = $consulta['productos_premios'];
         $referenciasGlobales = $consulta['referencias_globales'];
         $esImpresion = $request->validated('salida') === 'imprimir';
-        $datos = compact('grupos', 'bloquesMeses', 'filtros', 'productos', 'productosPremios', 'esImpresion', 'referenciasGlobales');
+        $tamanoHoja = $request->validated('tamano_hoja', 'letter');
+        $anchoHoja = $tamanoHoja === 'legal' ? 1008 : 792;
+        $tamanoFuenteImportes = $this->tamanoFuenteImpresion($grupos, $anchoHoja, min(2, count($consulta['meses'])));
+        $datos = compact('grupos', 'bloquesMeses', 'filtros', 'productos', 'productosPremios', 'esImpresion', 'referenciasGlobales', 'tamanoHoja', 'tamanoFuenteImportes');
         if ($esImpresion) {
             return response()->view('gerencia.rentabilidad-agencia-v10-impresion', $datos)->header('Cache-Control', 'private, no-store');
         }
-        $pdf = Pdf::loadView('gerencia.rentabilidad-agencia-v10-impresion', $datos)->setPaper('a4', 'landscape');
+        $pdf = Pdf::loadView('gerencia.rentabilidad-agencia-v10-impresion', $datos)->setPaper($tamanoHoja, 'landscape');
         $pdf->render();
         $dompdf = $pdf->getDomPDF();
-        $dompdf->getCanvas()->page_text(695, 575, 'Página {PAGE_NUM} de {PAGE_COUNT}', $dompdf->getFontMetrics()->getFont('DejaVu Sans'), 8, [0.4, 0.45, 0.5]);
+        $canvas = $dompdf->getCanvas();
+        $canvas->page_text($canvas->get_width() - 150, $canvas->get_height() - 24, 'Página {PAGE_NUM} de {PAGE_COUNT}', $dompdf->getFontMetrics()->getFont('DejaVu Sans'), 8, [0.4, 0.45, 0.5]);
 
         return $pdf->download('rentabilidad_agencia_v10.pdf')->header('Cache-Control', 'private, no-store');
+    }
+
+    /**
+     * @param  Collection<string, Collection<int, array<string, mixed>>>  $grupos
+     */
+    private function tamanoFuenteImpresion(Collection $grupos, int $anchoHoja, int $mesesPorBloque): float
+    {
+        $campos = ['ventas_tradicionales', 'ventas_no_tradicionales', 'ventas_recargas', 'ingresos_tradicionales', 'ingresos_no_tradicionales', 'ingresos_recargas', 'premios_sacados_2', 'utilidad_2', 'gastos', 'balance_general'];
+        $metricas = Pdf::getDomPDF()->getFontMetrics();
+        $fuente = $metricas->getFont('DejaVu Sans', 'bold');
+        $anchoMaximo = 1.0;
+        foreach ($grupos as $filas) {
+            $periodos = $filas->flatMap(fn (array $fila): array => $fila['periodos']);
+            $conjuntos = collect([$periodos])
+                ->concat($periodos->map(fn (array $periodo): Collection => collect([$periodo])))
+                ->concat($periodos->groupBy('mes')->values())
+                ->concat($filas->map(fn (array $fila): Collection => collect($fila['periodos'])));
+            foreach ($conjuntos as $conjunto) {
+                foreach ($campos as $campo) {
+                    $anchoMaximo = max($anchoMaximo, $metricas->getTextWidth(number_format($conjunto->sum($campo), 2), $fuente, 1));
+                }
+            }
+        }
+        $anchoColumna = ($anchoHoja - 48) * 0.72 / (max(1, $mesesPorBloque) * 6);
+        $fuenteMaxima = $anchoHoja > 792 ? 11 : 9;
+
+        return floor(min($fuenteMaxima, ($anchoColumna - 7) / $anchoMaximo) * 10) / 10;
     }
 
     /**

@@ -26,6 +26,7 @@ class ImprimirRentabilidadAgenciaV10Request extends FormRequest
             'informe_id' => ['required', 'uuid'],
             'ruta_impresion' => ['nullable', 'string', 'max:255'],
             'salida' => ['required', 'in:pdf,imprimir'],
+            'tamano_hoja' => ['sometimes', 'required', 'string', 'in:letter,legal'],
         ];
     }
 
@@ -38,6 +39,9 @@ class ImprimirRentabilidadAgenciaV10Request extends FormRequest
             'salida.required' => 'Selecciona Imprimir o Generar PDF.',
             'salida.in' => 'Selecciona Imprimir o Generar PDF.',
             'ruta_impresion.max' => 'La ruta seleccionada es demasiado larga.',
+            'tamano_hoja.required' => 'Selecciona el tamaño de hoja.',
+            'tamano_hoja.string' => 'Selecciona un tamaño de hoja válido.',
+            'tamano_hoja.in' => 'Selecciona Carta (8.5 x 11) o Legal (8.5 x 14).',
         ];
     }
 }
