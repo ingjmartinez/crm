@@ -87,17 +87,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[caracter]);
     const porcentajeGlobal = (referencia, campo) => referencia?.[campo] == null ? '—' : `${Number(referencia[campo]).toFixed(2)}%`;
     const productos = [['tradicionales', 'Tradicional'], ['no_tradicionales', 'No tradicional'], ['recargas', 'Recargas']];
-    const porcentajeProducto = (clave, periodo) => {
+    const porcentajeProducto = (clave, porcentajeNoTradicional) => {
         if (clave === 'tradicionales') return 100;
         if (clave === 'recargas') return 7.5;
-        return periodo.porcentaje_no_tradicional == null ? null : Number(periodo.porcentaje_no_tradicional) * 100;
+        return porcentajeNoTradicional == null ? null : Math.trunc(Number(porcentajeNoTradicional) * 100) / 100;
     };
     const textoPorcentaje = valor => valor == null ? '—' : `${valor.toFixed(2)}%`;
     const mostrarPorcentajeIngresos2 = (valor, tipo = 'display') => tipo === 'display'
         ? `<div class="desglose-productos desglose-porcentajes"><div class="linea-producto"><span class="producto-etiqueta">No tradicional</span><span>${valor == null ? '—' : (Math.trunc(valor * 100) / 100).toFixed(2) + '%'}</span></div></div>` : valor ?? '';
-    const desglosePorcentajes = (periodo, tipo = 'display') => {
-        if (tipo !== 'display') return productos.map(([clave, etiqueta]) => `${etiqueta}: ${textoPorcentaje(porcentajeProducto(clave, periodo))}`).join(' | ');
-        return `<div class="desglose-productos desglose-porcentajes">${productos.map(([clave, etiqueta]) => `<div class="linea-producto"><span class="producto-etiqueta">${etiqueta}</span><span>${textoPorcentaje(porcentajeProducto(clave, periodo))}</span></div>`).join('')}</div>`;
+    const desglosePorcentajes = (porcentajeNoTradicional, tipo = 'display') => {
+        if (tipo !== 'display') return productos.map(([clave, etiqueta]) => `${etiqueta}: ${textoPorcentaje(porcentajeProducto(clave, porcentajeNoTradicional))}`).join(' | ');
+        return `<div class="desglose-productos desglose-porcentajes">${productos.map(([clave, etiqueta]) => `<div class="linea-producto"><span class="producto-etiqueta">${etiqueta}</span><span>${textoPorcentaje(porcentajeProducto(clave, porcentajeNoTradicional))}</span></div>`).join('')}</div>`;
     };
     const desgloseProductos = (campo, periodo) => {
         const prefijo = campo === 'ventas' ? 'ventas_' : 'ingresos_';
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } },
         ...configuracion.meses.flatMap((mes, indiceMes) => medidas.map((campo, indiceCampo) => ({
             data: ['porcentaje_ingresos', 'porcentaje_ingresos_2'].includes(campo) ? null : `periodos.${indiceMes}.${campo}`,
-            visible: true,
+            visible: campo !== 'porcentaje_ingresos_2',
             defaultContent: 0,
             className: `text-end fw-bold${indiceCampo === 0 ? ' inicio-mes' : ''}`,
             render: (valor, tipo, fila) => {
@@ -156,9 +156,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     return mostrarPorcentajeIngresos2(configuracion.referenciasGlobales.ingresos_2?.empresas[fila.empresa]?.[mes.codigo]?.porcentaje ?? null, tipo);
                 }
                 if (campo === 'porcentaje_ingresos') {
-                    const periodo = fila.periodos[indiceMes] || {};
-                    if (tipo === 'sort' || tipo === 'type') return periodo.ingresos_calculados == null || !Number(periodo.ventas) ? null : Number(periodo.ingresos_calculados) / Number(periodo.ventas) * 100;
-                    return desglosePorcentajes(periodo, tipo);
+                    const porcentaje = configuracion.referenciasGlobales.ingresos_2?.empresas[fila.empresa]?.[mes.codigo]?.porcentaje ?? null;
+                    if (tipo === 'sort' || tipo === 'type') return porcentaje;
+                    return desglosePorcentajes(porcentaje, tipo);
                 }
                 if (tipo === 'display' && ['ventas', 'ingresos_calculados'].includes(campo)) {
                     return desgloseProductos(campo, fila.periodos[indiceMes] || {});
@@ -223,10 +223,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         return;
                     }
                     if (campo === 'porcentaje_ingresos') {
-                        const periodo = {
-                            porcentaje_no_tradicional: configuracion.referenciasGlobales.ingresos?.[mes.codigo] ?? null,
-                        };
-                        celda.innerHTML = desglosePorcentajes(periodo);
+                        celda.innerHTML = desglosePorcentajes(configuracion.referenciasGlobales.ingresos_2?.total[mes.codigo] ?? null);
                         return;
                     }
                     if (['ventas', 'ingresos_calculados'].includes(campo)) {

@@ -41,11 +41,11 @@
     @if ($esImpresion)<div class="barra"><button type="button" onclick="window.print()">Imprimir documento</button></div>@endif
     @php
         $campos = ['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'premios_sacados' => 'Premios sacados', 'utilidad' => 'Utilidad', 'gastos' => 'Gastos', 'balance_general' => 'Balance'];
-        $porcentajeProducto = static function (string $producto, array $periodo): string {
+        $porcentajeProducto = static function (string $producto, ?float $porcentajeNoTradicional): string {
             $porcentaje = match ($producto) {
                 'tradicionales' => 100,
                 'recargas' => 7.5,
-                default => ($periodo['porcentaje_no_tradicional'] ?? null) === null ? null : $periodo['porcentaje_no_tradicional'] * 100,
+                default => $porcentajeNoTradicional === null ? null : ((int) ($porcentajeNoTradicional * 100)) / 100,
             };
 
             return $porcentaje === null ? '—' : number_format($porcentaje, 2, '.', '').'%';
@@ -99,7 +99,7 @@
                                             @endif
                                             @if ($campo === 'porcentaje_ingresos')
                                                 @foreach (['tradicionales' => 'Tradicional', 'no_tradicionales' => 'No tradicional', 'recargas' => 'Recargas'] as $producto => $nombre)
-                                                    <div class="desglose-producto"><span class="producto-etiqueta">{{ $nombre }}</span>{{ $porcentajeProducto($producto, $fila['periodos'][$indiceMes]) }}</div>
+                                                    <div class="desglose-producto"><span class="producto-etiqueta">{{ $nombre }}</span>{{ $porcentajeProducto($producto, $referenciasGlobales['ingresos_2']['empresas'][$fila['empresa']][$mes['codigo']]['porcentaje'] ?? null) }}</div>
                                                 @endforeach
                                             @endif
                                             @unless (in_array($campo, ['ventas', 'ingresos_calculados', 'porcentaje_ingresos'], true))
@@ -148,13 +148,8 @@
                                             @endforeach
                                         @endif
                                         @if ($campo === 'porcentaje_ingresos')
-                                            @php
-                                                $periodoPorcentaje = [
-                                                    'porcentaje_no_tradicional' => $referenciasGlobales['ingresos'][$mes['codigo']] ?? null,
-                                                ];
-                                            @endphp
                                             @foreach (['tradicionales' => 'Tradicional', 'no_tradicionales' => 'No tradicional', 'recargas' => 'Recargas'] as $producto => $nombre)
-                                                <div class="desglose-producto"><span class="producto-etiqueta">{{ $nombre }}</span>{{ $porcentajeProducto($producto, $periodoPorcentaje) }}</div>
+                                                <div class="desglose-producto"><span class="producto-etiqueta">{{ $nombre }}</span>{{ $porcentajeProducto($producto, $referenciasGlobales['ingresos_2']['total'][$mes['codigo']] ?? null) }}</div>
                                             @endforeach
                                         @endif
                                         @unless (in_array($campo, ['ventas', 'ingresos_calculados', 'porcentaje_ingresos'], true))

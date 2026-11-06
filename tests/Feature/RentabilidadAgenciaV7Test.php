@@ -309,6 +309,47 @@ JS;
         }
         $referencia = $pagina->viewData('referenciasGlobales')['empresas']['Grupo Joselito']['meses']['2026-01'];
         $this->assertEqualsWithDelta(($esperados['1001'] + $esperados['1003']) / 220 * 100, $referencia['premios_sacados'], 0.000001);
+        $codigo = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const configuracion = JSON.parse(process.argv[3]);
+const esperados = JSON.parse(process.argv[4]);
+const elementos = new Map();
+const elemento = id => {
+    if (!elementos.has(id)) elementos.set(id, {value: '', classList: {add(){},remove(){}}, addEventListener(){}, replaceChildren(){}, querySelector(){return {};}, createTFoot(){return {};}});
+    return elementos.get(id);
+};
+global.document = {getElementById: elemento, addEventListener(evento, fn){global.iniciar = fn;}};
+global.Option = class {};
+global.window = {rentabilidadV10: configuracion, addEventListener(){}};
+let opciones;
+global.$ = () => ({DataTable(config){opciones = config;}});
+$.fn = {DataTable(){}};
+window.jQuery = $;
+vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
+iniciar();
+const moneda = valor => new Intl.NumberFormat('es-DO', {style: 'currency', currency: 'DOP'}).format(valor);
+const importeAzul = valor => `<div class="importe-general" title="Ventas por el porcentaje global de premios">${moneda(valor)}</div>`;
+for (const fila of configuracion.datos) {
+    const premiosEmpresa = fila.empresa === 'Grupo Joselito' ? esperados['1001'] + esperados['1003'] : esperados['1002'];
+    const ventasEmpresa = fila.empresa === 'Grupo Joselito' ? 220 : 200;
+    const celda = opciones.columns[5].render(fila.periodos[0].premios_sacados, 'display', fila);
+    assert.ok(celda.includes(importeAzul(fila.periodos[0].ventas * premiosEmpresa / ventasEmpresa)), celda);
+}
+const pies = Array.from({length: opciones.columns.length}, () => ({classList: {add(){},remove(){}}}));
+opciones.footerCallback.call({api(){return {rows(){return {data(){return {toArray(){return configuracion.datos;}};}};}, column(indice){return {footer(){return pies[indice];}};}};}});
+assert.ok(pies[5].innerHTML.includes(importeAzul(Object.values(esperados).reduce((suma, valor) => suma + valor, 0))), pies[5].innerHTML);
+JS;
+        $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v10.js'), json_encode([
+            'datos' => $pagina->viewData('datosTabla'),
+            'referenciasGlobales' => $pagina->viewData('referenciasGlobales'),
+            'meses' => $pagina->viewData('meses'),
+            'rutasDisponibles' => [],
+            'agrupacion' => 'terminal',
+        ], JSON_THROW_ON_ERROR), json_encode($esperados, JSON_THROW_ON_ERROR)]);
+        $proceso->setInput($codigo)->setTimeout(15)->run();
+        $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
         $terminal = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'empresa' => 'Grupo Joselito', 'alcance' => 'terminal', 'terminal' => '1001']))->assertOk();
         $this->assertSame($referencia, $terminal->viewData('referenciasGlobales')['empresas']['Grupo Joselito']['meses']['2026-01']);
         $rutas = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'empresa' => 'Grupo Joselito', 'agrupacion' => 'ruta']))->assertOk();
@@ -405,7 +446,7 @@ JS;
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
             ->assertOk()->assertSee('Ingresos calculado')->assertDontSee('966,151.06')
             ->assertSeeInOrder(['Tradicional', 'No tradicional', 'Recargas'])
-            ->assertSee('16,277.74')->assertSee('6,179.33')->assertSee('% ing')->assertSee('5.20%')->assertSee('100.00%')->assertSee('7.50%');
+            ->assertSee('16,277.74')->assertSee('6,179.33')->assertSee('% ing')->assertSee('10.77%')->assertDontSee('5.20%')->assertSee('100.00%')->assertSee('7.50%');
         $this->assertSame(966151.06, $impresion->viewData('grupos')->first()->first()['periodos'][0]['ingresos_calculados']);
         $ruta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
         $this->assertSame(966151.06, $ruta->viewData('datosTabla')[0]['periodos'][0]['ingresos_calculados']);
@@ -564,6 +605,8 @@ assert.equal(opciones.columns.length,18);
 assert.equal(opciones.scrollX,false);
 assert.equal(opciones.columns[3].visible,true);
 assert.equal(opciones.columns[11].visible,true);
+assert.equal(opciones.columns[4].visible,false);
+assert.equal(opciones.columns[12].visible,false);
 assert.equal(opciones.columns[2].visible,true);
 assert.equal(opciones.buttons[0].exportOptions.columns,':visible');
 assert.equal((pie.innerHTML.match(/<td\b/g)||[]).length,18);
@@ -635,15 +678,17 @@ const porcentajes = opciones.columns[3].render(null,'display',fila);
 assert.equal(opciones.buttons[0].exportOptions.format.header('',3),'% ing · 2026-01');
 assert.ok(porcentajes.indexOf('Tradicional') < porcentajes.indexOf('No tradicional'));
 assert.ok(porcentajes.indexOf('No tradicional') < porcentajes.indexOf('Recargas'));
-for (const porcentaje of ['100.00%','95.00%','7.50%']) assert.ok(porcentajes.includes(porcentaje));
+for (const porcentaje of ['100.00%','20.00%','7.50%']) assert.ok(porcentajes.includes(porcentaje));
 assert.ok(!porcentajes.includes('<span>Total</span>'));
-assert.equal(opciones.columns[3].render(null,'export',fila),'Tradicional: 100.00% | No tradicional: 95.00% | Recargas: 7.50%');
-assert.equal(opciones.columns[3].render(null,'sort',fila),80);
-assert.ok(pies[3].innerHTML.includes('95.00%'));
+assert.equal(opciones.columns[3].render(null,'export',fila),'Tradicional: 100.00% | No tradicional: 20.00% | Recargas: 7.50%');
+assert.equal(opciones.columns[3].render(null,'sort',fila),20);
+assert.ok(pies[3].innerHTML.includes('20.00%'));
 const sinVentas = {...fila,periodos:[{ventas:0,ventas_no_tradicionales:0,ingresos_no_tradicionales:0}]};
-assert.ok(opciones.columns[3].render(null,'display',sinVentas).includes('—'));
+assert.ok(opciones.columns[3].render(null,'display',sinVentas).includes('20.00%'));
+assert.ok(opciones.columns[11].render(null,'display',fila).includes('—'));
+assert.equal(opciones.columns[11].render(null,'sort',fila),null);
 const tasaMayo = {...fila,periodos:[{porcentaje_no_tradicional:29065.02/559158,ventas_no_tradicionales:559158,ingresos_no_tradicionales:29065.02}]};
-assert.ok(opciones.columns[3].render(null,'display',tasaMayo).includes('5.20%'));
+assert.ok(opciones.columns[3].render(null,'display',tasaMayo).includes('20.00%'));
 assert.equal(opciones.buttons[0].exportOptions.format.header('',4),'% ing 2 · 2026-01');
 assert.ok(opciones.columns[4].render(null,'display',fila).includes('20.00%'));
 assert.equal(opciones.columns[4].render(null,'export',fila),20);
@@ -653,6 +698,8 @@ assert.ok(opciones.columns[12].render(null,'display',fila).includes('—'));
 assert.equal(opciones.columns[12].render(null,'export',fila),'');
 window.rentabilidadV10.referenciasGlobales.ingresos_2.empresas['Grupo Joselito']['2026-01'].porcentaje=136700531/19531959.98;
 const conciliacion=opciones.columns[4].render(null,'display',fila);
+assert.ok(opciones.columns[3].render(null,'display',fila).includes('6.99%'));
+assert.ok(opciones.columns[3].render(null,'export',fila).includes('6.99%'));
 assert.ok(conciliacion.includes('6.99%'));
 assert.ok(!conciliacion.includes('699.88%'));
 assert.ok(!conciliacion.includes('7.00%'));
@@ -661,7 +708,7 @@ const incompleta = {...fila,periodos:[{ventas:100,ingresos_calculados:null}]};
 const apiIncompleta = {...api,rows(){return {data(){return {toArray(){return [fila,incompleta];}};}};}};
 opciones.footerCallback.call({api(){return apiIncompleta;}});
 assert.ok(pies[2].innerHTML.includes('Sin porcentaje contable'));
-assert.ok(pies[3].innerHTML.includes('95.00%'));
+assert.ok(pies[3].innerHTML.includes('20.00%'));
 window.rentabilidadV10.agrupacion='ruta';
 iniciar();
 assert.equal(opciones.buttons[0].exportOptions.format.header('',0),'Ruta / Empresa');
