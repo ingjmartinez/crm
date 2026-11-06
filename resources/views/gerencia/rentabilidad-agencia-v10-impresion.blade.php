@@ -40,7 +40,7 @@
 <body>
     @if ($esImpresion)<div class="barra"><button type="button" onclick="window.print()">Imprimir documento</button></div>@endif
     @php
-        $campos = ['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'premios_sacados' => 'Premios sacados', 'utilidad' => 'Utilidad', 'gastos' => 'Gastos', 'balance_general' => 'Balance'];
+        $campos = ['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'premios_sacados' => 'Premios sacados', 'premios_sacados_2' => 'Premios sacados 2', 'utilidad' => 'Utilidad', 'utilidad_2' => 'Utilidad 2', 'gastos' => 'Gastos', 'balance_general' => 'Balance'];
         $porcentajeProducto = static function (string $producto, ?float $porcentajeNoTradicional): string {
             $porcentaje = match ($producto) {
                 'tradicionales' => 100,
@@ -86,7 +86,12 @@
                                 @foreach ($bloque as $indiceMes => $mes)
                                     @foreach ($campos as $campo => $etiqueta)
                                         @php
-                                            $valor = $campo === 'porcentaje_ingresos' ? null : $fila['periodos'][$indiceMes][$campo];
+                                            $valor = match ($campo) {
+                                                'porcentaje_ingresos' => null,
+                                                'premios_sacados_2' => round($fila['periodos'][$indiceMes]['ventas_tradicionales'] * 0.63, 2),
+                                                'utilidad_2' => round($fila['periodos'][$indiceMes]['ventas_tradicionales'] - round($fila['periodos'][$indiceMes]['ventas_tradicionales'] * 0.63, 2), 2),
+                                                default => $fila['periodos'][$indiceMes][$campo],
+                                            };
                                         @endphp
                                         <td @class(['importe', 'positivo' => $campo === 'balance_general' && $valor > 0, 'negativo' => $campo === 'balance_general' && $valor < 0])>
                                             @if (in_array($campo, ['ventas', 'ingresos_calculados'], true))
@@ -103,8 +108,11 @@
                                                 @endforeach
                                             @endif
                                             @unless (in_array($campo, ['ventas', 'ingresos_calculados', 'porcentaje_ingresos'], true))
-                                                <div>{{ number_format($valor, 0) }}</div>
+                                                <div>{{ number_format($valor, in_array($campo, ['premios_sacados_2', 'utilidad_2'], true) ? 2 : 0) }}</div>
                                             @endunless
+                                            @if (in_array($campo, ['premios_sacados_2', 'utilidad_2'], true))
+                                                <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados_2', 'porcentaje-utilidad' => $campo === 'utilidad_2'])>{{ $campo === 'premios_sacados_2' ? '63%' : '37%' }}</div>
+                                            @endif
                                             @if ($campo === 'utilidad')
                                                 <div class="importe-general">{{ $ventasMenosPremios($fila['periodos'][$indiceMes]['ventas'], $referenciaEmpresa['meses'][$mes['codigo']] ?? []) }}</div>
                                             @elseif ($campo === 'premios_sacados')
@@ -134,7 +142,12 @@
                             @foreach ($bloque as $indiceMes => $mes)
                                 @foreach ($campos as $campo => $etiqueta)
                                     @php
-                                        $total = $campo === 'porcentaje_ingresos' ? null : $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes][$campo]);
+                                        $total = match ($campo) {
+                                            'porcentaje_ingresos' => null,
+                                            'premios_sacados_2' => round($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas_tradicionales']) * 0.63, 2),
+                                            'utilidad_2' => round($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas_tradicionales']) - round($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas_tradicionales']) * 0.63, 2), 2),
+                                            default => $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes][$campo]),
+                                        };
                                         $incompleto = $campo === 'ingresos_calculados' && $filas->contains(fn ($fila) => $fila['periodos'][$indiceMes][$campo] === null);
                                     @endphp
                                     <td @class(['importe', 'positivo' => $campo === 'balance_general' && $total > 0, 'negativo' => $campo === 'balance_general' && $total < 0])>
@@ -153,8 +166,11 @@
                                             @endforeach
                                         @endif
                                         @unless (in_array($campo, ['ventas', 'ingresos_calculados', 'porcentaje_ingresos'], true))
-                                            <div>{{ number_format($total, 0) }}</div>
+                                            <div>{{ number_format($total, in_array($campo, ['premios_sacados_2', 'utilidad_2'], true) ? 2 : 0) }}</div>
                                         @endunless
+                                        @if (in_array($campo, ['premios_sacados_2', 'utilidad_2'], true))
+                                            <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados_2', 'porcentaje-utilidad' => $campo === 'utilidad_2'])>{{ $campo === 'premios_sacados_2' ? '63%' : '37%' }}</div>
+                                        @endif
                                         @if ($campo === 'utilidad')
                                             <div class="importe-general">{{ $ventasMenosPremios($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas']), $referenciasGlobales['total']['meses'][$mes['codigo']] ?? []) }}</div>
                                         @elseif ($campo === 'premios_sacados')

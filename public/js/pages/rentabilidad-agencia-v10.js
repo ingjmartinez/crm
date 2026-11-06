@@ -80,8 +80,11 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    const medidas = ['ventas', 'ingresos_calculados', 'porcentaje_ingresos', 'porcentaje_ingresos_2', 'premios_sacados', 'utilidad', 'gastos', 'balance_general'];
-    const etiquetas = ['Ventas', 'Ingresos calculado', '% ing', '% ing 2', 'Premios sacados', 'Utilidad', 'Gastos', 'Balance general'];
+    const medidas = ['ventas', 'ingresos_calculados', 'porcentaje_ingresos', 'porcentaje_ingresos_2', 'premios_sacados', 'premios_sacados_2', 'utilidad', 'utilidad_2', 'gastos', 'balance_general'];
+    const etiquetas = ['Ventas', 'Ingresos calculado', '% ing', '% ing 2', 'Premios sacados', 'Premios sacados 2', 'Utilidad', 'Utilidad 2', 'Gastos', 'Balance general'];
+    const premiosSacados2 = ventas => Math.round(Number(ventas || 0) * 0.63 * 100) / 100;
+    const utilidad2 = ventas => Math.round((Number(ventas || 0) - premiosSacados2(ventas)) * 100) / 100;
+    const mostrarEstimado = (campo, importe) => `<div>${moneda(importe)}</div><small class="porcentaje ${campo === 'premios_sacados_2' ? 'porcentaje-premios' : 'porcentaje-utilidad'}">${campo === 'premios_sacados_2' ? '63%' : '37%'}</small>`;
     const porRuta = configuracion.agrupacion === 'ruta';
     const unidad = porRuta ? 'rutas' : 'terminales';
     const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[caracter]);
@@ -147,11 +150,16 @@ document.addEventListener('DOMContentLoaded', function () {
             return `${valor} - ${fila.nombre}`;
         } },
         ...configuracion.meses.flatMap((mes, indiceMes) => medidas.map((campo, indiceCampo) => ({
-            data: ['porcentaje_ingresos', 'porcentaje_ingresos_2'].includes(campo) ? null : `periodos.${indiceMes}.${campo}`,
-            visible: campo !== 'porcentaje_ingresos_2',
+            data: ['porcentaje_ingresos', 'porcentaje_ingresos_2', 'premios_sacados_2', 'utilidad_2'].includes(campo) ? null : `periodos.${indiceMes}.${campo}`,
+            visible: !['porcentaje_ingresos', 'porcentaje_ingresos_2'].includes(campo),
             defaultContent: 0,
             className: `text-end fw-bold${indiceCampo === 0 ? ' inicio-mes' : ''}`,
             render: (valor, tipo, fila) => {
+                if (['premios_sacados_2', 'utilidad_2'].includes(campo)) {
+                    const ventas = fila.periodos[indiceMes]?.ventas_tradicionales;
+                    const importe = campo === 'premios_sacados_2' ? premiosSacados2(ventas) : utilidad2(ventas);
+                    return tipo === 'display' ? mostrarEstimado(campo, importe) : importe;
+                }
                 if (campo === 'porcentaje_ingresos_2') {
                     return mostrarPorcentajeIngresos2(configuracion.referenciasGlobales.ingresos_2?.empresas[fila.empresa]?.[mes.codigo]?.porcentaje ?? null, tipo);
                 }
@@ -218,6 +226,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 configuracion.meses.forEach((mes, indiceMes) => medidas.forEach((campo, indiceCampo) => {
                     const total = Math.round(filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.[campo] || 0), 0) * 100) / 100;
                     const celda = api.column(1 + indiceMes * medidas.length + indiceCampo).footer();
+                    if (['premios_sacados_2', 'utilidad_2'].includes(campo)) {
+                        const ventas = filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.ventas_tradicionales || 0), 0);
+                        celda.innerHTML = mostrarEstimado(campo, campo === 'premios_sacados_2' ? premiosSacados2(ventas) : utilidad2(ventas));
+                        return;
+                    }
                     if (campo === 'porcentaje_ingresos_2') {
                         celda.innerHTML = mostrarPorcentajeIngresos2(configuracion.referenciasGlobales.ingresos_2?.total[mes.codigo] ?? null);
                         return;

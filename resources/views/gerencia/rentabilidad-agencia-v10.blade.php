@@ -79,19 +79,19 @@
                                 <thead>
                                     <tr>
                                         <th rowspan="2">{{ $filtros['agrupacion'] === 'ruta' ? 'Ruta / Empresa' : 'Terminal / Agencia' }}</th>
-                                        @foreach ($meses as $mes)<th colspan="8" class="text-center grupo-mes">{{ $mes['nombre'] }}</th>@endforeach
+                                        @foreach ($meses as $mes)<th colspan="10" class="text-center grupo-mes">{{ $mes['nombre'] }}</th>@endforeach
                                         <th rowspan="2" class="inicio-mes">Resultado Bruto</th>
                                     </tr>
                                     <tr>
                                         @foreach ($meses as $mes)
-                                            @foreach (['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'porcentaje_ingresos_2' => '% ing 2', 'premios_sacados' => 'Premios sacados', 'utilidad' => 'Utilidad', 'gastos' => 'Gastos', 'balance_general' => 'Balance general'] as $campo => $etiqueta)
+                                            @foreach (['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'porcentaje_ingresos_2' => '% ing 2', 'premios_sacados' => 'Premios sacados', 'premios_sacados_2' => 'Premios sacados 2', 'utilidad' => 'Utilidad', 'utilidad_2' => 'Utilidad 2', 'gastos' => 'Gastos', 'balance_general' => 'Balance general'] as $campo => $etiqueta)
                                                 <th @class(['inicio-mes' => $loop->first])>{{ $etiqueta }} <span class="d-block small text-muted">{{ $mes['codigo'] }}</span></th>
                                             @endforeach
                                         @endforeach
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
-                                <tfoot class="table-light fw-semibold"><tr><td>Totales</td>@foreach ($meses as $mes)@foreach (range(1, 8) as $columna)<td class="text-end"></td>@endforeach @endforeach<td class="text-end inicio-mes"></td></tr></tfoot>
+                                <tfoot class="table-light fw-semibold"><tr><td>Totales</td>@foreach ($meses as $mes)@foreach (range(1, 10) as $columna)<td class="text-end"></td>@endforeach @endforeach<td class="text-end inicio-mes"></td></tr></tfoot>
                             </table>
                         </div>
                     @endif
