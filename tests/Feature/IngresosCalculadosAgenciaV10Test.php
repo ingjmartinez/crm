@@ -64,7 +64,7 @@ class IngresosCalculadosAgenciaV10Test extends TestCase
         $this->assertSame(0.1, $service->porcentaje('Grupo Joselito', '2026-05')['porcentaje']);
         $this->assertSame(0.2, $service->porcentaje('Grupo Joselito', '2026-06')['porcentaje']);
         $this->assertSame(0.3, $service->porcentaje('Negosur', '2026-05')['porcentaje']);
-        $this->assertSame(['porcentaje' => null, 'estado' => 'sin_datos', 'base' => 0.0], $service->porcentaje('Otra empresa', '2026-05'));
+        $this->assertSame(['porcentaje' => null, 'estado' => 'sin_datos', 'base' => 0.0, 'ingresos' => null], $service->porcentaje('Otra empresa', '2026-05'));
     }
 
     #[DataProvider('cuentasSinDatos')]

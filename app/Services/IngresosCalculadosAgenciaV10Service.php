@@ -11,7 +11,7 @@ class IngresosCalculadosAgenciaV10Service
 
     public const CUENTA_INGRESOS = '400120001';
 
-    /** @var array<string, array{porcentaje: ?float, base: float}> */
+    /** @var array<string, array{porcentaje: ?float, base: float, ingresos: ?float}> */
     private array $consultas = [];
 
     public static function clave(string $empresa, string $mes): string
@@ -19,14 +19,14 @@ class IngresosCalculadosAgenciaV10Service
         return 'rentabilidad-v10:porcentajes-ingresos:global-v2:'.$empresa.':'.$mes;
     }
 
-    /** @return array{porcentaje: ?float, estado: string, base: float} */
+    /** @return array{porcentaje: ?float, estado: string, base: float, ingresos: ?float} */
     public function porcentaje(string $empresa, string $mes): array
     {
         $empresaId = match ($empresa) {
             'Grupo Joselito' => '168', 'Negosur' => '169', default => null,
         };
         if ($empresaId === null) {
-            return ['porcentaje' => null, 'estado' => 'sin_datos', 'base' => 0.0];
+            return ['porcentaje' => null, 'estado' => 'sin_datos', 'base' => 0.0, 'ingresos' => null];
         }
 
         $clave = $empresaId.'|'.$mes;
@@ -35,10 +35,10 @@ class IngresosCalculadosAgenciaV10Service
         }
         $consulta = $this->consultas[$clave];
 
-        return ['porcentaje' => $consulta['porcentaje'], 'estado' => $consulta['porcentaje'] === null ? 'sin_datos' : 'listo', 'base' => $consulta['base']];
+        return ['porcentaje' => $consulta['porcentaje'], 'estado' => $consulta['porcentaje'] === null ? 'sin_datos' : 'listo', 'base' => $consulta['base'], 'ingresos' => $consulta['ingresos']];
     }
 
-    /** @return array{porcentaje: ?float, base: float} */
+    /** @return array{porcentaje: ?float, base: float, ingresos: ?float} */
     public function consultarMes(string $empresa, string $mes): array
     {
         $desde = Carbon::createFromFormat('!Y-m', $mes);
@@ -57,6 +57,7 @@ class IngresosCalculadosAgenciaV10Service
             'porcentaje' => $ventas > 0 && $creditos->has(self::CUENTA_INGRESOS)
                 ? (float) $creditos->get(self::CUENTA_INGRESOS) / $ventas : null,
             'base' => $ventas,
+            'ingresos' => $creditos->has(self::CUENTA_INGRESOS) ? (float) $creditos->get(self::CUENTA_INGRESOS) : null,
         ];
     }
 }

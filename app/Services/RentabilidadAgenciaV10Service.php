@@ -7,6 +7,8 @@ use App\Models\ClasificacionCuenta;
 use App\Models\EntradaDiario;
 use App\Models\RentabilidadAgenciaR20;
 use App\Models\RentabilidadAgenciaV5;
+use App\Models\VtUsuarioBet;
+use App\Models\VtUsuarioNet;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -18,6 +20,8 @@ use Illuminate\Validation\ValidationException;
 class RentabilidadAgenciaV10Service
 {
     public const PRODUCTOS = ['Tradicional', 'No Tradicional', 'Recarga'];
+
+    public const PRODUCTOS_PREMIOS = ['Tradicional', 'No Tradicional'];
 
     public const IMPORTES = ['ventas', 'premios_sacados', 'utilidad', 'gastos', 'balance_general'];
 
@@ -39,6 +43,12 @@ class RentabilidadAgenciaV10Service
     public function productos(array $filtros): array
     {
         return array_values(array_unique($filtros['productos'] ?? (! empty($filtros['productos_filtrados']) ? [] : self::PRODUCTOS)));
+    }
+
+    /** @param array<string, mixed> $filtros @return list<string> */
+    public function productosPremios(array $filtros): array
+    {
+        return array_values(array_unique($filtros['premios_productos'] ?? (! empty($filtros['premios_filtrados']) ? [] : array_intersect($this->productos($filtros), self::PRODUCTOS_PREMIOS))));
     }
 
     /** @param array<string, mixed> $filtros @param array<string, mixed> $resultado */
@@ -206,12 +216,48 @@ class RentabilidadAgenciaV10Service
             ->orderBy('terminal')->get(['terminal', 'nombre_agencia', 'agencia', 'sistema', 'empresa', 'ruta']);
     }
 
+    /** @param array<string, mixed> $filtros @return array<string, array<string, array{ventas: float, ingresos: ?float, porcentaje: ?float}>> */
+    public function porcentajesIngresos2(array $filtros): array
+    {
+        [$desde, $hasta] = $this->rango($filtros);
+        $agencias = $this->agencias([...$filtros, 'ruta' => '', 'alcance' => 'todas', 'terminal' => '']);
+        $referencias = [];
+        foreach ($agencias->groupBy(fn (RentabilidadAgenciaV5 $agencia): string => trim((string) $agencia->empresa)) as $empresa => $terminalesEmpresa) {
+            $ventas = [];
+            foreach (['bet' => VtUsuarioBet::class, 'net' => VtUsuarioNet::class] as $sistema => $modelo) {
+                $terminales = $terminalesEmpresa->filter(function (RentabilidadAgenciaV5 $agencia) use ($sistema): bool {
+                    $nombre = mb_strtoupper(trim((string) $agencia->sistema));
+
+                    return $sistema === 'bet' ? ! in_array($nombre, ['LOTONET', 'LOTENET'], true) : $nombre !== 'LOTOBET';
+                })->pluck('terminal')->unique()->all();
+                if ($terminales === []) {
+                    continue;
+                }
+                $periodo = $this->periodoSql('fecha', false);
+                $meses = $modelo::query()->whereIn('agencia_id', $terminales)->where('tipo', 'No Tradicional')
+                    ->where('fecha', '>=', $desde->toDateString())->where('fecha', '<', $hasta->copy()->addDay()->toDateString())
+                    ->selectRaw($periodo.' AS mes, SUM(COALESCE(monto, 0)) AS ventas')->groupByRaw($periodo)->get();
+                foreach ($meses as $mes) {
+                    $ventas[$mes->mes] = ($ventas[$mes->mes] ?? 0.0) + (float) $mes->ventas;
+                }
+            }
+            for ($fecha = $desde->copy(); $fecha->lte($hasta); $fecha->addMonth()) {
+                $mes = $fecha->format('Y-m');
+                $ingresos = $this->ingresos->porcentaje($empresa, $mes)['ingresos'];
+                $venta = round($ventas[$mes] ?? 0.0, 2);
+                $referencias[$empresa][$mes] = ['ventas' => $venta, 'ingresos' => $ingresos, 'porcentaje' => $ingresos === null || $ingresos == 0 ? null : $venta / $ingresos];
+            }
+        }
+
+        return $referencias;
+    }
+
     /** @param array<string, mixed> $filtros @return array{filas: Collection, totales: array<string, float>, desde: Carbon, hasta: Carbon} */
     public function reporte(array $filtros, bool $diario = false): array
     {
         [$desde, $hasta] = $this->rango($filtros);
         $agencias = $this->agencias($filtros);
-        $mediciones = $this->mediciones($agencias, $desde, $hasta, $this->productos($filtros), $diario);
+        $mediciones = $this->mediciones($agencias, $desde, $hasta, $this->productos($filtros), $diario, $this->productosPremios($filtros));
         $r20 = (float) RentabilidadAgenciaR20::query()->where('terminal', '*')
             ->orderByRaw('CASE WHEN mes = ? THEN 0 ELSE 1 END', ['GLOBAL'])->orderByDesc('updated_at')->value('monto');
         $r20PorDia = $diario ? $this->distribuirR20Diario($mediciones, $r20) : [];
@@ -357,14 +403,13 @@ class RentabilidadAgenciaV10Service
         return DB::query()->fromSub($union, 'ventas_terminal')->select('periodo')->groupBy('periodo')->havingRaw('SUM(ventas) > 0')->pluck('periodo');
     }
 
-    /** @param Collection<int, RentabilidadAgenciaV5> $agencias @param list<string> $productos @return Collection<string, object> */
-    private function mediciones(Collection $agencias, Carbon $desde, Carbon $hasta, array $productos, bool $diario): Collection
+    /** @param Collection<int, RentabilidadAgenciaV5> $agencias @param list<string> $productos @param list<string> $productosPremios @return Collection<string, object> */
+    private function mediciones(Collection $agencias, Carbon $desde, Carbon $hasta, array $productos, bool $diario, array $productosPremios): Collection
     {
         if ($agencias->isEmpty()) {
             return collect();
         }
         $ramas = [];
-        $productosPremios = array_values(array_intersect($productos, ['Tradicional', 'No Tradicional']));
         $premiosFiltro = count($productosPremios) === 2 ? null : CatalogoJuego::query()->whereIn('tipo', $productosPremios)->pluck('producto_id')->map(fn ($id): string => (string) $id)->all();
         foreach (['bet', 'net'] as $sistema) {
             $terminales = $agencias->filter(function (RentabilidadAgenciaV5 $agencia) use ($sistema): bool {

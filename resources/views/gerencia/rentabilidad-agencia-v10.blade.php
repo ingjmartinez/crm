@@ -38,11 +38,23 @@
                 <div class="col-md-2"><label for="alcanceV10" class="form-label">Consultar</label><select id="alcanceV10" name="alcance" class="form-select"><option value="todas" @selected($filtros['alcance'] === 'todas')>Todas las terminales</option><option value="terminal" @selected($filtros['alcance'] === 'terminal')>Una terminal</option></select></div>
                 <div class="col-md-3"><label for="terminalV10" class="form-label">Número de terminal</label><input id="terminalV10" name="terminal" class="form-control" value="{{ $filtros['terminal'] }}" placeholder="Ej.: 052232"></div>
                 <div class="col-md-auto"><button class="btn btn-primary" type="submit">Consultar</button></div>
-                <div class="col-12"><input type="hidden" name="productos_filtrados" value="1"><span class="form-label d-block">Productos incluidos</span><div class="d-flex gap-3 flex-wrap">
+                <div class="col-12"><input type="hidden" name="productos_filtrados" value="1"><span class="form-label d-block">Productos en ventas</span><div class="d-flex gap-3 flex-wrap">
                     @foreach (\App\Services\RentabilidadAgenciaV10Service::PRODUCTOS as $producto)
                         <label class="form-check"><input type="checkbox" name="productos[]" value="{{ $producto }}" class="form-check-input" @checked(in_array($producto, $productos, true))><span class="form-check-label">{{ $producto }}</span></label>
                     @endforeach
                 </div></div>
+                <div class="col-12">
+                    <fieldset class="border rounded p-3">
+                        <legend class="float-none w-auto px-2 fs-6">Premios sacados incluidos</legend>
+                        <input type="hidden" name="premios_filtrados" value="1">
+                        <div class="d-flex gap-3 flex-wrap">
+                            @foreach (\App\Services\RentabilidadAgenciaV10Service::PRODUCTOS_PREMIOS as $producto)
+                                <label class="form-check" for="premiosProductoV10-{{ $loop->index }}"><input type="checkbox" id="premiosProductoV10-{{ $loop->index }}" name="premios_productos[]" value="{{ $producto }}" class="form-check-input" @checked(in_array($producto, $productosPremios, true))><span class="form-check-label">{{ $producto }}</span></label>
+                            @endforeach
+                        </div>
+                        <p class="form-text mb-0">Ambos marcados incluyen todos los premios. Puedes incluir solo uno o desmarcar ambos para excluir los premios. Esta selección es independiente de ventas y actualiza utilidad, balance y sus porcentajes al pulsar Consultar.</p>
+                    </fieldset>
+                </div>
             </form>
             @if ($errors->any())<div class="alert alert-danger mt-3" role="alert">{{ $errors->first() }}</div>@endif
         </div></div>
@@ -53,6 +65,7 @@
                     @if ($informeId)<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImpresionV10">Impresión personalizada</button>@endif
                 </div>
                 <div class="card-body">
+                    <p class="text-muted small">% ing 2 muestra la división directa de ventas no tradicionales globales de la empresa y mes / créditos de la cuenta 400120001, con dos decimales sin redondear. Solo es informativo: no modifica los ingresos calculados. Sin ingresos contables o con importe cero se muestra —.</p>
                     <p class="text-muted small">Ingresos calculado = ventas tradicionales al 100% + ventas no tradicionales por su porcentaje contable global de los datos guardados (créditos 400120001 / créditos 200111001, de la empresa y mes) + recargas al 7.5%. El % ing no cambia al filtrar agencia, ruta o productos. Esta columna no modifica la utilidad ni el balance.</p>
                     <p class="text-muted small">Resultado Bruto = suma de los balances de los meses consultados. Sus tarjetas muestran los porcentajes globales de la empresa para todo el período, calculados sobre las ventas totales del período.</p>
                     <p class="text-muted small">Utilidad = ventas - premios sacados. Balance = utilidad - gastos. Los importes son de cada terminal o ruta. Los porcentajes son globales de su empresa para cada mes: premios o utilidad totales / ventas totales. No cambian al filtrar ruta, terminal o buscar en la tabla. Se respetan los productos seleccionados. Sin ventas globales se muestra —.</p>
@@ -66,19 +79,19 @@
                                 <thead>
                                     <tr>
                                         <th rowspan="2">{{ $filtros['agrupacion'] === 'ruta' ? 'Ruta / Empresa' : 'Terminal / Agencia' }}</th>
-                                        @foreach ($meses as $mes)<th colspan="7" class="text-center grupo-mes">{{ $mes['nombre'] }}</th>@endforeach
+                                        @foreach ($meses as $mes)<th colspan="8" class="text-center grupo-mes">{{ $mes['nombre'] }}</th>@endforeach
                                         <th rowspan="2" class="inicio-mes">Resultado Bruto</th>
                                     </tr>
                                     <tr>
                                         @foreach ($meses as $mes)
-                                            @foreach (['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'premios_sacados' => 'Premios sacados', 'utilidad' => 'Utilidad', 'gastos' => 'Gastos', 'balance_general' => 'Balance general'] as $campo => $etiqueta)
+                                            @foreach (['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'porcentaje_ingresos_2' => '% ing 2', 'premios_sacados' => 'Premios sacados', 'utilidad' => 'Utilidad', 'gastos' => 'Gastos', 'balance_general' => 'Balance general'] as $campo => $etiqueta)
                                                 <th @class(['inicio-mes' => $loop->first])>{{ $etiqueta }} <span class="d-block small text-muted">{{ $mes['codigo'] }}</span></th>
                                             @endforeach
                                         @endforeach
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
-                                <tfoot class="table-light fw-semibold"><tr><td>Totales</td>@foreach ($meses as $mes)@foreach (range(1, 7) as $columna)<td class="text-end"></td>@endforeach @endforeach<td class="text-end inicio-mes"></td></tr></tfoot>
+                                <tfoot class="table-light fw-semibold"><tr><td>Totales</td>@foreach ($meses as $mes)@foreach (range(1, 8) as $columna)<td class="text-end"></td>@endforeach @endforeach<td class="text-end inicio-mes"></td></tr></tfoot>
                             </table>
                         </div>
                     @endif

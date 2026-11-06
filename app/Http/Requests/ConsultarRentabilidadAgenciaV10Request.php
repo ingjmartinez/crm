@@ -31,6 +31,9 @@ class ConsultarRentabilidadAgenciaV10Request extends FormRequest
             'productos_filtrados' => ['nullable', 'boolean'],
             'productos' => ['nullable', 'array', 'max:3'],
             'productos.*' => ['distinct', 'in:Tradicional,No Tradicional,Recarga'],
+            'premios_filtrados' => ['nullable', 'boolean'],
+            'premios_productos' => ['nullable', 'array', 'max:2'],
+            'premios_productos.*' => ['string', 'distinct', 'in:Tradicional,No Tradicional'],
         ];
     }
 
@@ -74,6 +77,12 @@ class ConsultarRentabilidadAgenciaV10Request extends FormRequest
             'ruta_impresion.max' => 'El nombre de ruta es demasiado largo.',
             'salida.in' => 'Selecciona imprimir o generar PDF.',
             'productos.*.in' => 'Selecciona un producto valido.',
+            'premios_filtrados.boolean' => 'La seleccion de premios no es valida.',
+            'premios_productos.array' => 'Selecciona los tipos de premios mediante los checks.',
+            'premios_productos.max' => 'Solo puedes seleccionar premios tradicionales y no tradicionales.',
+            'premios_productos.*.string' => 'Selecciona un tipo de premio valido.',
+            'premios_productos.*.distinct' => 'No repitas tipos de premios.',
+            'premios_productos.*.in' => 'Selecciona premios tradicionales o no tradicionales.',
         ];
     }
 }

@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RentabilidadAgenciaV10Controller extends Controller
 {
-    private const VERSION_IMPRESION = 6;
+    private const VERSION_IMPRESION = 7;
 
     public function __construct(private readonly RentabilidadAgenciaV10Service $reporte) {}
 
@@ -29,6 +29,7 @@ class RentabilidadAgenciaV10Controller extends Controller
             $filtros[$campo] = trim((string) $filtros[$campo]);
         }
         $productos = $this->reporte->productos($filtros);
+        $productosPremios = $this->reporte->productosPremios($filtros);
         $resultado = $request->filled('anio') ? $this->reporte->reporte($filtros) : null;
         $meses = [];
         if ($resultado !== null) {
@@ -51,6 +52,7 @@ class RentabilidadAgenciaV10Controller extends Controller
                 'version' => self::VERSION_IMPRESION,
                 'usuario' => (string) $request->user()->getAuthIdentifier(),
                 'filtros' => $filtros, 'productos' => $productos, 'meses' => $meses, 'filas' => $datosTabla,
+                'productos_premios' => $productosPremios,
                 'referencias_globales' => $referenciasGlobales,
             ], now()->addMinutes(10));
         }
@@ -60,7 +62,7 @@ class RentabilidadAgenciaV10Controller extends Controller
             ->selectRaw('TRIM(empresa) AS empresa')->distinct()->orderBy('empresa')->pluck('empresa');
         $rutas = $rutasDisponibles->when($filtros['empresa'] !== '', fn (Collection $filas): Collection => $filas->where('empresa', $filtros['empresa']))->pluck('ruta')->unique()->values();
 
-        return view('gerencia.rentabilidad-agencia-v10', compact('filtros', 'productos', 'resultado', 'meses', 'datosTabla', 'empresas', 'rutas', 'rutasDisponibles', 'informeId', 'referenciasGlobales'));
+        return view('gerencia.rentabilidad-agencia-v10', compact('filtros', 'productos', 'productosPremios', 'resultado', 'meses', 'datosTabla', 'empresas', 'rutas', 'rutasDisponibles', 'informeId', 'referenciasGlobales'));
     }
 
     public function imprimir(ImprimirRentabilidadAgenciaV10Request $request): Response|RedirectResponse
@@ -90,9 +92,10 @@ class RentabilidadAgenciaV10Controller extends Controller
         $bloquesMeses = array_chunk($consulta['meses'], 2, true);
         $filtros = $consulta['filtros'];
         $productos = $consulta['productos'];
+        $productosPremios = $consulta['productos_premios'];
         $referenciasGlobales = $consulta['referencias_globales'];
         $esImpresion = $request->validated('salida') === 'imprimir';
-        $datos = compact('grupos', 'bloquesMeses', 'filtros', 'productos', 'esImpresion', 'referenciasGlobales');
+        $datos = compact('grupos', 'bloquesMeses', 'filtros', 'productos', 'productosPremios', 'esImpresion', 'referenciasGlobales');
         if ($esImpresion) {
             return response()->view('gerencia.rentabilidad-agencia-v10-impresion', $datos)->header('Cache-Control', 'private, no-store');
         }
@@ -111,11 +114,19 @@ class RentabilidadAgenciaV10Controller extends Controller
      */
     private function referenciasGlobales(array $filtros, array $resultado): array
     {
+        $ingresos2 = $this->reporte->porcentajesIngresos2($filtros);
+        $totalesIngresos2 = collect($ingresos2)->flatMap(fn (array $meses): array => array_map(fn (string $mes, array $datos): array => ['mes' => $mes, ...$datos], array_keys($meses), array_values($meses)))
+            ->groupBy('mes')->map(function (Collection $empresas): ?float {
+                $ingresos = $empresas->sum('ingresos');
+
+                return $ingresos == 0 || $empresas->contains(fn (array $empresa): bool => $empresa['ingresos'] === null) ? null : $empresas->sum('ventas') / $ingresos;
+            })->all();
         $global = $filtros['ruta'] === '' && $filtros['alcance'] !== 'terminal'
             ? $resultado
             : $this->reporte->reporte([...$filtros, 'ruta' => '', 'alcance' => 'todas', 'terminal' => '']);
 
         return [
+            'ingresos_2' => ['empresas' => $ingresos2, 'total' => $totalesIngresos2],
             'ingresos' => $global['filas']->flatMap(fn (array $fila): array => array_map(fn (array $periodo): array => [...$periodo, 'empresa' => $fila['empresa']], $fila['periodos']))
                 ->groupBy('mes')->map(function (Collection $periodos): ?float {
                     $empresas = $periodos->unique('empresa');
