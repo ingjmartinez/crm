@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 generando = true;
                 botones.forEach(boton => { boton.disabled = true; });
                 estado.className = 'alert alert-info mt-3';
-                estado.textContent = 'Generando documento... Si incluyes todas las rutas, puede tardar más de un minuto.';
+                estado.textContent = salida === 'pdf' ? 'Generando PDF... La descarga comenzará al terminar.' : 'Preparando documento para imprimir...';
                 try {
                     if (salida === 'imprimir') {
                         ventana = window.open('', '_blank');

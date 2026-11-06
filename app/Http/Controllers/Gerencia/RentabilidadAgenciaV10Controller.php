@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ConsultarRentabilidadAgenciaV10Request;
 use App\Http\Requests\ImprimirRentabilidadAgenciaV10Request;
 use App\Models\RentabilidadAgenciaV5;
+use App\Services\RentabilidadAgenciaV10Pdf;
 use App\Services\RentabilidadAgenciaV10Service;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -18,7 +19,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RentabilidadAgenciaV10Controller extends Controller
 {
-    private const VERSION_IMPRESION = 8;
+    private const VERSION_IMPRESION = 11;
 
     public function __construct(private readonly RentabilidadAgenciaV10Service $reporte) {}
 
@@ -37,15 +38,24 @@ class RentabilidadAgenciaV10Controller extends Controller
                 $meses[] = ['codigo' => $fecha->format('Y-m'), 'nombre' => $fecha->copy()->locale('es')->isoFormat('MMMM YYYY')];
             }
         }
+        $tradicionalGlobal = $resultado === null ? null : $this->reporte->reporte([
+            ...$filtros, 'ruta' => '', 'alcance' => 'todas', 'terminal' => '',
+            'productos_filtrados' => 1, 'productos' => ['Tradicional'],
+            'premios_filtrados' => 1,
+            'premios_productos' => array_values(array_intersect($productosPremios, ['Tradicional'])),
+        ]);
+        $premiosTradicionales = $tradicionalGlobal === null ? [] : $tradicionalGlobal['filas']->mapWithKeys(fn (array $fila): array => [
+            $fila['terminal'] => collect($fila['periodos'])->pluck('premios_sacados', 'mes')->all(),
+        ])->all();
         $datosTabla = $resultado === null ? [] : $resultado['filas']->map(fn (array $fila): array => [
             'terminal' => $fila['terminal'], 'nombre' => $fila['nombre'],
             'empresa' => $fila['empresa'], 'ruta' => $fila['ruta'],
-            'periodos' => array_map($this->calcularPeriodoEstimado(...), $fila['periodos']),
+            'periodos' => array_map(fn (array $periodo): array => $this->calcularPeriodoEstimado($periodo, $premiosTradicionales[$fila['terminal']][$periodo['mes']] ?? 0.0), $fila['periodos']),
         ])->values()->all();
         if ($filtros['agrupacion'] === 'ruta') {
             $datosTabla = $this->agruparPorRuta($datosTabla);
         }
-        $referenciasGlobales = $resultado === null ? [] : $this->referenciasGlobales($filtros, $resultado);
+        $referenciasGlobales = $resultado === null ? [] : $this->referenciasGlobales($filtros, $resultado, $tradicionalGlobal);
         $informeId = null;
         if ($datosTabla !== []) {
             $informeId = (string) Str::uuid();
@@ -66,7 +76,7 @@ class RentabilidadAgenciaV10Controller extends Controller
         return view('gerencia.rentabilidad-agencia-v10', compact('filtros', 'productos', 'productosPremios', 'resultado', 'meses', 'datosTabla', 'empresas', 'rutas', 'rutasDisponibles', 'informeId', 'referenciasGlobales'));
     }
 
-    public function imprimir(ImprimirRentabilidadAgenciaV10Request $request): Response|RedirectResponse
+    public function imprimir(ImprimirRentabilidadAgenciaV10Request $request, RentabilidadAgenciaV10Pdf $generador): Response|RedirectResponse
     {
         try {
             $consulta = Cache::get('rentabilidad-v10:impresion:'.$request->validated('informe_id'));
@@ -97,19 +107,32 @@ class RentabilidadAgenciaV10Controller extends Controller
         $referenciasGlobales = $consulta['referencias_globales'];
         $esImpresion = $request->validated('salida') === 'imprimir';
         $tamanoHoja = $request->validated('tamano_hoja', 'letter');
+        $clavePdf = 'rentabilidad-v10:pdf:'.hash('sha256', json_encode([$request->validated('informe_id'), $ruta, $tamanoHoja, 'canvas-v3'], JSON_THROW_ON_ERROR));
+        $pdfCodificado = $esImpresion ? null : Cache::get($clavePdf);
+        $contenidoPdf = is_string($pdfCodificado) ? base64_decode($pdfCodificado, true) : false;
+        if (is_string($contenidoPdf) && str_starts_with($contenidoPdf, '%PDF-')) {
+            return $this->descargarPdf($contenidoPdf);
+        }
         $anchoHoja = $tamanoHoja === 'legal' ? 1008 : 792;
         $tamanoFuenteImportes = $this->tamanoFuenteImpresion($grupos, $anchoHoja, min(2, count($consulta['meses'])));
         $datos = compact('grupos', 'bloquesMeses', 'filtros', 'productos', 'productosPremios', 'esImpresion', 'referenciasGlobales', 'tamanoHoja', 'tamanoFuenteImportes');
         if ($esImpresion) {
             return response()->view('gerencia.rentabilidad-agencia-v10-impresion', $datos)->header('Cache-Control', 'private, no-store');
         }
-        $pdf = Pdf::loadView('gerencia.rentabilidad-agencia-v10-impresion', $datos)->setPaper($tamanoHoja, 'landscape');
-        $pdf->render();
-        $dompdf = $pdf->getDomPDF();
-        $canvas = $dompdf->getCanvas();
-        $canvas->page_text($canvas->get_width() - 150, $canvas->get_height() - 24, 'Página {PAGE_NUM} de {PAGE_COUNT}', $dompdf->getFontMetrics()->getFont('DejaVu Sans'), 8, [0.4, 0.45, 0.5]);
+        $contenidoPdf = $generador->generar($datos);
+        Cache::put($clavePdf, base64_encode($contenidoPdf), now()->addMinutes(10));
 
-        return $pdf->download('rentabilidad_agencia_v10.pdf')->header('Cache-Control', 'private, no-store');
+        return $this->descargarPdf($contenidoPdf);
+    }
+
+    private function descargarPdf(string $contenido): Response
+    {
+        return new Response($contenido, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="rentabilidad_agencia_v10.pdf"',
+            'Content-Length' => (string) strlen($contenido),
+            'Cache-Control' => 'private, no-store',
+        ]);
     }
 
     /**
@@ -117,51 +140,55 @@ class RentabilidadAgenciaV10Controller extends Controller
      */
     private function tamanoFuenteImpresion(Collection $grupos, int $anchoHoja, int $mesesPorBloque): float
     {
-        $campos = ['ventas_tradicionales', 'ventas_no_tradicionales', 'ventas_recargas', 'ingresos_tradicionales', 'ingresos_no_tradicionales', 'ingresos_recargas', 'premios_sacados_2', 'utilidad_2', 'gastos', 'balance_general'];
+        $campos = ['ventas_tradicionales', 'ventas_no_tradicionales', 'ventas_recargas', 'ingresos_tradicionales', 'ingresos_no_tradicionales', 'ingresos_recargas', 'premios_sacados', 'utilidad', 'premios_sacados_2', 'utilidad_2', 'gastos', 'balance_general'];
         $metricas = Pdf::getDomPDF()->getFontMetrics();
         $fuente = $metricas->getFont('DejaVu Sans', 'bold');
         $anchoMaximo = 1.0;
         foreach ($grupos as $filas) {
             $periodos = $filas->flatMap(fn (array $fila): array => $fila['periodos']);
-            $conjuntos = collect([$periodos])
-                ->concat($periodos->map(fn (array $periodo): Collection => collect([$periodo])))
-                ->concat($periodos->groupBy('mes')->values())
-                ->concat($filas->map(fn (array $fila): Collection => collect($fila['periodos'])));
+            $conjuntos = $periodos->map(fn (array $periodo): Collection => collect([$periodo]))
+                ->concat($periodos->groupBy('mes')->values());
             foreach ($conjuntos as $conjunto) {
                 foreach ($campos as $campo) {
-                    $anchoMaximo = max($anchoMaximo, $metricas->getTextWidth(number_format($conjunto->sum($campo), 2), $fuente, 1));
+                    $anchoMaximo = max($anchoMaximo, $metricas->getTextWidth(number_format($conjunto->sum($campo), 0), $fuente, 1));
                 }
             }
         }
-        $anchoColumna = ($anchoHoja - 48) * 0.72 / (max(1, $mesesPorBloque) * 6);
+        $pesos = RentabilidadAgenciaV10Pdf::PESOS_COLUMNAS;
+        $anchoColumna = ($anchoHoja - 48) * (1 - RentabilidadAgenciaV10Pdf::ANCHO_AGENCIA)
+            * min($pesos) / (max(1, $mesesPorBloque) * array_sum($pesos));
         $fuenteMaxima = $anchoHoja > 792 ? 11 : 9;
 
-        return floor(min($fuenteMaxima, ($anchoColumna - 7) / $anchoMaximo) * 10) / 10;
+        return floor(min($fuenteMaxima, ($anchoColumna - RentabilidadAgenciaV10Pdf::MARGEN_CELDA * 2 - 1) / $anchoMaximo) * 10) / 10;
     }
 
     /**
      * @param  array<string, mixed>  $periodo
      * @return array<string, mixed>
      */
-    private function calcularPeriodoEstimado(array $periodo): array
+    private function calcularPeriodoEstimado(array $periodo, float $premiosTradicionales): array
     {
         $premios = round($periodo['ventas_tradicionales'] * 0.63, 2);
         $utilidad = round($periodo['ventas_tradicionales'] - $premios, 2);
+        $utilidadTradicional = round($periodo['ventas_tradicionales'] - $premiosTradicionales, 2);
 
         return [
             ...$periodo,
             'premios_sacados_2' => $premios,
             'utilidad_2' => $utilidad,
-            'balance_general' => round($utilidad - $periodo['gastos'], 2),
+            'premios_sacados_tradicionales' => $premiosTradicionales,
+            'utilidad' => $utilidadTradicional,
+            'balance_general' => round($utilidadTradicional - $periodo['gastos'], 2),
         ];
     }
 
     /**
      * @param  array<string, mixed>  $filtros
      * @param  array<string, mixed>  $resultado
+     * @param  array<string, mixed>  $globalTradicional
      * @return array<string, mixed>
      */
-    private function referenciasGlobales(array $filtros, array $resultado): array
+    private function referenciasGlobales(array $filtros, array $resultado, array $globalTradicional): array
     {
         $ingresos2 = $this->reporte->porcentajesIngresos2($filtros);
         $totalesIngresos2 = collect($ingresos2)->flatMap(fn (array $meses): array => array_map(fn (string $mes, array $datos): array => ['mes' => $mes, ...$datos], array_keys($meses), array_values($meses)))
@@ -184,8 +211,8 @@ class RentabilidadAgenciaV10Controller extends Controller
                     return $base <= 0 || $empresas->contains(fn (array $periodo): bool => $periodo['porcentaje_no_tradicional'] === null) ? null
                         : $empresas->sum(fn (array $periodo): float => $periodo['base_porcentaje_no_tradicional'] * $periodo['porcentaje_no_tradicional']) / $base;
                 })->all(),
-            'empresas' => $global['filas']->groupBy('empresa')->map(fn (Collection $filas): array => $this->referencia($filas))->all(),
-            'total' => $this->referencia($global['filas']),
+            'empresas' => $globalTradicional['filas']->groupBy('empresa')->map(fn (Collection $filas): array => $this->referencia($filas))->all(),
+            'total' => $this->referencia($globalTradicional['filas']),
         ];
     }
 
@@ -223,7 +250,7 @@ class RentabilidadAgenciaV10Controller extends Controller
      */
     private function agruparPorRuta(array $filas): array
     {
-        $campos = ['ventas', 'ventas_loterias', 'ventas_tradicionales', 'ventas_no_tradicionales', 'ventas_recargas', 'ingresos_tradicionales', 'ingresos_recargas', 'premios_sacados', 'premios_sacados_2', 'utilidad', 'utilidad_2', 'costos', 'gastos_contables', 'r20', 'gastos', 'balance_general'];
+        $campos = ['ventas', 'ventas_loterias', 'ventas_tradicionales', 'ventas_no_tradicionales', 'ventas_recargas', 'ingresos_tradicionales', 'ingresos_recargas', 'premios_sacados', 'premios_sacados_tradicionales', 'premios_sacados_2', 'utilidad', 'utilidad_2', 'costos', 'gastos_contables', 'r20', 'gastos', 'balance_general'];
 
         return collect($filas)
             ->groupBy(fn (array $fila): string => json_encode([$fila['empresa'], $fila['ruta']], JSON_THROW_ON_ERROR))

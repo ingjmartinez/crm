@@ -299,16 +299,17 @@ JS;
         $filtros = ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 1, 'premios_filtrados' => 1, 'premios_productos' => $seleccion];
         $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $filtros))->assertOk()
             ->assertSee('Premios sacados incluidos')->assertSee('name="premios_productos[]"', false)->assertViewHas('productosPremios', $seleccion);
+        $premiosReferencia = in_array('Tradicional', $seleccion, true) ? ['1001' => 90, '1002' => 20, '1003' => 10] : ['1001' => 0, '1002' => 0, '1003' => 0];
         $filas = collect($pagina->viewData('datosTabla'))->keyBy('terminal');
         foreach (['1001' => 100.0, '1002' => 200.0, '1003' => 120.0] as $terminal => $ventas) {
             $periodo = $filas[$terminal]['periodos'][0];
             $this->assertSame($ventas, $periodo['ventas']);
             $this->assertSame((float) $esperados[$terminal], $periodo['premios_sacados']);
-            $this->assertSame($ventas - $esperados[$terminal], $periodo['utilidad']);
-            $this->assertSame(round($ventas - round($ventas * 0.63, 2) - $periodo['gastos'], 2), $periodo['balance_general']);
+            $this->assertSame($ventas - $premiosReferencia[$terminal], $periodo['utilidad']);
+            $this->assertSame($ventas - $premiosReferencia[$terminal] - $periodo['gastos'], $periodo['balance_general']);
         }
         $referencia = $pagina->viewData('referenciasGlobales')['empresas']['Grupo Joselito']['meses']['2026-01'];
-        $this->assertEqualsWithDelta(($esperados['1001'] + $esperados['1003']) / 220 * 100, $referencia['premios_sacados'], 0.000001);
+        $this->assertEqualsWithDelta(($premiosReferencia['1001'] + $premiosReferencia['1003']) / 220 * 100, $referencia['premios_sacados'], 0.000001);
         $codigo = <<<'JS'
 const fs = require('node:fs');
 const vm = require('node:vm');
@@ -329,17 +330,20 @@ $.fn = {DataTable(){}};
 window.jQuery = $;
 vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'));
 iniciar();
-const moneda = valor => new Intl.NumberFormat('es-DO', {style: 'currency', currency: 'DOP'}).format(valor);
-const importeAzul = valor => `<div class="importe-general" title="Ventas por el porcentaje global de premios">${moneda(valor)}</div>`;
+const moneda = valor => new Intl.NumberFormat('es-DO', {style: 'currency', currency: 'DOP', minimumFractionDigits: 0, maximumFractionDigits: 0}).format(valor);
+const devolucionAzul = valor => `<span class="devolucion-azul" title="Premios sacados / ventas tradicionales de la terminal">${valor.toFixed(2)}%</span>`;
 for (const fila of configuracion.datos) {
     const premiosEmpresa = fila.empresa === 'Grupo Joselito' ? esperados['1001'] + esperados['1003'] : esperados['1002'];
     const ventasEmpresa = fila.empresa === 'Grupo Joselito' ? 220 : 200;
     const celda = opciones.columns[5].render(fila.periodos[0].premios_sacados, 'display', fila);
-    assert.ok(celda.includes(importeAzul(fila.periodos[0].ventas * premiosEmpresa / ventasEmpresa)), celda);
+    assert.ok(celda.includes(devolucionAzul(fila.periodos[0].premios_sacados / fila.periodos[0].ventas_tradicionales * 100)), celda);
+    assert.ok(celda.includes((premiosEmpresa / ventasEmpresa * 100).toFixed(2) + '%'), celda);
 }
 const pies = Array.from({length: opciones.columns.length}, () => ({classList: {add(){},remove(){}}}));
 opciones.footerCallback.call({api(){return {rows(){return {data(){return {toArray(){return configuracion.datos;}};}};}, column(indice){return {footer(){return pies[indice];}};}};}});
-assert.ok(pies[5].innerHTML.includes(importeAzul(Object.values(esperados).reduce((suma, valor) => suma + valor, 0))), pies[5].innerHTML);
+const premios = configuracion.datos.reduce((suma,fila) => suma + fila.periodos[0].premios_sacados,0);
+const ventas = configuracion.datos.reduce((suma,fila) => suma + fila.periodos[0].ventas_tradicionales,0);
+assert.ok(pies[5].innerHTML.includes(devolucionAzul(premios / ventas * 100)), pies[5].innerHTML);
 JS;
         $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v10.js'), json_encode([
             'datos' => $pagina->viewData('datosTabla'),
@@ -347,7 +351,7 @@ JS;
             'meses' => $pagina->viewData('meses'),
             'rutasDisponibles' => [],
             'agrupacion' => 'terminal',
-        ], JSON_THROW_ON_ERROR), json_encode($esperados, JSON_THROW_ON_ERROR)]);
+        ], JSON_THROW_ON_ERROR), json_encode($premiosReferencia, JSON_THROW_ON_ERROR)]);
         $proceso->setInput($codigo)->setTimeout(15)->run();
         $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
         $terminal = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'empresa' => 'Grupo Joselito', 'alcance' => 'terminal', 'terminal' => '1001']))->assertOk();
@@ -357,13 +361,18 @@ JS;
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
             ->assertOk()->assertViewHas('productosPremios', $seleccion)->assertSee('Premios sacados incluidos: '.($seleccion ? implode(', ', $seleccion) : 'Ninguno'));
         $this->assertSame($esperados['1001'], (int) $impresion->viewData('grupos')->first()->first()['periodos'][0]['premios_sacados']);
-        $impresion->assertSee('Premios sacados 2');
+        $impresion->assertDontSee('<th>Premios sacados 2</th>', false)->assertDontSee('<th>Utilidad 2</th>', false);
         $documento = new \DOMDocument;
         @$documento->loadHTML($impresion->getContent());
-        $this->assertSame('63.00', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[4]/div[1]')->item(0)->textContent));
-        $this->assertSame('37.00', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[5]/div[1]')->item(0)->textContent));
-        $this->assertSame('63%', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[4]/div[contains(@class,"porcentaje-premios")]')->item(0)->textContent));
-        $this->assertSame('37%', trim((new \DOMXPath($documento))->query('//tbody/tr[1]/td[5]/div[contains(@class,"porcentaje-utilidad")]')->item(0)->textContent));
+        $xpath = new \DOMXPath($documento);
+        $this->assertSame('63', trim($xpath->query('//tbody/tr[1]/td[4]/div[3]/span[2]')->item(0)->textContent));
+        $this->assertSame('63%', trim($xpath->query('//tbody/tr[1]/td[4]/div[3]/span[1]/span')->item(0)->textContent));
+        $this->assertSame(number_format($esperados['1001'], 2, '.', '').'%', trim($xpath->query('//tbody/tr[1]/td[4]/div[1]/span[1]/span')->item(0)->textContent));
+        $this->assertSame(number_format($esperados['1001'], 0), trim($xpath->query('//tbody/tr[1]/td[4]/div[1]/span[2]')->item(0)->textContent));
+        $this->assertSame(number_format($referencia['premios_sacados'], 0), trim($xpath->query('//tbody/tr[1]/td[4]/div[2]/span[2]')->item(0)->textContent));
+        $this->assertStringContainsString('devolucion-azul', $xpath->query('//tbody/tr[1]/td[4]/div[1]/span[2]')->item(0)->getAttribute('class'));
+        $this->assertStringContainsString('monto-proyectado', $xpath->query('//tbody/tr[1]/td[4]/div[3]/span[2]')->item(0)->getAttribute('class'));
+        $this->assertStringContainsString('devolucion-azul', $xpath->query('//tbody/tr[1]/td[5]')->item(0)->getAttribute('class'));
         $sinVentasNoTradicionales = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'empresa' => 'Grupo Joselito', 'alcance' => 'terminal', 'terminal' => '1001', 'productos_filtrados' => 1, 'productos' => ['Recarga']]))->assertOk();
         $this->assertSame(0.0, $sinVentasNoTradicionales->viewData('datosTabla')[0]['periodos'][0]['ventas']);
         $this->assertSame((float) $esperados['1001'], $sinVentasNoTradicionales->viewData('datosTabla')[0]['periodos'][0]['premios_sacados']);
@@ -445,7 +454,7 @@ JS;
         $this->assertSame(943694.0, $periodo['ingresos_tradicionales']);
         $this->assertSame(16277.74, round($periodo['ingresos_no_tradicionales'], 2));
         $this->assertSame(6179.33, round($periodo['ingresos_recargas'], 2));
-        $this->assertSame(1339239.0, $periodo['utilidad']);
+        $this->assertSame(943694.0, $periodo['utilidad']);
         foreach (['Tradicional' => 943694.0, 'No Tradicional' => 16277.74, 'Recarga' => 6179.33] as $producto => $esperado) {
             $respuesta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'productos_filtrados' => 1, 'productos' => [$producto]]))->assertOk();
             $this->assertSame($esperado, $respuesta->viewData('datosTabla')[0]['periodos'][0]['ingresos_calculados']);
@@ -453,7 +462,7 @@ JS;
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
             ->assertOk()->assertSee('Ingresos calculado')->assertDontSee('966,151.06')
             ->assertSeeInOrder(['Tradicional', 'No tradicional', 'Recargas'])
-            ->assertSee('16,277.74')->assertSee('6,179.33')->assertDontSee('% ing')->assertDontSee('10.77%')->assertSee('63%')->assertSee('37%');
+            ->assertSee('16,278')->assertSee('6,179')->assertDontSee('% ing')->assertDontSee('10.77%')->assertSee('63%');
         $this->assertSame(966151.06, $impresion->viewData('grupos')->first()->first()['periodos'][0]['ingresos_calculados']);
         $ruta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
         $this->assertSame(966151.06, $ruta->viewData('datosTabla')[0]['periodos'][0]['ingresos_calculados']);
@@ -493,6 +502,35 @@ JS;
             ->assertOk()->assertDontSee('Total incompleto')->assertSee('Sin porcentaje');
     }
 
+    public function test_v10_porcentaje_global_solo_usa_ventas_y_premios_tradicionales(): void
+    {
+        $this->datos();
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-01-10', 'tipo' => 'No Tradicional', 'monto' => 1000],
+            ['agencia_id' => '1001', 'fecha' => '2026-01-10', 'tipo' => 'Recarga', 'monto' => 500],
+            ['agencia_id' => '1001', 'fecha' => '2026-02-10', 'tipo' => 'No Tradicional', 'monto' => 9000],
+            ['agencia_id' => '1001', 'fecha' => '2026-03-10', 'tipo' => 'No Tradicional', 'monto' => 1000],
+        ]);
+        DB::table('premios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-01-10', 'monto' => 700, 'producto_id' => '2'],
+            ['agencia_id' => '1001', 'fecha' => '2026-02-10', 'monto' => 800, 'producto_id' => '2'],
+        ]);
+        $filtros = [...$this->filtros(), 'premios_filtrados' => 1, 'premios_productos' => ['Tradicional', 'No Tradicional']];
+        foreach ([[], ['agrupacion' => 'ruta'], ['productos_filtrados' => 1, 'productos' => ['No Tradicional', 'Recarga']]] as $cambio) {
+            $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, ...$cambio]))->assertOk();
+            $referencia = $pagina->viewData('referenciasGlobales')['empresas']['Grupo Joselito'];
+            $this->assertEqualsWithDelta(90 / 220 * 100, $referencia['meses']['2026-01']['premios_sacados'], 0.000001);
+            $this->assertEqualsWithDelta(130 / 220 * 100, $referencia['meses']['2026-01']['utilidad'], 0.000001);
+            $this->assertSame(0.0, $referencia['meses']['2026-02']['premios_sacados']);
+            $this->assertNull($referencia['meses']['2026-03']['premios_sacados']);
+            $this->assertSame(28.125, $referencia['periodo']['premios_sacados']);
+            $this->assertSame(790.0, $pagina->viewData('datosTabla')[0]['periodos'][0]['premios_sacados']);
+        }
+        $sinTradicional = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'premios_productos' => ['No Tradicional']]))->assertOk();
+        $this->assertSame(700.0, $sinTradicional->viewData('datosTabla')[0]['periodos'][0]['premios_sacados']);
+        $this->assertSame(0.0, $sinTradicional->viewData('referenciasGlobales')['empresas']['Grupo Joselito']['meses']['2026-01']['premios_sacados']);
+    }
+
     public function test_v10_porcentajes_globales_de_empresa_no_cambian_al_filtrar_terminal_o_ruta(): void
     {
         $this->datos();
@@ -512,7 +550,7 @@ JS;
         $this->assertSame(['premios_sacados' => null, 'utilidad' => null], $referencia['meses']['2026-03']);
         $this->assertEqualsWithDelta(28.125, $referencia['periodo']['premios_sacados'], 0.00001);
         $this->assertSame(90.0, $pagina->viewData('datosTabla')[0]['periodos'][0]['premios_sacados']);
-        $this->assertSame([-18.0, 22.0, -7.0], array_column($pagina->viewData('datosTabla')[0]['periodos'], 'balance_general'));
+        $this->assertSame([-45.0, 85.0, -7.0], array_column($pagina->viewData('datosTabla')[0]['periodos'], 'balance_general'));
 
         foreach ([['alcance' => 'todas', 'terminal' => '', 'ruta' => 'Norte'], ['alcance' => 'todas', 'agrupacion' => 'ruta', 'ruta' => 'Sur']] as $cambio) {
             $respuesta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), ...$cambio]))->assertOk();
@@ -521,7 +559,7 @@ JS;
         $todas = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'empresa' => '', 'alcance' => 'todas', 'terminal' => '']))->assertOk();
         $this->assertSame(0.0, $todas->viewData('referenciasGlobales')['empresas']['Negosur']['meses']['2026-01']['premios_sacados']);
         $vacio = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'productos_filtrados' => 1, 'productos' => []]))->assertOk();
-        $this->assertNull($vacio->viewData('referenciasGlobales')['empresas']['Grupo Joselito']['periodo']['premios_sacados']);
+        $this->assertSame(0.0, $vacio->viewData('referenciasGlobales')['empresas']['Grupo Joselito']['periodo']['premios_sacados']);
         $this->get(route('gerencia.rentabilidad-agencia-v10'))->assertOk()->assertViewHas('resultado', null);
         $this->getJson(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'mes_fin' => 0]))->assertUnprocessable();
         $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'terminal' => 'INEXISTENTE']))
@@ -540,10 +578,9 @@ JS;
         $informeId = $pagina->viewData('informeId');
         DB::table('premios_bet')->update(['monto' => 999999]);
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'imprimir']))
-            ->assertOk()->assertDontSee('40.91%')->assertDontSee('59.09%')->assertSee('% Premios: 63%')->assertSee('% Utilidad: 37%')
-            ->assertSee('Resultado Bruto')->assertDontSee('90.00%');
-        $impresion->assertSee('<div class="importe-general">126.00</div>', false)
-            ->assertSee('<div class="importe-general">74.00</div>', false);
+            ->assertOk()->assertSee('40.91%')->assertDontSee('59.09%')->assertDontSee('% Premios:')->assertDontSee('% Utilidad:')
+            ->assertSee('Resultado Bruto')->assertSee('90.00%');
+        $impresion->assertDontSee('class="importe-general"', false);
         $this->assertSame($pagina->viewData('referenciasGlobales'), $impresion->viewData('referenciasGlobales'));
         $pdf = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))
             ->assertOk()->assertHeader('Content-Type', 'application/pdf');
@@ -573,11 +610,70 @@ JS;
 
                 $this->assertSame('table-responsive d-none', $xpath->query('//*[@id="contenedorTablaV10"]')->item(0)->getAttribute('class'));
                 $this->assertSame($cantidadMeses * 10, $xpath->query($tabla.'/thead/tr[2]/th')->length);
-                $this->assertSame($cantidadMeses * 10 + 2, $xpath->query($tabla.'/tfoot/tr/td')->length);
-                $this->assertSame(2, $xpath->query($tabla.'/thead/tr[1]/th[@rowspan="2"]')->length);
+                $this->assertSame($cantidadMeses * 10 + 1, $xpath->query($tabla.'/tfoot/tr/td')->length);
+                $this->assertSame(1, $xpath->query($tabla.'/thead/tr[1]/th[@rowspan="2"]')->length);
                 $this->assertSame($cantidadMeses, $xpath->query($tabla.'/thead/tr[1]/th[@colspan="10"]')->length);
+                $this->assertSame(0, $xpath->query($tabla.'/thead/tr[1]/th[contains(.,"Resultado Bruto")]')->length);
+                $this->assertSame($cantidadMeses, $xpath->query($tabla.'/thead/tr[2]/th[contains(.,"Resultado Bruto")]')->length);
             }
         }
+    }
+
+    public function test_v10_pdf_reutiliza_descarga_sin_mezclar_ruta_hoja_o_usuario(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Norte']);
+        DB::table('agencias')->where('terminal', '1003')->update(['ruta' => 'Sur']);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'alcance' => 'todas', 'terminal' => '']))->assertOk();
+        $parametros = ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'pdf'];
+        $generador = $this->mock(\App\Services\RentabilidadAgenciaV10Pdf::class);
+        $generador->shouldReceive('generar')->times(3)->andReturn('%PDF-carta-todas', '%PDF-carta-norte', '%PDF-legal-todas');
+
+        $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', $parametros))->assertOk()->assertContent('%PDF-carta-todas');
+        $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'tamano_hoja' => 'letter']))->assertOk()->assertContent('%PDF-carta-todas');
+        $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'ruta_impresion' => 'Norte']))->assertOk()->assertContent('%PDF-carta-norte');
+        $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'tamano_hoja' => 'legal']))->assertOk()->assertContent('%PDF-legal-todas');
+        $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'ruta_impresion' => 'Norte']))->assertOk()->assertContent('%PDF-carta-norte');
+        auth()->user()->id = 2;
+        $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', $parametros))->assertUnprocessable();
+        auth()->user()->id = 1;
+        $this->travel(11)->minutes();
+        $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', $parametros))->assertUnprocessable();
+    }
+
+    public function test_v10_cache_pdf_conserva_binarios_sin_utf8_invalido(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $this->filtros()))->assertOk();
+        $informeId = $pagina->viewData('informeId');
+        $binario = "%PDF-1.7\n\xFF\xFE\x00\x81\xE2\n%%EOF";
+        $generador = $this->mock(\App\Services\RentabilidadAgenciaV10Pdf::class);
+        $generador->shouldReceive('generar')->once()->andReturn($binario);
+        $parametros = ['informe_id' => $informeId, 'salida' => 'pdf', 'tamano_hoja' => 'legal'];
+        $url = route('gerencia.rentabilidad-agencia-v10.impresion', $parametros);
+        $this->get($url, ['Accept' => 'application/json'])->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertContent($binario);
+        $clave = 'rentabilidad-v10:pdf:'.hash('sha256', json_encode([$informeId, '', 'legal', 'canvas-v3'], JSON_THROW_ON_ERROR));
+        $guardado = \Illuminate\Support\Facades\Cache::get($clave);
+        $this->assertTrue(mb_check_encoding($guardado, 'UTF-8'));
+        $this->assertSame($binario, base64_decode($guardado, true));
+        $this->get($url, ['Accept' => 'application/json'])->assertOk()->assertContent($binario)->assertHeader('Content-Length', (string) strlen($binario));
+    }
+
+    public function test_v10_pdf_con_mil_terminales_mantiene_memoria_acotada(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $this->filtros()))->assertOk();
+        $html = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))->assertOk();
+        $datos = $html->original->getData();
+        $original = $datos['grupos']->first()->first();
+        $datos['grupos'] = collect(['Ruta de carga' => collect(range(1, 1000))->map(fn (int $indice): array => [...$original, 'terminal' => (string) $indice, 'nombre' => 'Agencia '.$indice])]);
+        memory_reset_peak_usage();
+        $memoriaInicial = memory_get_usage(true);
+        $contenido = app(\App\Services\RentabilidadAgenciaV10Pdf::class)->generar($datos);
+        $this->assertStringStartsWith('%PDF-', $contenido);
+        $this->assertLessThan(128 * 1024 * 1024, memory_get_peak_usage(true) - $memoriaInicial);
+        preg_match_all('/\/Type\s*\/Page\b/', $contenido, $paginas);
+        $this->assertGreaterThan(100, count($paginas[0]));
     }
 
     public function test_v10_impresion_ajusta_carta_y_legal_con_importes_uniformes(): void
@@ -595,14 +691,14 @@ JS;
         $fuentes = [];
         foreach (['letter' => 792, 'legal' => 1008] as $tamano => $ancho) {
             $html = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'tamano_hoja' => $tamano]))
-                ->assertOk()->assertViewHas('tamanoHoja', $tamano)->assertDontSee('% ing')->assertSee('1,977,556.00');
+                ->assertOk()->assertViewHas('tamanoHoja', $tamano)->assertDontSee('% ing')->assertSee('1,977,556');
             $fuentes[$tamano] = $html->viewData('tamanoFuenteImportes');
             $this->assertGreaterThan(0, $fuentes[$tamano]);
             $documento = new \DOMDocument;
             @$documento->loadHTML($html->getContent());
             $xpath = new \DOMXPath($documento);
             $this->assertSame(12, $xpath->query('(//thead)[1]/tr[2]/th')->length);
-            $this->assertSame(0, $xpath->query('//th[normalize-space(.)="Premios sacados" or normalize-space(.)="Utilidad"]')->length);
+            $this->assertSame(6, $xpath->query('//th[normalize-space(.)="Premios sacados" or normalize-space(.)="Utilidad"]')->length);
             $pdf = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'salida' => 'pdf', 'tamano_hoja' => $tamano]))
                 ->assertOk()->assertHeader('Content-Type', 'application/pdf');
             $this->assertSame(1, preg_match('/\/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]/', $pdf->getContent(), $dimensiones));
@@ -616,7 +712,64 @@ JS;
         }
     }
 
-    public function test_v10_balance_y_resultado_bruto_usan_utilidad_2_por_terminal_y_ruta(): void
+    public function test_v10_pdf_alinea_montos_sin_desbordar_columnas_en_carta_y_legal(): void
+    {
+        $this->datos();
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-01-15', 'tipo' => 'Tradicional', 'monto' => 1977456],
+            ['agencia_id' => '1003', 'fecha' => '2026-01-15', 'tipo' => 'Tradicional', 'monto' => 9876543.21],
+        ]);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'alcance' => 'todas', 'terminal' => '']))->assertOk();
+        $envolturaOriginal = app('dompdf.wrapper');
+        foreach (['letter' => 792, 'legal' => 1008] as $papel => $anchoPagina) {
+            $this->app->instance('dompdf.wrapper', $envolturaOriginal);
+            $html = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [
+                'informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir', 'tamano_hoja' => $papel,
+            ]))->assertOk();
+            $datos = $html->original->getData();
+            $metricas = $envolturaOriginal->getDomPDF()->getFontMetrics();
+            $celdas = [];
+            $montos = [];
+            $numeroPagina = 1;
+            $canvas = \Mockery::mock(\Dompdf\Canvas::class);
+            $canvas->shouldReceive('get_width')->andReturn($anchoPagina);
+            $canvas->shouldReceive('get_height')->andReturn(612);
+            $canvas->shouldReceive('filled_rectangle', 'line', 'page_text')->andReturnNull();
+            $canvas->shouldReceive('new_page')->andReturnUsing(function () use (&$numeroPagina): void {
+                $numeroPagina++;
+            });
+            $canvas->shouldReceive('rectangle')->andReturnUsing(function ($x, $y, $ancho, $alto) use (&$celdas, &$numeroPagina): void {
+                if ($y >= 146) {
+                    $celdas[] = ['pagina' => $numeroPagina, ...compact('x', 'y', 'ancho', 'alto')];
+                }
+            });
+            $canvas->shouldReceive('text')->andReturnUsing(function ($x, $y, $texto, $fuente, $tamano) use (&$montos, &$numeroPagina, $metricas): void {
+                if (preg_match('/^-?[\d,]+$/', $texto)) {
+                    $montos[] = ['pagina' => $numeroPagina, 'x' => $x, 'y' => $y, 'tamano' => $tamano, 'ancho' => $metricas->getTextWidth($texto, $fuente, $tamano)];
+                }
+            });
+            $dompdf = \Mockery::mock(\Dompdf\Dompdf::class);
+            $dompdf->shouldReceive('getCanvas')->andReturn($canvas);
+            $dompdf->shouldReceive('getFontMetrics')->andReturn($metricas);
+            $envoltura = \Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+            $envoltura->shouldReceive('loadHTML', 'setPaper')->andReturnSelf();
+            $envoltura->shouldReceive('render')->andReturnNull();
+            $envoltura->shouldReceive('getDomPDF')->andReturn($dompdf);
+            $envoltura->shouldReceive('output')->andReturn('%PDF-');
+            $this->app->instance('dompdf.wrapper', $envoltura);
+            app(\App\Services\RentabilidadAgenciaV10Pdf::class)->generar($datos);
+            $this->assertNotEmpty($montos);
+            foreach ($montos as $monto) {
+                $this->assertEqualsWithDelta($datos['tamanoFuenteImportes'], $monto['tamano'], 0.001);
+                $celda = collect($celdas)->first(fn (array $celda): bool => $monto['pagina'] === $celda['pagina'] && $monto['x'] >= $celda['x'] && $monto['x'] < $celda['x'] + $celda['ancho'] && $monto['y'] >= $celda['y'] && $monto['y'] < $celda['y'] + $celda['alto']);
+                $this->assertNotNull($celda);
+                $this->assertGreaterThanOrEqual($celda['x'] + 5 - 0.001, $monto['x']);
+                $this->assertEqualsWithDelta($celda['x'] + $celda['ancho'] - 5, $monto['x'] + $monto['ancho'], 0.001);
+            }
+        }
+    }
+
+    public function test_v10_utilidad_tradicional_y_resultado_bruto_sin_montos_azules(): void
     {
         $this->datos();
         DB::table('vt_usuarios_bet')->insert([
@@ -624,19 +777,23 @@ JS;
             ['agencia_id' => '1001', 'fecha' => '2026-01-10', 'tipo' => 'No Tradicional', 'monto' => 400000],
             ['agencia_id' => '1001', 'fecha' => '2026-01-10', 'tipo' => 'Recarga', 'monto' => 100000],
         ]);
+        DB::table('premios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-01-10', 'monto' => 100000, 'producto_id' => '2']);
         $filtros = [...$this->filtros(), 'mes_fin' => 1];
         $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $filtros))->assertOk()
-            ->assertSee('Balance general = Utilidad 2 - gastos.');
+            ->assertSee('Resultado Bruto = Utilidad - gastos.');
         $periodo = $pagina->viewData('datosTabla')[0]['periodos'][0];
         $this->assertSame(1245797.28, $periodo['premios_sacados_2']);
         $this->assertSame(731658.72, $periodo['utilidad_2']);
-        $this->assertSame(731603.72, $periodo['balance_general']);
+        $this->assertSame(100090.0, $periodo['premios_sacados']);
+        $this->assertSame(90.0, $periodo['premios_sacados_tradicionales']);
+        $this->assertSame(1977366.0, $periodo['utilidad']);
+        $this->assertSame(1977311.0, $periodo['balance_general']);
 
         $porRuta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
         $ruta = $porRuta->viewData('datosTabla')[0]['periodos'][0];
         $this->assertSame(1245872.88, $ruta['premios_sacados_2']);
         $this->assertSame(731703.12, $ruta['utilidad_2']);
-        $this->assertSame(731638.12, $ruta['balance_general']);
+        $this->assertSame(1977421.0, $ruta['balance_general']);
 
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [
             'informe_id' => $porRuta->viewData('informeId'), 'salida' => 'imprimir',
@@ -644,9 +801,10 @@ JS;
         $documento = new \DOMDocument;
         @$documento->loadHTML($impresion->getContent());
         $xpath = new \DOMXPath($documento);
-        $this->assertSame('731,638.12', trim($xpath->query('//tbody/tr[1]/td[last()]/div[1]')->item(0)->textContent));
-        $this->assertSame('1,245,872.88', trim($xpath->query('//tbody/tr[1]/td[last()]/div[2]')->item(0)->textContent));
-        $this->assertSame('731,703.12', trim($xpath->query('//tbody/tr[1]/td[last()]/div[3]')->item(0)->textContent));
+        $this->assertSame('1,977,421', trim($xpath->query('//tbody/tr[1]/td[last()]/div[1]')->item(0)->textContent));
+        $this->assertSame(1, $xpath->query('//tbody/tr[1]/td[last()]/div')->length);
+        $this->assertSame(1, $xpath->query('//tbody/tr[1]/td[5]/div')->length);
+        $this->assertSame('1,977,486', trim($xpath->query('//tbody/tr[1]/td[5]/div')->item(0)->textContent));
     }
 
     public function test_v10_javascript_repite_porcentajes_globales_y_conserva_importes_y_totales_filtrados(): void
@@ -665,8 +823,8 @@ function elemento(id) {
 global.document = {getElementById: elemento, querySelector(){return boton;}, addEventListener(evento, fn){global.iniciar = fn;}};
 global.Option = class {};
 const referencia = {meses: {'2026-01': {premios_sacados: 40.9090909, utilidad: 59.0909091}, '2026-02': {premios_sacados: null, utilidad: null}}, periodo: {premios_sacados: 28.125, utilidad: 71.875}};
-const fila = {terminal:'1001', nombre:'Agencia A', empresa:'Grupo Joselito', periodos:[{ventas:100,porcentaje_no_tradicional:0.95,ventas_tradicionales:50,ventas_no_tradicionales:30,ventas_recargas:20,ingresos_calculados:80,ingresos_tradicionales:50,ingresos_no_tradicionales:28.5,ingresos_recargas:1.5,premios_sacados:90,utilidad:10,gastos:55,balance_general:-45},{ventas:0,premios_sacados:0,utilidad:0,gastos:7,balance_general:-7}]};
-const otra = {...fila, terminal:'1003', periodos:[{ventas:120,premios_sacados:0,utilidad:120,balance_general:110},{ventas:0}]};
+const fila = {terminal:'1001', nombre:'Agencia A', empresa:'Grupo Joselito', periodos:[{ventas:100,porcentaje_no_tradicional:0.95,ventas_tradicionales:50,ventas_no_tradicionales:30,ventas_recargas:20,ingresos_calculados:80,ingresos_tradicionales:50,ingresos_no_tradicionales:28.5,ingresos_recargas:1.5,premios_sacados:90,utilidad:-40,gastos:55,balance_general:-95},{ventas:0,premios_sacados:0,utilidad:0,gastos:7,balance_general:-7}]};
+const otra = {...fila, terminal:'1003', periodos:[{ventas:120,ventas_tradicionales:120,premios_sacados:0,utilidad:120,balance_general:110},{ventas:0}]};
 global.window = {rentabilidadV10: {datos:[fila,otra], meses:[{codigo:'2026-01'},{codigo:'2026-02'}], rutasDisponibles:[], referenciasGlobales:{ingresos_2:{empresas:{'Grupo Joselito':{'2026-01':{porcentaje:20}}},total:{'2026-01':20}},ingresos:{'2026-01':0.95},empresas:{'Grupo Joselito':referencia},total:referencia}}, addEventListener(){}};
 let opciones;
 global.$ = () => ({DataTable(config){opciones=config;}});
@@ -674,15 +832,21 @@ $.fn = {DataTable(){}};
 window.jQuery = $;
 vm.runInThisContext(fs.readFileSync(process.argv[2],'utf8'));
 iniciar();
-assert.equal(opciones.columns.length,22);
+assert.equal(opciones.columns.length,21);
+assert.equal(opciones.columns[20].data,'periodos.1.balance_general');
+assert.equal(opciones.buttons[0].exportOptions.format.header('',10),'Resultado Bruto · 2026-01');
+assert.equal(opciones.buttons[0].exportOptions.format.header('',20),'Resultado Bruto · 2026-02');
+assert.equal(opciones.columns[10].render(null,'export',fila),-95);
+assert.equal(opciones.columns[20].render(null,'export',fila),-7);
 assert.equal(opciones.buttons[0].exportOptions.format.header('',6),'Premios sacados 2 · 2026-01');
 assert.equal(opciones.columns[6].data,null);
-assert.equal(opciones.columns[6].visible,true);
+assert.equal(opciones.columns[6].visible,false);
 assert.equal(opciones.buttons[0].exportOptions.format.header('',8),'Utilidad 2 · 2026-01');
 assert.equal(opciones.columns[8].data,null);
-assert.equal(opciones.columns[8].visible,true);
-for (const indice of [5,7,15,17]) assert.equal(opciones.columns[indice].visible,false);
-for (const indice of [6,8,16,18]) assert.equal(opciones.columns[indice].visible,true);
+assert.equal(opciones.columns[8].visible,false);
+for (const indice of [5,7,15,17]) assert.equal(opciones.columns[indice].visible,true);
+for (const indice of [6,8,16,18]) assert.equal(opciones.columns[indice].visible,false);
+for (const indice of [7,17]) assert.ok(opciones.columns[indice].className.includes('devolucion-azul'));
 for (const [ventas, esperado] of [[1977456,1245797.28],[100,63],[120,75.6],[100.01,63.01],[0,0],[-100,-63],[undefined,0]]) {
     const prueba = {...fila,periodos:[{ventas: (ventas || 0) + 500000, ventas_tradicionales:ventas, ventas_no_tradicionales:400000, ventas_recargas:100000}]};
     assert.equal(opciones.columns[6].render(null,'sort',prueba),esperado);
@@ -692,7 +856,7 @@ for (const [ventas, esperado] of [[1977456,1245797.28],[100,63],[120,75.6],[100.
     assert.equal(opciones.columns[8].render(null,'export',prueba),utilidadEsperada);
     assert.ok(opciones.columns[6].render(null,'display',prueba).includes('porcentaje-premios">63%'));
     assert.ok(opciones.columns[8].render(null,'display',prueba).includes('porcentaje-utilidad">37%'));
-    assert.ok(opciones.columns[6].render(null,'display',prueba).includes(new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP'}).format(esperado)));
+    assert.ok(opciones.columns[6].render(null,'display',prueba).includes(new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP',minimumFractionDigits:0,maximumFractionDigits:0}).format(esperado)));
 }
 assert.equal(opciones.scrollX,false);
 assert.equal(opciones.columns[3].visible,false);
@@ -701,35 +865,55 @@ assert.equal(opciones.columns[4].visible,false);
 assert.equal(opciones.columns[14].visible,false);
 assert.equal(opciones.columns[2].visible,true);
 assert.equal(opciones.buttons[0].exportOptions.columns,':visible');
-assert.equal((pie.innerHTML.match(/<td\b/g)||[]).length,22);
+assert.equal((pie.innerHTML.match(/<td\b/g)||[]).length,21);
 for (const terminal of [fila, otra, {...fila,periodos:[{ventas:0}]}]) {
     assert.ok(opciones.columns[5].render(terminal.periodos[0].premios_sacados,'display',terminal).includes('40.91%'));
-    assert.ok(opciones.columns[7].render(terminal.periodos[0].utilidad,'display',terminal).includes('59.09%'));
+    assert.equal(opciones.columns[7].render(terminal.periodos[0].utilidad,'display',terminal),new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP',minimumFractionDigits:0,maximumFractionDigits:0}).format(terminal.periodos[0].utilidad || 0));
 }
 assert.ok(opciones.columns[15].render(0,'display',fila).includes('—'));
-assert.equal(opciones.columns[5].render(90,'export',fila),90);
-assert.equal(opciones.columns[21].render(null,'export',fila),-43.5);
-assert.ok(opciones.columns[21].render(null,'display',fila).includes('% Premios: 63%'));
-const moneda = valor => new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP'}).format(valor);
-const importeGeneral = valor => `<div class="importe-general" title="Ventas menos el porcentaje global de premios">${moneda(valor)}</div>`;
-const importePremios = valor => `<div class="importe-general" title="Ventas por el porcentaje global de premios">${moneda(valor)}</div>`;
-assert.ok(opciones.columns[5].render(90,'display',fila).includes(importePremios(40.9090909)));
-assert.ok(opciones.columns[5].render(0,'display',otra).includes(importePremios(49.09090908)));
-assert.ok(opciones.columns[5].render(0,'display',{...fila,periodos:[{ventas:0}]}).includes(importePremios(0)));
-assert.ok(opciones.columns[15].render(0,'display',fila).includes('>—</div>'));
-assert.ok(opciones.columns[21].render(null,'display',fila).includes(moneda(31.5)));
-assert.ok(opciones.columns[7].render(10,'display',fila).includes(importeGeneral(59.0909091)));
-assert.ok(opciones.columns[7].render(120,'display',otra).includes(importeGeneral(70.90909092)));
-assert.ok(opciones.columns[7].render(0,'display',{...fila,periodos:[{ventas:0}]}).includes(importeGeneral(0)));
-assert.ok(opciones.columns[17].render(0,'display',fila).includes('>—</div>'));
-assert.ok(opciones.columns[21].render(null,'display',fila).includes(moneda(18.5)));
+assert.ok(opciones.columns[5].render(90,'export',fila).includes('180.00%'));
+assert.ok(opciones.columns[5].render(90,'export',fila).includes('63%'));
+assert.equal(opciones.columns[5].render(90,'sort',fila),180);
+const moneda = valor => new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP',minimumFractionDigits:0,maximumFractionDigits:0}).format(valor);
+for (const [importe, esperado] of [[1234.49,1234],[1234.5,1235],[-1234.5,-1235],[0,0]]) {
+    assert.equal(opciones.columns[7].render(importe,'display',fila),moneda(esperado));
+    assert.equal(opciones.columns[7].render(importe,'export',fila),importe);
+}
+const devolucionAzul = valor => `<span class="devolucion-azul" title="Premios sacados / ventas tradicionales de la terminal">${valor == null ? String.fromCharCode(8212) : valor.toFixed(2) + "%"}</span>`;
+
+
+assert.ok(opciones.columns[5].render(90,'display',fila).includes(devolucionAzul(180)));
+assert.ok(opciones.columns[5].render(0,'display',otra).includes(devolucionAzul(0)));
+assert.ok(opciones.columns[5].render(0,'display',{...fila,periodos:[{ventas:0}]}).includes(devolucionAzul(null)));
+assert.ok(opciones.columns[15].render(0,'display',fila).includes(devolucionAzul(null)));
+assert.equal(opciones.columns[7].render(10,'display',fila),moneda(10));
+assert.equal(opciones.columns[7].render(120,'display',otra),moneda(120));
+assert.equal(opciones.columns[7].render(0,'display',{...fila,periodos:[{ventas:0}]}),moneda(0));
+assert.equal(opciones.columns[17].render(0,'display',fila),moneda(0));
 assert.equal(opciones.columns[7].render(10,'export',fila),10);
 referencia.meses['2026-01'].premios_sacados = 150;
-assert.ok(opciones.columns[5].render(90,'display',fila).includes(importePremios(150)));
-assert.ok(opciones.columns[7].render(10,'display',fila).includes(importeGeneral(-50)));
+assert.ok(opciones.columns[5].render(90,'display',fila).includes(devolucionAzul(180)));
+const premiosCombinados = opciones.columns[5].render(90,'display',fila);
+assert.ok(premiosCombinados.indexOf('180.00%') < premiosCombinados.indexOf('150.00%'));
+assert.ok(premiosCombinados.indexOf('150.00%') < premiosCombinados.indexOf(moneda(31.5)));
+assert.ok(premiosCombinados.indexOf('Dev T') < premiosCombinados.indexOf('Dev G'));
+assert.ok(premiosCombinados.indexOf('Dev G') < premiosCombinados.indexOf('Dev Proy'));
+assert.ok(premiosCombinados.includes(moneda(90)));
+assert.ok(premiosCombinados.includes(`<span class="devolucion-azul">${moneda(90)}</span>`));
+assert.ok(premiosCombinados.includes(`<span class="monto-proyectado">${moneda(31.5)}</span>`));
+assert.ok(premiosCombinados.includes(moneda(75)));
+assert.ok(premiosCombinados.includes(moneda(31.5)));
+assert.equal((premiosCombinados.match(/class="linea-devolucion"/g)||[]).length,3);
+const premiosExportados = opciones.columns[5].render(90,'export',fila);
+assert.ok(premiosExportados.includes(`Dev T 180.00%: ${moneda(90)}`));
+assert.ok(premiosExportados.includes(`Dev G 150.00%: ${moneda(75)}`));
+assert.ok(premiosExportados.includes(`Dev Proy 63%: ${moneda(31.5)}`));
+assert.equal(opciones.columns[5].render(0,'sort',{...fila,periodos:[{ventas_tradicionales:0}]}),null);
+assert.equal(opciones.columns[5].render(-10,'sort',{...fila,periodos:[{ventas_tradicionales:100}]}),-10);
+assert.equal(opciones.columns[7].render(10,'display',fila),moneda(10));
 referencia.meses['2026-01'].premios_sacados = 40.9090909;
 assert.deepEqual(opciones.order,[[1,'desc'],[11,'desc'],[0,'asc']]);
-const pies = Array.from({length:22},()=>({classList:{add(){},remove(){}}}));
+const pies = Array.from({length:21},()=>({classList:{add(){},remove(){}}}));
 const api = {rows(){return {data(){return {toArray(){return [fila];}};}};},column(i){return {footer(){return pies[i];}};}};
 opciones.footerCallback.call({api(){return api;}});
 assert.ok(pies[6].innerHTML.includes(moneda(31.5)));
@@ -740,31 +924,25 @@ const ejemplo = {...fila,periodos:[{ventas:2477456,ventas_tradicionales:1977456,
 assert.equal(opciones.columns[6].render(null,'export',ejemplo),1245797.28);
 assert.equal(opciones.columns[8].render(null,'export',ejemplo),731658.72);
 const conGastos = {...ejemplo,periodos:[{...ejemplo.periodos[0],gastos:100,balance_general:999999}]};
-assert.equal(opciones.columns[10].render(null,'export',conGastos),731558.72);
-assert.equal(opciones.columns[21].render(null,'export',conGastos),731558.72);
-assert.ok(opciones.columns[21].render(null,'display',conGastos).includes('% Utilidad: 37%'));
+assert.equal(opciones.columns[10].render(null,'export',conGastos),1977356);
 const apiEjemplo = {...api,rows(){return {data(){return {toArray(){return [ejemplo];}};}};}};
 opciones.footerCallback.call({api(){return apiEjemplo;}});
 assert.ok(pies[6].innerHTML.includes(moneda(1245797.28)));
 assert.ok(pies[8].innerHTML.includes(moneda(731658.72)));
-assert.equal(pies[10].textContent,moneda(731658.72));
-assert.ok(pies[21].innerHTML.includes(moneda(731658.72)));
+assert.equal(pies[10].textContent,moneda(1977456));
 const apiCentavos = {...api,rows(){return {data(){return {toArray(){return [1,2].map(() => ({...fila,periodos:[{ventas_tradicionales:0.01}]}));}};}};}};
 opciones.footerCallback.call({api(){return apiCentavos;}});
 assert.ok(pies[6].innerHTML.includes(moneda(0.02)));
 assert.ok(pies[8].innerHTML.includes(moneda(0)));
-assert.equal(pies[10].textContent,moneda(0));
+assert.equal(pies[10].textContent,moneda(0.02));
 const apiSinFilas = {...api,rows(){return {data(){return {toArray(){return [];}};}};}};
 opciones.footerCallback.call({api(){return apiSinFilas;}});
 assert.ok(pies[6].innerHTML.includes(moneda(0)));
 assert.ok(pies[8].innerHTML.includes(moneda(0)));
 opciones.footerCallback.call({api(){return api;}});
 assert.ok(pies[5].innerHTML.includes('40.91%'));
-assert.ok(pies[21].innerHTML.includes('63%'));
-assert.ok(pies[7].innerHTML.includes(importeGeneral(59.0909091)));
-assert.ok(pies[5].innerHTML.includes(importePremios(40.9090909)));
-assert.ok(pies[21].innerHTML.includes(moneda(31.5)));
-assert.ok(pies[21].innerHTML.includes(moneda(18.5)));
+assert.equal(pies[7].textContent,moneda(-40));
+assert.ok(pies[5].innerHTML.includes(devolucionAzul(180)));
 assert.ok(pies[1].innerHTML.includes(moneda(50)));
 assert.equal(opciones.columns[2].data,'periodos.0.ingresos_calculados');
 assert.equal(opciones.columns[2].render(80,'export',fila),80);
@@ -773,13 +951,6 @@ assert.equal(opciones.columns[2].render(null,'export',fila),'');
 assert.ok(opciones.columns[2].render(null,'display',{...fila,periodos:[{...fila.periodos[0],ingresos_no_tradicionales:null}]}).includes('Sin porcentaje contable'));
 assert.equal(opciones.buttons[0].exportOptions.format.header('',2),'Ingresos calculado · 2026-01');
 assert.ok(pies[2].innerHTML.includes(moneda(50)));
-for (const contenido of [opciones.columns[5].render(90,'display',fila),opciones.columns[7].render(10,'display',fila),pies[5].innerHTML,pies[7].innerHTML]) {
-    assert.ok(contenido.indexOf('importe-general') > 0);
-    assert.ok(contenido.indexOf('importe-general') < contenido.indexOf('class="porcentaje '));
-    assert.ok(contenido.endsWith('</small>'));
-}
-const bruto=opciones.columns[21].render(null,'display',fila);
-assert.ok(bruto.lastIndexOf('importe-general') < bruto.indexOf('class="porcentaje '));
 const ventasDesglosadas = opciones.columns[1].render(100,'display',fila);
 const ingresosDesglosados = opciones.columns[2].render(80,'display',fila);
 for (const contenido of [ventasDesglosadas,ingresosDesglosados,pies[1].innerHTML,pies[2].innerHTML]) {
@@ -831,9 +1002,9 @@ assert.ok(pies[3].innerHTML.includes('20.00%'));
 window.rentabilidadV10.agrupacion='ruta';
 iniciar();
 assert.equal(opciones.buttons[0].exportOptions.format.header('',0),'Ruta / Empresa');
-assert.ok(opciones.columns[5].render(90,'display',fila).includes(importePremios(40.9090909)));
+assert.ok(opciones.columns[5].render(90,'display',fila).includes(devolucionAzul(180)));
 assert.ok(opciones.columns[5].render(90,'display',fila).includes('40.91%'));
-assert.ok(opciones.columns[7].render(10,'display',fila).includes(importeGeneral(59.0909091)));
+assert.equal(opciones.columns[7].render(10,'display',fila),moneda(10));
 JS;
         $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v10.js')]);
         $proceso->setInput($codigo)->setTimeout(15)->run();
@@ -2425,7 +2596,7 @@ JS;
         $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
     }
 
-    public function test_v8_y_v9_impresion_en_javascript_descarga_pdf_muestra_errores_y_rehabilita_botones(): void
+    public function test_v8_v9_y_v10_impresion_en_javascript_descarga_pdf_muestra_errores_y_rehabilita_botones(): void
     {
         $codigo = <<<'JS'
 const fs = require('node:fs');
@@ -2512,7 +2683,7 @@ const habilitados = () => botones.every(boton => !boton.disabled);
     assert.ok(habilitados());
 })().catch(error => {console.error(error); process.exitCode = 1;});
 JS;
-        foreach ([8, 9] as $version) {
+        foreach ([8, 9, 10] as $version) {
             $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v'.$version.'-impresion.js')]);
             $proceso->setInput(str_replace(['V8', 'v8'], ['V'.$version, 'v'.$version], $codigo))->setTimeout(15)->run();
             $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());

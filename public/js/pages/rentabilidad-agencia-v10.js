@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
     const configuracion = window.rentabilidadV10;
-    const moneda = valor => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(Number(valor || 0));
+    const moneda = valor => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(valor || 0));
     const empresa = document.getElementById('empresaV10');
     const ruta = document.getElementById('rutaV10');
     const actualizarRutas = () => {
@@ -81,13 +81,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const medidas = ['ventas', 'ingresos_calculados', 'porcentaje_ingresos', 'porcentaje_ingresos_2', 'premios_sacados', 'premios_sacados_2', 'utilidad', 'utilidad_2', 'gastos', 'balance_general'];
-    const etiquetas = ['Ventas', 'Ingresos calculado', '% ing', '% ing 2', 'Premios sacados', 'Premios sacados 2', 'Utilidad', 'Utilidad 2', 'Gastos', 'Balance general'];
+    const etiquetas = ['Ventas', 'Ingresos calculado', '% ing', '% ing 2', 'Premios sacados', 'Premios sacados 2', 'Utilidad', 'Utilidad 2', 'Gastos', 'Resultado Bruto'];
     const premiosSacados2 = ventas => Math.round(Number(ventas || 0) * 0.63 * 100) / 100;
     const utilidad2 = ventas => Math.round((Number(ventas || 0) - premiosSacados2(ventas)) * 100) / 100;
     const estimadosPeriodo = periodo => {
         const premios = periodo?.premios_sacados_2 ?? premiosSacados2(periodo?.ventas_tradicionales);
         const utilidad = periodo?.utilidad_2 ?? utilidad2(periodo?.ventas_tradicionales);
-        return { premios_sacados_2: premios, utilidad_2: utilidad, balance_general: Math.round((utilidad - Number(periodo?.gastos || 0)) * 100) / 100 };
+        const utilidadOriginal = Number(periodo?.utilidad ?? (Number(periodo?.ventas_tradicionales || 0) - Number(periodo?.premios_sacados_tradicionales ?? periodo?.premios_sacados ?? 0)));
+        return { premios_sacados_2: premios, utilidad_2: utilidad, balance_general: Math.round((utilidadOriginal - Number(periodo?.gastos || 0)) * 100) / 100 };
     };
     const mostrarEstimado = (campo, importe) => `<div>${moneda(importe)}</div><small class="porcentaje ${campo === 'premios_sacados_2' ? 'porcentaje-premios' : 'porcentaje-utilidad'}">${campo === 'premios_sacados_2' ? '63%' : '37%'}</small>`;
     const porRuta = configuracion.agrupacion === 'ruta';
@@ -117,33 +118,17 @@ document.addEventListener('DOMContentLoaded', function () {
         }).join('');
         return `<div class="desglose-productos">${lineas}</div>`;
     };
-    const ventasMenosPremios = (ventas, referencia) => {
-        const importe = referencia?.premios_sacados == null ? '—' : moneda(Number(ventas || 0) * (1 - Number(referencia.premios_sacados) / 100));
-        return `<div class="importe-general" title="Ventas menos el porcentaje global de premios">${importe}</div>`;
+    const devolucionTerminal = (premios, ventas) => Number(ventas || 0) === 0 ? null : Number(premios || 0) / Number(ventas) * 100;
+    const mostrarPremios = (premios, ventas, referencia, estimado, tipo = 'display') => {
+        const devolucion = devolucionTerminal(premios, ventas);
+        const textoDevolucion = devolucion == null ? '—' : `${devolucion.toFixed(2)}%`;
+        const global = porcentajeGlobal(referencia, 'premios_sacados');
+        const montoGlobal = referencia?.premios_sacados == null ? '—' : moneda(Number(ventas || 0) * Number(referencia.premios_sacados) / 100);
+        if (tipo === 'sort' || tipo === 'type') return devolucion;
+        if (tipo !== 'display') return `Dev T ${textoDevolucion}: ${moneda(premios)} | Dev G ${global}: ${montoGlobal} | Dev Proy 63%: ${moneda(estimado)}`;
+        return `<div class="desglose-devoluciones"><div class="linea-devolucion"><span>Dev T <span class="devolucion-azul" title="Premios sacados / ventas tradicionales de la terminal">${textoDevolucion}</span></span><span class="devolucion-azul">${moneda(premios)}</span></div><div class="linea-devolucion"><span>Dev G <small class="porcentaje porcentaje-premios" title="Global del grupo">${global}</small></span><span>${montoGlobal}</span></div><div class="linea-devolucion"><span>Dev Proy <small class="porcentaje porcentaje-premios">63%</small></span><span class="monto-proyectado">${moneda(estimado)}</span></div></div>`;
     };
-    const ventasPorPremios = (ventas, referencia) => {
-        const importe = referencia?.premios_sacados == null ? '—' : moneda(Number(ventas || 0) * Number(referencia.premios_sacados) / 100);
-        return `<div class="importe-general" title="Ventas por el porcentaje global de premios">${importe}</div>`;
-    };
-    const conPorcentaje = (campo, importe, referencia, ventas) => {
-        const porcentaje = porcentajeGlobal(referencia, campo);
-        const clase = campo === 'premios_sacados' ? 'porcentaje-premios' : 'porcentaje-utilidad';
-        return `<div>${moneda(importe)}</div>${campo === 'utilidad' ? ventasMenosPremios(ventas, referencia) : ventasPorPremios(ventas, referencia)}<small class="porcentaje ${clase}">${porcentaje}</small>`;
-    };
-    const resumenPeriodo = filas => {
-        const totales = { premios_sacados_2: 0, utilidad_2: 0, balance_general: 0 };
-        filas.forEach(fila => configuracion.meses.forEach((mes, indiceMes) => {
-            const periodo = estimadosPeriodo(fila.periodos[indiceMes]);
-            Object.keys(totales).forEach(campo => { totales[campo] += Number(periodo[campo] || 0); });
-        }));
-        Object.keys(totales).forEach(campo => { totales[campo] = Math.round(totales[campo] * 100) / 100; });
-        return totales;
-    };
-    const mostrarResultadoBruto = resumen => {
-        const clase = resumen.balance_general > 0 ? 'text-success' : resumen.balance_general < 0 ? 'text-danger' : '';
-        return `<div class="${clase}">${moneda(resumen.balance_general)}</div><div class="importe-general" title="Premios sacados 2 del período">${moneda(resumen.premios_sacados_2)}</div><div class="importe-general" title="Utilidad 2 del período">${moneda(resumen.utilidad_2)}</div><div><small class="porcentaje porcentaje-premios">% Premios: 63%</small></div><div><small class="porcentaje porcentaje-utilidad">% Utilidad: 37%</small></div>`;
-    };
-    const encabezados = [porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia', ...configuracion.meses.flatMap(mes => etiquetas.map(etiqueta => `${etiqueta} · ${mes.codigo}`)), 'Resultado Bruto'];
+    const encabezados = [porRuta ? 'Ruta / Empresa' : 'Terminal / Agencia', ...configuracion.meses.flatMap(mes => etiquetas.map(etiqueta => `${etiqueta} · ${mes.codigo}`))];
     const columnas = [
         { data: 'terminal', render: (valor, tipo, fila) => {
             if (porRuta) {
@@ -156,10 +141,14 @@ document.addEventListener('DOMContentLoaded', function () {
         } },
         ...configuracion.meses.flatMap((mes, indiceMes) => medidas.map((campo, indiceCampo) => ({
             data: ['porcentaje_ingresos', 'porcentaje_ingresos_2', 'premios_sacados_2', 'utilidad_2'].includes(campo) ? null : `periodos.${indiceMes}.${campo}`,
-            visible: !['porcentaje_ingresos', 'porcentaje_ingresos_2', 'premios_sacados', 'utilidad'].includes(campo),
+            visible: !['porcentaje_ingresos', 'porcentaje_ingresos_2', 'premios_sacados_2', 'utilidad_2'].includes(campo),
             defaultContent: 0,
-            className: `text-end fw-bold${indiceCampo === 0 ? ' inicio-mes' : ''}`,
+            className: `text-end fw-bold${indiceCampo === 0 ? ' inicio-mes' : ''}${campo === 'utilidad' ? ' devolucion-azul' : ''}`,
             render: (valor, tipo, fila) => {
+                if (campo === 'premios_sacados') {
+                    const periodo = fila.periodos[indiceMes];
+                    return mostrarPremios(valor, periodo?.ventas_tradicionales, configuracion.referenciasGlobales.empresas[fila.empresa]?.meses[mes.codigo], estimadosPeriodo(periodo).premios_sacados_2, tipo);
+                }
                 if (['premios_sacados_2', 'utilidad_2', 'balance_general'].includes(campo)) {
                     const importe = estimadosPeriodo(fila.periodos[indiceMes])[campo];
                     return tipo === 'display' ? (campo === 'balance_general' ? moneda(importe) : mostrarEstimado(campo, importe)) : importe;
@@ -179,26 +168,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     return tipo === 'sort' || tipo === 'type' ? null : '';
                 }
                 if (tipo !== 'display') return Number(valor || 0);
-                return ['premios_sacados', 'utilidad'].includes(campo)
-                    ? conPorcentaje(campo, valor, configuracion.referenciasGlobales.empresas[fila.empresa]?.meses[mes.codigo], fila.periodos[indiceMes]?.ventas)
-                    : moneda(valor);
+                return moneda(valor);
             },
             createdCell: (celda, valor) => {
                 if (campo === 'balance_general' && Number(valor) !== 0) celda.classList.add(Number(valor) > 0 ? 'text-success' : 'text-danger');
             },
         }))),
-        {
-            data: null,
-            className: 'text-end fw-bold inicio-mes',
-            render: (valor, tipo, fila) => {
-                const resumen = resumenPeriodo([fila]);
-                return tipo === 'display' ? mostrarResultadoBruto(resumen) : resumen.balance_general;
-            },
-        },
     ];
     try {
         const tabla = document.getElementById('tablaRentabilidadV10');
-        tabla.createTFoot().innerHTML = `<tr>${columnas.map((columna, indice) => `<td class="${indice === 0 ? '' : 'text-end'}${indice === columnas.length - 1 ? ' inicio-mes' : ''}">${indice === 0 ? 'Totales' : ''}</td>`).join('')}</tr>`;
+        tabla.createTFoot().innerHTML = `<tr>${columnas.map((columna, indice) => `<td class="${indice === 0 ? '' : 'text-end'}">${indice === 0 ? 'Totales' : ''}</td>`).join('')}</tr>`;
         $('#tablaRentabilidadV10').DataTable({
             data: configuracion.datos,
             columns: columnas,
@@ -230,6 +209,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 configuracion.meses.forEach((mes, indiceMes) => medidas.forEach((campo, indiceCampo) => {
                     const total = Math.round(filas.reduce((suma, fila) => suma + Number((['premios_sacados_2', 'utilidad_2', 'balance_general'].includes(campo) ? estimadosPeriodo(fila.periodos[indiceMes])[campo] : fila.periodos[indiceMes]?.[campo]) || 0), 0) * 100) / 100;
                     const celda = api.column(1 + indiceMes * medidas.length + indiceCampo).footer();
+                    if (campo === 'premios_sacados') {
+                        const ventas = filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.ventas_tradicionales || 0), 0);
+                        const estimado = filas.reduce((suma, fila) => suma + estimadosPeriodo(fila.periodos[indiceMes]).premios_sacados_2, 0);
+                        celda.innerHTML = mostrarPremios(total, ventas, configuracion.referenciasGlobales.total.meses[mes.codigo], Math.round(estimado * 100) / 100);
+                        return;
+                    }
                     if (['premios_sacados_2', 'utilidad_2'].includes(campo)) {
                         celda.innerHTML = mostrarEstimado(campo, total);
                         return;
@@ -254,14 +239,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         return;
                     }
                     celda.textContent = moneda(total);
-                    if (['premios_sacados', 'utilidad'].includes(campo)) {
-                        const ventas = filas.reduce((suma, fila) => suma + Number(fila.periodos[indiceMes]?.ventas || 0), 0);
-                        celda.innerHTML = conPorcentaje(campo, total, configuracion.referenciasGlobales.total.meses[mes.codigo], ventas);
-                    }
+                    if (campo === 'utilidad') celda.classList.add('devolucion-azul');
                     celda.classList.remove('text-success', 'text-danger');
                     if (campo === 'balance_general' && total !== 0) celda.classList.add(total > 0 ? 'text-success' : 'text-danger');
                 }));
-                api.column(columnas.length - 1).footer().innerHTML = mostrarResultadoBruto(resumenPeriodo(filas));
             },
             language: { search: porRuta ? 'Buscar ruta o empresa:' : 'Buscar agencia o terminal:', info: `Mostrando _START_ a _END_ de _TOTAL_ ${unidad}`, infoEmpty: `Sin ${unidad}`, zeroRecords: 'Sin coincidencias', emptyTable: 'Sin datos', paginate: { next: 'Siguiente', previous: 'Anterior' } },
         });

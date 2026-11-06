@@ -9,7 +9,11 @@
         #tablaRentabilidadV10 .porcentaje-premios { background: #fff3cd; color: #77520a; }
         #tablaRentabilidadV10 .porcentaje-utilidad { background: #dcece4; color: #285541; }
         #tablaRentabilidadV10 .importe-general { color: #0d6efd; margin-top: 3px; }
-        #tablaRentabilidadV10 .desglose-productos { min-width: 245px; font-weight: 500; }
+        #tablaRentabilidadV10 .devolucion-azul { color: #0d6efd; }
+        #tablaRentabilidadV10 .monto-proyectado { color: #000; }
+        #tablaRentabilidadV10 .desglose-devoluciones { min-width: 245px; }
+        #tablaRentabilidadV10 .linea-devolucion { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 3px 0; }
+        #tablaRentabilidadV10 .desglose-productos { min-width: 215px; font-weight: 500; }
         #tablaRentabilidadV10 .desglose-porcentajes { min-width: 170px; }
         #tablaRentabilidadV10 .linea-producto { display: flex; justify-content: space-between; gap: 18px; padding: 5px 0; }
         #tablaRentabilidadV10 .producto-etiqueta { color: var(--vz-secondary-color, #687789); font-size: 12px; }
@@ -67,8 +71,8 @@
                 <div class="card-body">
                     <p class="text-muted small">% ing muestra la división directa de ventas no tradicionales globales de la empresa y mes / créditos de la cuenta 400120001, con dos decimales sin redondear. Solo es informativo: no modifica los ingresos calculados. Sin ingresos contables o con importe cero se muestra —.</p>
                     <p class="text-muted small">Ingresos calculado = ventas tradicionales al 100% + ventas no tradicionales por su porcentaje contable global de los datos guardados (créditos 400120001 / créditos 200111001, de la empresa y mes) + recargas al 7.5%. El porcentaje contable aplicado a ingresos no cambia al filtrar agencia, ruta o productos. Esta columna no modifica la utilidad ni el balance.</p>
-                    <p class="text-muted small">Resultado Bruto = suma de los balances de los meses consultados. Sus tarjetas muestran los totales de Premios sacados 2 y Utilidad 2 del período, con porcentajes fijos de 63% y 37% sobre las ventas tradicionales.</p>
-                    <p class="text-muted small">Premios sacados 2 = ventas tradicionales × 63%. Utilidad 2 = ventas tradicionales - Premios sacados 2. Balance general = Utilidad 2 - gastos. Los importes corresponden a cada terminal o ruta y respetan los productos seleccionados. Los totales y el Resultado Bruto usan estos mismos cálculos.</p>
+                    <p class="text-muted small">Resultado Bruto de cada mes = Utilidad - gastos. % Premios = premios sacados tradicionales de la empresa / ventas tradicionales de la empresa × 100, para el mismo mes. No incluye ventas ni premios no tradicionales ni recargas. Si se excluyen los premios tradicionales, el porcentaje de premios es cero. Sin ventas tradicionales se muestra —.</p>
+                    <p class="text-muted small">Utilidad = ventas tradicionales - premios sacados tradicionales. Resultado Bruto = Utilidad - gastos. En Premios sacados: Dev T muestra la devolución y los premios reales de la terminal; Dev G muestra el porcentaje global del grupo y el monto de ventas tradicionales por ese porcentaje; Dev Proy muestra el 63% y su monto proyectado. Los importes respetan los productos seleccionados y los checks de premios.</p>
                     @if ($resultado['filas']->isEmpty())
                         <div class="alert alert-info">No se encontraron terminales activas con los filtros seleccionados.</div>
                     @else
@@ -80,18 +84,18 @@
                                     <tr>
                                         <th rowspan="2">{{ $filtros['agrupacion'] === 'ruta' ? 'Ruta / Empresa' : 'Terminal / Agencia' }}</th>
                                         @foreach ($meses as $mes)<th colspan="10" class="text-center grupo-mes">{{ $mes['nombre'] }}</th>@endforeach
-                                        <th rowspan="2" class="inicio-mes">Resultado Bruto</th>
+
                                     </tr>
                                     <tr>
                                         @foreach ($meses as $mes)
-                                            @foreach (['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'porcentaje_ingresos_2' => '% ing 2', 'premios_sacados' => 'Premios sacados', 'premios_sacados_2' => 'Premios sacados 2', 'utilidad' => 'Utilidad', 'utilidad_2' => 'Utilidad 2', 'gastos' => 'Gastos', 'balance_general' => 'Balance general'] as $campo => $etiqueta)
+                                            @foreach (['ventas' => 'Ventas', 'ingresos_calculados' => 'Ingresos calculado', 'porcentaje_ingresos' => '% ing', 'porcentaje_ingresos_2' => '% ing 2', 'premios_sacados' => 'Premios sacados', 'premios_sacados_2' => 'Premios sacados 2', 'utilidad' => 'Utilidad', 'utilidad_2' => 'Utilidad 2', 'gastos' => 'Gastos', 'balance_general' => 'Resultado Bruto'] as $campo => $etiqueta)
                                                 <th @class(['inicio-mes' => $loop->first])>{{ $etiqueta }} <span class="d-block small text-muted">{{ $mes['codigo'] }}</span></th>
                                             @endforeach
                                         @endforeach
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
-                                <tfoot class="table-light fw-semibold"><tr><td>Totales</td>@foreach ($meses as $mes)@foreach (range(1, 10) as $columna)<td class="text-end"></td>@endforeach @endforeach<td class="text-end inicio-mes"></td></tr></tfoot>
+                                <tfoot class="table-light fw-semibold"><tr><td>Totales</td>@foreach ($meses as $mes)@foreach (range(1, 10) as $columna)<td class="text-end"></td>@endforeach @endforeach</tr></tfoot>
                             </table>
                         </div>
                     @endif
@@ -121,7 +125,7 @@
                             <option value="letter">Carta (8.5 x 11 pulgadas)</option>
                             <option value="legal">Legal (8.5 x 14 pulgadas)</option>
                         </select>
-                        <p class="text-muted small mt-3 mb-0">Agrupación: {{ $filtros['agrupacion'] === 'ruta' ? 'Por ruta y empresa' : 'Por terminal' }}. Impresión horizontal, en bloques de dos meses, con dos decimales y las columnas visibles del reporte. El tamaño de los montos se ajusta a la hoja seleccionada. La búsqueda de la tabla no limita la impresión. La consulta permanece disponible durante 10 minutos.</p>
+                        <p class="text-muted small mt-3 mb-0">Agrupación: {{ $filtros['agrupacion'] === 'ruta' ? 'Por ruta y empresa' : 'Por terminal' }}. Impresión horizontal, en bloques de dos meses, con importes redondeados a enteros y las columnas visibles del reporte. El tamaño de los montos se ajusta a la hoja seleccionada. La búsqueda de la tabla no limita la impresión. La consulta permanece disponible durante 10 minutos.</p>
                         <div id="estadoImpresionV10" class="mt-3" role="status" aria-live="polite"></div>
                     </div>
                     <div class="modal-footer">
