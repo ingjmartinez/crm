@@ -305,7 +305,7 @@ JS;
             $this->assertSame($ventas, $periodo['ventas']);
             $this->assertSame((float) $esperados[$terminal], $periodo['premios_sacados']);
             $this->assertSame($ventas - $esperados[$terminal], $periodo['utilidad']);
-            $this->assertSame($ventas - $esperados[$terminal] - $periodo['gastos'], $periodo['balance_general']);
+            $this->assertSame(round($ventas - round($ventas * 0.63, 2) - $periodo['gastos'], 2), $periodo['balance_general']);
         }
         $referencia = $pagina->viewData('referenciasGlobales')['empresas']['Grupo Joselito']['meses']['2026-01'];
         $this->assertEqualsWithDelta(($esperados['1001'] + $esperados['1003']) / 220 * 100, $referencia['premios_sacados'], 0.000001);
@@ -512,7 +512,7 @@ JS;
         $this->assertSame(['premios_sacados' => null, 'utilidad' => null], $referencia['meses']['2026-03']);
         $this->assertEqualsWithDelta(28.125, $referencia['periodo']['premios_sacados'], 0.00001);
         $this->assertSame(90.0, $pagina->viewData('datosTabla')[0]['periodos'][0]['premios_sacados']);
-        $this->assertSame([-45.0, 85.0, -7.0], array_column($pagina->viewData('datosTabla')[0]['periodos'], 'balance_general'));
+        $this->assertSame([-18.0, 22.0, -7.0], array_column($pagina->viewData('datosTabla')[0]['periodos'], 'balance_general'));
 
         foreach ([['alcance' => 'todas', 'terminal' => '', 'ruta' => 'Norte'], ['alcance' => 'todas', 'agrupacion' => 'ruta', 'ruta' => 'Sur']] as $cambio) {
             $respuesta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), ...$cambio]))->assertOk();
@@ -540,12 +540,12 @@ JS;
         $informeId = $pagina->viewData('informeId');
         DB::table('premios_bet')->update(['monto' => 999999]);
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'imprimir']))
-            ->assertOk()->assertSee('40.91%')->assertSee('59.09%')->assertSee('% Premios: 28.13%')->assertSee('% Utilidad: 71.88%')
+            ->assertOk()->assertSee('40.91%')->assertSee('59.09%')->assertSee('% Premios: 63%')->assertSee('% Utilidad: 37%')
             ->assertSee('Resultado Bruto')->assertDontSee('90.00%');
         $impresion->assertSee('<div class="importe-general">59</div>', false)
             ->assertSee('<div class="importe-general">41</div>', false)
-            ->assertSee('<div class="importe-general">56</div>', false)
-            ->assertSee('<div class="importe-general">144</div>', false)
+            ->assertSee('<div class="importe-general">126.00</div>', false)
+            ->assertSee('<div class="importe-general">74.00</div>', false)
             ->assertSee('<div class="importe-general">—</div>', false);
         $this->assertSame($pagina->viewData('referenciasGlobales'), $impresion->viewData('referenciasGlobales'));
         $pdf = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))
@@ -583,6 +583,39 @@ JS;
         }
     }
 
+    public function test_v10_balance_y_resultado_bruto_usan_utilidad_2_por_terminal_y_ruta(): void
+    {
+        $this->datos();
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-01-10', 'tipo' => 'Tradicional', 'monto' => 1977356],
+            ['agencia_id' => '1001', 'fecha' => '2026-01-10', 'tipo' => 'No Tradicional', 'monto' => 400000],
+            ['agencia_id' => '1001', 'fecha' => '2026-01-10', 'tipo' => 'Recarga', 'monto' => 100000],
+        ]);
+        $filtros = [...$this->filtros(), 'mes_fin' => 1];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $filtros))->assertOk()
+            ->assertSee('Balance general = Utilidad 2 - gastos.');
+        $periodo = $pagina->viewData('datosTabla')[0]['periodos'][0];
+        $this->assertSame(1245797.28, $periodo['premios_sacados_2']);
+        $this->assertSame(731658.72, $periodo['utilidad_2']);
+        $this->assertSame(731603.72, $periodo['balance_general']);
+
+        $porRuta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
+        $ruta = $porRuta->viewData('datosTabla')[0]['periodos'][0];
+        $this->assertSame(1245872.88, $ruta['premios_sacados_2']);
+        $this->assertSame(731703.12, $ruta['utilidad_2']);
+        $this->assertSame(731638.12, $ruta['balance_general']);
+
+        $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [
+            'informe_id' => $porRuta->viewData('informeId'), 'salida' => 'imprimir',
+        ]))->assertOk();
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($impresion->getContent());
+        $xpath = new \DOMXPath($documento);
+        $this->assertSame('731,638', trim($xpath->query('//tbody/tr[1]/td[last()]/div[1]')->item(0)->textContent));
+        $this->assertSame('1,245,872.88', trim($xpath->query('//tbody/tr[1]/td[last()]/div[2]')->item(0)->textContent));
+        $this->assertSame('731,703.12', trim($xpath->query('//tbody/tr[1]/td[last()]/div[3]')->item(0)->textContent));
+    }
+
     public function test_v10_javascript_repite_porcentajes_globales_y_conserva_importes_y_totales_filtrados(): void
     {
         $codigo = <<<'JS'
@@ -615,6 +648,8 @@ assert.equal(opciones.columns[6].visible,true);
 assert.equal(opciones.buttons[0].exportOptions.format.header('',8),'Utilidad 2 · 2026-01');
 assert.equal(opciones.columns[8].data,null);
 assert.equal(opciones.columns[8].visible,true);
+for (const indice of [5,7,15,17]) assert.equal(opciones.columns[indice].visible,false);
+for (const indice of [6,8,16,18]) assert.equal(opciones.columns[indice].visible,true);
 for (const [ventas, esperado] of [[1977456,1245797.28],[100,63],[120,75.6],[100.01,63.01],[0,0],[-100,-63],[undefined,0]]) {
     const prueba = {...fila,periodos:[{ventas: (ventas || 0) + 500000, ventas_tradicionales:ventas, ventas_no_tradicionales:400000, ventas_recargas:100000}]};
     assert.equal(opciones.columns[6].render(null,'sort',prueba),esperado);
@@ -640,8 +675,8 @@ for (const terminal of [fila, otra, {...fila,periodos:[{ventas:0}]}]) {
 }
 assert.ok(opciones.columns[15].render(0,'display',fila).includes('—'));
 assert.equal(opciones.columns[5].render(90,'export',fila),90);
-assert.equal(opciones.columns[21].render(null,'export',fila),-52);
-assert.ok(opciones.columns[21].render(null,'display',fila).includes('% Premios: 28.13%'));
+assert.equal(opciones.columns[21].render(null,'export',fila),-43.5);
+assert.ok(opciones.columns[21].render(null,'display',fila).includes('% Premios: 63%'));
 const moneda = valor => new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP'}).format(valor);
 const importeGeneral = valor => `<div class="importe-general" title="Ventas menos el porcentaje global de premios">${moneda(valor)}</div>`;
 const importePremios = valor => `<div class="importe-general" title="Ventas por el porcentaje global de premios">${moneda(valor)}</div>`;
@@ -649,12 +684,12 @@ assert.ok(opciones.columns[5].render(90,'display',fila).includes(importePremios(
 assert.ok(opciones.columns[5].render(0,'display',otra).includes(importePremios(49.09090908)));
 assert.ok(opciones.columns[5].render(0,'display',{...fila,periodos:[{ventas:0}]}).includes(importePremios(0)));
 assert.ok(opciones.columns[15].render(0,'display',fila).includes('>—</div>'));
-assert.ok(opciones.columns[21].render(null,'display',fila).includes(importePremios(28.125)));
+assert.ok(opciones.columns[21].render(null,'display',fila).includes(moneda(31.5)));
 assert.ok(opciones.columns[7].render(10,'display',fila).includes(importeGeneral(59.0909091)));
 assert.ok(opciones.columns[7].render(120,'display',otra).includes(importeGeneral(70.90909092)));
 assert.ok(opciones.columns[7].render(0,'display',{...fila,periodos:[{ventas:0}]}).includes(importeGeneral(0)));
 assert.ok(opciones.columns[17].render(0,'display',fila).includes('>—</div>'));
-assert.ok(opciones.columns[21].render(null,'display',fila).includes(importeGeneral(71.875)));
+assert.ok(opciones.columns[21].render(null,'display',fila).includes(moneda(18.5)));
 assert.equal(opciones.columns[7].render(10,'export',fila),10);
 referencia.meses['2026-01'].premios_sacados = 150;
 assert.ok(opciones.columns[5].render(90,'display',fila).includes(importePremios(150)));
@@ -671,21 +706,32 @@ assert.ok(pies[8].innerHTML.includes('porcentaje-utilidad">37%'));
 const ejemplo = {...fila,periodos:[{ventas:2477456,ventas_tradicionales:1977456,ventas_no_tradicionales:400000,ventas_recargas:100000}]};
 assert.equal(opciones.columns[6].render(null,'export',ejemplo),1245797.28);
 assert.equal(opciones.columns[8].render(null,'export',ejemplo),731658.72);
+const conGastos = {...ejemplo,periodos:[{...ejemplo.periodos[0],gastos:100,balance_general:999999}]};
+assert.equal(opciones.columns[10].render(null,'export',conGastos),731558.72);
+assert.equal(opciones.columns[21].render(null,'export',conGastos),731558.72);
+assert.ok(opciones.columns[21].render(null,'display',conGastos).includes('% Utilidad: 37%'));
 const apiEjemplo = {...api,rows(){return {data(){return {toArray(){return [ejemplo];}};}};}};
 opciones.footerCallback.call({api(){return apiEjemplo;}});
 assert.ok(pies[6].innerHTML.includes(moneda(1245797.28)));
 assert.ok(pies[8].innerHTML.includes(moneda(731658.72)));
+assert.equal(pies[10].textContent,moneda(731658.72));
+assert.ok(pies[21].innerHTML.includes(moneda(731658.72)));
+const apiCentavos = {...api,rows(){return {data(){return {toArray(){return [1,2].map(() => ({...fila,periodos:[{ventas_tradicionales:0.01}]}));}};}};}};
+opciones.footerCallback.call({api(){return apiCentavos;}});
+assert.ok(pies[6].innerHTML.includes(moneda(0.02)));
+assert.ok(pies[8].innerHTML.includes(moneda(0)));
+assert.equal(pies[10].textContent,moneda(0));
 const apiSinFilas = {...api,rows(){return {data(){return {toArray(){return [];}};}};}};
 opciones.footerCallback.call({api(){return apiSinFilas;}});
 assert.ok(pies[6].innerHTML.includes(moneda(0)));
 assert.ok(pies[8].innerHTML.includes(moneda(0)));
 opciones.footerCallback.call({api(){return api;}});
 assert.ok(pies[5].innerHTML.includes('40.91%'));
-assert.ok(pies[21].innerHTML.includes('28.13%'));
+assert.ok(pies[21].innerHTML.includes('63%'));
 assert.ok(pies[7].innerHTML.includes(importeGeneral(59.0909091)));
 assert.ok(pies[5].innerHTML.includes(importePremios(40.9090909)));
-assert.ok(pies[21].innerHTML.includes(importePremios(28.125)));
-assert.ok(pies[21].innerHTML.includes(importeGeneral(71.875)));
+assert.ok(pies[21].innerHTML.includes(moneda(31.5)));
+assert.ok(pies[21].innerHTML.includes(moneda(18.5)));
 assert.ok(pies[1].innerHTML.includes(moneda(50)));
 assert.equal(opciones.columns[2].data,'periodos.0.ingresos_calculados');
 assert.equal(opciones.columns[2].render(80,'export',fila),80);

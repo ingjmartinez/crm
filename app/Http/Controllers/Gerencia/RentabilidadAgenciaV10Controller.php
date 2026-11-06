@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RentabilidadAgenciaV10Controller extends Controller
 {
-    private const VERSION_IMPRESION = 7;
+    private const VERSION_IMPRESION = 8;
 
     public function __construct(private readonly RentabilidadAgenciaV10Service $reporte) {}
 
@@ -39,7 +39,8 @@ class RentabilidadAgenciaV10Controller extends Controller
         }
         $datosTabla = $resultado === null ? [] : $resultado['filas']->map(fn (array $fila): array => [
             'terminal' => $fila['terminal'], 'nombre' => $fila['nombre'],
-            'empresa' => $fila['empresa'], 'ruta' => $fila['ruta'], 'periodos' => $fila['periodos'],
+            'empresa' => $fila['empresa'], 'ruta' => $fila['ruta'],
+            'periodos' => array_map($this->calcularPeriodoEstimado(...), $fila['periodos']),
         ])->values()->all();
         if ($filtros['agrupacion'] === 'ruta') {
             $datosTabla = $this->agruparPorRuta($datosTabla);
@@ -105,6 +106,23 @@ class RentabilidadAgenciaV10Controller extends Controller
         $dompdf->getCanvas()->page_text(695, 575, 'Página {PAGE_NUM} de {PAGE_COUNT}', $dompdf->getFontMetrics()->getFont('DejaVu Sans'), 8, [0.4, 0.45, 0.5]);
 
         return $pdf->download('rentabilidad_agencia_v10.pdf')->header('Cache-Control', 'private, no-store');
+    }
+
+    /**
+     * @param  array<string, mixed>  $periodo
+     * @return array<string, mixed>
+     */
+    private function calcularPeriodoEstimado(array $periodo): array
+    {
+        $premios = round($periodo['ventas_tradicionales'] * 0.63, 2);
+        $utilidad = round($periodo['ventas_tradicionales'] - $premios, 2);
+
+        return [
+            ...$periodo,
+            'premios_sacados_2' => $premios,
+            'utilidad_2' => $utilidad,
+            'balance_general' => round($utilidad - $periodo['gastos'], 2),
+        ];
     }
 
     /**
@@ -174,7 +192,7 @@ class RentabilidadAgenciaV10Controller extends Controller
      */
     private function agruparPorRuta(array $filas): array
     {
-        $campos = ['ventas', 'ventas_loterias', 'ventas_tradicionales', 'ventas_no_tradicionales', 'ventas_recargas', 'ingresos_tradicionales', 'ingresos_recargas', 'premios_sacados', 'utilidad', 'costos', 'gastos_contables', 'r20', 'gastos', 'balance_general'];
+        $campos = ['ventas', 'ventas_loterias', 'ventas_tradicionales', 'ventas_no_tradicionales', 'ventas_recargas', 'ingresos_tradicionales', 'ingresos_recargas', 'premios_sacados', 'premios_sacados_2', 'utilidad', 'utilidad_2', 'costos', 'gastos_contables', 'r20', 'gastos', 'balance_general'];
 
         return collect($filas)
             ->groupBy(fn (array $fila): string => json_encode([$fila['empresa'], $fila['ruta']], JSON_THROW_ON_ERROR))

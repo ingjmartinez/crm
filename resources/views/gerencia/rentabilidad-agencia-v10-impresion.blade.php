@@ -69,7 +69,7 @@
                 <p class="subtitulo">Ingresos calculado: tradicional 100%; recargas 7.5%; no tradicional según créditos globales guardados de las cuentas 400120001 / 200111001 de cada empresa y mes. El porcentaje no cambia al filtrar agencia o ruta. Sin porcentaje contable: faltan movimientos de las cuentas o una base de ventas positiva.</p>
                 <p class="subtitulo">Empresa: {{ $filtros['empresa'] ?: 'Todas las empresas' }} | Año: {{ $filtros['anio'] }} | Productos: {{ $productos ? implode(', ', $productos) : 'Ninguno' }}<br>Importes en RD$, redondeados a enteros. % Premios y % Utilidad: globales de la empresa en cada mes, sobre ventas totales. Sin ventas globales: —.</p>
                 <h2 class="ruta">{{ $ruta }} | {{ $filas->count() }} {{ $porRuta ? 'rutas' : ($filas->count() === 1 ? 'agencia' : 'agencias') }}</h2>
-                <p class="subtitulo">Resultado Bruto: suma de los balances de todo el período. Las tarjetas usan porcentajes globales de la empresa para el período completo. Los filtros de ruta o terminal no cambian estos porcentajes.</p>
+                <p class="subtitulo">Balance general = Utilidad 2 - Gastos. Resultado Bruto = suma de los balances de todo el período. Sus tarjetas muestran los totales de Premios sacados 2 y Utilidad 2, con porcentajes fijos de 63% y 37% sobre las ventas tradicionales.</p>
                 <table @class(['tres-meses' => count($bloque) === 3])>
                     <colgroup><col style="width:{{ $anchoAgencia }}%">@foreach ($bloque as $mes)@foreach ($campos as $campo => $etiqueta)<col style="width:{{ $anchoMeses / (count($bloque) * count($campos)) }}%">@endforeach @endforeach<col style="width:{{ $anchoResultado }}%"></colgroup>
                     <thead>
@@ -88,8 +88,8 @@
                                         @php
                                             $valor = match ($campo) {
                                                 'porcentaje_ingresos' => null,
-                                                'premios_sacados_2' => round($fila['periodos'][$indiceMes]['ventas_tradicionales'] * 0.63, 2),
-                                                'utilidad_2' => round($fila['periodos'][$indiceMes]['ventas_tradicionales'] - round($fila['periodos'][$indiceMes]['ventas_tradicionales'] * 0.63, 2), 2),
+                                                'premios_sacados_2' => $fila['periodos'][$indiceMes]['premios_sacados_2'],
+                                                'utilidad_2' => $fila['periodos'][$indiceMes]['utilidad_2'],
                                                 default => $fila['periodos'][$indiceMes][$campo],
                                             };
                                         @endphp
@@ -130,10 +130,10 @@
                                 @endphp
                                 <td @class(['importe', 'resultado-bruto', 'positivo' => $resultadoBruto > 0, 'negativo' => $resultadoBruto < 0])>
                                     <div>{{ number_format($resultadoBruto, 0) }}</div>
-                                    <div class="importe-general">{{ $ventasPorPremios($periodos->sum('ventas'), $referenciaEmpresa['periodo']) }}</div>
-                                    <div class="importe-general">{{ $ventasMenosPremios($periodos->sum('ventas'), $referenciaEmpresa['periodo']) }}</div>
+                                    <div class="importe-general">{{ number_format($periodos->sum('premios_sacados_2'), 2) }}</div>
+                                    <div class="importe-general">{{ number_format($periodos->sum('utilidad_2'), 2) }}</div>
                                     @foreach (['premios_sacados' => '% Premios', 'utilidad' => '% Utilidad'] as $campo => $etiqueta)
-                                        <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $etiqueta }}: {{ $porcentajeGlobal($referenciaEmpresa['periodo'], $campo) }}</div>
+                                        <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $etiqueta }}: {{ $campo === 'premios_sacados' ? '63%' : '37%' }}</div>
                                     @endforeach
                                 </td>
                             </tr>
@@ -144,8 +144,8 @@
                                     @php
                                         $total = match ($campo) {
                                             'porcentaje_ingresos' => null,
-                                            'premios_sacados_2' => round($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas_tradicionales']) * 0.63, 2),
-                                            'utilidad_2' => round($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas_tradicionales']) - round($filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['ventas_tradicionales']) * 0.63, 2), 2),
+                                            'premios_sacados_2' => $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['premios_sacados_2']),
+                                            'utilidad_2' => $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes]['utilidad_2']),
                                             default => $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes][$campo]),
                                         };
                                         $incompleto = $campo === 'ingresos_calculados' && $filas->contains(fn ($fila) => $fila['periodos'][$indiceMes][$campo] === null);
@@ -188,10 +188,10 @@
                             @endphp
                             <td @class(['importe', 'resultado-bruto', 'positivo' => $resultadoBruto > 0, 'negativo' => $resultadoBruto < 0])>
                                 <div>{{ number_format($resultadoBruto, 0) }}</div>
-                                <div class="importe-general">{{ $ventasPorPremios($periodos->sum('ventas'), $referenciasGlobales['total']['periodo']) }}</div>
-                                <div class="importe-general">{{ $ventasMenosPremios($periodos->sum('ventas'), $referenciasGlobales['total']['periodo']) }}</div>
+                                <div class="importe-general">{{ number_format($periodos->sum('premios_sacados_2'), 2) }}</div>
+                                <div class="importe-general">{{ number_format($periodos->sum('utilidad_2'), 2) }}</div>
                                 @foreach (['premios_sacados' => '% Premios', 'utilidad' => '% Utilidad'] as $campo => $etiqueta)
-                                    <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $etiqueta }}: {{ $porcentajeGlobal($referenciasGlobales['total']['periodo'], $campo) }}</div>
+                                    <div @class(['porcentaje', 'porcentaje-premios' => $campo === 'premios_sacados', 'porcentaje-utilidad' => $campo === 'utilidad'])>{{ $etiqueta }}: {{ $campo === 'premios_sacados' ? '63%' : '37%' }}</div>
                                 @endforeach
                             </td>
                         </tr>
