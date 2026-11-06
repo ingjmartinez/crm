@@ -26,6 +26,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         parent::setUp();
         $this->withoutMiddleware([EnsureViewPermission::class, ForcePasswordChange::class]);
         Http::preventStrayRequests();
+        \Illuminate\Support\Facades\Bus::fake([\App\Jobs\ConsultarPorcentajesIngresosAgenciaV10::class]);
         Schema::create('agencias', function (Blueprint $table): void {
             $table->id();
             $table->string('terminal');
@@ -274,6 +275,251 @@ assert.ok(opciones.columns[2].render(90,'display',fila).includes('40.91%'));
 assert.ok(opciones.columns[3].render(10,'display',fila).endsWith(importeGeneral(59.0909091)));
 JS;
         $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v9.js')]);
+        $proceso->setInput($codigo)->setTimeout(15)->run();
+        $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
+    }
+
+    public function test_v10_calcula_ingresos_por_producto_con_porcentaje_global_contable_de_cada_mes(): void
+    {
+        $this->datos();
+        \Illuminate\Support\Facades\Cache::put(\App\Services\IngresosCalculadosAgenciaV10Service::clave('168', '2026-05'), [
+            'estado' => 'listo', 'porcentaje' => 29065.02 / 559158, 'base' => 559158.0,
+        ], now()->addHour());
+        foreach (['Tradicional' => 943694, 'No Tradicional' => 313154, 'Recarga' => 82391] as $tipo => $monto) {
+            DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-05-15', 'tipo' => $tipo, 'monto' => $monto]);
+        }
+        $filtros = [...$this->filtros(), 'mes_inicio' => 5, 'mes_fin' => 5];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $filtros))->assertOk()->assertSee('Ingresos calculado');
+        $periodo = $pagina->viewData('datosTabla')[0]['periodos'][0];
+        $this->assertSame(1339239.0, $periodo['ventas']);
+        $this->assertSame(966151.06, $periodo['ingresos_calculados']);
+        $this->assertSame(943694.0, $periodo['ingresos_tradicionales']);
+        $this->assertSame(16277.74, round($periodo['ingresos_no_tradicionales'], 2));
+        $this->assertSame(6179.33, round($periodo['ingresos_recargas'], 2));
+        $this->assertSame(1339239.0, $periodo['utilidad']);
+        foreach (['Tradicional' => 943694.0, 'No Tradicional' => 16277.74, 'Recarga' => 6179.33] as $producto => $esperado) {
+            $respuesta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'productos_filtrados' => 1, 'productos' => [$producto]]))->assertOk();
+            $this->assertSame($esperado, $respuesta->viewData('datosTabla')[0]['periodos'][0]['ingresos_calculados']);
+        }
+        $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
+            ->assertOk()->assertSee('Ingresos calculado')->assertDontSee('966,151.06')
+            ->assertSeeInOrder(['Tradicional', 'No tradicional', 'Recargas'])
+            ->assertSee('16,277.74')->assertSee('6,179.33')->assertSee('% ing')->assertSee('5.20%')->assertSee('100.00%')->assertSee('7.50%');
+        $this->assertSame(966151.06, $impresion->viewData('grupos')->first()->first()['periodos'][0]['ingresos_calculados']);
+        $ruta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
+        $this->assertSame(966151.06, $ruta->viewData('datosTabla')[0]['periodos'][0]['ingresos_calculados']);
+        $this->assertSame(943694.0, $ruta->viewData('datosTabla')[0]['periodos'][0]['ventas_tradicionales']);
+        $this->assertSame(313154.0, $ruta->viewData('datosTabla')[0]['periodos'][0]['ventas_no_tradicionales']);
+        $this->assertSame(82391.0, $ruta->viewData('datosTabla')[0]['periodos'][0]['ventas_recargas']);
+        $this->assertSame(16277.74, round($ruta->viewData('datosTabla')[0]['periodos'][0]['ingresos_no_tradicionales'], 2));
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1003', 'fecha' => '2026-05-15', 'tipo' => 'No Tradicional', 'monto' => 100]);
+        $rutaIncompleta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
+        $this->assertSame(966156.26, $rutaIncompleta->viewData('datosTabla')[0]['periodos'][0]['ingresos_calculados']);
+        $this->assertEqualsWithDelta(29065.02 / 559158, $rutaIncompleta->viewData('datosTabla')[0]['periodos'][0]['porcentaje_no_tradicional'], 0.0000001);
+        $otraTerminal = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'terminal' => '1003']))->assertOk();
+        $this->assertSame($periodo['porcentaje_no_tradicional'], $otraTerminal->viewData('datosTabla')[0]['periodos'][0]['porcentaje_no_tradicional']);
+        $this->assertSame(5.2, $otraTerminal->viewData('datosTabla')[0]['periodos'][0]['ingresos_no_tradicionales'] === null ? null : round($otraTerminal->viewData('datosTabla')[0]['periodos'][0]['ingresos_no_tradicionales'], 2));
+        $this->assertSame($pagina->viewData('referenciasGlobales')['ingresos'], $otraTerminal->viewData('referenciasGlobales')['ingresos']);
+        $sinVentas = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'productos_filtrados' => 1, 'productos' => []]))->assertOk();
+        $this->assertSame($periodo['porcentaje_no_tradicional'], $sinVentas->viewData('datosTabla')[0]['periodos'][0]['porcentaje_no_tradicional']);
+        $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $rutaIncompleta->viewData('informeId'), 'salida' => 'imprimir']))
+            ->assertOk()->assertDontSee('Total incompleto')->assertSee('Sin porcentaje');
+        $v9 = $this->get(route('gerencia.rentabilidad-agencia-v9', $filtros))->assertOk()->assertDontSee('Ingresos calculado');
+        $this->assertArrayNotHasKey('ingresos_calculados', $v9->viewData('datosTabla')[0]['periodos'][0]);
+    }
+
+    public function test_v10_muestra_ingresos_pendientes_sin_tratarlos_como_cero(): void
+    {
+        \Illuminate\Support\Facades\Bus::fake();
+        $this->datos();
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-05-15', 'tipo' => 'No Tradicional', 'monto' => 313154]);
+        $filtros = [...$this->filtros(), 'mes_inicio' => 5, 'mes_fin' => 5];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $filtros))->assertOk()->assertSee('Consultando los porcentajes contables');
+        $periodo = $pagina->viewData('datosTabla')[0]['periodos'][0];
+        $this->assertNull($periodo['ingresos_calculados']);
+        $this->assertSame('pendiente', $periodo['estado_ingresos']);
+        \Illuminate\Support\Facades\Bus::assertDispatchedTimes(\App\Jobs\ConsultarPorcentajesIngresosAgenciaV10::class, 1);
+        $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
+            ->assertOk()->assertDontSee('Total incompleto')->assertSee('Sin porcentaje');
+    }
+
+    public function test_v10_porcentajes_globales_de_empresa_no_cambian_al_filtrar_terminal_o_ruta(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Norte']);
+        DB::table('agencias')->where('terminal', '1003')->update(['ruta' => 'Sur']);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $this->filtros()))->assertOk()
+            ->assertViewIs('gerencia.rentabilidad-agencia-v10')->assertSee('Resultado Bruto')
+            ->assertSee('Volver a Gerencia')->assertDontSee('Ver reporte V8');
+        $tarjetas = collect(config('module_hubs.gerencia.items'));
+        $tarjetaV10 = $tarjetas->firstWhere('nombre', 'Rentabilidad de Agencia V10');
+        $this->assertSame('/gerencia/rentabilidad-agencia-v10', $tarjetaV10['url']);
+        $this->assertTrue($tarjetaV10['activo']);
+        $this->assertNotSame($tarjetas->firstWhere('nombre', 'Rentabilidad de Agencia V9')['url'], $tarjetaV10['url']);
+        $referencia = $pagina->viewData('referenciasGlobales')['empresas']['Grupo Joselito'];
+        $this->assertEqualsWithDelta(90 / 220 * 100, $referencia['meses']['2026-01']['premios_sacados'], 0.00001);
+        $this->assertEqualsWithDelta(130 / 220 * 100, $referencia['meses']['2026-01']['utilidad'], 0.00001);
+        $this->assertSame(['premios_sacados' => null, 'utilidad' => null], $referencia['meses']['2026-03']);
+        $this->assertEqualsWithDelta(28.125, $referencia['periodo']['premios_sacados'], 0.00001);
+        $this->assertSame(90.0, $pagina->viewData('datosTabla')[0]['periodos'][0]['premios_sacados']);
+        $this->assertSame([-45.0, 85.0, -7.0], array_column($pagina->viewData('datosTabla')[0]['periodos'], 'balance_general'));
+
+        foreach ([['alcance' => 'todas', 'terminal' => '', 'ruta' => 'Norte'], ['alcance' => 'todas', 'agrupacion' => 'ruta', 'ruta' => 'Sur']] as $cambio) {
+            $respuesta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), ...$cambio]))->assertOk();
+            $this->assertSame($referencia, $respuesta->viewData('referenciasGlobales')['empresas']['Grupo Joselito']);
+        }
+        $todas = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'empresa' => '', 'alcance' => 'todas', 'terminal' => '']))->assertOk();
+        $this->assertSame(0.0, $todas->viewData('referenciasGlobales')['empresas']['Negosur']['meses']['2026-01']['premios_sacados']);
+        $vacio = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'productos_filtrados' => 1, 'productos' => []]))->assertOk();
+        $this->assertNull($vacio->viewData('referenciasGlobales')['empresas']['Grupo Joselito']['periodo']['premios_sacados']);
+        $this->get(route('gerencia.rentabilidad-agencia-v10'))->assertOk()->assertViewHas('resultado', null);
+        $this->getJson(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'mes_fin' => 0]))->assertUnprocessable();
+        $this->get(route('gerencia.rentabilidad-agencia-v10', [...$this->filtros(), 'terminal' => 'INEXISTENTE']))
+            ->assertOk()->assertViewHas('datosTabla', []);
+        $this->assertSame('gerencia.rentabilidad_de_agencia.view', app(ViewPermissionCatalog::class)->items()->firstWhere('path', '/gerencia/rentabilidad-agencia-v10')['permission']);
+        $this->assertSame(Route::getRoutes()->getByName('gerencia.rentabilidad-agencia-v9')->gatherMiddleware(), Route::getRoutes()->getByName('gerencia.rentabilidad-agencia-v10')->gatherMiddleware());
+        $this->withMiddleware(EnsureViewPermission::class);
+        $this->usuario(false);
+        $this->get(route('gerencia.rentabilidad-agencia-v10'))->assertForbidden();
+    }
+
+    public function test_v10_pdf_conserva_porcentajes_globales_de_la_consulta_y_aisla_sus_referencias(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v10', $this->filtros()))->assertOk();
+        $informeId = $pagina->viewData('informeId');
+        DB::table('premios_bet')->update(['monto' => 999999]);
+        $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'imprimir']))
+            ->assertOk()->assertSee('40.91%')->assertSee('59.09%')->assertSee('% Premios: 28.13%')->assertSee('% Utilidad: 71.88%')
+            ->assertSee('Resultado Bruto')->assertDontSee('90.00%');
+        $impresion->assertSee('<div class="importe-general">59</div>', false)
+            ->assertSee('<div class="importe-general">41</div>', false)
+            ->assertSee('<div class="importe-general">56</div>', false)
+            ->assertSee('<div class="importe-general">144</div>', false)
+            ->assertSee('<div class="importe-general">—</div>', false);
+        $this->assertSame($pagina->viewData('referenciasGlobales'), $impresion->viewData('referenciasGlobales'));
+        $pdf = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))
+            ->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $pdf->getContent());
+        $this->getJson(route('gerencia.rentabilidad-agencia-v9.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))->assertUnprocessable();
+        $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'imprimir', 'ruta_impresion' => 'No existe']))->assertUnprocessable();
+        auth()->user()->id = 2;
+        $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))->assertUnprocessable();
+        auth()->user()->id = 1;
+        $this->travel(11)->minutes();
+        $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))->assertUnprocessable();
+    }
+
+    public function test_v10_javascript_repite_porcentajes_globales_y_conserva_importes_y_totales_filtrados(): void
+    {
+        $codigo = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const elementos = new Map();
+const pie = {};
+const boton = {};
+function elemento(id) {
+    if (!elementos.has(id)) elementos.set(id, {value: '', classList: {add(){},remove(){}}, addEventListener(){}, replaceChildren(){}, querySelector(){return boton;}, createTFoot(){return pie;}});
+    return elementos.get(id);
+}
+global.document = {getElementById: elemento, querySelector(){return boton;}, addEventListener(evento, fn){global.iniciar = fn;}};
+global.Option = class {};
+const referencia = {meses: {'2026-01': {premios_sacados: 40.9090909, utilidad: 59.0909091}, '2026-02': {premios_sacados: null, utilidad: null}}, periodo: {premios_sacados: 28.125, utilidad: 71.875}};
+const fila = {terminal:'1001', nombre:'Agencia A', empresa:'Grupo Joselito', periodos:[{ventas:100,porcentaje_no_tradicional:0.95,ventas_tradicionales:50,ventas_no_tradicionales:30,ventas_recargas:20,ingresos_calculados:80,ingresos_tradicionales:50,ingresos_no_tradicionales:28.5,ingresos_recargas:1.5,premios_sacados:90,utilidad:10,gastos:55,balance_general:-45},{ventas:0,premios_sacados:0,utilidad:0,gastos:7,balance_general:-7}]};
+const otra = {...fila, terminal:'1003', periodos:[{ventas:120,premios_sacados:0,utilidad:120,balance_general:110},{ventas:0}]};
+global.window = {rentabilidadV10: {datos:[fila,otra], meses:[{codigo:'2026-01'},{codigo:'2026-02'}], rutasDisponibles:[], referenciasGlobales:{ingresos:{'2026-01':0.95},empresas:{'Grupo Joselito':referencia},total:referencia}}, addEventListener(){}};
+let opciones;
+global.$ = () => ({DataTable(config){opciones=config;}});
+$.fn = {DataTable(){}};
+window.jQuery = $;
+vm.runInThisContext(fs.readFileSync(process.argv[2],'utf8'));
+iniciar();
+assert.equal(opciones.columns.length,16);
+assert.equal((pie.innerHTML.match(/<td\b/g)||[]).length,16);
+for (const terminal of [fila, otra, {...fila,periodos:[{ventas:0}]}]) {
+    assert.ok(opciones.columns[4].render(terminal.periodos[0].premios_sacados,'display',terminal).includes('40.91%'));
+    assert.ok(opciones.columns[5].render(terminal.periodos[0].utilidad,'display',terminal).includes('59.09%'));
+}
+assert.ok(opciones.columns[11].render(0,'display',fila).includes('—'));
+assert.equal(opciones.columns[4].render(90,'export',fila),90);
+assert.equal(opciones.columns[15].render(null,'export',fila),-52);
+assert.ok(opciones.columns[15].render(null,'display',fila).includes('% Premios: 28.13%'));
+const moneda = valor => new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP'}).format(valor);
+const importeGeneral = valor => `<div class="importe-general" title="Ventas menos el porcentaje global de premios">${moneda(valor)}</div>`;
+const importePremios = valor => `<div class="importe-general" title="Ventas por el porcentaje global de premios">${moneda(valor)}</div>`;
+assert.ok(opciones.columns[4].render(90,'display',fila).endsWith(importePremios(40.9090909)));
+assert.ok(opciones.columns[4].render(0,'display',otra).endsWith(importePremios(49.09090908)));
+assert.ok(opciones.columns[4].render(0,'display',{...fila,periodos:[{ventas:0}]}).endsWith(importePremios(0)));
+assert.ok(opciones.columns[11].render(0,'display',fila).endsWith('>—</div>'));
+assert.ok(opciones.columns[15].render(null,'display',fila).includes(importePremios(28.125)));
+assert.ok(opciones.columns[5].render(10,'display',fila).endsWith(importeGeneral(59.0909091)));
+assert.ok(opciones.columns[5].render(120,'display',otra).endsWith(importeGeneral(70.90909092)));
+assert.ok(opciones.columns[5].render(0,'display',{...fila,periodos:[{ventas:0}]}).endsWith(importeGeneral(0)));
+assert.ok(opciones.columns[12].render(0,'display',fila).endsWith('>—</div>'));
+assert.ok(opciones.columns[15].render(null,'display',fila).endsWith(importeGeneral(71.875)));
+assert.equal(opciones.columns[5].render(10,'export',fila),10);
+referencia.meses['2026-01'].premios_sacados = 150;
+assert.ok(opciones.columns[4].render(90,'display',fila).endsWith(importePremios(150)));
+assert.ok(opciones.columns[5].render(10,'display',fila).endsWith(importeGeneral(-50)));
+referencia.meses['2026-01'].premios_sacados = 40.9090909;
+assert.deepEqual(opciones.order,[[1,'desc'],[8,'desc'],[0,'asc']]);
+const pies = Array.from({length:16},()=>({classList:{add(){},remove(){}}}));
+const api = {rows(){return {data(){return {toArray(){return [fila];}};}};},column(i){return {footer(){return pies[i];}};}};
+opciones.footerCallback.call({api(){return api;}});
+assert.ok(pies[4].innerHTML.includes('40.91%'));
+assert.ok(pies[15].innerHTML.includes('28.13%'));
+assert.ok(pies[5].innerHTML.endsWith(importeGeneral(59.0909091)));
+assert.ok(pies[4].innerHTML.endsWith(importePremios(40.9090909)));
+assert.ok(pies[15].innerHTML.includes(importePremios(28.125)));
+assert.ok(pies[15].innerHTML.endsWith(importeGeneral(71.875)));
+assert.ok(pies[1].innerHTML.includes(moneda(50)));
+assert.equal(opciones.columns[2].data,'periodos.0.ingresos_calculados');
+assert.equal(opciones.columns[2].render(80,'export',fila),80);
+assert.ok(opciones.columns[2].render(80,'display',fila).includes('No tradicional'));
+assert.equal(opciones.columns[2].render(null,'export',fila),'');
+assert.ok(opciones.columns[2].render(null,'display',{...fila,periodos:[{...fila.periodos[0],ingresos_no_tradicionales:null}]}).includes('Sin porcentaje contable'));
+assert.equal(opciones.buttons[0].exportOptions.format.header('',2),'Ingresos calculado · 2026-01');
+assert.ok(pies[2].innerHTML.includes(moneda(50)));
+const ventasDesglosadas = opciones.columns[1].render(100,'display',fila);
+const ingresosDesglosados = opciones.columns[2].render(80,'display',fila);
+for (const contenido of [ventasDesglosadas,ingresosDesglosados,pies[1].innerHTML,pies[2].innerHTML]) {
+    assert.ok(contenido.indexOf('Tradicional') < contenido.indexOf('No tradicional'));
+    assert.ok(contenido.indexOf('No tradicional') < contenido.indexOf('Recargas'));
+    assert.ok(!contenido.includes('<span>Total</span>'));
+}
+for (const importe of [50,30,20]) assert.ok(ventasDesglosadas.includes(moneda(importe)));
+for (const importe of [50,28.5,1.5]) assert.ok(ingresosDesglosados.includes(moneda(importe)));
+assert.ok(!ventasDesglosadas.includes(moneda(100)));
+assert.ok(!ingresosDesglosados.includes(moneda(80)));
+assert.equal(opciones.columns[1].render(100,'export',fila),100);
+assert.equal(opciones.columns[2].render(80,'sort',fila),80);
+const porcentajes = opciones.columns[3].render(null,'display',fila);
+assert.equal(opciones.buttons[0].exportOptions.format.header('',3),'% ing · 2026-01');
+assert.ok(porcentajes.indexOf('Tradicional') < porcentajes.indexOf('No tradicional'));
+assert.ok(porcentajes.indexOf('No tradicional') < porcentajes.indexOf('Recargas'));
+for (const porcentaje of ['100.00%','95.00%','7.50%']) assert.ok(porcentajes.includes(porcentaje));
+assert.ok(!porcentajes.includes('<span>Total</span>'));
+assert.equal(opciones.columns[3].render(null,'export',fila),'Tradicional: 100.00% | No tradicional: 95.00% | Recargas: 7.50%');
+assert.equal(opciones.columns[3].render(null,'sort',fila),80);
+assert.ok(pies[3].innerHTML.includes('95.00%'));
+const sinVentas = {...fila,periodos:[{ventas:0,ventas_no_tradicionales:0,ingresos_no_tradicionales:0}]};
+assert.ok(opciones.columns[3].render(null,'display',sinVentas).includes('—'));
+const tasaMayo = {...fila,periodos:[{porcentaje_no_tradicional:29065.02/559158,ventas_no_tradicionales:559158,ingresos_no_tradicionales:29065.02}]};
+assert.ok(opciones.columns[3].render(null,'display',tasaMayo).includes('5.20%'));
+const incompleta = {...fila,periodos:[{ventas:100,ingresos_calculados:null}]};
+const apiIncompleta = {...api,rows(){return {data(){return {toArray(){return [fila,incompleta];}};}};}};
+opciones.footerCallback.call({api(){return apiIncompleta;}});
+assert.ok(pies[2].innerHTML.includes('Sin porcentaje contable'));
+assert.ok(pies[3].innerHTML.includes('95.00%'));
+window.rentabilidadV10.agrupacion='ruta';
+iniciar();
+assert.equal(opciones.buttons[0].exportOptions.format.header('',0),'Ruta / Empresa');
+assert.ok(opciones.columns[4].render(90,'display',fila).endsWith(importePremios(40.9090909)));
+assert.ok(opciones.columns[4].render(90,'display',fila).includes('40.91%'));
+assert.ok(opciones.columns[5].render(10,'display',fila).endsWith(importeGeneral(59.0909091)));
+JS;
+        $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v10.js')]);
         $proceso->setInput($codigo)->setTimeout(15)->run();
         $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
     }
