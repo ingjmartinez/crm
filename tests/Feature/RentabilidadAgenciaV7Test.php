@@ -512,6 +512,29 @@ JS;
         $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $informeId, 'salida' => 'pdf']))->assertUnprocessable();
     }
 
+    public function test_v10_tabla_usa_desplazamiento_nativo_con_columnas_consistentes(): void
+    {
+        $this->datos();
+
+        foreach ([1, 3, 12] as $cantidadMeses) {
+            foreach (['terminal', 'ruta'] as $agrupacion) {
+                $respuesta = $this->get(route('gerencia.rentabilidad-agencia-v10', [
+                    ...$this->filtros(), 'mes_fin' => $cantidadMeses, 'agrupacion' => $agrupacion,
+                ]))->assertOk();
+                $documento = new \DOMDocument;
+                @$documento->loadHTML($respuesta->getContent());
+                $xpath = new \DOMXPath($documento);
+                $tabla = '//*[@id="tablaRentabilidadV10"]';
+
+                $this->assertSame('table-responsive d-none', $xpath->query('//*[@id="contenedorTablaV10"]')->item(0)->getAttribute('class'));
+                $this->assertSame($cantidadMeses * 8, $xpath->query($tabla.'/thead/tr[2]/th')->length);
+                $this->assertSame($cantidadMeses * 8 + 2, $xpath->query($tabla.'/tfoot/tr/td')->length);
+                $this->assertSame(2, $xpath->query($tabla.'/thead/tr[1]/th[@rowspan="2"]')->length);
+                $this->assertSame($cantidadMeses, $xpath->query($tabla.'/thead/tr[1]/th[@colspan="8"]')->length);
+            }
+        }
+    }
+
     public function test_v10_javascript_repite_porcentajes_globales_y_conserva_importes_y_totales_filtrados(): void
     {
         $codigo = <<<'JS'
@@ -538,6 +561,7 @@ window.jQuery = $;
 vm.runInThisContext(fs.readFileSync(process.argv[2],'utf8'));
 iniciar();
 assert.equal(opciones.columns.length,18);
+assert.equal(opciones.scrollX,false);
 assert.equal(opciones.columns[3].visible,true);
 assert.equal(opciones.columns[11].visible,true);
 assert.equal(opciones.columns[2].visible,true);

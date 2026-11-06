@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function () {
             columns: columnas,
             deferRender: true,
             pageLength: 25,
-            scrollX: true,
+            scrollX: false,
             autoWidth: false,
             order: [...configuracion.meses.map((mes, indiceMes) => [1 + indiceMes * medidas.length, 'desc']), [0, 'asc']],
             dom: 'Bfrtip',

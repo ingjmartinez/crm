@@ -73,7 +73,7 @@
                         <div class="alert alert-info">No se encontraron terminales activas con los filtros seleccionados.</div>
                     @else
                         <div id="cargandoV10" class="text-muted py-3" role="status">Preparando comparación mensual...</div>
-                        <div id="contenedorTablaV10" class="d-none">
+                        <div id="contenedorTablaV10" class="table-responsive d-none">
                             <p class="text-muted small">Desplaza la tabla horizontalmente para comparar los meses. Los totales y las exportaciones respetan la búsqueda aplicada.</p>
                             <table id="tablaRentabilidadV10" class="table table-bordered table-striped align-middle w-100">
                                 <thead>
