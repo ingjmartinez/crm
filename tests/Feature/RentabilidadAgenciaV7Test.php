@@ -311,6 +311,30 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertSame(0, collect($vacia->viewData('resumenCategorias'))->sum('cantidad'));
     }
 
+    public function test_v11_ventas_muestran_colores_segun_importe_en_impresion_y_totales(): void
+    {
+        $this->datos();
+        DB::table('vt_usuarios_bet')->where('agencia_id', '1001')->where('fecha', '2026-01-01')->update(['monto' => 100000]);
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-01-15', 'tipo' => 'No Tradicional', 'monto' => 99999],
+            ['agencia_id' => '1001', 'fecha' => '2026-01-15', 'tipo' => 'Recarga', 'monto' => 1000001],
+        ]);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$this->filtros(), 'mes_fin' => 1]))->assertOk();
+        $html = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))->assertOk();
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($html->getContent());
+        $xpath = new \DOMXPath($documento);
+        foreach (['1' => '#0d6efd', '2' => '#b32636', '3' => '#167047'] as $linea => $color) {
+            foreach (['1', 'last()'] as $fila) {
+                $this->assertSame('color:'.$color, $xpath->query('//tbody/tr['.$fila.']/td[2]/div['.$linea.']')->item(0)->getAttribute('style'));
+                $this->assertSame('', $xpath->query('//tbody/tr['.$fila.']/td[3]/div['.$linea.']')->item(0)->getAttribute('style'));
+            }
+        }
+        foreach ([[0, '#b32636'], [99998, '#b32636'], [99999, '#b32636'], [100000, '#0d6efd'], [100001, '#0d6efd'], [1000000, '#0d6efd'], [1000001, '#167047'], [null, '#243247']] as [$importe, $color]) {
+            $this->assertSame($color, \App\Services\RentabilidadAgenciaV11Pdf::colorVentas($importe));
+        }
+    }
+
     public function test_v11_javascript_oculta_etiquetas_y_suma_importes_dev_g_filtrados(): void
     {
         $codigo = <<<'JS'
@@ -335,6 +359,13 @@ window.jQuery = $;
 vm.runInThisContext(fs.readFileSync(process.argv[2],'utf8'));
 iniciar();
 assert.equal(opciones.columns.length,7);
+for (const [valor,clase] of [[0,'venta-baja'],[99998,'venta-baja'],[99999,'venta-baja'],[100000,'venta-alta'],[100001,'venta-alta'],[1000000,'venta-alta'],[1000001,'venta-millon']]) {
+    const prueba = {...fila,periodos:[{...fila.periodos[0],ventas:valor,ventas_tradicionales:valor,ventas_no_tradicionales:valor,ventas_recargas:valor}]};
+    const html = opciones.columns[1].render(valor,'display',prueba);
+    assert.equal((html.match(new RegExp(clase,'g'))||[]).length,3);
+    assert.ok(!opciones.columns[2].render(120,'display',prueba).includes(clase));
+    assert.equal(opciones.columns[1].render(valor,'export',prueba),valor);
+}
 const etiqueta = opciones.columns[0].render('1001','display',fila);
 for (const texto of ['Buenas','Evaluación provisional','En deterioro','#cfe2ff']) assert.ok(etiqueta.includes(texto));
 for (const texto of ['Margen estimado','8.33%','meses con ventas']) assert.ok(!etiqueta.includes(texto));

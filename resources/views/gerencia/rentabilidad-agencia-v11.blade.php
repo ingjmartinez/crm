@@ -11,6 +11,9 @@
         #tablaRentabilidadV11 .linea-devolucion { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding: 3px 0; }
         #tablaRentabilidadV11 .desglose-productos { min-width: 110px; font-weight: 500; }
         #tablaRentabilidadV11 .linea-producto { display: flex; justify-content: flex-end; padding: 5px 0; }
+        #tablaRentabilidadV11 .venta-baja { color: #b32636; }
+        #tablaRentabilidadV11 .venta-alta { color: #0d6efd; }
+        #tablaRentabilidadV11 .venta-millon { color: #167047; }
         #tablaRentabilidadV11 .clasificacion-terminal { margin-top: 7px; text-align: left; line-height: 1.5; }
     </style>
     <div class="main-content"><div class="page-content"><div class="container-fluid">

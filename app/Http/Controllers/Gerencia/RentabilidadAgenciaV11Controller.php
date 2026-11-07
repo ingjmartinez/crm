@@ -112,7 +112,7 @@ class RentabilidadAgenciaV11Controller extends Controller
         $referenciasGlobales = $consulta['referencias_globales'];
         $esImpresion = $request->validated('salida') === 'imprimir';
         $tamanoHoja = $request->validated('tamano_hoja', 'letter');
-        $clavePdf = 'rentabilidad-v11:pdf:'.hash('sha256', json_encode([$request->validated('informe_id'), $ruta, $tamanoHoja, 'canvas-v13'], JSON_THROW_ON_ERROR));
+        $clavePdf = 'rentabilidad-v11:pdf:'.hash('sha256', json_encode([$request->validated('informe_id'), $ruta, $tamanoHoja, 'canvas-v14'], JSON_THROW_ON_ERROR));
         $pdfCodificado = $esImpresion ? null : Cache::get($clavePdf);
         $contenidoPdf = is_string($pdfCodificado) ? base64_decode($pdfCodificado, true) : false;
         if (is_string($contenidoPdf) && str_starts_with($contenidoPdf, '%PDF-')) {

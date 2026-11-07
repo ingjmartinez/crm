@@ -46,6 +46,16 @@ class RentabilidadAgenciaV11Pdf
         return self::MARGEN_CELDA * min(1, 3 / max(1, $cantidadMeses));
     }
 
+    public static function colorVentas(?float $importe): string
+    {
+        return match (true) {
+            $importe === null => '#243247',
+            $importe > 1000000 => '#167047',
+            $importe >= 100000 => '#0d6efd',
+            default => '#b32636',
+        };
+    }
+
     /** @param array<string, mixed> $datos */
     public function generar(array $datos): string
     {
@@ -201,7 +211,8 @@ class RentabilidadAgenciaV11Pdf
                 $prefijo = $campo === 'ventas' ? 'ventas_' : 'ingresos_';
                 foreach (['tradicionales', 'no_tradicionales', 'recargas'] as $linea => $producto) {
                     $valor = $periodo[$prefijo.$producto];
-                    $this->texto($valor === null ? '—' : number_format($valor, 0), $x + $margen, $y + ($linea + 0.5) * $alto / 3 - $tamanoImportes / 2, $tamanoImportes, $ancho - $margen * 2, self::TEXTO, true);
+                    $color = $campo === 'ventas' ? array_map(fn (int $canal): float => $canal / 255, sscanf(self::colorVentas($valor), '#%02x%02x%02x')) : self::TEXTO;
+                    $this->texto($valor === null ? '—' : number_format($valor, 0), $x + $margen, $y + ($linea + 0.5) * $alto / 3 - $tamanoImportes / 2, $tamanoImportes, $ancho - $margen * 2, $color, true);
                 }
             } elseif ($campo === 'premios_sacados') {
                 $porcentaje = $periodo['porcentaje_dev_g'];
