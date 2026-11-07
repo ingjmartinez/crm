@@ -87,8 +87,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[caracter]);
     const mostrarClasificacion = clasificacion => {
         if (!clasificacion) return '';
-        const margen = clasificacion.margen == null ? 'Sin base suficiente' : `Margen estimado: ${Number(clasificacion.margen).toFixed(2)}%`;
-        return `<div class="clasificacion-terminal"><span class="badge" style="background-color:${escapar(clasificacion.fondo)};color:${escapar(clasificacion.color)}">${escapar(clasificacion.etiqueta)}</span><small class="d-block text-muted">${margen} · ${Number(clasificacion.meses_ventas)} meses con ventas</small>${clasificacion.provisional ? '<small class="d-block text-muted">Evaluación provisional</small>' : ''}${clasificacion.deterioro ? '<small class="d-block text-danger">En deterioro</small>' : ''}</div>`;
+        return `<div class="clasificacion-terminal"><span class="badge" style="background-color:${escapar(clasificacion.fondo)};color:${escapar(clasificacion.color)}">${escapar(clasificacion.etiqueta)}</span>${clasificacion.provisional ? '<small class="d-block text-muted">Evaluación provisional</small>' : ''}${clasificacion.deterioro ? '<small class="d-block text-danger">En deterioro</small>' : ''}</div>`;
     };
     const productos = ['tradicionales', 'no_tradicionales', 'recargas'];
     const desgloseProductos = (campo, periodo) => {

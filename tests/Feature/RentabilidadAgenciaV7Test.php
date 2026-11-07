@@ -228,7 +228,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->datos();
         $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', $this->filtros()))->assertOk();
         $parametros = ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir'];
-        $html = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', $parametros))->assertOk()->assertSee('40.91%')->assertSee('Margen estimado:')->assertSee('Evaluación provisional')->assertDontSee('Dev G')->assertDontSee('Dev T')->assertDontSee('Dev Proy');
+        $html = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', $parametros))->assertOk()->assertSee('Evaluacion de Agencia')->assertDontSee('Rentabilidad mensual de agencias V11')->assertSee('40.91%')->assertDontSee('Margen estimado:')->assertDontSee('meses con ventas')->assertSee('Evaluación provisional')->assertDontSee('Dev G')->assertDontSee('Dev T')->assertDontSee('Dev Proy');
         $this->assertCount(1, $html->viewData('bloquesMeses'));
         $this->assertCount(3, $html->viewData('bloquesMeses')[0]);
         $documento = new \DOMDocument;
@@ -277,7 +277,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertSame(0, $resumen['Atención prioritaria']['cantidad']);
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))->assertOk();
         $this->assertSame('Para trabajar', $impresion->viewData('grupos')->first()->first()['clasificacion']['etiqueta']);
-        $impresion->assertSee('Para trabajar')->assertSee('-15.00%');
+        $impresion->assertSee('Para trabajar')->assertDontSee('Margen estimado:');
     }
 
     public function test_v11_dashboard_cuenta_terminales_por_categoria_y_respeta_los_filtros(): void
@@ -336,7 +336,8 @@ vm.runInThisContext(fs.readFileSync(process.argv[2],'utf8'));
 iniciar();
 assert.equal(opciones.columns.length,7);
 const etiqueta = opciones.columns[0].render('1001','display',fila);
-for (const texto of ['Buenas','8.33%','2 meses con ventas','Evaluación provisional','En deterioro','#cfe2ff']) assert.ok(etiqueta.includes(texto));
+for (const texto of ['Buenas','Evaluación provisional','En deterioro','#cfe2ff']) assert.ok(etiqueta.includes(texto));
+for (const texto of ['Margen estimado','8.33%','meses con ventas']) assert.ok(!etiqueta.includes(texto));
 assert.ok(etiqueta.indexOf('Terminal:') < etiqueta.indexOf('Buenas'));
 assert.ok(opciones.columns[0].render('1001','export',fila).includes('Buenas'));
 for (const indice of [1,2]) {
@@ -957,6 +958,76 @@ JS;
         }
     }
 
+    public function test_v11_pdf_aprovecha_la_hoja_con_cinco_terminales_o_cuatro_con_etiquetas_largas(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', $this->filtros()))->assertOk();
+        $html = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))->assertOk();
+        $datosOriginales = $html->original->getData();
+        $filaOriginal = $datosOriginales['grupos']->first()->first();
+        $metricas = app('dompdf.wrapper')->getDomPDF()->getFontMetrics();
+        foreach (['letter' => 792, 'legal' => 1008] as $papel => $anchoPagina) {
+            foreach ([[10, false, [5, 5]], [5, false, [5]], [5, true, [4, 1]], [4, true, [4]]] as [$cantidad, $largo, $esperadas]) {
+                $datos = [...$datosOriginales, 'tamanoHoja' => $papel, 'tamanoFuenteImportes' => 8];
+                $datos['grupos'] = collect(['Ruta de prueba' => collect(range(1, $cantidad))->map(fn (int $indice): array => [
+                    ...$filaOriginal, 'terminal' => 'T'.$indice,
+                    'nombre' => $largo ? 'Agencia con un nombre muy largo para comprobar todas las etiquetas' : 'Agencia '.$indice,
+                    'clasificacion' => [...$filaOriginal['clasificacion'], 'provisional' => $largo, 'deterioro' => $largo],
+                ])]);
+                $numeroPagina = 1;
+                $terminales = [];
+                $totales = [];
+                $celdas = [];
+                $textos = [];
+                $canvas = \Mockery::mock(\Dompdf\Canvas::class);
+                $canvas->shouldReceive('get_width')->andReturn($anchoPagina);
+                $canvas->shouldReceive('get_height')->andReturn(612);
+                $canvas->shouldReceive('filled_rectangle', 'line', 'page_text')->andReturnNull();
+                $canvas->shouldReceive('new_page')->andReturnUsing(function () use (&$numeroPagina): void {
+                    $numeroPagina++;
+                });
+                $canvas->shouldReceive('rectangle')->andReturnUsing(function ($x, $y, $ancho, $alto) use (&$celdas, &$numeroPagina): void {
+                    if ($y >= 146) {
+                        $celdas[] = ['pagina' => $numeroPagina, ...compact('x', 'y', 'ancho', 'alto')];
+                    }
+                });
+                $canvas->shouldReceive('text')->andReturnUsing(function ($x, $y, $texto, $fuente, $tamano) use (&$textos, &$terminales, &$totales, &$numeroPagina, $metricas): void {
+                    if (str_starts_with($texto, 'Terminal: T')) {
+                        $terminales[$numeroPagina][] = $texto;
+                    }
+                    if ($texto === 'Totales') {
+                        $totales[] = $numeroPagina;
+                    }
+                    if ($y >= 146) {
+                        $textos[] = ['pagina' => $numeroPagina, 'x' => $x, 'y' => $y, 'alto' => $metricas->getFontHeight($fuente, $tamano), 'ancho' => $metricas->getTextWidth($texto, $fuente, $tamano)];
+                    }
+                });
+                $dompdf = \Mockery::mock(\Dompdf\Dompdf::class);
+                $dompdf->shouldReceive('getCanvas')->andReturn($canvas);
+                $dompdf->shouldReceive('getFontMetrics')->andReturn($metricas);
+                $envoltura = \Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+                $envoltura->shouldReceive('loadHTML', 'setPaper')->andReturnSelf();
+                $envoltura->shouldReceive('render')->andReturnNull();
+                $envoltura->shouldReceive('getDomPDF')->andReturn($dompdf);
+                $envoltura->shouldReceive('output')->andReturn('%PDF-');
+                $this->app->instance('dompdf.wrapper', $envoltura);
+                app(\App\Services\RentabilidadAgenciaV11Pdf::class)->generar($datos);
+                $this->assertSame($esperadas, array_values(array_map('count', $terminales)));
+                $this->assertSame($cantidad, count(array_unique(array_merge(...array_values($terminales)))));
+                $this->assertSame([count($esperadas)], $totales);
+                foreach ($celdas as $celda) {
+                    $this->assertLessThanOrEqual(580, $celda['y'] + $celda['alto']);
+                }
+                foreach ($textos as $texto) {
+                    $celda = collect($celdas)->first(fn (array $celda): bool => $texto['pagina'] === $celda['pagina'] && $texto['x'] >= $celda['x'] - 0.001 && $texto['x'] < $celda['x'] + $celda['ancho'] && $texto['y'] >= $celda['y'] && $texto['y'] < $celda['y'] + $celda['alto']);
+                    $this->assertNotNull($celda);
+                    $this->assertLessThanOrEqual($celda['x'] + $celda['ancho'] + 0.001, $texto['x'] + $texto['ancho']);
+                    $this->assertLessThanOrEqual($celda['y'] + $celda['alto'], $texto['y'] + $texto['alto']);
+                }
+            }
+        }
+    }
+
     public function test_v11_pdf_amplia_solo_numeros_sin_salir_de_columnas_o_paginas(): void
     {
         $this->datos();
@@ -1017,6 +1088,9 @@ JS;
                 $this->assertLessThanOrEqual(588, $celda['y'] + $celda['alto']);
             }
             foreach ($textosPorPagina as $textos) {
+                $this->assertContains('Evaluacion de Agencia', $textos);
+                $this->assertNotContains('Rentabilidad mensual de agencias V11', $textos);
+                $this->assertStringNotContainsString('Importes en RD$', implode(' ', $textos));
                 foreach (['enero 2026', 'febrero 2026', 'marzo 2026', 'Ingresos', 'Premios', 'Neto'] as $etiqueta) {
                     $this->assertContains($etiqueta, $textos);
                 }

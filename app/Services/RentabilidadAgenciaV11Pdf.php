@@ -37,7 +37,7 @@ class RentabilidadAgenciaV11Pdf
 
     private float $ancho;
 
-    private float $altoFila;
+    private float $altoMinimo;
 
     private float $margen;
 
@@ -49,7 +49,7 @@ class RentabilidadAgenciaV11Pdf
     /** @param array<string, mixed> $datos */
     public function generar(array $datos): string
     {
-        $pdf = Pdf::loadHTML('<html><body></body></html>')->setPaper($datos['tamanoHoja'], 'landscape');
+        $pdf = Pdf::loadHTML('<html><head><title>Evaluacion de Agencia</title></head><body></body></html>')->setPaper($datos['tamanoHoja'], 'landscape');
         $pdf->render();
         $this->canvas = $pdf->getDomPDF()->getCanvas();
         $this->metricas = $pdf->getDomPDF()->getFontMetrics();
@@ -58,25 +58,20 @@ class RentabilidadAgenciaV11Pdf
         $this->tamano = $datos['tamanoFuenteImportes'];
         $this->margen = self::margenCelda(max(array_map('count', $datos['bloquesMeses'])));
         $this->ancho = $this->canvas->get_width() - self::MARGEN_PAGINA * 2;
-        $this->altoFila = max(102, ceil($this->tamano * 4.5 + 12));
-        $capacidad = max(1, (int) floor(($this->canvas->get_height() - 181) / $this->altoFila) - 1);
+        $this->altoMinimo = max(64, ceil($this->tamano * 4.5 + 12));
         $primera = true;
         foreach ($datos['grupos'] as $ruta => $filas) {
             foreach ($datos['bloquesMeses'] as $bloque) {
-                $paginas = $filas->chunk($capacidad);
-                foreach ($paginas as $indice => $pagina) {
+                foreach ($this->paginar($filas) as $pagina) {
                     if (! $primera) {
                         $this->canvas->new_page();
                     }
                     $primera = false;
                     $columnas = $this->encabezado($datos, (string) $ruta, $bloque);
                     $y = 146.0;
-                    foreach ($pagina as $fila) {
-                        $this->fila($fila, $columnas, $y);
-                        $y += $this->altoFila;
-                    }
-                    if ($indice === $paginas->count() - 1) {
-                        $this->fila($this->totales($filas), $columnas, $y, true);
+                    foreach ($pagina as $elemento) {
+                        $this->fila($elemento['fila'], $columnas, $y, $elemento['alto'], $elemento['total']);
+                        $y += $elemento['alto'];
                     }
                 }
             }
@@ -87,15 +82,63 @@ class RentabilidadAgenciaV11Pdf
     }
 
     /**
+     * @param  Collection<int, array<string, mixed>>  $filas
+     * @return list<list<array{fila: array<string, mixed>, alto: float, total: bool}>>
+     */
+    private function paginar(Collection $filas): array
+    {
+        $elementos = $filas->map(fn (array $fila): array => ['fila' => $fila, 'alto' => $this->altoDeFila($fila), 'total' => false])->values()->all();
+        $total = $this->totales($filas);
+        $elementos[] = ['fila' => $total, 'alto' => $this->altoDeFila($total), 'total' => true];
+        $disponible = $this->canvas->get_height() - 32 - 146;
+        $paginas = [];
+        $pagina = [];
+        $ocupado = 0;
+        $terminales = 0;
+        foreach ($elementos as $elemento) {
+            if ($pagina !== [] && ($ocupado + $elemento['alto'] > $disponible || (! $elemento['total'] && $terminales >= 5))) {
+                $paginas[] = $pagina;
+                $pagina = [];
+                $ocupado = 0;
+                $terminales = 0;
+            }
+            $pagina[] = $elemento;
+            $ocupado += $elemento['alto'];
+            if (! $elemento['total']) {
+                $terminales++;
+            }
+        }
+        $paginas[] = $pagina;
+        $ultima = count($paginas) - 1;
+        if ($ultima > 0 && count($paginas[$ultima]) === 1 && $paginas[$ultima][0]['total'] && count($paginas[$ultima - 1]) > 1) {
+            array_unshift($paginas[$ultima], array_pop($paginas[$ultima - 1]));
+        }
+
+        return $paginas;
+    }
+
+    /** @param array<string, mixed> $fila */
+    private function altoDeFila(array $fila): float
+    {
+        $ancho = $this->ancho * self::ANCHO_AGENCIA - 8;
+        $lineas = count($this->dividirLineas($fila['nombre'], 9.5, $ancho, 3));
+        $alto = 23 + $lineas * 11.5;
+        if (isset($fila['clasificacion'])) {
+            $alto += 18 + ($fila['clasificacion']['provisional'] ? 8 : 0) + ($fila['clasificacion']['deterioro'] ? 8 : 0);
+        }
+
+        return max($this->altoMinimo, ceil($alto));
+    }
+
+    /**
      * @param  array<string, mixed>  $datos
      * @return list<array{campo: string, indice: int, mes: string, x: float, ancho: float}>
      */
     private function encabezado(array $datos, string $ruta, array $bloque): array
     {
         $izquierda = self::MARGEN_PAGINA;
-        $this->texto('Rentabilidad mensual de agencias V11', $izquierda, 18, 18, $this->ancho);
+        $this->texto('Evaluacion de Agencia', $izquierda, 18, 18, $this->ancho);
         $this->texto('Empresa: '.($datos['filtros']['empresa'] ?: 'Todas').' | Año: '.$datos['filtros']['anio'].' | Hoja: '.($datos['tamanoHoja'] === 'legal' ? 'Legal (8.5 x 14)' : 'Carta (8.5 x 11)'), $izquierda, 46, 9, $this->ancho);
-        $this->texto('Importes en RD$, redondeados. Premios = ventas tradicionales por el porcentaje global. Utilidad = ventas tradicionales - premios. Neto = Utilidad - Gastos.', $izquierda, 63, 7.5, $this->ancho);
         $this->canvas->filled_rectangle($izquierda, 80, $this->ancho, 19, [0.13, 0.22, 0.32]);
         $this->texto($ruta, $izquierda + 5, 83, 11, $this->ancho - 10, [1, 1, 1]);
         $anchoAgencia = $this->ancho * self::ANCHO_AGENCIA;
@@ -124,13 +167,13 @@ class RentabilidadAgenciaV11Pdf
      * @param  array<string, mixed>  $fila
      * @param  list<array{campo: string, indice: int, mes: string, x: float, ancho: float}>  $columnas
      */
-    private function fila(array $fila, array $columnas, float $y, bool $total = false): void
+    private function fila(array $fila, array $columnas, float $y, float $alto, bool $total = false): void
     {
-        $tamanoImportes = min(24, $this->tamano * 1.4, ($this->altoFila / 3 - 4) / 1.2);
+        $tamanoImportes = min(24, $this->tamano * 1.4, ($alto / 3 - 4) / 1.2);
         $anchoAgencia = $this->ancho * self::ANCHO_AGENCIA;
         $fondo = $total ? self::FONDO : [1, 1, 1];
         $izquierda = self::MARGEN_PAGINA;
-        $this->caja($izquierda, $y, $anchoAgencia, $this->altoFila, $fondo);
+        $this->caja($izquierda, $y, $anchoAgencia, $alto, $fondo);
         $lineasNombre = $this->lineas($fila['nombre'], $izquierda + 4, $y + 7, 9.5, $anchoAgencia - 8, 3);
         $this->texto($fila['terminal'] === '' ? ($fila['empresa'] ?? '') : 'Terminal: '.$fila['terminal'], $izquierda + 4, $y + 10 + $lineasNombre * 11.5, 7, $anchoAgencia - 8, [0.40, 0.45, 0.51], negrita: false);
         if (isset($fila['clasificacion'])) {
@@ -140,9 +183,7 @@ class RentabilidadAgenciaV11Pdf
             $colorEtiqueta = array_map(fn (int $canal): float => $canal / 255, sscanf($clasificacion['color'], '#%02x%02x%02x'));
             $this->canvas->filled_rectangle($izquierda + 4, $posicion, $anchoAgencia - 8, 11, $fondoEtiqueta);
             $this->texto($clasificacion['etiqueta'], $izquierda + 6, $posicion + 1, 7.5, $anchoAgencia - 12, $colorEtiqueta);
-            $margen = $clasificacion['margen'] === null ? '—' : number_format($clasificacion['margen'], 2).'%';
-            $this->texto('Margen estimado: '.$margen.' | '.$clasificacion['meses_ventas'].' meses', $izquierda + 4, $posicion + 14, 6.5, $anchoAgencia - 8);
-            $posicion += 24;
+            $posicion += 14;
             if ($clasificacion['provisional']) {
                 $this->texto('Evaluación provisional', $izquierda + 4, $posicion, 6.5, $anchoAgencia - 8);
                 $posicion += 8;
@@ -154,17 +195,17 @@ class RentabilidadAgenciaV11Pdf
         foreach ($columnas as $columna) {
             ['campo' => $campo, 'indice' => $indice, 'mes' => $mes, 'x' => $x, 'ancho' => $ancho] = $columna;
             $periodo = $fila['periodos'][$indice];
-            $this->caja($x, $y, $ancho, $this->altoFila, $fondo);
+            $this->caja($x, $y, $ancho, $alto, $fondo);
             $margen = $this->margen;
             if (in_array($campo, ['ventas', 'ingresos_calculados'], true)) {
                 $prefijo = $campo === 'ventas' ? 'ventas_' : 'ingresos_';
                 foreach (['tradicionales', 'no_tradicionales', 'recargas'] as $linea => $producto) {
                     $valor = $periodo[$prefijo.$producto];
-                    $this->texto($valor === null ? '—' : number_format($valor, 0), $x + $margen, $y + ($linea + 0.5) * $this->altoFila / 3 - $tamanoImportes / 2, $tamanoImportes, $ancho - $margen * 2, self::TEXTO, true);
+                    $this->texto($valor === null ? '—' : number_format($valor, 0), $x + $margen, $y + ($linea + 0.5) * $alto / 3 - $tamanoImportes / 2, $tamanoImportes, $ancho - $margen * 2, self::TEXTO, true);
                 }
             } elseif ($campo === 'premios_sacados') {
                 $porcentaje = $periodo['porcentaje_dev_g'];
-                $posicionY = $y + $this->altoFila / 2 - $tamanoImportes - 3;
+                $posicionY = $y + $alto / 2 - $tamanoImportes - 3;
                 $textoPorcentaje = $porcentaje === null ? '—' : number_format($porcentaje, 2).'%';
                 $this->texto($periodo['premios_sacados'] === null ? '—' : number_format($periodo['premios_sacados'], 0), $x + $margen, $posicionY, $tamanoImportes, $ancho - $margen * 2, self::TEXTO, true);
                 $anchoPorcentaje = min($ancho - $margen * 2, $this->metricas->getTextWidth($textoPorcentaje, $this->negrita, $tamanoImportes * 0.8) + 4);
@@ -175,10 +216,10 @@ class RentabilidadAgenciaV11Pdf
             } else {
                 $valor = $periodo[$campo];
                 $color = $campo === 'utilidad' ? self::AZUL : ($campo === 'balance_general' && $valor != 0 ? ($valor > 0 ? [0.09, 0.44, 0.28] : [0.70, 0.15, 0.21]) : self::TEXTO);
-                $this->texto($valor === null ? '—' : number_format($valor, 0), $x + $margen, $y + ($this->altoFila - $tamanoImportes) / 2, $tamanoImportes, $ancho - $margen * 2, $color, true);
+                $this->texto($valor === null ? '—' : number_format($valor, 0), $x + $margen, $y + ($alto - $tamanoImportes) / 2, $tamanoImportes, $ancho - $margen * 2, $color, true);
             }
             if ($campo === 'ventas') {
-                $this->canvas->line($x, $y, $x, $y + $this->altoFila, [0.59, 0.66, 0.74], 1);
+                $this->canvas->line($x, $y, $x, $y + $alto, [0.59, 0.66, 0.74], 1);
             }
         }
     }
@@ -225,6 +266,17 @@ class RentabilidadAgenciaV11Pdf
 
     private function lineas(string $texto, float $x, float $y, float $tamano, float $ancho, int $limite, bool $centrado = false): int
     {
+        $lineas = $this->dividirLineas($texto, $tamano, $ancho, $limite);
+        foreach ($lineas as $indice => $linea) {
+            $this->texto($linea, $x, $y + $indice * ($tamano + 2), $tamano, $ancho, centrado: $centrado);
+        }
+
+        return count($lineas);
+    }
+
+    /** @return list<string> */
+    private function dividirLineas(string $texto, float $tamano, float $ancho, int $limite): array
+    {
         $lineas = [''];
         foreach (preg_split('/\s+/u', trim($texto)) as $palabra) {
             $indice = count($lineas) - 1;
@@ -235,10 +287,7 @@ class RentabilidadAgenciaV11Pdf
                 $lineas[$indice] = $candidata;
             }
         }
-        foreach ($lineas as $indice => $linea) {
-            $this->texto($linea, $x, $y + $indice * ($tamano + 2), $tamano, $ancho, centrado: $centrado);
-        }
 
-        return count($lineas);
+        return $lineas;
     }
 }

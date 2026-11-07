@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Rentabilidad mensual V11</title>
+    <title>Evaluacion de Agencia</title>
     <style>
         @page { size: {{ $tamanoHoja === 'legal' ? '14in 8.5in' : '11in 8.5in' }}; margin: 12pt; }
         body { font-family: 'DejaVu Sans', sans-serif; color: #243247; font-size: 9px; }
@@ -61,12 +61,11 @@
                 $anchoMeses = 100 - $anchoAgencia;
             @endphp
             <div @class(['bloque-nuevo' => !$primero])>
-                <h1>Rentabilidad mensual de agencias V11</h1>
+                <h1>Evaluacion de Agencia</h1>
                 <p class="subtitulo">Premios sacados incluidos: {{ $productosPremios ? implode(', ', $productosPremios) : 'Ninguno' }}.</p>
                 <p class="subtitulo">Ingresos calculado: tradicional 100%; recargas 7.5%; no tradicional según créditos globales guardados de las cuentas 400120001 / 200111001 de cada empresa y mes. El porcentaje no cambia al filtrar agencia o ruta. Sin porcentaje contable: faltan movimientos de las cuentas o una base de ventas positiva.</p>
                 <p class="subtitulo">Empresa: {{ $filtros['empresa'] ?: 'Todas las empresas' }} | Año: {{ $filtros['anio'] }} | Productos: {{ $productos ? implode(', ', $productos) : 'Ninguno' }}<br>Hoja: {{ $tamanoHoja === 'legal' ? 'Legal (8.5 x 14)' : 'Carta (8.5 x 11)' }} horizontal. Importes en RD$, redondeados a enteros.</p>
                 <h2 class="ruta">{{ $ruta }} | {{ $filas->count() }} {{ $porRuta ? 'rutas' : ($filas->count() === 1 ? 'agencia' : 'agencias') }}</h2>
-                <p class="subtitulo">Premios sacados = ventas tradicionales por el porcentaje global del grupo. Utilidad = ventas tradicionales - premios. Neto = Utilidad - Gastos.</p>
                 <table>
                     <colgroup><col style="width:{{ $anchoAgencia }}%">@foreach ($bloque as $mes)@foreach ($campos as $campo => $etiqueta)<col style="width:{{ $anchoMeses * $pesosColumnas[$campo] / (count($bloque) * array_sum($pesosColumnas)) }}%">@endforeach @endforeach</colgroup>
                     <thead>
@@ -83,7 +82,6 @@
                                         @endphp
                                         <div class="clasificacion">
                                             <span class="etiqueta" style="background-color:{{ $clasificacion['fondo'] }};color:{{ $clasificacion['color'] }}">{{ $clasificacion['etiqueta'] }}</span>
-                                            <div>Margen estimado: {{ $clasificacion['margen'] === null ? '—' : number_format($clasificacion['margen'], 2).'%' }} · {{ $clasificacion['meses_ventas'] }} meses con ventas</div>
                                             @if ($clasificacion['provisional'])<div>Evaluación provisional</div>@endif
                                             @if ($clasificacion['deterioro'])<div style="color:#842029">En deterioro</div>@endif
                                         </div>
