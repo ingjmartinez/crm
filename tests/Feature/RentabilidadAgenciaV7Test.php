@@ -461,7 +461,7 @@ JS;
         }
         $impresion = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
             ->assertOk()->assertSee('Ingresos calculado')->assertDontSee('966,151.06')
-            ->assertSeeInOrder(['Tradicional', 'No tradicional', 'Recargas'])
+            ->assertSeeInOrder(['Tra', 'Notra', 'Rec'])
             ->assertSee('16,278')->assertSee('6,179')->assertDontSee('% ing')->assertDontSee('10.77%')->assertSee('63%');
         $this->assertSame(966151.06, $impresion->viewData('grupos')->first()->first()['periodos'][0]['ingresos_calculados']);
         $ruta = $this->get(route('gerencia.rentabilidad-agencia-v10', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
@@ -652,7 +652,7 @@ JS;
         $parametros = ['informe_id' => $informeId, 'salida' => 'pdf', 'tamano_hoja' => 'legal'];
         $url = route('gerencia.rentabilidad-agencia-v10.impresion', $parametros);
         $this->get($url, ['Accept' => 'application/json'])->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertContent($binario);
-        $clave = 'rentabilidad-v10:pdf:'.hash('sha256', json_encode([$informeId, '', 'legal', 'canvas-v3'], JSON_THROW_ON_ERROR));
+        $clave = 'rentabilidad-v10:pdf:'.hash('sha256', json_encode([$informeId, '', 'legal', 'canvas-v4'], JSON_THROW_ON_ERROR));
         $guardado = \Illuminate\Support\Facades\Cache::get($clave);
         $this->assertTrue(mb_check_encoding($guardado, 'UTF-8'));
         $this->assertSame($binario, base64_decode($guardado, true));
@@ -697,7 +697,9 @@ JS;
             $documento = new \DOMDocument;
             @$documento->loadHTML($html->getContent());
             $xpath = new \DOMXPath($documento);
-            $this->assertSame(12, $xpath->query('(//thead)[1]/tr[2]/th')->length);
+            $this->assertSame(18, $xpath->query('(//thead)[1]/tr[2]/th')->length);
+            $this->assertCount(1, $html->viewData('bloquesMeses'));
+            $this->assertCount(3, $html->viewData('bloquesMeses')[0]);
             $this->assertSame(6, $xpath->query('//th[normalize-space(.)="Premios sacados" or normalize-space(.)="Utilidad"]')->length);
             $pdf = $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'salida' => 'pdf', 'tamano_hoja' => $tamano]))
                 ->assertOk()->assertHeader('Content-Type', 'application/pdf');
@@ -730,6 +732,7 @@ JS;
             $metricas = $envolturaOriginal->getDomPDF()->getFontMetrics();
             $celdas = [];
             $montos = [];
+            $textosPorPagina = [];
             $numeroPagina = 1;
             $canvas = \Mockery::mock(\Dompdf\Canvas::class);
             $canvas->shouldReceive('get_width')->andReturn($anchoPagina);
@@ -743,7 +746,8 @@ JS;
                     $celdas[] = ['pagina' => $numeroPagina, ...compact('x', 'y', 'ancho', 'alto')];
                 }
             });
-            $canvas->shouldReceive('text')->andReturnUsing(function ($x, $y, $texto, $fuente, $tamano) use (&$montos, &$numeroPagina, $metricas): void {
+            $canvas->shouldReceive('text')->andReturnUsing(function ($x, $y, $texto, $fuente, $tamano) use (&$montos, &$textosPorPagina, &$numeroPagina, $metricas): void {
+                $textosPorPagina[$numeroPagina][] = $texto;
                 if (preg_match('/^-?[\d,]+$/', $texto)) {
                     $montos[] = ['pagina' => $numeroPagina, 'x' => $x, 'y' => $y, 'tamano' => $tamano, 'ancho' => $metricas->getTextWidth($texto, $fuente, $tamano)];
                 }
@@ -759,6 +763,14 @@ JS;
             $this->app->instance('dompdf.wrapper', $envoltura);
             app(\App\Services\RentabilidadAgenciaV10Pdf::class)->generar($datos);
             $this->assertNotEmpty($montos);
+            foreach ($textosPorPagina as $textos) {
+                foreach (['enero 2026', 'febrero 2026', 'marzo 2026', 'Tra', 'Notra', 'Rec'] as $etiqueta) {
+                    $this->assertContains($etiqueta, $textos);
+                }
+                foreach (['Tradicional', 'No tradicional', 'Recargas'] as $etiqueta) {
+                    $this->assertNotContains($etiqueta, $textos);
+                }
+            }
             foreach ($montos as $monto) {
                 $this->assertEqualsWithDelta($datos['tamanoFuenteImportes'], $monto['tamano'], 0.001);
                 $celda = collect($celdas)->first(fn (array $celda): bool => $monto['pagina'] === $celda['pagina'] && $monto['x'] >= $celda['x'] && $monto['x'] < $celda['x'] + $celda['ancho'] && $monto['y'] >= $celda['y'] && $monto['y'] < $celda['y'] + $celda['alto']);

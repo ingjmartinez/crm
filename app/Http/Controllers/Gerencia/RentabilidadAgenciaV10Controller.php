@@ -100,21 +100,21 @@ class RentabilidadAgenciaV10Controller extends Controller
         }
         $porRuta = ($consulta['filtros']['agrupacion'] ?? 'terminal') === 'ruta';
         $grupos = $porRuta ? collect(['Resumen por ruta' => $filas]) : $filas->groupBy(fn (array $fila): string => $fila['ruta'] ?: 'Sin ruta')->sortKeys();
-        $bloquesMeses = array_chunk($consulta['meses'], 2, true);
+        $bloquesMeses = [$consulta['meses']];
         $filtros = $consulta['filtros'];
         $productos = $consulta['productos'];
         $productosPremios = $consulta['productos_premios'];
         $referenciasGlobales = $consulta['referencias_globales'];
         $esImpresion = $request->validated('salida') === 'imprimir';
         $tamanoHoja = $request->validated('tamano_hoja', 'letter');
-        $clavePdf = 'rentabilidad-v10:pdf:'.hash('sha256', json_encode([$request->validated('informe_id'), $ruta, $tamanoHoja, 'canvas-v3'], JSON_THROW_ON_ERROR));
+        $clavePdf = 'rentabilidad-v10:pdf:'.hash('sha256', json_encode([$request->validated('informe_id'), $ruta, $tamanoHoja, 'canvas-v4'], JSON_THROW_ON_ERROR));
         $pdfCodificado = $esImpresion ? null : Cache::get($clavePdf);
         $contenidoPdf = is_string($pdfCodificado) ? base64_decode($pdfCodificado, true) : false;
         if (is_string($contenidoPdf) && str_starts_with($contenidoPdf, '%PDF-')) {
             return $this->descargarPdf($contenidoPdf);
         }
         $anchoHoja = $tamanoHoja === 'legal' ? 1008 : 792;
-        $tamanoFuenteImportes = $this->tamanoFuenteImpresion($grupos, $anchoHoja, min(2, count($consulta['meses'])));
+        $tamanoFuenteImportes = $this->tamanoFuenteImpresion($grupos, $anchoHoja, count($consulta['meses']));
         $datos = compact('grupos', 'bloquesMeses', 'filtros', 'productos', 'productosPremios', 'esImpresion', 'referenciasGlobales', 'tamanoHoja', 'tamanoFuenteImportes');
         if ($esImpresion) {
             return response()->view('gerencia.rentabilidad-agencia-v10-impresion', $datos)->header('Cache-Control', 'private, no-store');
@@ -159,7 +159,9 @@ class RentabilidadAgenciaV10Controller extends Controller
             * min($pesos) / (max(1, $mesesPorBloque) * array_sum($pesos));
         $fuenteMaxima = $anchoHoja > 792 ? 11 : 9;
 
-        return floor(min($fuenteMaxima, ($anchoColumna - RentabilidadAgenciaV10Pdf::MARGEN_CELDA * 2 - 1) / $anchoMaximo) * 10) / 10;
+        $margen = RentabilidadAgenciaV10Pdf::margenCelda($mesesPorBloque);
+
+        return floor(min($fuenteMaxima, ($anchoColumna - $margen * 2 - 1) / $anchoMaximo) * 10) / 10;
     }
 
     /**

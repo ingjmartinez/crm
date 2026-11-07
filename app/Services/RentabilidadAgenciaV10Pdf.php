@@ -37,6 +37,13 @@ class RentabilidadAgenciaV10Pdf
 
     private float $altoFila;
 
+    private float $margen;
+
+    public static function margenCelda(int $cantidadMeses): float
+    {
+        return self::MARGEN_CELDA * min(1, 3 / max(1, $cantidadMeses));
+    }
+
     /** @param array<string, mixed> $datos */
     public function generar(array $datos): string
     {
@@ -47,6 +54,7 @@ class RentabilidadAgenciaV10Pdf
         $this->fuente = $this->metricas->getFont('DejaVu Sans');
         $this->negrita = $this->metricas->getFont('DejaVu Sans', 'bold');
         $this->tamano = $datos['tamanoFuenteImportes'];
+        $this->margen = self::margenCelda(max(array_map('count', $datos['bloquesMeses'])));
         $this->ancho = $this->canvas->get_width() - 48;
         $this->altoFila = max(56, ceil($this->tamano * 6 + 6));
         $capacidad = max(1, (int) floor(($this->canvas->get_height() - 181) / $this->altoFila) - 1);
@@ -125,10 +133,10 @@ class RentabilidadAgenciaV10Pdf
             ['campo' => $campo, 'indice' => $indice, 'mes' => $mes, 'x' => $x, 'ancho' => $ancho] = $columna;
             $periodo = $fila['periodos'][$indice];
             $this->caja($x, $y, $ancho, $this->altoFila, $fondo);
-            $margen = self::MARGEN_CELDA;
+            $margen = $this->margen;
             if (in_array($campo, ['ventas', 'ingresos_calculados'], true)) {
                 $prefijo = $campo === 'ventas' ? 'ventas_' : 'ingresos_';
-                foreach (['tradicionales' => 'Tradicional', 'no_tradicionales' => 'No tradicional', 'recargas' => 'Recargas'] as $producto => $etiqueta) {
+                foreach (['tradicionales' => 'Tra', 'no_tradicionales' => 'Notra', 'recargas' => 'Rec'] as $producto => $etiqueta) {
                     $linea = array_search($producto, ['tradicionales', 'no_tradicionales', 'recargas'], true);
                     $valor = $periodo[$prefijo.$producto];
                     $paso = ($this->altoFila - 6) / 3;

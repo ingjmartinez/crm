@@ -125,7 +125,7 @@
                             <option value="letter">Carta (8.5 x 11 pulgadas)</option>
                             <option value="legal">Legal (8.5 x 14 pulgadas)</option>
                         </select>
-                        <p class="text-muted small mt-3 mb-0">Agrupación: {{ $filtros['agrupacion'] === 'ruta' ? 'Por ruta y empresa' : 'Por terminal' }}. Impresión horizontal, en bloques de dos meses, con importes redondeados a enteros y las columnas visibles del reporte. El tamaño de los montos se ajusta a la hoja seleccionada. La búsqueda de la tabla no limita la impresión. La consulta permanece disponible durante 10 minutos.</p>
+                        <p class="text-muted small mt-3 mb-0">Agrupación: {{ $filtros['agrupacion'] === 'ruta' ? 'Por ruta y empresa' : 'Por terminal' }}. Impresión horizontal, con todos los meses consultados juntos, con importes redondeados a enteros y las columnas visibles del reporte. El tamaño de los montos se ajusta a la hoja seleccionada. La búsqueda de la tabla no limita la impresión. La consulta permanece disponible durante 10 minutos.</p>
                         <div id="estadoImpresionV10" class="mt-3" role="status" aria-live="polite"></div>
                     </div>
                     <div class="modal-footer">

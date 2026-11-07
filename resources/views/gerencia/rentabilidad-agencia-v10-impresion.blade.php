@@ -12,7 +12,7 @@
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
-        th, td { border: 1px solid #d6dfe9; padding: 5pt 5pt; vertical-align: middle; }
+        th, td { border: 1px solid #d6dfe9; padding: 5pt {{ \App\Services\RentabilidadAgenciaV10Pdf::margenCelda(count($bloquesMeses[0])) }}pt; vertical-align: middle; }
         th { background: #edf2f8; font-size: {{ $tamanoFuenteImportes }}pt; text-align: center; overflow-wrap: break-word; }
         .ruta { text-align: left; background: #203852; color: #fff; font-size: 12px; padding: 9px 7px; margin: 0; }
         .agencia { text-align: left; word-wrap: break-word; }
@@ -87,7 +87,7 @@
                                         @endphp
                                         <td style="width:{{ $anchoMeses * $pesosColumnas[$campo] / (count($bloque) * array_sum($pesosColumnas)) }}%" @class(['importe', 'positivo' => $campo === 'balance_general' && $valor > 0, 'negativo' => $campo === 'balance_general' && $valor < 0, 'devolucion-azul' => $campo === 'utilidad'])>
                                             @if (in_array($campo, ['ventas', 'ingresos_calculados'], true))
-                                                @foreach (['tradicionales' => 'Tradicional', 'no_tradicionales' => 'No tradicional', 'recargas' => 'Recargas'] as $producto => $nombre)
+                                                @foreach (['tradicionales' => 'Tra', 'no_tradicionales' => 'Notra', 'recargas' => 'Rec'] as $producto => $nombre)
                                                     @php
                                                         $importeProducto = $fila['periodos'][$indiceMes][($campo === 'ventas' ? 'ventas_' : 'ingresos_').$producto];
                                                     @endphp
@@ -130,7 +130,7 @@
                                     @endphp
                                     <td style="width:{{ $anchoMeses * $pesosColumnas[$campo] / (count($bloque) * array_sum($pesosColumnas)) }}%" @class(['importe', 'positivo' => $campo === 'balance_general' && $total > 0, 'negativo' => $campo === 'balance_general' && $total < 0, 'devolucion-azul' => $campo === 'utilidad'])>
                                         @if (in_array($campo, ['ventas', 'ingresos_calculados'], true))
-                                            @foreach (['tradicionales' => 'Tradicional', 'no_tradicionales' => 'No tradicional', 'recargas' => 'Recargas'] as $producto => $nombre)
+                                            @foreach (['tradicionales' => 'Tra', 'no_tradicionales' => 'Notra', 'recargas' => 'Rec'] as $producto => $nombre)
                                                 @php
                                                     $nombreCampo = ($campo === 'ventas' ? 'ventas_' : 'ingresos_').$producto;
                                                     $sinPorcentaje = $campo === 'ingresos_calculados' && $producto === 'no_tradicionales' && $incompleto;
