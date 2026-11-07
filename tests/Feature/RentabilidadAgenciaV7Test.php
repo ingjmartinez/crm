@@ -136,6 +136,249 @@ class RentabilidadAgenciaV7Test extends TestCase
         return ['anio' => 2026, 'mes_inicio' => 1, 'mes_fin' => 3, 'terminal' => '1001', 'empresa' => 'Grupo Joselito', 'alcance' => 'terminal'];
     }
 
+    public function test_v11_calcula_premios_utilidad_y_resultado_con_dev_g_y_conserva_v10(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('terminal', '1001')->update(['ruta' => 'Norte']);
+        DB::table('agencias')->where('terminal', '1003')->update(['ruta' => 'Sur']);
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-01-10', 'tipo' => 'No Tradicional', 'monto' => 10000]);
+        DB::table('premios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-01-10', 'producto_id' => '2', 'monto' => 1000]);
+        $filtros = [...$this->filtros(), 'mes_fin' => 1];
+        foreach ([[], ['ruta' => 'Norte'], ['agrupacion' => 'ruta', 'ruta' => 'Norte']] as $cambio) {
+            $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$filtros, ...$cambio]))->assertOk()->assertViewIs('gerencia.rentabilidad-agencia-v11');
+            $periodo = $pagina->viewData('datosTabla')[0]['periodos'][0];
+            $this->assertEqualsWithDelta(90 / 220 * 100, $periodo['porcentaje_dev_g'], 0.000001);
+            $this->assertSame(40.91, $periodo['premios_sacados']);
+            $this->assertSame(59.09, $periodo['utilidad']);
+            $this->assertSame(4.09, $periodo['balance_general']);
+            $clasificacion = $pagina->viewData('datosTabla')[0]['clasificacion'];
+            $this->assertSame('Para trabajar', $clasificacion['etiqueta']);
+            $this->assertSame(4.09, $clasificacion['margen']);
+            $this->assertTrue($clasificacion['provisional']);
+        }
+        $todas = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$filtros, 'alcance' => 'todas', 'terminal' => '']))->assertOk();
+        $filas = collect($todas->viewData('datosTabla'));
+        $this->assertSame(49.09, $filas->firstWhere('terminal', '1003')['periodos'][0]['premios_sacados']);
+        $this->assertSame(90.0, $filas->sum(fn (array $fila): float => $fila['periodos'][0]['premios_sacados']));
+        $original = $this->get(route('gerencia.rentabilidad-agencia-v10', $filtros))->assertOk()->viewData('datosTabla')[0]['periodos'][0];
+        $this->assertSame(1090.0, $original['premios_sacados']);
+        $this->assertSame(10.0, $original['utilidad']);
+        $this->assertSame(-45.0, $original['balance_general']);
+        $this->assertSame('gerencia.rentabilidad_de_agencia.view', app(ViewPermissionCatalog::class)->items()->firstWhere('path', '/gerencia/rentabilidad-agencia-v11')['permission']);
+        $this->assertSame(Route::getRoutes()->getByName('gerencia.rentabilidad-agencia-v10')->gatherMiddleware(), Route::getRoutes()->getByName('gerencia.rentabilidad-agencia-v11')->gatherMiddleware());
+    }
+
+    public function test_v11_respeta_checks_de_premios_y_propaga_la_falta_de_porcentaje(): void
+    {
+        $this->datos();
+        DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-03-10', 'tipo' => 'No Tradicional', 'monto' => 100]);
+        $sinPremios = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$this->filtros(), 'premios_filtrados' => 1, 'premios_productos' => ['No Tradicional']]))->assertOk();
+        $periodo = $sinPremios->viewData('datosTabla')[0]['periodos'][0];
+        $this->assertSame(0.0, $periodo['premios_sacados']);
+        $this->assertSame(100.0, $periodo['utilidad']);
+        $this->assertSame(45.0, $periodo['balance_general']);
+        foreach (['terminal', 'ruta'] as $agrupacion) {
+            $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$this->filtros(), 'mes_inicio' => 3, 'agrupacion' => $agrupacion]))->assertOk();
+            foreach ($pagina->viewData('datosTabla') as $fila) {
+                foreach (['porcentaje_dev_g', 'premios_sacados', 'utilidad', 'balance_general'] as $campo) {
+                    $this->assertNull($fila['periodos'][0][$campo]);
+                }
+            }
+            $html = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))->assertOk();
+            $this->assertStringContainsString('—', $html->getContent());
+        }
+        $this->getJson(route('gerencia.rentabilidad-agencia-v11', [...$this->filtros(), 'mes_fin' => 0]))->assertUnprocessable();
+    }
+
+    public function test_v11_excluye_terminales_sin_ventas_del_periodo_antes_de_agrupar_e_imprimir(): void
+    {
+        $this->datos();
+        DB::table('agencias')->insert([
+            ['terminal' => '1004', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Sin ventas'],
+            ['terminal' => '1005', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Fuera del periodo'],
+            ['terminal' => '1006', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Con ajustes'],
+        ]);
+        DB::table('agencias')->where('empresa', 'Grupo Joselito')->update(['ruta' => 'Norte']);
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1005', 'fecha' => '2026-04-10', 'tipo' => 'Tradicional', 'monto' => 100],
+            ['agencia_id' => '1006', 'fecha' => '2026-01-10', 'tipo' => 'Tradicional', 'monto' => 10],
+            ['agencia_id' => '1006', 'fecha' => '2026-02-10', 'tipo' => 'Tradicional', 'monto' => -10],
+        ]);
+        DB::table('entradas_diario')->insert(['id_viejo' => '1004', 'fecha' => '2026-01-10', 'cuenta' => '6001', 'debito' => 500, 'credito' => 0]);
+        $filtros = [...$this->filtros(), 'alcance' => 'todas', 'terminal' => ''];
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', $filtros))->assertOk();
+        $this->assertEqualsCanonicalizing(['1001', '1003', '1006'], array_column($pagina->viewData('datosTabla'), 'terminal'));
+        $this->assertCount(3, $pagina->viewData('resultado')['filas']);
+        $html = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))
+            ->assertOk()->assertDontSee('Sin ventas')->assertDontSee('Fuera del periodo')->assertSee('Con ajustes');
+        $this->assertCount(3, $html->viewData('grupos')->first());
+        $ruta = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$filtros, 'agrupacion' => 'ruta']))->assertOk();
+        $this->assertSame(3, $ruta->viewData('datosTabla')[0]['cantidad_terminales']);
+        $this->assertLessThan(500, $ruta->viewData('datosTabla')[0]['periodos'][0]['gastos']);
+        foreach ([['terminal' => '1004', 'alcance' => 'terminal'], ['mes_inicio' => 3]] as $cambio) {
+            $vacia = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$filtros, ...$cambio]))->assertOk();
+            $this->assertSame([], $vacia->viewData('datosTabla'));
+            $this->assertNull($vacia->viewData('informeId'));
+            $vacia->assertSee('No se encontraron terminales');
+        }
+    }
+
+    public function test_v11_impresion_muestra_solo_dev_g_y_aisla_las_consultas_de_v10(): void
+    {
+        $this->datos();
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', $this->filtros()))->assertOk();
+        $parametros = ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir'];
+        $html = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', $parametros))->assertOk()->assertSee('40.91%')->assertSee('Margen estimado:')->assertSee('Evaluación provisional')->assertDontSee('Dev G')->assertDontSee('Dev T')->assertDontSee('Dev Proy');
+        $this->assertCount(1, $html->viewData('bloquesMeses'));
+        $this->assertCount(3, $html->viewData('bloquesMeses')[0]);
+        $documento = new \DOMDocument;
+        @$documento->loadHTML($html->getContent());
+        $xpath = new \DOMXPath($documento);
+        $this->assertSame(18, $xpath->query('(//thead)[1]/tr[2]/th')->length);
+        $this->assertSame(3, $xpath->query('//th[normalize-space(.)="Ingresos"]')->length);
+        $this->assertSame(3, $xpath->query('//th[normalize-space(.)="Premios"]')->length);
+        $this->assertSame(3, $xpath->query('//th[normalize-space(.)="Neto"]')->length);
+        $html->assertDontSee('Resultado Bruto');
+        $this->assertSame(0, $xpath->query('//th[normalize-space(.)="Ingresos calculado" or normalize-space(.)="Premios sacados"]')->length);
+        foreach (['Tra', 'Notra', 'Rec', 'Tradicional', 'No tradicional', 'Recargas'] as $etiqueta) {
+            $this->assertSame(0, $xpath->query('//tbody//*[normalize-space(text())="'.$etiqueta.'"]')->length);
+        }
+        $this->assertSame('41', trim($xpath->query('//tbody/tr[1]/td[4]//span[@class="monto-devolucion"]')->item(0)->textContent));
+        $this->assertSame('monto-devolucion', $xpath->query('//tbody/tr[1]/td[4]/div/*[1]')->item(0)->getAttribute('class'));
+        $this->assertSame('etiqueta-devolucion', $xpath->query('//tbody/tr[1]/td[4]/div/*[2]')->item(0)->getAttribute('class'));
+        $this->assertSame('59', trim($xpath->query('//tbody/tr[1]/td[5]')->item(0)->textContent));
+        $this->assertSame('4', trim($xpath->query('//tbody/tr[1]/td[7]')->item(0)->textContent));
+        $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', $parametros))->assertUnprocessable();
+        foreach (['letter', 'legal'] as $hoja) {
+            $pdf = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', [...$parametros, 'salida' => 'pdf', 'tamano_hoja' => $hoja]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+            $this->assertStringStartsWith('%PDF-', $pdf->getContent());
+        }
+        $this->getJson(route('gerencia.rentabilidad-agencia-v11.impresion', [...$parametros, 'tamano_hoja' => 'a3']))->assertUnprocessable();
+        $this->getJson(route('gerencia.rentabilidad-agencia-v11.impresion', [...$parametros, 'ruta_impresion' => 'Inexistente']))->assertUnprocessable();
+        $this->usuario(true);
+        auth()->user()->id = 2;
+        $this->getJson(route('gerencia.rentabilidad-agencia-v11.impresion', $parametros))->assertUnprocessable();
+        $this->withMiddleware(EnsureViewPermission::class);
+        $this->usuario(false);
+        $this->get(route('gerencia.rentabilidad-agencia-v11'))->assertForbidden();
+    }
+
+    public function test_v11_margen_menos_quince_es_para_trabajar_en_tabla_dashboard_e_impresion(): void
+    {
+        $this->datos();
+        DB::table('entradas_diario')->insert(['id_viejo' => '1001', 'fecha' => '2026-01-15', 'cuenta' => '6001', 'debito' => 19.09, 'credito' => 0]);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$this->filtros(), 'mes_fin' => 1]))->assertOk();
+        $fila = $pagina->viewData('datosTabla')[0];
+        $this->assertSame(-15.0, $fila['periodos'][0]['balance_general']);
+        $this->assertSame(-15.0, $fila['clasificacion']['margen']);
+        $this->assertSame('Para trabajar', $fila['clasificacion']['etiqueta']);
+        $resumen = collect($pagina->viewData('resumenCategorias'))->keyBy('etiqueta');
+        $this->assertSame(1, $resumen['Para trabajar']['cantidad']);
+        $this->assertSame(0, $resumen['Atención prioritaria']['cantidad']);
+        $impresion = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', ['informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir']))->assertOk();
+        $this->assertSame('Para trabajar', $impresion->viewData('grupos')->first()->first()['clasificacion']['etiqueta']);
+        $impresion->assertSee('Para trabajar')->assertSee('-15.00%');
+    }
+
+    public function test_v11_dashboard_cuenta_terminales_por_categoria_y_respeta_los_filtros(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('empresa', 'Grupo Joselito')->update(['ruta' => 'Norte']);
+        DB::table('agencias')->insert(['terminal' => '1004', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Sin ventas', 'ruta' => 'Norte']);
+        $filtros = [...$this->filtros(), 'mes_fin' => 1, 'alcance' => 'todas', 'terminal' => ''];
+        foreach (['terminal', 'ruta'] as $agrupacion) {
+            $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$filtros, 'agrupacion' => $agrupacion]))->assertOk()
+                ->assertSee('Plan de mejoras de terminales')->assertDontSee('división directa de ventas')->assertDontSee('Clasificación estimada del período =');
+            $resumen = collect($pagina->viewData('resumenCategorias'))->keyBy('etiqueta');
+            $this->assertSame(2, $resumen->sum('cantidad'));
+            $this->assertSame(1, $resumen['Rentables']['cantidad']);
+            $this->assertSame(1, $resumen['Para trabajar']['cantidad']);
+            foreach (['Buenas', 'Atención prioritaria', 'Sin datos'] as $categoria) {
+                $this->assertSame(0, $resumen[$categoria]['cantidad']);
+            }
+            $documento = new \DOMDocument;
+            @$documento->loadHTML($pagina->getContent());
+            $xpath = new \DOMXPath($documento);
+            $this->assertSame(5, $xpath->query('//*[@data-categoria]')->length);
+            $this->assertSame('1', trim($xpath->query('//*[@data-categoria="Para trabajar"]')->item(0)->textContent));
+        }
+        $terminal = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$filtros, 'alcance' => 'terminal', 'terminal' => '1001']))->assertOk();
+        $resumen = collect($terminal->viewData('resumenCategorias'))->keyBy('etiqueta');
+        $this->assertSame(1, $resumen->sum('cantidad'));
+        $this->assertSame(1, $resumen['Para trabajar']['cantidad']);
+        $this->assertSame(0, $resumen['Rentables']['cantidad']);
+        $vacia = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$filtros, 'mes_inicio' => 3, 'mes_fin' => 3]))->assertOk();
+        $this->assertSame(0, collect($vacia->viewData('resumenCategorias'))->sum('cantidad'));
+    }
+
+    public function test_v11_javascript_oculta_etiquetas_y_suma_importes_dev_g_filtrados(): void
+    {
+        $codigo = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const elementos = new Map();
+function elemento(id) {
+    if (!elementos.has(id)) elementos.set(id, {value:'',classList:{add(){},remove(){}},addEventListener(){},replaceChildren(){},querySelector(){return {};},createTFoot(){return {};}});
+    return elementos.get(id);
+}
+global.document = {getElementById:elemento,querySelector(){return {};},addEventListener(evento, fn){global.iniciar=fn;}};
+global.Option = class {};
+const fila = {terminal:'1001',nombre:'Agencia A',empresa:'Grupo Joselito',periodos:[{ventas:350,ventas_tradicionales:100,ventas_no_tradicionales:200,ventas_recargas:50,ingresos_calculados:120,ingresos_tradicionales:100,ingresos_no_tradicionales:16.25,ingresos_recargas:3.75,premios_sacados:40.91,porcentaje_dev_g:40.9090909,utilidad:59.09,gastos:55,balance_general:4.09}]};
+const otra = {...fila,terminal:'1003',periodos:[{...fila.periodos[0],ventas_tradicionales:120,premios_sacados:49.09,utilidad:70.91,gastos:10,balance_general:60.91}]};
+fila.clasificacion = {etiqueta:'Buenas',fondo:'#cfe2ff',color:'#084298',margen:8.33,meses_ventas:2,provisional:true,deterioro:true};
+global.window = {rentabilidadV11:{datos:[fila,otra],meses:[{codigo:'2026-01'}],rutasDisponibles:[]},addEventListener(){}};
+let opciones;
+global.$ = () => ({DataTable(config){opciones=config;}});
+$.fn = {DataTable(){}};
+window.jQuery = $;
+vm.runInThisContext(fs.readFileSync(process.argv[2],'utf8'));
+iniciar();
+assert.equal(opciones.columns.length,7);
+const etiqueta = opciones.columns[0].render('1001','display',fila);
+for (const texto of ['Buenas','8.33%','2 meses con ventas','Evaluación provisional','En deterioro','#cfe2ff']) assert.ok(etiqueta.includes(texto));
+assert.ok(etiqueta.indexOf('Terminal:') < etiqueta.indexOf('Buenas'));
+assert.ok(opciones.columns[0].render('1001','export',fila).includes('Buenas'));
+for (const indice of [1,2]) {
+    const html = opciones.columns[indice].render(null,'display',fila);
+    for (const etiqueta of ['Tradicional','No tradicional','Recargas','producto-etiqueta']) assert.ok(!html.includes(etiqueta));
+    assert.equal((html.match(/linea-producto/g)||[]).length,3);
+}
+const premios = opciones.columns[3].render(40.91,'display',fila);
+assert.ok(premios.indexOf('monto-devolucion') < premios.indexOf('porcentaje-premios'));
+assert.ok(!premios.includes('Dev G'));
+assert.equal(opciones.buttons[0].exportOptions.format.header('',2),'Ingresos · 2026-01');
+assert.equal(opciones.buttons[0].exportOptions.format.header('',3),'Premios · 2026-01');
+assert.equal(opciones.buttons[0].exportOptions.format.header('',6),'Neto · 2026-01');
+assert.ok(premios.includes('40.91%'));
+assert.ok(!premios.includes('Dev T'));
+assert.ok(!premios.includes('Dev Proy'));
+assert.equal(opciones.columns[3].render(40.91,'export',fila),40.91);
+assert.equal(opciones.columns[4].render(59.09,'export',fila),59.09);
+assert.equal(opciones.columns[6].render(4.09,'export',fila),4.09);
+const moneda = valor => new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP',minimumFractionDigits:0,maximumFractionDigits:0}).format(valor);
+const celdas = Array.from({length:7},()=>({classList:{add(){},remove(){}}}));
+let filtradas = [fila,otra];
+const api = {rows(){return {data(){return {toArray(){return filtradas;}};}};},column(indice){return {footer(){return celdas[indice];}};}};
+opciones.footerCallback.call({api(){return api;}});
+assert.ok(celdas[3].innerHTML.includes(moneda(90)));
+assert.equal(celdas[4].textContent,moneda(130));
+assert.equal(celdas[6].textContent,moneda(65));
+filtradas = [fila];
+opciones.footerCallback.call({api(){return api;}});
+assert.ok(celdas[3].innerHTML.includes(moneda(40.91)));
+assert.equal(celdas[4].textContent,moneda(59.09));
+assert.equal(celdas[6].textContent,moneda(4.09));
+filtradas = [{...fila,periodos:[{...fila.periodos[0],premios_sacados:null,utilidad:null,balance_general:null}]}];
+opciones.footerCallback.call({api(){return api;}});
+assert.equal(celdas[4].textContent,'—');
+assert.equal(celdas[6].textContent,'—');
+JS;
+        $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v11.js')]);
+        $proceso->setInput($codigo)->run();
+        $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput().$proceso->getOutput());
+    }
+
     public function test_v9_porcentajes_globales_de_empresa_no_cambian_al_filtrar_terminal_o_ruta(): void
     {
         $this->datos();
@@ -711,6 +954,85 @@ JS;
         $this->get(route('gerencia.rentabilidad-agencia-v10.impresion', $parametros))->assertOk()->assertViewHas('tamanoHoja', 'letter');
         foreach (['a3', '', ['legal']] as $invalido) {
             $this->getJson(route('gerencia.rentabilidad-agencia-v10.impresion', [...$parametros, 'tamano_hoja' => $invalido]))->assertUnprocessable()->assertJsonValidationErrors('tamano_hoja');
+        }
+    }
+
+    public function test_v11_pdf_amplia_solo_numeros_sin_salir_de_columnas_o_paginas(): void
+    {
+        $this->datos();
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-01-15', 'tipo' => 'Tradicional', 'monto' => 1977456],
+            ['agencia_id' => '1003', 'fecha' => '2026-01-15', 'tipo' => 'Tradicional', 'monto' => 9876543.21],
+        ]);
+        $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$this->filtros(), 'alcance' => 'todas', 'terminal' => '']))->assertOk();
+        $envolturaOriginal = app('dompdf.wrapper');
+        foreach (['letter' => 792, 'legal' => 1008] as $papel => $anchoPagina) {
+            $this->app->instance('dompdf.wrapper', $envolturaOriginal);
+            $html = $this->get(route('gerencia.rentabilidad-agencia-v11.impresion', [
+                'informe_id' => $pagina->viewData('informeId'), 'salida' => 'imprimir', 'tamano_hoja' => $papel,
+            ]))->assertOk();
+            $datos = $html->original->getData();
+            $metricas = $envolturaOriginal->getDomPDF()->getFontMetrics();
+            $celdas = [];
+            $montos = [];
+            $textosPorPagina = [];
+            $numeroPagina = 1;
+            $canvas = \Mockery::mock(\Dompdf\Canvas::class);
+            $canvas->shouldReceive('get_width')->andReturn($anchoPagina);
+            $canvas->shouldReceive('get_height')->andReturn(612);
+            $canvas->shouldReceive('filled_rectangle', 'line', 'page_text')->andReturnNull();
+            $canvas->shouldReceive('new_page')->andReturnUsing(function () use (&$numeroPagina): void {
+                $numeroPagina++;
+            });
+            $canvas->shouldReceive('rectangle')->andReturnUsing(function ($x, $y, $ancho, $alto) use (&$celdas, &$numeroPagina): void {
+                if ($y >= 146) {
+                    $celdas[] = ['pagina' => $numeroPagina, ...compact('x', 'y', 'ancho', 'alto')];
+                }
+            });
+            $canvas->shouldReceive('text')->andReturnUsing(function ($x, $y, $texto, $fuente, $tamano) use (&$montos, &$textosPorPagina, &$numeroPagina, $metricas): void {
+                $textosPorPagina[$numeroPagina][] = $texto;
+                if (preg_match('/^-?[\d,]+$/', $texto)) {
+                    $montos[] = ['pagina' => $numeroPagina, 'x' => $x, 'y' => $y, 'tamano' => $tamano, 'alto' => $metricas->getFontHeight($fuente, $tamano), 'ancho' => $metricas->getTextWidth($texto, $fuente, $tamano)];
+                }
+            });
+            $dompdf = \Mockery::mock(\Dompdf\Dompdf::class);
+            $dompdf->shouldReceive('getCanvas')->andReturn($canvas);
+            $dompdf->shouldReceive('getFontMetrics')->andReturn($metricas);
+            $envoltura = \Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+            $envoltura->shouldReceive('loadHTML', 'setPaper')->andReturnSelf();
+            $envoltura->shouldReceive('render')->andReturnNull();
+            $envoltura->shouldReceive('getDomPDF')->andReturn($dompdf);
+            $envoltura->shouldReceive('output')->andReturn('%PDF-');
+            $this->app->instance('dompdf.wrapper', $envoltura);
+            app(\App\Services\RentabilidadAgenciaV11Pdf::class)->generar($datos);
+            $this->assertNotEmpty($montos);
+            $anchoMayor = max(array_map(fn (array $monto): float => $monto['ancho'] / $monto['tamano'], $montos));
+            $anchoAnterior = ($anchoPagina - 48) * 0.87 * 1.15 / (3 * 7.1) - 11;
+            $fuenteAnterior = floor(min($papel === 'legal' ? 11 : 9, $anchoAnterior / $anchoMayor) * 10) / 10;
+            $this->assertGreaterThan($fuenteAnterior, $datos['tamanoFuenteImportes']);
+            $this->assertGreaterThan($datos['tamanoFuenteImportes'] * 1.2, max(array_column($montos, 'tamano')));
+            foreach ($celdas as $celda) {
+                $this->assertGreaterThanOrEqual(12, $celda['x']);
+                $this->assertLessThanOrEqual($anchoPagina - 12 + 0.001, $celda['x'] + $celda['ancho']);
+                $this->assertLessThanOrEqual(588, $celda['y'] + $celda['alto']);
+            }
+            foreach ($textosPorPagina as $textos) {
+                foreach (['enero 2026', 'febrero 2026', 'marzo 2026', 'Ingresos', 'Premios', 'Neto'] as $etiqueta) {
+                    $this->assertContains($etiqueta, $textos);
+                }
+                foreach (['Tradicional', 'No tradicional', 'Recargas', 'Dev G'] as $etiqueta) {
+                    $this->assertNotContains($etiqueta, $textos);
+                }
+            }
+            foreach ($montos as $monto) {
+                $this->assertGreaterThanOrEqual($datos['tamanoFuenteImportes'] - 0.001, $monto['tamano']);
+                $this->assertLessThanOrEqual($datos['tamanoFuenteImportes'] * 1.4 + 0.001, $monto['tamano']);
+                $celda = collect($celdas)->first(fn (array $celda): bool => $monto['pagina'] === $celda['pagina'] && $monto['x'] >= $celda['x'] && $monto['x'] < $celda['x'] + $celda['ancho'] && $monto['y'] >= $celda['y'] && $monto['y'] < $celda['y'] + $celda['alto']);
+                $this->assertNotNull($celda);
+                $this->assertLessThanOrEqual($celda['y'] + $celda['alto'], $monto['y'] + $monto['alto']);
+                $this->assertGreaterThanOrEqual($celda['x'] + 2.5 - 0.001, $monto['x']);
+                $this->assertEqualsWithDelta($celda['x'] + $celda['ancho'] - 2.5, $monto['x'] + $monto['ancho'], 0.001);
+            }
         }
     }
 
@@ -2608,7 +2930,7 @@ JS;
         $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
     }
 
-    public function test_v8_v9_y_v10_impresion_en_javascript_descarga_pdf_muestra_errores_y_rehabilita_botones(): void
+    public function test_v8_v9_v10_y_v11_impresion_en_javascript_descarga_pdf_muestra_errores_y_rehabilita_botones(): void
     {
         $codigo = <<<'JS'
 const fs = require('node:fs');
@@ -2695,7 +3017,7 @@ const habilitados = () => botones.every(boton => !boton.disabled);
     assert.ok(habilitados());
 })().catch(error => {console.error(error); process.exitCode = 1;});
 JS;
-        foreach ([8, 9, 10] as $version) {
+        foreach ([8, 9, 10, 11] as $version) {
             $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v'.$version.'-impresion.js')]);
             $proceso->setInput(str_replace(['V8', 'v8'], ['V'.$version, 'v'.$version], $codigo))->setTimeout(15)->run();
             $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput());
