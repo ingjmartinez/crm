@@ -416,7 +416,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const elementos = new Map();
 function elemento(id) {
-    if (!elementos.has(id)) elementos.set(id, {value:'',classList:{add(){},remove(){}},addEventListener(){},replaceChildren(){},querySelector(){return {};},createTFoot(){return {};}});
+    if (!elementos.has(id)) elementos.set(id, {value:'',classList:{add(){},remove(){}},eventos:{},addEventListener(nombre,fn){this.eventos[nombre]=fn;},replaceChildren(){},querySelector(){return {};},createTFoot(){return {};}});
     return elementos.get(id);
 }
 global.document = {getElementById:elemento,querySelector(){return {};},addEventListener(evento, fn){global.iniciar=fn;}};
@@ -427,7 +427,8 @@ fila.clasificacion = {etiqueta:'Buenas',fondo:'#cfe2ff',color:'#084298',margen:8
 global.window = {rentabilidadV11:{datos:[fila,otra],meses:[{codigo:'2026-01'}],rutasDisponibles:[]},addEventListener(){}};
 let opciones;
 let filasExcel = [otra,fila];
-global.$ = () => ({DataTable(config){opciones=config;return {rows(modificador){assert.deepEqual(modificador,{search:'applied',order:'applied',selected:null});return {data(){return {toArray(){return filasExcel;}};}};}};}});
+let exportacionesExcel = 0;
+global.$ = () => ({DataTable(config){opciones=config;return {button(selector){assert.equal(selector,'.buttons-excel');return {count(){return 1;},trigger(){exportacionesExcel++;}};},rows(modificador){assert.deepEqual(modificador,{search:'applied',order:'applied',selected:null});return {data(){return {toArray(){return filasExcel;}};}};}};}});
 $.fn = {DataTable(){}};
 window.jQuery = $;
 vm.runInThisContext(fs.readFileSync(process.argv[2],'utf8'));
@@ -481,6 +482,9 @@ opciones.footerCallback.call({api(){return api;}});
 assert.equal(celdas[4].textContent,'—');
 assert.equal(celdas[6].textContent,'—');
 const botonExcel = opciones.buttons.find(boton => boton.extend === 'excel');
+assert.equal(elemento('exportarExcelV11').disabled,false);
+elemento('exportarExcelV11').eventos.click();
+assert.equal(exportacionesExcel,1);
 assert.equal(botonExcel.text,'Exportar Excel');
 assert.equal(botonExcel.footer,true);
 const excel = {};
@@ -522,6 +526,8 @@ JS;
         $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v11.js')]);
         $proceso->setInput($codigo)->run();
         $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput().$proceso->getOutput());
+        $vista = file_get_contents(resource_path('views/gerencia/rentabilidad-agencia-v11.blade.php'));
+        $this->assertStringContainsString('id="exportarExcelV11" class="btn btn-success"', $vista);
     }
 
     public function test_v9_porcentajes_globales_de_empresa_no_cambian_al_filtrar_terminal_o_ruta(): void

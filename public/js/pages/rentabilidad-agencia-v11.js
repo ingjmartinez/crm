@@ -231,6 +231,9 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             language: { search: porRuta ? 'Buscar ruta o empresa:' : 'Buscar agencia o terminal:', info: `Mostrando _START_ a _END_ de _TOTAL_ ${unidad}`, infoEmpty: `Sin ${unidad}`, zeroRecords: 'Sin coincidencias', emptyTable: 'Sin datos', paginate: { next: 'Siguiente', previous: 'Anterior' } },
         });
+        const botonExcel = document.getElementById('exportarExcelV11');
+        botonExcel.disabled = tablaDatos.button('.buttons-excel').count() === 0;
+        botonExcel.addEventListener('click', () => tablaDatos.button('.buttons-excel').trigger());
     } catch (error) {
         mostrarErrorCarga(error);
     }

@@ -65,7 +65,12 @@
             <div class="card">
                 <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div><h5 class="mb-1">Comparación mensual · {{ $resultado['desde']->format('Y-m') }} a {{ $resultado['hasta']->format('Y-m') }}</h5><p class="text-muted mb-0">Cada mes muestra ventas, premios sacados, utilidad, gastos y balance. Los importes corresponden exclusivamente a ese mes.</p></div>
-                    @if ($informeId)<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImpresionV11">Impresión personalizada</button>@endif
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (! $resultado['filas']->isEmpty())
+                            <button type="button" id="exportarExcelV11" class="btn btn-success" disabled>Exportar Excel</button>
+                        @endif
+                        @if ($informeId)<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImpresionV11">Impresión personalizada</button>@endif
+                    </div>
                 </div>
                 <div class="card-body">
                     <section aria-label="Plan de mejoras de terminales" class="mb-4">
