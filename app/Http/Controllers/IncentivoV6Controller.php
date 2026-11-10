@@ -10,6 +10,7 @@ use App\Http\Requests\ReconocerTerminalesCalendarioIncentivoV6Request;
 use App\Http\Requests\ReporteNuevoIncentivoV6Request;
 use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Models\Agencia;
+use App\Models\Empleado;
 use App\Models\IncentivoPeriodo;
 use App\Models\IncentivoPeriodoDetalle;
 use App\Models\IncentivoTerminalTipoPago;
@@ -20,6 +21,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -34,8 +36,38 @@ class IncentivoV6Controller extends Controller
     public function index(): View
     {
         $v5View = $this->incentivosController->reporteNuevoIncentivoV5View();
+        $data = $v5View->getData();
+        $coordinadores = collect($data['coordinadores'] ?? []);
+        $cedulas = $coordinadores->pluck('cedula')
+            ->map(fn ($cedula): string => preg_replace('/\D+/', '', (string) $cedula))
+            ->filter()->unique()->values();
+        $cedulasConSalida = collect();
 
-        return view('incentivos.reporte-nuevo-incentivo-v6', $v5View->getData());
+        if ($cedulas->isNotEmpty() && Schema::hasColumn('empleados', 'fechasalida')) {
+            $cedulasConSalida = Empleado::query()
+                ->whereIn(
+                    DB::raw("REPLACE(REPLACE(REPLACE(TRIM(CAST(cedula AS CHAR)), '-', ''), ' ', ''), '.', '')"),
+                    $cedulas
+                )
+                ->get(['cedula', 'fechasalida'])
+                ->filter(function (Empleado $empleado): bool {
+                    $fechaSalida = trim((string) $empleado->fechasalida);
+
+                    return $fechaSalida !== '' && $fechaSalida !== '0000-00-00';
+                })
+                ->mapWithKeys(fn (Empleado $empleado): array => [
+                    preg_replace('/\D+/', '', (string) $empleado->cedula) => true,
+                ]);
+        }
+
+        $data['coordinadores'] = $coordinadores->map(function (array $coordinador) use ($cedulasConSalida): array {
+            $cedula = preg_replace('/\D+/', '', (string) ($coordinador['cedula'] ?? ''));
+            $coordinador['cedula_con_salida'] = $cedula !== '' && $cedulasConSalida->has($cedula);
+
+            return $coordinador;
+        })->values();
+
+        return view('incentivos.reporte-nuevo-incentivo-v6', $data);
     }
 
     public function calendario(ConsultarCalendarioIncentivoV6Request $request): JsonResponse

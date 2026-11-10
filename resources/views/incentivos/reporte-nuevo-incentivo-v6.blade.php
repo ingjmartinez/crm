@@ -8,6 +8,11 @@
     @endphp
 
     <style>
+        #tbodyCoordinadores > tr.coordinador-con-salida > td {
+            background-color: #e7f5ff !important;
+            box-shadow: none;
+        }
+
         .empleado-maestro-pendiente {
             background: #fff7df;
             border: 1px solid #fde8ae;
@@ -6022,8 +6027,12 @@ ${buildWorksheetXml(sheet.headers, sheet.rows)}`);
             const appliedAmount = getCoordinatorAppliedAmount(row);
             const tr = document.createElement('tr');
             tr.classList.toggle('table-warning', excluded);
+            tr.classList.toggle('coordinador-con-salida', row.cedula_con_salida === true);
             tr.innerHTML = `
-                <td><input type="text" class="form-control form-control-sm coord-input" data-field="nombre" data-idx="${idx}" value="${escapeHtml(row.nombre)}"></td>
+                <td>
+                    <input type="text" class="form-control form-control-sm coord-input" data-field="nombre" data-idx="${idx}" value="${escapeHtml(row.nombre)}">
+                    ${row.cedula_con_salida === true ? '<small class="text-primary">Salida en maestra</small>' : ''}
+                </td>
                 <td>${escapeHtml(getCoordinatorCompanyLabel(row))}</td>
                 <td class="text-center fw-semibold">${toNumber(row.agencias)}</td>
                 <td class="text-center fw-semibold text-success">${toNumber(row.agencias_validas)}</td>
