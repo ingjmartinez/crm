@@ -83,6 +83,7 @@ use App\Http\Controllers\RendimientoCoordinadorController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\RutaController;
+use App\Http\Controllers\SelectorAgenciaController;
 use App\Http\Controllers\ServicioGeneralMantenimientoEquipoController;
 use App\Http\Controllers\ServicioGeneralRequerimientoController;
 use App\Http\Controllers\SolicitudTerminalController;
@@ -652,6 +653,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
 
     Route::prefix('mantenimiento')->name('mantenimiento.')->group(function () {
         Route::get('/', [ModuleHubController::class, 'mantenimiento'])->name('index');
+        Route::get('/selector-agencia', [SelectorAgenciaController::class, 'index'])->name('selector-agencia');
+        Route::post('/selector-agencia/seleccion', [SelectorAgenciaController::class, 'guardarSeleccion'])->name('selector-agencia.seleccion');
         Route::get('/ponche-por-cedula-ventas', [PonchePorCedulaController::class, 'cargarVentasIndex'])
             ->middleware('permission:mantenimiento.view')->name('ponche-por-cedula-ventas.index');
         Route::post('/ponche-por-cedula-ventas', [PonchePorCedulaController::class, 'cargarVentas'])

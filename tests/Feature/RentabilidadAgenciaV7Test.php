@@ -84,6 +84,12 @@ class RentabilidadAgenciaV7Test extends TestCase
             $table->timestamps();
         });
         config(['clasificacion_cuentas.cuentas' => ['5001' => 'FIJO', '6001' => 'VARIABLE']]);
+        Schema::create('selector_agencia_selecciones', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->unique();
+            $table->json('terminales');
+            $table->timestamps();
+        });
 
         Schema::create('permissions', function (Blueprint $table): void {
             $table->id();
@@ -311,6 +317,73 @@ class RentabilidadAgenciaV7Test extends TestCase
         $this->assertSame(0, collect($vacia->viewData('resumenCategorias'))->sum('cantidad'));
     }
 
+    public function test_selector_agencia_guarda_seleccion_por_usuario_valida_y_permite_vaciarla(): void
+    {
+        $terminales = [['empresa' => 'Grupo Joselito', 'terminal' => '05378'], ['empresa' => 'Negosur', 'terminal' => '05378']];
+        $this->postJson(route('mantenimiento.selector-agencia.seleccion'), ['user_id' => 999, 'terminales' => [...$terminales, $terminales[0]]])
+            ->assertOk()->assertJsonPath('guardada', true)->assertJsonPath('terminales', $terminales);
+        $this->assertDatabaseHas('selector_agencia_selecciones', ['user_id' => 1]);
+        $this->assertDatabaseMissing('selector_agencia_selecciones', ['user_id' => 999]);
+        $this->get(route('mantenimiento.selector-agencia'))->assertOk()->assertViewHas('seleccionGuardada', $terminales);
+        auth()->user()->id = 2;
+        $this->get(route('mantenimiento.selector-agencia'))->assertOk()->assertViewHas('seleccionGuardada', null);
+        $this->postJson(route('mantenimiento.selector-agencia.seleccion'), ['terminales' => []])->assertOk();
+        $this->get(route('mantenimiento.selector-agencia'))->assertOk()->assertViewHas('seleccionGuardada', []);
+        auth()->user()->id = 1;
+        $this->get(route('mantenimiento.selector-agencia'))->assertOk()->assertViewHas('seleccionGuardada', $terminales);
+        foreach ([[], ['terminales' => 'invalido'], ['terminales' => [['empresa' => 'Grupo', 'terminal' => 5378]]], ['terminales' => [['terminal' => '05378']]]] as $invalido) {
+            $this->postJson(route('mantenimiento.selector-agencia.seleccion'), $invalido)->assertUnprocessable();
+        }
+        $this->postJson(route('mantenimiento.selector-agencia.seleccion'), ['terminales' => []])->assertOk()->assertJsonPath('terminales', []);
+        $this->get(route('mantenimiento.selector-agencia'))->assertOk()->assertViewHas('seleccionGuardada', []);
+        $this->withMiddleware(EnsureViewPermission::class);
+        $this->usuario(false);
+        $this->postJson(route('mantenimiento.selector-agencia.seleccion'), ['terminales' => $terminales])->assertForbidden();
+    }
+
+    public function test_selector_agencia_en_mantenimiento_muestra_solo_ventas_y_premios_reales_tradicionales(): void
+    {
+        $this->datos();
+        DB::table('agencias')->where('empresa', 'Grupo Joselito')->update(['ruta' => 'Norte']);
+        DB::table('agencias')->insert(['terminal' => '1004', 'empresa' => 'Grupo Joselito', 'sistema' => 'LOTOBET', 'nombre_agencia' => 'Solo no tradicional', 'ruta' => 'Norte']);
+        DB::table('vt_usuarios_bet')->insert([
+            ['agencia_id' => '1001', 'fecha' => '2026-01-15', 'tipo' => 'No Tradicional', 'monto' => 10000],
+            ['agencia_id' => '1004', 'fecha' => '2026-01-15', 'tipo' => 'No Tradicional', 'monto' => 200],
+        ]);
+        DB::table('premios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2026-01-15', 'producto_id' => '2', 'monto' => 1000]);
+        $filtros = [...$this->filtros(), 'mes_fin' => 1, 'alcance' => 'todas', 'terminal' => ''];
+        foreach (['terminal', 'ruta'] as $agrupacion) {
+            $pagina = $this->get(route('gerencia.rentabilidad-agencia-v11', [...$filtros, 'agrupacion' => $agrupacion]))->assertOk()
+                ->assertDontSee('Lista de supervisión')->assertDontSee('tablaSupervisionV11')->assertDontSee('rentabilidad-agencia-v11-supervision.js');
+            if ($agrupacion === 'ruta') {
+                $this->assertCount(1, $pagina->viewData('datosTabla'));
+            }
+        }
+        $selector = $this->get(route('mantenimiento.selector-agencia', $filtros))->assertOk()->assertViewIs('mantenimiento.selector-agencia')
+            ->assertSee('Selector de agencia')->assertSee('Lista de supervisión')->assertSee('selector-agencia.js');
+        $datos = $selector->viewData('datos');
+        $this->assertEqualsCanonicalizing(['1001', '1003'], array_column($datos, 'terminal'));
+        $this->assertSame([100.0, 120.0], array_map(fn (array $fila): float => $fila['periodos'][0]['ventas_tradicionales'], $datos));
+        $this->assertSame([90.0, 0.0], array_map(fn (array $fila): float => $fila['periodos'][0]['premios_tradicionales'], $datos));
+        $this->assertSame(['mes', 'ventas_tradicionales', 'premios_tradicionales'], array_keys($datos[0]['periodos'][0]));
+        $this->assertArrayNotHasKey('clasificacion', $datos[0]);
+        $rutaVacia = $this->get(route('mantenimiento.selector-agencia', [...$filtros, 'ruta' => 'Otra']))->assertOk();
+        $this->assertSame([], $rutaVacia->viewData('datos'));
+        $negosur = $this->get(route('mantenimiento.selector-agencia', [...$filtros, 'empresa' => 'Negosur']))->assertOk();
+        $this->assertSame(['1002'], array_column($negosur->viewData('datos'), 'terminal'));
+        $vacia = $this->get(route('mantenimiento.selector-agencia', [...$filtros, 'mes_inicio' => 3, 'mes_fin' => 3]))->assertOk();
+        $this->assertSame([], $vacia->viewData('datos'));
+        $vacia->assertDontSee('id="tablaSupervisionSelectorAgencia"', false);
+        $this->get(route('mantenimiento.selector-agencia'))->assertOk()->assertViewHas('resultado', null);
+        $this->getJson(route('mantenimiento.selector-agencia', [...$filtros, 'mes_fin' => 0]))->assertUnprocessable();
+        $tarjeta = collect(config('module_hubs.mantenimiento.items'))->firstWhere('nombre', 'Selector de agencia');
+        $this->assertSame('/mantenimiento/selector-agencia', $tarjeta['url']);
+        $this->assertSame('gerencia.rentabilidad_de_agencia.view', $tarjeta['permission']);
+        $this->withMiddleware(EnsureViewPermission::class);
+        $this->usuario(false);
+        $this->get(route('mantenimiento.selector-agencia'))->assertForbidden();
+    }
+
     public function test_v11_ventas_muestran_colores_segun_importe_en_impresion_y_totales(): void
     {
         $this->datos();
@@ -326,7 +399,7 @@ class RentabilidadAgenciaV7Test extends TestCase
         $xpath = new \DOMXPath($documento);
         foreach (['1' => '#0d6efd', '2' => '#b32636', '3' => '#167047'] as $linea => $color) {
             foreach (['1', 'last()'] as $fila) {
-                $this->assertSame('color:'.$color, $xpath->query('//tbody/tr['.$fila.']/td[2]/div['.$linea.']')->item(0)->getAttribute('style'));
+                $this->assertSame('color:'.$color.';font-weight:800', $xpath->query('//tbody/tr['.$fila.']/td[2]/div['.$linea.']')->item(0)->getAttribute('style'));
                 $this->assertSame('', $xpath->query('//tbody/tr['.$fila.']/td[3]/div['.$linea.']')->item(0)->getAttribute('style'));
             }
         }
@@ -363,6 +436,7 @@ for (const [valor,clase] of [[0,'venta-baja'],[99998,'venta-baja'],[99999,'venta
     const prueba = {...fila,periodos:[{...fila.periodos[0],ventas:valor,ventas_tradicionales:valor,ventas_no_tradicionales:valor,ventas_recargas:valor}]};
     const html = opciones.columns[1].render(valor,'display',prueba);
     assert.equal((html.match(new RegExp(clase,'g'))||[]).length,3);
+    assert.equal((html.match(/<strong /g)||[]).length,3);
     assert.ok(!opciones.columns[2].render(120,'display',prueba).includes(clase));
     assert.equal(opciones.columns[1].render(valor,'export',prueba),valor);
 }

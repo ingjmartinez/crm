@@ -14,6 +14,7 @@
         #tablaRentabilidadV11 .venta-baja { color: #b32636; }
         #tablaRentabilidadV11 .venta-alta { color: #0d6efd; }
         #tablaRentabilidadV11 .venta-millon { color: #167047; }
+        #tablaRentabilidadV11 .venta-baja, #tablaRentabilidadV11 .venta-alta, #tablaRentabilidadV11 .venta-millon { font-weight: 800; }
         #tablaRentabilidadV11 .clasificacion-terminal { margin-top: 7px; text-align: left; line-height: 1.5; }
     </style>
     <div class="main-content"><div class="page-content"><div class="container-fluid">

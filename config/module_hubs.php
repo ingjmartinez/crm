@@ -450,6 +450,16 @@ return [
         'breadcrumb' => 'Mantenimiento',
         'items' => [
             [
+                'nombre' => 'Selector de agencia',
+                'descripcion' => 'Prepara listas de supervisión con ventas y premios tradicionales y expórtalas a Excel.',
+                'url' => '/mantenimiento/selector-agencia',
+                'icono' => 'ri-list-check-2',
+                'categoria' => 'Agencias',
+                'tags' => ['agencias', 'selector', 'supervision', 'ventas', 'premios', 'excel'],
+                'permission' => 'gerencia.rentabilidad_de_agencia.view',
+                'activo' => true,
+            ],
+            [
                 'nombre' => 'Carga de ponche por cédula',
                 'descripcion' => 'Carga las ventas diarias de Tradicional, No Tradicional y Recargas para el cálculo del ponche por cédula.',
                 'url' => '/mantenimiento/ponche-por-cedula-ventas',

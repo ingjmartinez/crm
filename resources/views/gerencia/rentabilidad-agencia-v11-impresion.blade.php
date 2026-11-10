@@ -98,7 +98,7 @@
                                                     @php
                                                         $importeProducto = $fila['periodos'][$indiceMes][($campo === 'ventas' ? 'ventas_' : 'ingresos_').$producto];
                                                     @endphp
-                                                    <div class="desglose-producto" style="{{ $campo === 'ventas' ? 'color:'.\App\Services\RentabilidadAgenciaV11Pdf::colorVentas($importeProducto) : '' }}">{{ $importeProducto === null ? 'Sin porcentaje' : number_format($importeProducto, 0) }}</div>
+                                                    <div class="desglose-producto" style="{{ $campo === 'ventas' ? 'color:'.\App\Services\RentabilidadAgenciaV11Pdf::colorVentas($importeProducto).';font-weight:800' : '' }}">{{ $importeProducto === null ? 'Sin porcentaje' : number_format($importeProducto, 0) }}</div>
                                                 @endforeach
                                             @endif
                                             @unless (in_array($campo, ['ventas', 'ingresos_calculados', 'premios_sacados'], true))
@@ -130,7 +130,7 @@
                                                     $sinPorcentaje = $campo === 'ingresos_calculados' && $producto === 'no_tradicionales' && $incompleto;
                                                     $importeProducto = $filas->sum(fn ($fila) => $fila['periodos'][$indiceMes][$nombreCampo]);
                                                 @endphp
-                                                <div class="desglose-producto" style="{{ $campo === 'ventas' ? 'color:'.\App\Services\RentabilidadAgenciaV11Pdf::colorVentas($importeProducto) : '' }}">{{ $sinPorcentaje ? 'Sin porcentaje' : number_format($importeProducto, 0) }}</div>
+                                                <div class="desglose-producto" style="{{ $campo === 'ventas' ? 'color:'.\App\Services\RentabilidadAgenciaV11Pdf::colorVentas($importeProducto).';font-weight:800' : '' }}">{{ $sinPorcentaje ? 'Sin porcentaje' : number_format($importeProducto, 0) }}</div>
                                             @endforeach
                                         @endif
                                         @unless (in_array($campo, ['ventas', 'ingresos_calculados', 'premios_sacados'], true))

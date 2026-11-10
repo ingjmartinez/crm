@@ -93,7 +93,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const colorVentas = valor => valor == null ? '' : Number(valor) > 1000000 ? 'venta-millon' : Number(valor) >= 100000 ? 'venta-alta' : 'venta-baja';
     const desgloseProductos = (campo, periodo) => {
         const prefijo = campo === 'ventas' ? 'ventas_' : 'ingresos_';
-        return '<div class="desglose-productos">' + productos.map(clave => '<div class="linea-producto"><span class="' + (campo === 'ventas' ? colorVentas(periodo[prefijo + clave]) : '') + '">' + moneda(periodo[prefijo + clave]) + '</span></div>').join('') + '</div>';
+        return '<div class="desglose-productos">' + productos.map(clave => {
+            const etiqueta = campo === 'ventas' ? 'strong' : 'span';
+            const clase = campo === 'ventas' ? colorVentas(periodo[prefijo + clave]) : '';
+            return '<div class="linea-producto"><' + etiqueta + ' class="' + clase + '">' + moneda(periodo[prefijo + clave]) + '</' + etiqueta + '></div>';
+        }).join('') + '</div>';
     };
     const mostrarPremios = (importe, porcentaje, tipo = 'display') => {
         const textoPorcentaje = porcentaje == null ? '—' : Number(porcentaje).toFixed(2) + '%';
