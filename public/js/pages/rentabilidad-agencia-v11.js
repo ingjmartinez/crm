@@ -138,10 +138,39 @@ document.addEventListener('DOMContentLoaded', function () {
             },
         }))),
     ];
+    let tablaDatos;
+    const prepararExcel = datos => {
+        const filas = tablaDatos.rows({ search: 'applied', order: 'applied', selected: null }).data().toArray();
+        const etiquetasProductos = ['Tradicional', 'No tradicional', 'Recargas'];
+        const columnasExcel = configuracion.meses.flatMap((mes, indiceMes) => medidas.flatMap((campo, indiceCampo) => {
+            if (['ventas', 'ingresos_calculados'].includes(campo)) {
+                const prefijo = campo === 'ventas' ? 'ventas_' : 'ingresos_';
+                return productos.map((producto, indiceProducto) => ({
+                    campo: prefijo + producto,
+                    indiceMes,
+                    titulo: `${etiquetas[indiceCampo]} - ${etiquetasProductos[indiceProducto]} - ${mes.codigo}`,
+                }));
+            }
+            return [{ campo, indiceMes, titulo: `${etiquetas[indiceCampo]} - ${mes.codigo}` }];
+        }));
+        const importe = (fila, columna) => fila.periodos[columna.indiceMes]?.[columna.campo];
+        datos.header = [encabezados[0], ...columnasExcel.map(columna => columna.titulo)];
+        datos.body = filas.map(fila => [
+            columnas[0].render(fila.terminal, 'export', fila),
+            ...columnasExcel.map(columna => {
+                const valor = importe(fila, columna);
+                return valor == null ? '' : Number(valor);
+            }),
+        ]);
+        datos.footer = ['Totales filtrados', ...columnasExcel.map(columna => {
+            if (filas.some(fila => importe(fila, columna) == null)) return '';
+            return Math.round(filas.reduce((total, fila) => total + Number(importe(fila, columna)), 0) * 100) / 100;
+        })];
+    };
     try {
         const tabla = document.getElementById('tablaRentabilidadV11');
         tabla.createTFoot().innerHTML = `<tr>${columnas.map((columna, indice) => `<td class="${indice === 0 ? '' : 'text-end'}">${indice === 0 ? 'Totales' : ''}</td>`).join('')}</tr>`;
-        $('#tablaRentabilidadV11').DataTable({
+        tablaDatos = $('#tablaRentabilidadV11').DataTable({
             data: configuracion.datos,
             columns: columnas,
             deferRender: true,
@@ -152,12 +181,17 @@ document.addEventListener('DOMContentLoaded', function () {
             dom: 'Bfrtip',
             buttons: ['copy', 'csv', 'excel', 'print'].map(extend => ({
                 extend,
+                ...(extend === 'excel' ? { text: 'Exportar Excel', footer: true } : {}),
                 title: 'Rentabilidad mensual V11',
                 exportOptions: {
                     columns: ':visible',
                     orthogonal: 'export',
                     modifier: { search: 'applied' },
                     format: { header: (contenido, indice) => encabezados[indice] },
+                    ...(extend === 'excel' ? {
+                        modifier: { search: 'applied', order: 'applied', selected: null },
+                        customizeData: prepararExcel,
+                    } : {}),
                 },
             })),
             initComplete: function () {

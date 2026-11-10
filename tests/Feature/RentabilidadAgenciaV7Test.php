@@ -426,7 +426,8 @@ const otra = {...fila,terminal:'1003',periodos:[{...fila.periodos[0],ventas_trad
 fila.clasificacion = {etiqueta:'Buenas',fondo:'#cfe2ff',color:'#084298',margen:8.33,meses_ventas:2,provisional:true,deterioro:true};
 global.window = {rentabilidadV11:{datos:[fila,otra],meses:[{codigo:'2026-01'}],rutasDisponibles:[]},addEventListener(){}};
 let opciones;
-global.$ = () => ({DataTable(config){opciones=config;}});
+let filasExcel = [otra,fila];
+global.$ = () => ({DataTable(config){opciones=config;return {rows(modificador){assert.deepEqual(modificador,{search:'applied',order:'applied',selected:null});return {data(){return {toArray(){return filasExcel;}};}};}};}});
 $.fn = {DataTable(){}};
 window.jQuery = $;
 vm.runInThisContext(fs.readFileSync(process.argv[2],'utf8'));
@@ -479,6 +480,44 @@ filtradas = [{...fila,periodos:[{...fila.periodos[0],premios_sacados:null,utilid
 opciones.footerCallback.call({api(){return api;}});
 assert.equal(celdas[4].textContent,'—');
 assert.equal(celdas[6].textContent,'—');
+const botonExcel = opciones.buttons.find(boton => boton.extend === 'excel');
+assert.equal(botonExcel.text,'Exportar Excel');
+assert.equal(botonExcel.footer,true);
+const excel = {};
+botonExcel.exportOptions.customizeData(excel);
+assert.deepEqual(excel.header,[
+    'Terminal / Agencia',
+    'Ventas - Tradicional - 2026-01','Ventas - No tradicional - 2026-01','Ventas - Recargas - 2026-01',
+    'Ingresos - Tradicional - 2026-01','Ingresos - No tradicional - 2026-01','Ingresos - Recargas - 2026-01',
+    'Premios - 2026-01','Utilidad - 2026-01','Gastos - 2026-01','Neto - 2026-01',
+]);
+assert.equal(excel.body.length,2);
+assert.ok(excel.body[0][0].startsWith('1003 - '));
+assert.deepEqual(excel.body[1].slice(1),[100,200,50,100,16.25,3.75,40.91,59.09,55,4.09]);
+assert.deepEqual(excel.footer.slice(1),[220,400,100,200,32.5,7.5,90,130,65,65]);
+filasExcel = [{...fila,terminal:'01001',periodos:[{...fila.periodos[0],ingresos_no_tradicionales:null}]}];
+botonExcel.exportOptions.customizeData(excel);
+assert.equal(excel.body.length,1);
+assert.ok(excel.body[0][0].startsWith('01001 - '));
+assert.equal(excel.body[0][5],'');
+assert.equal(excel.footer[5],'');
+assert.equal(excel.footer[1],100);
+filasExcel = [];
+botonExcel.exportOptions.customizeData(excel);
+assert.deepEqual(excel.body,[]);
+assert.ok(excel.footer.slice(1).every(valor => valor === 0));
+window.rentabilidadV11 = {...window.rentabilidadV11,agrupacion:'ruta',meses:[{codigo:'2026-01'},{codigo:'2026-02'}]};
+filasExcel = [{...fila,nombre:'Norte',periodos:[fila.periodos[0],{...fila.periodos[0],ventas_tradicionales:999}]}];
+iniciar();
+opciones.buttons.find(boton => boton.extend === 'excel').exportOptions.customizeData(excel);
+assert.equal(excel.header[0],'Ruta / Empresa');
+assert.equal(excel.header.length,21);
+assert.equal(excel.header[11],'Ventas - Tradicional - 2026-02');
+assert.ok(excel.body[0][0].startsWith('Norte - Grupo Joselito'));
+assert.equal(excel.body[0][11],999);
+assert.equal(excel.footer[11],999);
+assert.equal(excel.body[0].length,excel.header.length);
+assert.equal(excel.footer.length,excel.header.length);
 JS;
         $proceso = new Process(['node', '-', public_path('js/pages/rentabilidad-agencia-v11.js')]);
         $proceso->setInput($codigo)->run();
