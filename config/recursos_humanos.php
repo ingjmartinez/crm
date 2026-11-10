@@ -39,6 +39,16 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Novedades de feriados',
+        'descripcion' => 'Consulta ponches, salida calculada y horas por cédula para revisar novedades de feriados.',
+        'url' => '/recursos-humanos/novedades-feriados',
+        'icono' => 'ri-calendar-event-line',
+        'categoria' => 'Asistencia',
+        'tags' => ['feriados', 'novedades', 'ponche', 'cedula', 'horas'],
+        'permission' => 'recursos_humanos.ponche_por_cedula.view',
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Seguimiento Cruce de Usuarios',
         'descripcion' => 'Gestiona los casos generados desde el reporte de cruce de usuarios.',
         'url' => '/recursos-humanos/seguimiento-cruce-usuarios',

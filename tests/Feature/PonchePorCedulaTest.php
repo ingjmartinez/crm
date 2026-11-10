@@ -46,6 +46,8 @@ class PonchePorCedulaTest extends TestCase
         });
         Schema::create('empleados', function (Blueprint $table): void {
             $table->id();
+            $table->unsignedInteger('companyid')->nullable();
+            $table->string('idturno')->nullable();
             $table->string('cedula');
             $table->string('empleadoid')->nullable();
             $table->string('nombres')->nullable();
@@ -204,6 +206,174 @@ class PonchePorCedulaTest extends TestCase
         $this->assertContains('permission:mantenimiento.view', Route::getRoutes()->getByName('mantenimiento.ponche-por-cedula-ventas.progreso')->gatherMiddleware());
         $this->assertContains('permission:mantenimiento.view', Route::getRoutes()->getByName('mantenimiento.ponche-por-cedula-ventas.fragmento')->gatherMiddleware());
         $this->assertContains('permission:mantenimiento.view', Route::getRoutes()->getByName('mantenimiento.ponche-por-cedula-ventas.finalizar')->gatherMiddleware());
+    }
+
+    public function test_holiday_report_has_its_own_page_and_card_with_the_same_access_as_the_original(): void
+    {
+        Schema::create('permissions', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+        });
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        \Illuminate\Support\Facades\Gate::before(fn (): bool => true);
+        $user = \App\Models\User::factory()->make();
+        $user->setRelation('roles', collect());
+        $user->setRelation('permissions', collect());
+        $this->actingAs($user);
+        $card = collect(config('recursos_humanos'))->firstWhere('url', '/recursos-humanos/novedades-feriados');
+
+        $this->assertSame('Novedades de feriados', $card['nombre']);
+        $this->assertSame('Asistencia', $card['categoria']);
+        $this->assertTrue($card['activo']);
+        $this->assertSame('recursos_humanos.ponche_por_cedula.view', app(ViewPermissionCatalog::class)->permission('recursos_humanos', $card));
+
+        foreach (['index', 'list'] as $action) {
+            $this->assertSame(
+                Route::getRoutes()->getByName('recursos-humanos.ponche-por-cedula.'.$action)->gatherMiddleware(),
+                Route::getRoutes()->getByName('recursos-humanos.novedades-feriados.'.$action)->gatherMiddleware()
+            );
+        }
+
+        $this->get(route('recursos-humanos.novedades-feriados.index'))
+            ->assertOk()
+            ->assertViewIs('recursos_humanos.novedades_feriados')
+            ->assertSee('Novedades de feriados')
+            ->assertSee(json_encode(route('recursos-humanos.novedades-feriados.list')), false)
+            ->assertSee('Salida calculada')
+            ->assertSee('Total de horas');
+    }
+
+    public function test_holiday_report_preserves_the_original_calculations_and_system_filter(): void
+    {
+        DB::table('empleados')->insert(['cedula' => '40240461497', 'nombres' => 'Ana', 'apellidos' => 'Pérez']);
+        DB::table('asistencias_bet')->insert([
+            'fecha' => '2026-11-09', 'agencia_id' => '0012', 'cedula' => '40240461497',
+            'primer_login' => '2026-11-09 08:00:00', 'ultimo_login' => '2026-11-09 14:00:00',
+        ]);
+        DB::table('asistencias_net')->insert([
+            'identificacion' => '40240461497', 'entrada' => '2026-11-09 09:00:00', 'salida' => '2026-11-09 18:00:00',
+        ]);
+        DB::table('ponche_por_cedula_ventas')->insert([
+            'terminal' => '12', 'usuario_venta' => '40240461497', 'fecha_transaccion' => '2026-11-09 16:30:00',
+            'tipo' => 'Tradicional', 'estatus' => 'Aplicado',
+        ]);
+        $filters = ['cedula' => '402-4046149-7', 'sistema' => 'todos', 'fecha_inicio' => '2026-11-09', 'fecha_fin' => '2026-11-09'];
+        $original = $this->getJson(route('recursos-humanos.ponche-por-cedula.list', $filters))->assertOk();
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', $filters))
+            ->assertOk()->assertExactJson(array_map(fn (array $row): array => [...$row, 'idturno' => null], $original->json()))
+            ->assertJsonCount(2)
+            ->assertJsonPath('0.salida_calculada', '2026-11-09 16:35:00')
+            ->assertJsonPath('0.total_horas', 8.58);
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'sistema' => 'lotonet']))
+            ->assertOk()->assertJsonCount(1)->assertJsonPath('0.sistema', 'Lotonet');
+    }
+
+    public function test_holiday_report_validates_filters_and_handles_empty_results(): void
+    {
+        $filters = ['cedula' => '40240461497', 'sistema' => 'todos', 'fecha_inicio' => '2026-11-09', 'fecha_fin' => '2026-11-09'];
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', $filters))
+            ->assertOk()->assertExactJson([]);
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'cedula' => '123']))
+            ->assertUnprocessable()->assertJsonValidationErrors('cedula');
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'fecha_fin' => '2026-11-08']))
+            ->assertUnprocessable()->assertJsonValidationErrors('fecha_fin');
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'sistema' => 'invalido']))
+            ->assertUnprocessable()->assertJsonValidationErrors('sistema');
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'empresa' => '170']))
+            ->assertUnprocessable()->assertJsonValidationErrors('empresa');
+    }
+
+    public function test_holiday_report_can_query_by_company_without_a_cedula_and_keeps_each_employees_sales_separate(): void
+    {
+        DB::table('empleados')->insert([
+            ['companyid' => 168, 'cedula' => '001-0000000-1', 'nombres' => 'Ana', 'apellidos' => 'Joselito', 'idturno' => '1'],
+            ['companyid' => 168, 'cedula' => '00200000002', 'nombres' => 'Luis', 'apellidos' => 'Joselito', 'idturno' => '0'],
+            ['companyid' => 169, 'cedula' => '00300000003', 'nombres' => 'Eva', 'apellidos' => 'Negosur', 'idturno' => null],
+            ['companyid' => 169, 'cedula' => '00100000001', 'nombres' => 'Ana', 'apellidos' => 'Negosur', 'idturno' => '9'],
+        ]);
+        foreach (['00100000001', '002-0000000-2', '00300000003'] as $cedula) {
+            DB::table('asistencias_bet')->insert([
+                'fecha' => '2026-11-09', 'agencia_id' => '0012', 'cedula' => $cedula,
+                'primer_login' => '2026-11-09 08:00:00', 'ultimo_login' => '2026-11-09 14:00:00',
+            ]);
+        }
+        DB::table('asistencias_net')->insert([
+            'identificacion' => '001-0000000-1', 'terminal' => '0012',
+            'entrada' => '2026-11-09 09:00:00', 'salida' => '2026-11-09 14:00:00',
+        ]);
+        DB::table('ponche_por_cedula_ventas')->insert([
+            ['terminal' => '12', 'usuario_venta' => '001-0000000-1', 'fecha_transaccion' => '2026-11-09 16:30:00', 'tipo' => 'Tradicional', 'estatus' => 'Aplicado'],
+            ['terminal' => '12', 'usuario_venta' => '00200000002', 'fecha_transaccion' => '2026-11-09 18:00:00', 'tipo' => 'Tradicional', 'estatus' => 'Aplicado'],
+            ['terminal' => '99', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-11-09 20:00:00', 'tipo' => 'Tradicional', 'estatus' => 'Aplicado'],
+            ['terminal' => '12', 'usuario_venta' => '00100000001', 'fecha_transaccion' => '2026-11-09 21:00:00', 'tipo' => 'Recargas', 'estatus' => 'Pendiente'],
+        ]);
+        $filters = ['empresa' => '168', 'sistema' => 'todos', 'fecha_inicio' => '2026-11-09', 'fecha_fin' => '2026-11-09'];
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', $filters))
+            ->assertOk()->assertJsonCount(3)
+            ->assertJsonPath('0.cedula', '00100000001')->assertJsonPath('0.nombre', 'Ana Joselito')
+            ->assertJsonPath('0.idturno', '1')->assertJsonPath('1.idturno', '0')->assertJsonPath('2.idturno', '1')
+            ->assertJsonPath('0.salida_calculada', '2026-11-09 16:35:00')
+            ->assertJsonPath('1.cedula', '00200000002')->assertJsonPath('1.salida_calculada', '2026-11-09 18:05:00')
+            ->assertJsonPath('2.sistema', 'Lotonet')->assertJsonPath('2.salida_calculada', '2026-11-09 16:35:00');
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'empresa' => '169', 'sistema' => 'lotobet']))
+            ->assertOk()->assertJsonCount(2)->assertJsonPath('0.nombre', 'Ana Negosur')->assertJsonPath('1.nombre', 'Eva Negosur')
+            ->assertJsonPath('0.idturno', '9')->assertJsonPath('1.idturno', null);
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'cedula' => '002-0000000-2']))
+            ->assertOk()->assertJsonCount(1)->assertJsonPath('0.nombre', 'Luis Joselito');
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'empresa' => '']))
+            ->assertOk()->assertJsonCount(4);
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'cedula' => '00300000003']))
+            ->assertOk()->assertExactJson([]);
+        $this->getJson(route('recursos-humanos.ponche-por-cedula.list', $filters))
+            ->assertUnprocessable()->assertJsonValidationErrors('cedula');
+    }
+
+    public function test_holiday_report_form_queries_a_company_without_requiring_a_cedula(): void
+    {
+        $codigo = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const html = fs.readFileSync(process.argv[2], 'utf8');
+const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/@json\(route\('[^']+'\)\)/g, "'/feriados/list'");
+const elementos = Object.fromEntries(Object.entries({cedula:'',empresa:'168',sistema:'todos',fecha_inicio:'2026-11-09',fecha_fin:'2026-11-09'}).map(([id,value]) => [id,{value,addEventListener(){}}]));
+elementos.btnBuscar = {addEventListener(evento,funcion){this.consultar=funcion;}};
+global.document = {getElementById(id){return elementos[id];}};
+let consultas = [];
+global.$ = () => ({DataTable(config){consultas.push(config);return {destroy(){}};}});
+global.Swal = {fire(){},close(){},showLoading(){}};
+vm.runInThisContext(script);
+elementos.btnBuscar.consultar();
+assert.equal(consultas.length,1);
+assert.equal(consultas[0].columns[3].data,'idturno');
+assert.ok(!consultas[0].columns.some(columna => columna.data === 'sistema'));
+assert.equal(consultas[0].columns[3].render(null),'—');
+assert.equal(consultas[0].columns[3].render(0),0);
+assert.equal(consultas[0].columns[3].render('9'),'9');
+assert.ok(html.includes('<th>idturno</th>'));
+assert.ok(!html.includes('<th>Sistema</th>'));
+assert.deepEqual(consultas[0].ajax.data,{cedula:'',empresa:'168',sistema:'todos',fecha_inicio:'2026-11-09',fecha_fin:'2026-11-09'});
+elementos.cedula.value='123';
+elementos.btnBuscar.consultar();
+assert.equal(consultas.length,1);
+elementos.cedula.value='001-0000000-1';
+elementos.empresa.value='169';
+elementos.btnBuscar.consultar();
+assert.equal(consultas.length,2);
+assert.equal(consultas[1].ajax.data.empresa,'169');
+elementos.fecha_fin.value='2026-11-08';
+elementos.btnBuscar.consultar();
+assert.equal(consultas.length,2);
+JS;
+        $proceso = new \Symfony\Component\Process\Process(['node', '-', resource_path('views/recursos_humanos/novedades_feriados.blade.php')]);
+        $proceso->setInput($codigo)->run();
+
+        $this->assertTrue($proceso->isSuccessful(), $proceso->getErrorOutput().$proceso->getOutput());
     }
 
     public function test_sales_upload_is_available_as_an_independent_maintenance_card(): void
@@ -519,6 +689,46 @@ class PonchePorCedulaTest extends TestCase
 
         $this->assertSame(2501, DB::table('ponche_por_cedula_ventas')->where('tipo', 'Tradicional')->count());
         $this->assertSame(2503, DB::table('ponche_por_cedula_ventas')->count());
+    }
+
+    public function test_import_uses_date_ranges_and_preserves_sales_on_adjacent_days(): void
+    {
+        $fechas = ['2026-10-11 23:59:59', '2026-10-12 00:00:00', '2026-10-12 23:59:59', '2026-10-13 00:00:00'];
+        foreach ($fechas as $fecha) {
+            DB::table('ponche_por_cedula_ventas')->insert([
+                'tipo' => 'Tradicional', 'fecha_transaccion' => $fecha, 'usuario_venta' => '99999999999',
+            ]);
+        }
+        $archivos = $this->archivosVentas('2026-10-12', '16:30:00');
+        $consultas = [];
+        DB::listen(function (\Illuminate\Database\Events\QueryExecuted $query) use (&$consultas): void {
+            $consultas[] = $query->sql;
+        });
+
+        app(NominaDomingoVentasImportService::class)->importarPonchePorCedula(
+            $archivos['tradicional'], $archivos['no_tradicional'], $archivos['recargas'], Carbon::parse('2026-10-12')
+        );
+
+        $this->assertSame(
+            ['2026-10-11 23:59:59', '2026-10-13 00:00:00'],
+            DB::table('ponche_por_cedula_ventas')->where('usuario_venta', '99999999999')->orderBy('fecha_transaccion')->pluck('fecha_transaccion')->all()
+        );
+        $this->assertSame(5, DB::table('ponche_por_cedula_ventas')->count());
+        $this->assertFalse(collect($consultas)->contains(fn (string $sql): bool => str_contains(strtolower($sql), 'date(')));
+        $this->assertTrue(collect($consultas)->contains(fn (string $sql): bool => str_contains($sql, 'MAX(fecha_transaccion)') && str_contains($sql, 'group by')));
+    }
+
+    public function test_date_index_migration_is_reversible_and_preserves_sales(): void
+    {
+        DB::table('ponche_por_cedula_ventas')->insert(['tipo' => 'Tradicional', 'fecha_transaccion' => '2026-10-12 12:00:00']);
+        $migration = require database_path('migrations/2026_11_10_183353_add_fecha_index_to_ponche_por_cedula_ventas_table.php');
+        $migration->up();
+        $migration->up();
+        $this->assertTrue(Schema::hasIndex('ponche_por_cedula_ventas', 'ponche_ventas_fecha_index'));
+        $migration->down();
+        $migration->down();
+        $this->assertFalse(Schema::hasIndex('ponche_por_cedula_ventas', 'ponche_ventas_fecha_index'));
+        $this->assertSame(1, DB::table('ponche_por_cedula_ventas')->count());
     }
 
     /** @return array<string, mixed> */

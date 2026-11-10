@@ -4,6 +4,7 @@ namespace App\Services\RecursosHumanos;
 
 use Carbon\Carbon;
 use DateTimeInterface;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,8 @@ class NominaDomingoVentasImportService
     private const PONCHE_SQLITE_IMPORT_CHUNK_SIZE = 2500;
 
     private string $fechaNomina;
+
+    private string $fechaSiguiente;
 
     private string $tablaVentas = 'nomina_domingo_ventas';
 
@@ -41,13 +44,14 @@ class NominaDomingoVentasImportService
         set_time_limit(300);
         DB::connection()->disableQueryLog();
         $this->fechaNomina = $fecha->toDateString();
+        $this->fechaSiguiente = $fecha->copy()->addDay()->toDateString();
         $this->tablaVentas = $tablaVentas;
         $this->importChunkSize = $tablaVentas === 'ponche_por_cedula_ventas'
             ? (DB::connection()->getDriverName() === 'sqlite' ? self::PONCHE_SQLITE_IMPORT_CHUNK_SIZE : self::PONCHE_IMPORT_CHUNK_SIZE)
             : self::IMPORT_CHUNK_SIZE;
 
         DB::transaction(function () use ($tradicional, $noTradicional, $recargas, $alIniciarCategoria): void {
-            $ventasAnteriores = DB::table($this->tablaVentas)->whereDate('fecha_transaccion', $this->fechaNomina);
+            $ventasAnteriores = $this->ventasDelDia();
 
             if ($recargas === null) {
                 $ventasAnteriores->whereIn('tipo', ['Tradicional', 'No Tradicional']);
@@ -109,11 +113,13 @@ class NominaDomingoVentasImportService
             $sheetPath = $this->obtenerPrimeraHoja($zip);
 
             $sharedStrings = $this->leerSharedStrings($zip);
-            $ventasProductos = DB::table($this->tablaVentas)
-                ->whereDate('fecha_transaccion', $this->fechaNomina)
+            $ventasProductos = $this->ventasDelDia()
                 ->whereIn('tipo', ['Tradicional', 'No Tradicional'])
                 ->whereNotNull('terminal')
-                ->cursor(['usuario_venta', 'terminal', 'fecha_transaccion']);
+                ->select(['usuario_venta', 'terminal'])
+                ->selectRaw('MAX(fecha_transaccion) AS fecha_transaccion')
+                ->groupBy('usuario_venta', 'terminal')
+                ->cursor();
             $terminalesPorCedula = [];
             $ultimasVentasPorCedulaYTerminal = [];
             foreach ($ventasProductos as $ventaProducto) {
@@ -130,10 +136,11 @@ class NominaDomingoVentasImportService
             $cedulasConVariosTerminales = array_filter($terminalesPorCedula, fn (array $terminales): bool => count($terminales) > 1);
             $periodosPorCedula = $this->periodosDeTrabajoPorCedula($cedulasConVariosTerminales, $ultimasVentasPorCedulaYTerminal);
             $columnas = null;
+            $columnasPermitidas = null;
             $filas = [];
 
             foreach ($this->iterarFilasHoja($zip, $sheetPath) as $numeroFila => $rowXml) {
-                $row = $this->parsearFilaXml($rowXml, $sharedStrings);
+                $row = $this->parsearFilaXml($rowXml, $sharedStrings, $columnasPermitidas);
 
                 if ($numeroFila === 10 && ! str_contains($this->limpiarTexto($row['A'] ?? ''), 'Confirmada')) {
                     throw ValidationException::withMessages(['recargas' => 'El reporte de Recargas debe estar filtrado por estatus Confirmada.']);
@@ -145,6 +152,7 @@ class NominaDomingoVentasImportService
                         'monto' => 'Monto',
                         'usuario_venta' => 'Usr. Venta',
                     ], 'Recargas');
+                    $columnasPermitidas = array_flip(array_map(fn (string $columna): int => $this->indiceColumna($columna), array_values($columnas)));
 
                     continue;
                 }
@@ -228,7 +236,14 @@ class NominaDomingoVentasImportService
                 continue;
             }
 
-            $ponches = DB::table($fuente['tabla'])->whereDate($fuente['fecha'], $this->fechaNomina)
+            $consultaPonches = DB::table($fuente['tabla']);
+            if ($fuente['fecha'] === 'fecha') {
+                $consultaPonches->where('fecha', $this->fechaNomina);
+            } else {
+                $consultaPonches->where($fuente['fecha'], '>=', $this->fechaNomina.' 00:00:00')
+                    ->where($fuente['fecha'], '<', $this->fechaSiguiente.' 00:00:00');
+            }
+            $ponches = $consultaPonches
                 ->get([$fuente['terminal'], $fuente['cedula'], $fuente['entrada'], $fuente['salida']]);
 
             foreach ($ponches as $ponche) {
@@ -266,10 +281,16 @@ class NominaDomingoVentasImportService
         return $terminales->count() === 1 ? $terminales->first() : null;
     }
 
+    private function ventasDelDia(): Builder
+    {
+        return DB::table($this->tablaVentas)
+            ->where('fecha_transaccion', '>=', $this->fechaNomina.' 00:00:00')
+            ->where('fecha_transaccion', '<', $this->fechaSiguiente.' 00:00:00');
+    }
+
     private function verificarVentas(string $tipo): void
     {
-        $tieneVentas = DB::table($this->tablaVentas)
-            ->whereDate('fecha_transaccion', $this->fechaNomina)
+        $tieneVentas = $this->ventasDelDia()
             ->where('tipo', $tipo)
             ->exists();
 
@@ -442,7 +463,7 @@ class NominaDomingoVentasImportService
 
         return [
             'tipo' => $tipo,
-            'fecha_transaccion' => $this->fechaSql($fecha['orden'] ?? null),
+            'fecha_transaccion' => $fechaArchivo,
             'fecha_texto' => $fecha['texto'],
             'agencia' => $agencia,
             'terminal' => $terminal,
