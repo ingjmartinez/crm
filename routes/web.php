@@ -570,6 +570,8 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
 
         Route::get('/reportes-cuadre-ventas', [ReporteController::class, 'cuadreVentas']);
         Route::get('/reportes-cuadre-ventas/list', [ReporteController::class, 'listCuadreVentas']);
+        Route::get('/reportes-cuadre-premios', [ReporteController::class, 'cuadrePremios'])->name('reportes.cuadre-premios');
+        Route::get('/reportes-cuadre-premios/list', [ReporteController::class, 'listCuadrePremios'])->name('reportes.cuadre-premios.list');
         Route::get('/reportes-ventas-por-ruta', [ReporteController::class, 'ventasPorRuta']);
         Route::get('/reportes-ventas-por-ruta/list', [ReporteController::class, 'listVentasPorRuta']);
 

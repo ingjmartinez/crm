@@ -19,6 +19,10 @@
         .label { color: #64748b; font-size: 8px; text-transform: uppercase; }
         .value { font-size: 15px; font-weight: bold; margin-top: 3px; }
         .success { color: #087f5b; }
+        .danger { color: #b91c1c; }
+        .payment-status { background: #f0fdf4; border: 1px solid #087f5b; margin: 16px 0; padding: 10px; }
+        .payment-status.invalid { background: #fef2f2; border-color: #b91c1c; color: #b91c1c; }
+        .total.invalid-total td { background: #fef2f2; color: #b91c1c; }
         .section { margin-top: 16px; }
         .section-title { border-bottom: 1px solid #cbd5e1; color: #002d72; font-size: 14px; margin-bottom: 8px; padding-bottom: 4px; }
         table.data { border-collapse: collapse; width: 100%; }
@@ -43,6 +47,9 @@
             'periodo' => $periodo,
             'tiposPago' => $tiposPago,
             'resumen' => $resumen,
+            'validoParaPago' => $validoParaPago,
+            'estadoPago' => $estadoPago,
+            'motivosPago' => $motivosPago,
         ]];
     @endphp
 
@@ -60,6 +67,17 @@
         <p class="muted">Datos conservados del {{ $periodo->fecha_inicio->format('d/m/Y') }} al {{ $periodo->fecha_fin->format('d/m/Y') }}</p>
     </div>
 
+    <div class="payment-status {{ $reportePdf['validoParaPago'] ? '' : 'invalid' }}">
+        <strong>{{ $reportePdf['validoParaPago'] ? $reportePdf['estadoPago'] : 'No válido para pago' }}</strong>
+        @if (! $reportePdf['validoParaPago'])
+            <p>{{ $reportePdf['estadoPago'] }}. El incentivo generado es informativo y no corresponde a un pago autorizado.</p>
+        @endif
+        @if ($reportePdf['motivosPago'] !== '')
+            <p>Motivos: {{ $reportePdf['motivosPago'] }}</p>
+        @endif
+        <p>Monto pagado: RD$ {{ number_format($detalle->monto_pagado) }}</p>
+    </div>
+
     <div class="section">
         <h2 class="section-title">Identificación</h2>
         <p><strong>Cédula:</strong> {{ $detalle->cedula }}</p>
@@ -73,7 +91,7 @@
             <td><div class="label">Ventas último mes</div><div class="value">RD$ {{ number_format($detalle->ventas_ultimo_mes) }}</div></td>
             <td><div class="label">Ventas mes actual</div><div class="value">RD$ {{ number_format($detalle->ventas_mes_actual) }}</div></td>
             <td><div class="label">Días con ventas</div><div class="value">{{ $detalle->dias_ventas }}</div></td>
-            <td><div class="label">Incentivo generado</div><div class="value success">RD$ {{ number_format($detalle->incentivo_generado) }}</div></td>
+            <td><div class="label">Incentivo generado</div><div class="value {{ $reportePdf['validoParaPago'] ? 'success' : 'danger' }}">RD$ {{ number_format($detalle->incentivo_generado) }}</div></td>
         </tr>
     </table>
 
@@ -95,7 +113,7 @@
                 @empty
                     <tr><td colspan="6">El período no conserva detalle por tipo de pago.</td></tr>
                 @endforelse
-                <tr class="total"><td>Total</td><td class="right">RD$ {{ number_format($resumen['ventas_desglosadas']) }}</td><td class="right">{{ number_format($resumen['porcentaje_total'], 2) }}%</td><td></td><td></td><td class="right">RD$ {{ number_format($resumen['incentivo_desglosado']) }}</td></tr>
+                <tr class="total {{ $reportePdf['validoParaPago'] ? '' : 'invalid-total' }}"><td>Total</td><td class="right">RD$ {{ number_format($resumen['ventas_desglosadas']) }}</td><td class="right">{{ number_format($resumen['porcentaje_total'], 2) }}%</td><td></td><td></td><td class="right">RD$ {{ number_format($resumen['incentivo_desglosado']) }}</td></tr>
             </tbody>
         </table>
     </div>

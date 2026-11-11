@@ -3,11 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Exports\VentasUsuarioExport;
+use App\Http\Requests\ConsultarCuadrePremiosRequest;
 use App\Http\Requests\ConsultarVentasUsuarioBetRequest;
 use App\Models\CoordinadorOperador;
+use App\Models\PagoAOtraEmpresa;
+use App\Models\PagoAOtraEmpresaNet;
+use App\Models\PagoPorOtraEmpresa;
+use App\Models\PagoPorOtraEmpresaNet;
+use App\Models\Premio;
+use App\Models\PremioNet;
 use App\Services\FavoritoCatalogoService;
 use App\ViewPermissionCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -748,6 +756,63 @@ class ReporteController extends Controller
         ", [$fechaInicio, $fechaFin, $fechaInicio, $fechaFin]);
 
         return response()->json($resultados);
+    }
+
+    public function cuadrePremios(): View
+    {
+        return view('reportes.cuadre-premios');
+    }
+
+    public function listCuadrePremios(ConsultarCuadrePremiosRequest $request): JsonResponse
+    {
+        $filtros = $request->validated();
+        $inicio = CarbonImmutable::parse($filtros['fecha_inicio'])->startOfDay();
+        $fin = CarbonImmutable::parse($filtros['fecha_fin'])->startOfDay();
+        $fuentes = $filtros['sistema'] === 'Lotobet'
+            ? ['premios_sacados' => Premio::class, 'pagados_a_otra_empresa' => PagoAOtraEmpresa::class, 'pagados_por_otra_empresa' => PagoPorOtraEmpresa::class]
+            : ['premios_sacados' => PremioNet::class, 'pagados_a_otra_empresa' => PagoAOtraEmpresaNet::class, 'pagados_por_otra_empresa' => PagoPorOtraEmpresaNet::class];
+        $datos = [];
+        $totales = ['fecha' => 'TOTAL'];
+
+        foreach ($fuentes as $campo => $modelo) {
+            $datos[$campo] = $modelo::query()
+                ->selectRaw('DATE(fecha) AS dia, COALESCE(SUM(monto), 0) AS total')
+                ->where('fecha', '>=', $inicio->toDateString())
+                ->where('fecha', '<', $fin->addDay()->toDateString())
+                ->groupByRaw('DATE(fecha)')
+                ->toBase()
+                ->get()
+                ->keyBy('dia');
+            $totales[$campo] = round((float) $datos[$campo]->sum('total'), 2);
+        }
+
+        $resultados = [];
+        $fechasFaltantes = [];
+
+        for ($fecha = $inicio; $fecha->lessThanOrEqualTo($fin); $fecha = $fecha->addDay()) {
+            $dia = $fecha->toDateString();
+            $fila = ['fecha' => $dia];
+            $sinData = [];
+
+            foreach ($fuentes as $campo => $modelo) {
+                $registro = $datos[$campo]->get($dia);
+                $fila[$campo] = $registro ? round((float) $registro->total, 2) : null;
+
+                if (! $registro) {
+                    $sinData[] = $campo;
+                }
+            }
+
+            $resultados[] = $fila;
+
+            if ($sinData !== []) {
+                $fechasFaltantes[] = ['fecha' => $dia, 'fuentes' => $sinData];
+            }
+        }
+
+        $resultados[] = $totales;
+
+        return response()->json(['resultados' => $resultados, 'fechas_faltantes' => $fechasFaltantes]);
     }
 
     public function ventasPorRuta(Request $request)

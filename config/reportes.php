@@ -29,6 +29,15 @@ return [
         'activo' => true,
     ],
     [
+        'nombre' => 'Cuadre de Premios',
+        'descripcion' => 'Valida premios sacados y pagos entre empresas por fecha y detecta fuentes sin data.',
+        'url' => '/reportes-cuadre-premios',
+        'icono' => 'ri-calculator-line',
+        'categoria' => 'Premios',
+        'tags' => ['cuadre', 'premios', 'pagos', 'fechas', 'sin data'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Ventas por ruta',
         'descripcion' => 'Consulta ventas agrupadas por ruta y filtradas por empresa.',
         'url' => '/reportes-ventas-por-ruta',

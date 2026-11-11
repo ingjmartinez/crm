@@ -129,7 +129,7 @@
 
                         @foreach ($reportes as $reporte)
                             @php($detalle = $reporte['detalle'])
-                            <div class="card border-primary">
+                            <div class="card {{ $reporte['validoParaPago'] ? 'border-primary' : 'border-danger' }}">
                                 <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                                     <div>
                                         <h5 class="card-title mb-1">{{ $detalle->nombre }}</h5>
@@ -142,11 +142,21 @@
                                     </a>
                                 </div>
                                 <div class="card-body">
+                                    <div class="alert {{ $reporte['validoParaPago'] ? 'alert-success' : 'alert-danger' }}" role="alert">
+                                        <strong>{{ $reporte['validoParaPago'] ? $reporte['estadoPago'] : 'No válido para pago' }}</strong>
+                                        @if (! $reporte['validoParaPago'])
+                                            <span> · {{ $reporte['estadoPago'] }}. El incentivo generado es informativo y no corresponde a un pago autorizado.</span>
+                                        @endif
+                                        @if ($reporte['motivosPago'] !== '')
+                                            <div>Motivos: {{ $reporte['motivosPago'] }}</div>
+                                        @endif
+                                        <div>Monto pagado: RD$ {{ number_format($detalle->monto_pagado) }}</div>
+                                    </div>
                                     <div class="row g-3 mb-4">
                                         <div class="col-md-3"><div class="border rounded p-3 h-100"><small class="text-muted">Ventas último mes</small><h5 class="mb-0">RD$ {{ number_format($detalle->ventas_ultimo_mes) }}</h5></div></div>
                                         <div class="col-md-3"><div class="border rounded p-3 h-100"><small class="text-muted">Ventas mes actual</small><h5 class="mb-0">RD$ {{ number_format($detalle->ventas_mes_actual) }}</h5></div></div>
                                         <div class="col-md-3"><div class="border rounded p-3 h-100"><small class="text-muted">Días con ventas</small><h5 class="mb-0">{{ $detalle->dias_ventas }}</h5></div></div>
-                                        <div class="col-md-3"><div class="border border-success rounded p-3 h-100"><small class="text-muted">Incentivo generado</small><h5 class="mb-0 text-success">RD$ {{ number_format($detalle->incentivo_generado) }}</h5></div></div>
+                                        <div class="col-md-3"><div class="border {{ $reporte['validoParaPago'] ? 'border-success' : 'border-danger' }} rounded p-3 h-100"><small class="text-muted">Incentivo generado</small><h5 class="mb-0 {{ $reporte['validoParaPago'] ? 'text-success' : 'text-danger' }}">RD$ {{ number_format($detalle->incentivo_generado) }}</h5></div></div>
                                     </div>
 
                                     <div class="table-responsive">
@@ -162,7 +172,7 @@
                                                         <td class="text-end fw-semibold">{{ number_format($tipo['porcentaje'], 2) }}%</td>
                                                         <td class="text-center">{{ $tipo['dias'] }}</td>
                                                         <td class="text-end">RD$ {{ number_format($tipo['premio_escala']) }}</td>
-                                                        <td class="text-end text-success fw-semibold">RD$ {{ number_format($tipo['incentivo']) }}</td>
+                                                        <td class="text-end {{ $reporte['validoParaPago'] ? 'text-success' : 'text-danger' }} fw-semibold">RD$ {{ number_format($tipo['incentivo']) }}</td>
                                                     </tr>
                                                     <tr class="table-light">
                                                         <td colspan="6" class="small">
@@ -175,7 +185,7 @@
                                                 @endforelse
                                             </tbody>
                                             <tfoot>
-                                                <tr class="table-primary fw-semibold">
+                                                <tr class="{{ $reporte['validoParaPago'] ? 'table-primary' : 'table-danger' }} fw-semibold">
                                                     <td>Total</td>
                                                     <td class="text-end">RD$ {{ number_format($reporte['resumen']['ventas_desglosadas']) }}</td>
                                                     <td class="text-end">{{ number_format($reporte['resumen']['porcentaje_total'], 2) }}%</td>

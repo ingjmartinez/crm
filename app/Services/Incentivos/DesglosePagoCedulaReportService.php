@@ -37,6 +37,21 @@ class DesglosePagoCedulaReportService
             'detalle' => $detalle,
             'periodo' => $periodo,
             'tiposPago' => $tiposPago,
+            'validoParaPago' => in_array($detalle->estado, ['pagado', 'pagado_parcial'], true)
+                && (int) $detalle->monto_pagado > 0,
+            'estadoPago' => match ($detalle->estado) {
+                'pagado' => 'Pagado',
+                'pagado_parcial' => 'Pagado parcial',
+                'no_califica' => 'No calificó',
+                default => 'No pagado',
+            },
+            'motivosPago' => collect($detalle->motivos ?? [])->map(fn (string $motivo): string => match ($motivo) {
+                'faltante' => 'Faltante',
+                'desvinculado' => 'Desvinculado',
+                'agencia_excluida' => 'Agencia excluida',
+                'meta_no_alcanzada' => 'Meta no alcanzada',
+                default => $motivo,
+            })->implode(', '),
             'resumen' => [
                 'ventas_desglosadas' => (int) $tiposPago->sum('ventas'),
                 'incentivo_desglosado' => (int) $tiposPago->sum('incentivo'),

@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use App\Models\IncentivoPeriodo;
 use App\Models\IncentivoPeriodoDetalle;
 use App\Models\User;
+use App\Services\Incentivos\DesglosePagoCedulaReportService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class DesglosePagoCedulaTest extends TestCase
@@ -21,6 +23,7 @@ class DesglosePagoCedulaTest extends TestCase
         $this->withoutMiddleware();
         $user = Mockery::mock(User::class)->makePartial();
         $user->id = 77;
+        $user->setRelation('viewPermissions', collect());
         $user->shouldReceive('hasRole')->andReturnFalse();
         $user->shouldReceive('can')->andReturnFalse();
         $this->actingAs($user);
@@ -126,6 +129,70 @@ class DesglosePagoCedulaTest extends TestCase
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf')
             ->assertDownload('desglose-incentivo-40238509620-2026-07.pdf');
+    }
+
+    #[DataProvider('paymentStates')]
+    public function test_payment_validity_is_visible_on_the_screen_and_pdf_views(
+        string $state,
+        int $paidAmount,
+        array $reasons,
+        bool $isValid,
+        string $stateLabel,
+        string $reasonLabel
+    ): void {
+        $detail = $this->createDetail();
+        $detail->update([
+            'estado' => $state,
+            'monto_pagado' => $paidAmount,
+            'monto_no_pagado' => 612 - $paidAmount,
+            'motivos' => $reasons,
+        ]);
+
+        $response = $this->get(route('incentivos.desglose-pago-cedula.index', [
+            'consultar' => 1,
+            'periodo_id' => $detail->incentivo_periodo_id,
+            'cedula' => $detail->cedula,
+        ]))->assertOk()
+            ->assertSee($stateLabel)
+            ->assertSee('Monto pagado: RD$ '.number_format($paidAmount))
+            ->assertSee('RD$ 612');
+
+        if ($isValid) {
+            $response->assertDontSee('No válido para pago')->assertSee('alert-success');
+        } else {
+            $response->assertSee('No válido para pago')->assertSee('alert-danger')->assertSee('table-danger');
+        }
+
+        $report = app(DesglosePagoCedulaReportService::class)->build($detail);
+        $this->assertSame($isValid, $report['validoParaPago']);
+
+        foreach ([$report, ['reportes' => collect([$report])]] as $data) {
+            $view = $this->view('incentivos.desglose-pago-cedula-pdf', $data)
+                ->assertSee($stateLabel)
+                ->assertSee('Monto pagado: RD$ '.number_format($paidAmount));
+
+            if ($isValid) {
+                $view->assertDontSee('No válido para pago');
+            } else {
+                $view->assertSee('No válido para pago')->assertSee('payment-status invalid');
+            }
+
+            if ($reasonLabel !== '') {
+                $response->assertSee($reasonLabel);
+                $view->assertSee($reasonLabel);
+            }
+        }
+    }
+
+    public static function paymentStates(): array
+    {
+        return [
+            'paid' => ['pagado', 612, [], true, 'Pagado', ''],
+            'partially paid' => ['pagado_parcial', 224, ['agencia_excluida'], true, 'Pagado parcial', 'Agencia excluida'],
+            'unpaid' => ['no_pagado', 0, ['faltante', 'desvinculado'], false, 'No pagado', 'Faltante, Desvinculado'],
+            'not qualified' => ['no_califica', 0, ['meta_no_alcanzada'], false, 'No calificó', 'Meta no alcanzada'],
+            'zero payment' => ['pagado', 0, [], false, 'Pagado', ''],
+        ];
     }
 
     public function test_user_can_consult_a_manual_list_of_cedulas(): void
