@@ -82,7 +82,7 @@ class NovedadesFeriadosController extends Controller
             ->whereIn(DB::raw($normalizarCedulaSql('cedula')), $cedulas)
             ->when($empresa, fn (Builder $query): Builder => $query->where('companyid', $empresa))
             ->orderByRaw('CASE WHEN fechasalida IS NULL THEN 0 ELSE 1 END')
-            ->get(['cedula', 'nombres', 'apellidos', 'idturno'])
+            ->get(['cedula', 'empleadoid', 'nombres', 'apellidos', 'idturno'])
             ->groupBy(fn (Empleado $empleado): string => $this->normalizarCedula($empleado->cedula));
         $ventas = collect();
 
@@ -117,6 +117,7 @@ class NovedadesFeriadosController extends Controller
 
                 return [
                     'cedula' => $cedula,
+                    'empleadoid' => $empleado?->empleadoid,
                     'nombre' => $nombre,
                     'idturno' => $empleado?->idturno,
                     'fecha' => $fecha,

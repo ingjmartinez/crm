@@ -57,9 +57,9 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table id="tablePoncheCedula" class="table table-bordered table-striped align-middle" style="width: 100%;">
-                                <thead><tr><th>Cédula</th><th>Nombre</th><th>Día</th><th>idturno</th><th>Primer login</th><th>Último login</th><th>Salida calculada</th><th class="text-end">Total de horas</th></tr></thead>
+                                <thead><tr><th>Cédula</th><th>ID empleado</th><th>Nombre</th><th>Día</th><th>idturno</th><th>Primer login</th><th>Último login</th><th>Salida calculada</th><th class="text-end">Total de horas</th></tr></thead>
                                 <tbody></tbody>
-                                <tfoot><tr><th colspan="7" class="text-end">Total de horas</th><th id="totalHoras" class="text-end">0,00</th></tr></tfoot>
+                                <tfoot><tr><th colspan="8" class="text-end">Total de horas</th><th id="totalHoras" class="text-end">0,00</th></tr></tfoot>
                             </table>
                         </div>
                         <small class="text-muted">Total de registros: <span id="totalRegistros" class="fw-semibold">0</span></small>
@@ -107,6 +107,7 @@
                 },
                 columns: [
                     {data: 'cedula'},
+                    {data: 'empleadoid', defaultContent: '—', render: data => data ?? '—'},
                     {data: 'nombre'},
                     {data: 'fecha'},
                     {data: 'idturno', defaultContent: '—', render: data => data ?? '—'},
@@ -119,7 +120,7 @@
                 dom: 'Bfrtip',
                 buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
                 language: {url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'},
-                order: [[2, 'asc'], [3, 'asc']],
+                order: [[3, 'asc'], [4, 'asc']],
                 paging: false,
                 searching: false,
                 info: false,

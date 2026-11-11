@@ -262,7 +262,7 @@ class PonchePorCedulaTest extends TestCase
         $original = $this->getJson(route('recursos-humanos.ponche-por-cedula.list', $filters))->assertOk();
 
         $this->getJson(route('recursos-humanos.novedades-feriados.list', $filters))
-            ->assertOk()->assertExactJson(array_map(fn (array $row): array => [...$row, 'idturno' => null], $original->json()))
+            ->assertOk()->assertExactJson(array_map(fn (array $row): array => [...$row, 'idturno' => null, 'empleadoid' => null], $original->json()))
             ->assertJsonCount(2)
             ->assertJsonPath('0.salida_calculada', '2026-11-09 16:35:00')
             ->assertJsonPath('0.total_horas', 8.58);
@@ -290,10 +290,10 @@ class PonchePorCedulaTest extends TestCase
     public function test_holiday_report_can_query_by_company_without_a_cedula_and_keeps_each_employees_sales_separate(): void
     {
         DB::table('empleados')->insert([
-            ['companyid' => 168, 'cedula' => '001-0000000-1', 'nombres' => 'Ana', 'apellidos' => 'Joselito', 'idturno' => '1'],
-            ['companyid' => 168, 'cedula' => '00200000002', 'nombres' => 'Luis', 'apellidos' => 'Joselito', 'idturno' => '0'],
-            ['companyid' => 169, 'cedula' => '00300000003', 'nombres' => 'Eva', 'apellidos' => 'Negosur', 'idturno' => null],
-            ['companyid' => 169, 'cedula' => '00100000001', 'nombres' => 'Ana', 'apellidos' => 'Negosur', 'idturno' => '9'],
+            ['companyid' => 168, 'cedula' => '001-0000000-1', 'nombres' => 'Ana', 'apellidos' => 'Joselito', 'idturno' => '1', 'empleadoid' => '100'],
+            ['companyid' => 168, 'cedula' => '00200000002', 'nombres' => 'Luis', 'apellidos' => 'Joselito', 'idturno' => '0', 'empleadoid' => '200'],
+            ['companyid' => 169, 'cedula' => '00300000003', 'nombres' => 'Eva', 'apellidos' => 'Negosur', 'idturno' => null, 'empleadoid' => null],
+            ['companyid' => 169, 'cedula' => '00100000001', 'nombres' => 'Ana', 'apellidos' => 'Negosur', 'idturno' => '9', 'empleadoid' => '900'],
         ]);
         foreach (['00100000001', '002-0000000-2', '00300000003'] as $cedula) {
             DB::table('asistencias_bet')->insert([
@@ -317,12 +317,14 @@ class PonchePorCedulaTest extends TestCase
             ->assertOk()->assertJsonCount(3)
             ->assertJsonPath('0.cedula', '00100000001')->assertJsonPath('0.nombre', 'Ana Joselito')
             ->assertJsonPath('0.idturno', '1')->assertJsonPath('1.idturno', '0')->assertJsonPath('2.idturno', '1')
+            ->assertJsonPath('0.empleadoid', '100')->assertJsonPath('1.empleadoid', '200')->assertJsonPath('2.empleadoid', '100')
             ->assertJsonPath('0.salida_calculada', '2026-11-09 16:35:00')
             ->assertJsonPath('1.cedula', '00200000002')->assertJsonPath('1.salida_calculada', '2026-11-09 18:05:00')
             ->assertJsonPath('2.sistema', 'Lotonet')->assertJsonPath('2.salida_calculada', '2026-11-09 16:35:00');
         $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'empresa' => '169', 'sistema' => 'lotobet']))
             ->assertOk()->assertJsonCount(2)->assertJsonPath('0.nombre', 'Ana Negosur')->assertJsonPath('1.nombre', 'Eva Negosur')
-            ->assertJsonPath('0.idturno', '9')->assertJsonPath('1.idturno', null);
+            ->assertJsonPath('0.idturno', '9')->assertJsonPath('1.idturno', null)
+            ->assertJsonPath('0.empleadoid', '900')->assertJsonPath('1.empleadoid', null);
         $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'cedula' => '002-0000000-2']))
             ->assertOk()->assertJsonCount(1)->assertJsonPath('0.nombre', 'Luis Joselito');
         $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'empresa' => '']))
@@ -350,11 +352,17 @@ global.Swal = {fire(){},close(){},showLoading(){}};
 vm.runInThisContext(script);
 elementos.btnBuscar.consultar();
 assert.equal(consultas.length,1);
-assert.equal(consultas[0].columns[3].data,'idturno');
+assert.equal(consultas[0].columns[1].data,'empleadoid');
+assert.equal(consultas[0].columns[1].render(null),'—');
+assert.equal(consultas[0].columns[1].render('100'),'100');
+assert.ok(html.includes('<th>Cédula</th><th>ID empleado</th>'));
+assert.equal(consultas[0].columns.length,9);
+assert.deepEqual(consultas[0].order,[[3,'asc'],[4,'asc']]);
+assert.equal(consultas[0].columns[4].data,'idturno');
 assert.ok(!consultas[0].columns.some(columna => columna.data === 'sistema'));
-assert.equal(consultas[0].columns[3].render(null),'—');
-assert.equal(consultas[0].columns[3].render(0),0);
-assert.equal(consultas[0].columns[3].render('9'),'9');
+assert.equal(consultas[0].columns[4].render(null),'—');
+assert.equal(consultas[0].columns[4].render(0),0);
+assert.equal(consultas[0].columns[4].render('9'),'9');
 assert.ok(html.includes('<th>idturno</th>'));
 assert.ok(!html.includes('<th>Sistema</th>'));
 assert.deepEqual(consultas[0].ajax.data,{cedula:'',empresa:'168',sistema:'todos',fecha_inicio:'2026-11-09',fecha_fin:'2026-11-09'});
