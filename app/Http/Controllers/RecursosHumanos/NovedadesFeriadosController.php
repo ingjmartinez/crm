@@ -30,15 +30,17 @@ class NovedadesFeriadosController extends Controller
         $filters = $request->validated();
         $empresa = $filters['empresa'] ?? null;
         $cedula = $filters['cedula'] ?? null;
+        $idturno = $filters['idturno'] ?? null;
         $normalizarCedulaSql = fn (string $campo): string => "REPLACE(REPLACE($campo, '-', ''), ' ', '')";
-        $filtrarPonches = function (Builder $query, string $campo) use ($empresa, $cedula, $normalizarCedulaSql): void {
+        $filtrarPonches = function (Builder $query, string $campo) use ($empresa, $cedula, $idturno, $normalizarCedulaSql): void {
             if ($cedula) {
                 $query->whereRaw($normalizarCedulaSql($campo).' = ?', [$cedula]);
             }
 
-            if ($empresa) {
+            if ($empresa || $idturno) {
                 $query->whereIn(DB::raw($normalizarCedulaSql($campo)), Empleado::query()
-                    ->where('companyid', $empresa)
+                    ->when($empresa, fn (Builder $query): Builder => $query->where('companyid', $empresa))
+                    ->when($idturno, fn (Builder $query): Builder => $query->where('idturno', $idturno))
                     ->selectRaw($normalizarCedulaSql('cedula')));
             }
         };
@@ -81,6 +83,7 @@ class NovedadesFeriadosController extends Controller
         $empleados = Empleado::query()
             ->whereIn(DB::raw($normalizarCedulaSql('cedula')), $cedulas)
             ->when($empresa, fn (Builder $query): Builder => $query->where('companyid', $empresa))
+            ->when($idturno, fn (Builder $query): Builder => $query->where('idturno', $idturno))
             ->orderByRaw('CASE WHEN fechasalida IS NULL THEN 0 ELSE 1 END')
             ->get(['cedula', 'empleadoid', 'nombres', 'apellidos', 'idturno'])
             ->groupBy(fn (Empleado $empleado): string => $this->normalizarCedula($empleado->cedula));

@@ -25,11 +25,17 @@ class ConsultarNovedadesFeriadosRequest extends ConsultarPonchePorCedulaRequest
             ...parent::rules(),
             'cedula' => ['nullable', 'digits:11'],
             'empresa' => ['nullable', 'in:168,169'],
+            'idturno' => ['nullable', 'integer', 'in:7,8,14,9,1'],
         ];
     }
 
     public function messages(): array
     {
-        return [...parent::messages(), 'empresa.in' => 'Seleccione una empresa válida.'];
+        return [
+            ...parent::messages(),
+            'empresa.in' => 'Seleccione una empresa válida.',
+            'idturno.integer' => 'Seleccione un turno válido.',
+            'idturno.in' => 'Seleccione un turno válido.',
+        ];
     }
 }

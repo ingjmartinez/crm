@@ -29,7 +29,18 @@
                                     <option value="169">Negosur</option>
                                 </select>
                             </div>
-                            <div class="col-md-2">
+                            <div class="col-md-3">
+                                <label for="idturno" class="form-label">Turno</label>
+                                <select id="idturno" class="form-control">
+                                    <option value="">Todos los turnos</option>
+                                    <option value="7">Matutino Banqueras - 7</option>
+                                    <option value="8">Vespertino Banqueras - 8</option>
+                                    <option value="14">Matutino Entrada Temprano - 14</option>
+                                    <option value="9">Turno Completo Banquera - 9</option>
+                                    <option value="1">Administrativo - 1</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
                                 <label for="sistema" class="form-label">Sistema</label>
                                 <select id="sistema" class="form-control">
                                     <option value="todos">Todos</option>
@@ -79,6 +90,7 @@
             const cedula = document.getElementById('cedula').value.trim();
             const sistema = document.getElementById('sistema').value;
             const empresa = document.getElementById('empresa').value;
+            const idturno = document.getElementById('idturno').value;
             const fechaInicio = document.getElementById('fecha_inicio').value;
             const fechaFin = document.getElementById('fecha_fin').value;
 
@@ -98,7 +110,7 @@
                 ajax: {
                     url: @json(route('recursos-humanos.novedades-feriados.list')),
                     type: 'GET',
-                    data: {cedula, empresa, sistema, fecha_inicio: fechaInicio, fecha_fin: fechaFin},
+                    data: {cedula, empresa, idturno, sistema, fecha_inicio: fechaInicio, fecha_fin: fechaFin},
                     dataSrc: '',
                     complete: () => Swal.close(),
                     error: function(xhr) {
