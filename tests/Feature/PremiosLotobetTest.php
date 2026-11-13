@@ -2,9 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\FaltantesController;
+use App\Http\Controllers\PagoAOtraEmpresaController;
+use App\Http\Controllers\PagoMismaEmpresaController;
+use App\Http\Controllers\PagoPorOtraEmpresaController;
+use App\Http\Controllers\RecargasController;
+use App\Http\Controllers\TokenController;
+use App\Http\Controllers\VentasController;
+use App\Http\Controllers\VentasProductosController;
 use App\Models\Premio;
+use App\Services\AutoProcesoService;
 use App\Services\Lotobet\LotobetSessionService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Symfony\Component\Process\Process;
@@ -54,6 +65,97 @@ class PremiosLotobetTest extends TestCase
         $this->getJson('/save-premios-lotobet?fecha=2026-11-03')->assertOk()->assertJsonPath('total', 0);
         foreach (['get', 'save'] as $accion) {
             $this->getJson('/'.$accion.'-premios-lotobet?fecha=incorrecta')->assertUnprocessable()->assertJsonValidationErrors('fecha');
+        }
+    }
+
+    public function test_auto_proceso_guarda_premios_con_la_fecha_solicitada(): void
+    {
+        $this->mockOtherLotobetModules();
+        $currentRequest = Request::create('/', 'GET', ['fecha' => '2026-11-01']);
+        $this->app->instance('request', $currentRequest);
+        $this->mock(LotobetSessionService::class)
+            ->shouldReceive('getPremios')->once()->with('2026-11-03')
+            ->andReturn(['Content' => [['agencia_id' => '0051', 'monto' => 150, 'fecha' => '2026-11-03']]]);
+
+        $result = app(AutoProcesoService::class)->execute('lotobet', '2026-11-03');
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame(10, $result['ok_count']);
+        $this->assertSame(0, $result['error_count']);
+        $this->assertSame(1, collect($result['details'])->firstWhere('modulo', 'Premios')['total']);
+        $this->assertDatabaseHas('premios_bet', ['agencia_id' => '0051', 'monto' => 150, 'fecha' => '2026-11-03']);
+        $this->assertSame($currentRequest, $this->app['request']);
+        $this->assertSame('2026-11-01', $this->app['request']->query('fecha'));
+    }
+
+    public function test_auto_proceso_valida_la_fecha_antes_de_consultar_premios(): void
+    {
+        $this->mockOtherLotobetModules();
+        $this->mock(LotobetSessionService::class)->shouldNotReceive('getPremios');
+
+        $result = app(AutoProcesoService::class)->execute('lotobet', 'incorrecta');
+        $premios = collect($result['details'])->firstWhere('modulo', 'Premios');
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame(9, $result['ok_count']);
+        $this->assertSame(1, $result['error_count']);
+        $this->assertFalse($premios['ok']);
+        $this->assertSame('La fecha debe tener el formato YYYY-MM-DD.', $premios['message']);
+        $this->assertDatabaseCount('premios_bet', 0);
+    }
+
+    public function test_auto_proceso_reporta_error_de_premios_y_continua_los_demas_modulos(): void
+    {
+        $this->mockOtherLotobetModules();
+        $this->mock(LotobetSessionService::class)->shouldReceive('getPremios')->once()
+            ->with('2026-11-03')->andThrow(new RuntimeException('API de premios no disponible.'));
+
+        $result = app(AutoProcesoService::class)->execute('lotobet', '2026-11-03');
+        $premios = collect($result['details'])->firstWhere('modulo', 'Premios');
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame(9, $result['ok_count']);
+        $this->assertSame(1, $result['error_count']);
+        $this->assertSame('API de premios no disponible.', $premios['message']);
+        $this->assertDatabaseCount('premios_bet', 0);
+    }
+
+    public function test_auto_proceso_reporta_premios_sin_datos(): void
+    {
+        $this->mockOtherLotobetModules();
+        $this->mock(LotobetSessionService::class)->shouldReceive('getPremios')->once()
+            ->with('2026-11-03')->andReturn(['Content' => []]);
+
+        $result = app(AutoProcesoService::class)->execute('lotobet', '2026-11-03');
+        $premios = collect($result['details'])->firstWhere('modulo', 'Premios');
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame(1, $result['no_data_count']);
+        $this->assertTrue($premios['no_data']);
+        $this->assertSame(0, $premios['total']);
+        $this->assertDatabaseCount('premios_bet', 0);
+    }
+
+    private function mockOtherLotobetModules(): void
+    {
+        $this->mock(TokenController::class)->shouldReceive('generateToken')->once()
+            ->withNoArgs()->andReturn(response()->json(['success' => 'Token generado.']));
+
+        $modules = [
+            [AsistenciaController::class, 'saveAsistenciasLotobet'],
+            [FaltantesController::class, 'saveFaltantesLotobet'],
+            [PagoAOtraEmpresaController::class, 'savePagosLotobet'],
+            [PagoMismaEmpresaController::class, 'savePagosMismaEmpresaLotobet'],
+            [PagoPorOtraEmpresaController::class, 'savePagosLotobet'],
+            [RecargasController::class, 'saveRecargasLotobet'],
+            [VentasProductosController::class, 'saveVentasProductosLotobet'],
+            [VentasController::class, 'saveVentasUsuariosLotobet'],
+        ];
+
+        foreach ($modules as [$controller, $method]) {
+            $this->mock($controller)->shouldReceive($method)->once()
+                ->withArgs(fn (Request $request): bool => $request->query('fecha') === 'incorrecta' || $request->query('fecha') === '2026-11-03')
+                ->andReturn(response()->json(['message' => 'Datos guardados.', 'total' => 1]));
         }
     }
 

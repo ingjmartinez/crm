@@ -13,8 +13,10 @@ use App\Http\Controllers\RecargasController;
 use App\Http\Controllers\TokenController;
 use App\Http\Controllers\VentasController;
 use App\Http\Controllers\VentasProductosController;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use ReflectionNamedType;
 
 class AutoProcesoService
 {
@@ -23,7 +25,7 @@ class AutoProcesoService
         $startedAt = microtime(true);
         $sistema = strtolower($sistema);
 
-        if (!in_array($sistema, ['lotobet', 'lotonet'], true)) {
+        if (! in_array($sistema, ['lotobet', 'lotonet'], true)) {
             return [
                 'ok' => false,
                 'message' => 'Sistema no soportado',
@@ -57,14 +59,14 @@ class AutoProcesoService
             $details[] = $this->runModule($module['modulo'], $module['controller'], $module['method'], $fecha);
         }
 
-        $timedOut = collect($details)->contains(fn (array $row) => !empty($row['timed_out']));
+        $timedOut = collect($details)->contains(fn (array $row) => ! empty($row['timed_out']));
         $noDataCount = collect($details)->where('no_data', true)->count();
         $okCount = collect($details)->where('ok', true)->count();
         $errorCount = count($details) - $okCount;
         $elapsedSeconds = (int) floor(microtime(true) - $startedAt);
 
         return [
-            'ok' => $errorCount === 0 && !$timedOut,
+            'ok' => $errorCount === 0 && ! $timedOut,
             'message' => $timedOut
                 ? 'Proceso cancelado por tiempo limite'
                 : ($errorCount === 0 ? 'Proceso completado' : 'Proceso completado con errores'),
@@ -90,11 +92,20 @@ class AutoProcesoService
             $controller = app($controllerClass);
             $request = Request::create('/', 'GET', $fecha ? ['fecha' => $fecha] : []);
             $reflection = new \ReflectionMethod($controller, $method);
+            $requestType = ($reflection->getParameters()[0] ?? null)?->getType();
+
+            if ($requestType instanceof ReflectionNamedType && is_subclass_of($requestType->getName(), FormRequest::class)) {
+                $requestClass = $requestType->getName();
+                $request = $requestClass::createFrom($request);
+                $request->setContainer(app())->setRedirector(app('redirect'));
+                $request->validateResolved();
+            }
+
             $response = $reflection->getNumberOfParameters() > 0
                 ? $controller->{$method}($request)
                 : $controller->{$method}();
 
-            if (!$response instanceof JsonResponse) {
+            if (! $response instanceof JsonResponse) {
                 return [
                     'modulo' => $modulo,
                     'ok' => false,
@@ -111,7 +122,7 @@ class AutoProcesoService
                 : ($payload['total'] ?? null);
             $message = $payload['message'] ?? $payload['success'] ?? $payload['error'] ?? 'Sin mensaje';
             $hasNoData = $this->isNoDataResult($modulo, $statusCode, $payload, (string) $message, $total);
-            $ok = $statusCode < 400 && !isset($payload['error']) && !$hasNoData;
+            $ok = $statusCode < 400 && ! isset($payload['error']) && ! $hasNoData;
 
             if ($hasNoData) {
                 $message = 'API sin datos: no se guardaron datos. Ejecutar manualmente este modulo.';
