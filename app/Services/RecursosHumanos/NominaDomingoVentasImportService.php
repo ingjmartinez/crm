@@ -135,6 +135,7 @@ class NominaDomingoVentasImportService
             $terminalesPorCedula = array_map('array_values', $terminalesPorCedula);
             $cedulasConVariosTerminales = array_filter($terminalesPorCedula, fn (array $terminales): bool => count($terminales) > 1);
             $periodosPorCedula = $this->periodosDeTrabajoPorCedula($cedulasConVariosTerminales, $ultimasVentasPorCedulaYTerminal);
+            $excluirAnuladas = false;
             $columnas = null;
             $columnasPermitidas = null;
             $filas = [];
@@ -142,16 +143,31 @@ class NominaDomingoVentasImportService
             foreach ($this->iterarFilasHoja($zip, $sheetPath) as $numeroFila => $rowXml) {
                 $row = $this->parsearFilaXml($rowXml, $sharedStrings, $columnasPermitidas);
 
-                if ($numeroFila === 10 && ! str_contains($this->limpiarTexto($row['A'] ?? ''), 'Confirmada')) {
-                    throw ValidationException::withMessages(['recargas' => 'El reporte de Recargas debe estar filtrado por estatus Confirmada.']);
+                if ($numeroFila === 10) {
+                    $estatusReporte = $this->limpiarTexto($row['A'] ?? '');
+                    $excluirAnuladas = $this->tablaVentas === 'ponche_por_cedula_ventas'
+                        && $estatusReporte === 'Estatus: Todos';
+
+                    if (! $excluirAnuladas && ! str_contains($estatusReporte, 'Confirmada')) {
+                        throw ValidationException::withMessages(['recargas' => $this->tablaVentas === 'ponche_por_cedula_ventas'
+                            ? 'El reporte de Recargas debe indicar estatus Confirmada o Todos.'
+                            : 'El reporte de Recargas debe estar filtrado por estatus Confirmada.']);
+                    }
                 }
 
                 if ($numeroFila === 13) {
-                    $columnas = $this->mapearColumnas($row, [
+                    $columnasRequeridas = [
                         'fecha' => 'Fecha',
                         'monto' => 'Monto',
                         'usuario_venta' => 'Usr. Venta',
-                    ], 'Recargas');
+                    ];
+
+                    if ($excluirAnuladas) {
+                        $columnasRequeridas['usuario_anulacion'] = 'Usr. Anulo';
+                        $columnasRequeridas['fecha_anulacion'] = 'Fec. Anulado';
+                    }
+
+                    $columnas = $this->mapearColumnas($row, $columnasRequeridas, 'Recargas');
                     $columnasPermitidas = array_flip(array_map(fn (string $columna): int => $this->indiceColumna($columna), array_values($columnas)));
 
                     continue;
@@ -164,6 +180,11 @@ class NominaDomingoVentasImportService
                 $fechaTexto = $this->limpiarTexto($row[$columnas['fecha']] ?? '');
 
                 if ($fechaTexto === '') {
+                    continue;
+                }
+
+                if ($excluirAnuladas && ($this->limpiarTexto($row[$columnas['usuario_anulacion']] ?? '') !== ''
+                    || $this->limpiarTexto($row[$columnas['fecha_anulacion']] ?? '') !== '')) {
                     continue;
                 }
 

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -730,6 +731,91 @@ JS;
         $this->assertTrue(DB::table('ponche_por_cedula_ventas')->where('fecha_transaccion', '2026-10-12 17:30:00')->exists());
     }
 
+    public function test_native_recargas_report_accepts_all_statuses_and_excludes_cancelled_rows(): void
+    {
+        $archivos = $this->archivosVentas('2026-10-12', '16:30:00', function (Worksheet $sheet): void {
+            $sheet->setCellValue('A10', 'Estatus: Todos');
+            $sheet->setCellValue('U13', 'Usr. Anulo');
+            $sheet->setCellValue('V13', 'Fec. Anulado');
+
+            foreach ([18, 19] as $fila) {
+                $sheet->setCellValue('K'.$fila, '2026-10-12 05:00:00 PM');
+                $sheet->setCellValue('R'.$fila, 500);
+                $sheet->setCellValue('S'.$fila, '40240461497');
+            }
+
+            $sheet->setCellValue('U18', 'operador');
+            $sheet->setCellValue('V19', '2026-10-12 05:10:00 PM');
+        });
+
+        $this->post(route('mantenimiento.ponche-por-cedula-ventas.store'), $archivos)
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success');
+
+        $recargas = DB::table('ponche_por_cedula_ventas')->where('tipo', 'Recargas')->get();
+        $this->assertCount(1, $recargas);
+        $this->assertSame(150.0, (float) $recargas->first()->total_apostado);
+        $this->assertSame('012', $recargas->first()->terminal);
+    }
+
+    public function test_native_recargas_report_requires_cancellation_columns(): void
+    {
+        $archivos = $this->archivosVentas('2026-10-12', '16:30:00', function (Worksheet $sheet): void {
+            $sheet->setCellValue('A10', 'Estatus: Todos');
+        });
+
+        $this->post(route('mantenimiento.ponche-por-cedula-ventas.store'), $archivos)
+            ->assertSessionHasErrors(['recargas' => 'En Recargas faltan estas columnas: Usr. Anulo, Fec. Anulado.']);
+
+        $this->assertSame(0, DB::table('ponche_por_cedula_ventas')->count());
+    }
+
+    public function test_native_recargas_report_preserves_previous_sales_when_dates_do_not_match(): void
+    {
+        DB::table('ponche_por_cedula_ventas')->insert([
+            'tipo' => 'Tradicional', 'fecha_transaccion' => '2026-10-12 12:00:00', 'total_apostado' => 999,
+        ]);
+        $archivos = $this->archivosVentas('2026-10-12', '16:30:00', function (Worksheet $sheet): void {
+            $sheet->setCellValue('A10', 'Estatus: Todos');
+            $sheet->setCellValue('U13', 'Usr. Anulo');
+            $sheet->setCellValue('V13', 'Fec. Anulado');
+            $sheet->setCellValue('K17', '2026-10-13 03:00:00 PM');
+        });
+
+        $this->post(route('mantenimiento.ponche-por-cedula-ventas.store'), $archivos)
+            ->assertSessionHasErrors('recargas');
+
+        $this->assertSame(1, DB::table('ponche_por_cedula_ventas')->count());
+        $this->assertSame(999.0, (float) DB::table('ponche_por_cedula_ventas')->sum('total_apostado'));
+    }
+
+    public function test_native_recargas_report_rejects_other_status_filters(): void
+    {
+        $archivos = $this->archivosVentas('2026-10-12', '16:30:00', function (Worksheet $sheet): void {
+            $sheet->setCellValue('A10', 'Estatus: Anulada');
+        });
+
+        $this->post(route('mantenimiento.ponche-por-cedula-ventas.store'), $archivos)
+            ->assertSessionHasErrors('recargas');
+
+        $this->assertSame(0, DB::table('ponche_por_cedula_ventas')->count());
+    }
+
+    public function test_native_recargas_report_with_only_cancelled_rows_does_not_save_sales(): void
+    {
+        $archivos = $this->archivosVentas('2026-10-12', '16:30:00', function (Worksheet $sheet): void {
+            $sheet->setCellValue('A10', 'Estatus: Todos');
+            $sheet->setCellValue('U13', 'Usr. Anulo');
+            $sheet->setCellValue('V13', 'Fec. Anulado');
+            $sheet->setCellValue('V17', '2026-10-12 05:10:00 PM');
+        });
+
+        $this->post(route('mantenimiento.ponche-por-cedula-ventas.store'), $archivos)
+            ->assertSessionHasErrors('recargas');
+
+        $this->assertSame(0, DB::table('ponche_por_cedula_ventas')->count());
+    }
+
     public function test_upload_inserts_rows_after_a_full_sqlite_batch(): void
     {
         $archivos = $this->archivosVentas('2026-10-12', '16:30:00');
@@ -787,7 +873,7 @@ JS;
     }
 
     /** @return array<string, mixed> */
-    private function archivosVentas(string $fecha, string $hora): array
+    private function archivosVentas(string $fecha, string $hora, ?callable $configurarRecargas = null): array
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
@@ -799,6 +885,9 @@ JS;
         $sheet->setCellValue('K17', $fecha.' 03:00:00 PM');
         $sheet->setCellValue('R17', 150);
         $sheet->setCellValue('S17', '40240461497');
+        if ($configurarRecargas !== null) {
+            $configurarRecargas($sheet);
+        }
         $path = tempnam(sys_get_temp_dir(), 'recargas_');
         (new Xlsx($spreadsheet))->save($path);
         $recargas = UploadedFile::fake()->createWithContent('recargas.xlsx', file_get_contents($path));
