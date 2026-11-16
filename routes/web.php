@@ -58,6 +58,7 @@ use App\Http\Controllers\MantenimientoTipoPagoController;
 use App\Http\Controllers\MarController;
 use App\Http\Controllers\MetaIncentivoController;
 use App\Http\Controllers\ModuleHubController;
+use App\Http\Controllers\MovimientoTerminalReporteController;
 use App\Http\Controllers\NovedadHorarioController;
 use App\Http\Controllers\OperacionDepositoRutaController;
 use App\Http\Controllers\OperacionesAgenciasSinCuadrarController;
@@ -581,6 +582,10 @@ Route::middleware(['auth', 'force.password.change', \App\Http\Middleware\EnsureV
         Route::get('/reportes-ventas-por-agencia', [ReporteController::class, 'ventasPorAgencia']);
         Route::get('/reportes-ventas-por-agencia/list', [ReporteController::class, 'listVentasPorAgencia']);
         Route::get('/reportes-ventas-por-agencia/agencia', [ReporteController::class, 'buscarAgencia']);
+
+        Route::get('/reportes-movimiento-terminal', [MovimientoTerminalReporteController::class, 'index'])->name('reportes.movimiento-terminal');
+        Route::get('/reportes-movimiento-terminal/list', [MovimientoTerminalReporteController::class, 'data'])->name('reportes.movimiento-terminal.list');
+        Route::get('/reportes-movimiento-terminal/agencia', [MovimientoTerminalReporteController::class, 'agencia'])->name('reportes.movimiento-terminal.agencia');
 
         Route::get('/reportes-ventas-por-cedula', [ReporteController::class, 'ventasPorCedula']);
         Route::get('/reportes-ventas-por-cedula/list', [ReporteController::class, 'listVentasPorCedula']);

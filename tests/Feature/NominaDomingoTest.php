@@ -4,18 +4,22 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\RecursosHumanos\NominaDomingoController;
 use App\Http\Requests\RecursosHumanos\ConsultarNominaDomingoRequest;
+use App\Models\User;
 use App\Services\RecursosHumanos\NominaDomingoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ViewErrorBag;
+use Mockery;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class NominaDomingoTest extends TestCase
@@ -1172,6 +1176,7 @@ class NominaDomingoTest extends TestCase
 
     public function test_report_shows_coordinator_and_filters_by_company(): void
     {
+        $this->autenticarUsuarioParaFiltros();
         DB::table('agencias')->insert([
             ['id' => 1, 'terminal' => '5', 'empresa' => 'Empresa Norte', 'coordinador' => 'Nombre anterior'],
             ['id' => 2, 'terminal' => '6', 'empresa' => 'Empresa Sur', 'coordinador' => 'Nombre anterior'],
@@ -1193,6 +1198,9 @@ class NominaDomingoTest extends TestCase
             'fecha' => '2026-09-13', 'consultar' => 1, 'empresa' => 'Empresa Norte',
         ]))
             ->assertOk()
+            ->assertViewHas('empresa', 'Empresa Norte')
+            ->assertViewHas('fecha', '2026-09-13')
+            ->assertViewHas('filas', fn ($filas): bool => $filas->pluck('empresa')->unique()->all() === ['Empresa Norte'])
             ->assertSee('Coordinadora Uno')
             ->assertSee('Empleado Norte')
             ->assertDontSee('Coordinador Dos')
@@ -1201,6 +1209,7 @@ class NominaDomingoTest extends TestCase
 
     public function test_excel_table_uses_company_and_compliance_filters_together(): void
     {
+        $this->autenticarUsuarioParaFiltros();
         DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);
         DB::table('agencias')->insert([
             ['terminal' => '5', 'empresa' => 'Empresa Norte'],
@@ -1221,6 +1230,94 @@ class NominaDomingoTest extends TestCase
             ->assertDontSee('>Norte no cumple<br>', false)
             ->assertDontSee('>Sur cumple<br>', false)
             ->assertSee("modifier: { search: 'applied', order: 'applied', page: 'all' }", false);
+    }
+
+    public function test_company_filter_can_return_to_all_companies_without_losing_date_or_compliance(): void
+    {
+        $this->autenticarUsuarioParaFiltros();
+        DB::table('agencias')->insert([
+            ['terminal' => '5', 'empresa' => 'Empresa Norte'],
+            ['terminal' => '6', 'empresa' => 'Empresa Sur'],
+        ]);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '5', 'cedula' => '00100000001', 'usuario' => 'Norte', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 16:00:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '6', 'cedula' => '00100000002', 'usuario' => 'Sur', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 16:00:00'],
+        ]);
+
+        $this->get(route('recursos-humanos.nomina-domingo.index', [
+            'fecha' => '2026-09-13', 'consultar' => 1, 'empresa' => '', 'estatus' => 'cumple',
+        ]))->assertOk()
+            ->assertViewHas('empresa', '')
+            ->assertViewHas('fecha', '2026-09-13')
+            ->assertViewHas('estatus', 'cumple')
+            ->assertViewHas('filas', fn ($filas): bool => $filas->count() === 2)
+            ->assertSee('id="btnAplicarFiltrosNominaDomingo"', false);
+    }
+
+    public function test_company_and_compliance_selectors_submit_filters_once_and_preserve_form_values(): void
+    {
+        $codigo = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const source = fs.readFileSync(process.argv[2], 'utf8');
+const script = source.slice(source.indexOf("formFiltrar?.addEventListener('submit'"), source.indexOf("formGenerar?.addEventListener('submit'"));
+function boot() {
+    const selectors = [{name: 'empresa', value: 'Empresa Norte'}, {name: 'estatus', value: 'cumple'}];
+    for (const selector of selectors) {selector.addEventListener = (name, handler) => {selector[name] = handler;};}
+    const buttons = [{disabled: false}, {disabled: false}];
+    const fields = {fecha: '2026-09-13', consultar: '1', empresa: 'Empresa Norte', estatus: 'cumple'};
+    const form = {
+        dataset: {}, fields, submissions: [],
+        addEventListener(name, handler) {this[name] = handler;},
+        querySelectorAll() {return selectors;},
+        requestSubmit() {
+            let prevented = false;
+            this.submit({preventDefault() {prevented = true;}});
+            if (!prevented) {this.submissions.push({...fields});}
+        }
+    };
+    const context = {formFiltrar: form, document: {querySelectorAll() {return buttons;}}, Swal: {fire(){}, showLoading(){}}};
+    vm.runInNewContext(script, context);
+    return {form, selectors, buttons};
+}
+for (const name of ['empresa', 'estatus']) {
+    const {form, selectors, buttons} = boot();
+    selectors.find(selector => selector.name === name).change();
+    assert.equal(form.submissions.length, 1);
+    assert.deepEqual(form.submissions[0], {fecha: '2026-09-13', consultar: '1', empresa: 'Empresa Norte', estatus: 'cumple'});
+    assert.ok(buttons.every(button => button.disabled));
+    selectors[0].change();
+    form.requestSubmit();
+    assert.equal(form.submissions.length, 1);
+}
+const {form} = boot();
+form.fields.empresa = '';
+form.requestSubmit();
+assert.equal(form.submissions[0].empresa, '');
+assert.equal(form.submissions[0].fecha, '2026-09-13');
+JS;
+        $process = new Process(['node', '-', resource_path('views/recursos_humanos/nomina-domingo.blade.php')]);
+        $process->setInput($codigo)->setTimeout(15)->run();
+
+        $this->assertTrue($process->isSuccessful(), $process->getErrorOutput());
+    }
+
+    private function autenticarUsuarioParaFiltros(): void
+    {
+        Schema::create('permissions', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+        });
+        $usuario = Mockery::mock(User::class)->makePartial();
+        $usuario->shouldReceive('can')->andReturnFalse();
+        $usuario->shouldReceive('hasRole')->andReturnFalse();
+        $usuario->shouldReceive('hasAnyRole')->andReturnFalse();
+        $usuario->setRelation('viewPermissions', collect());
+        $this->actingAs($usuario);
+        Gate::before(fn (): bool => false);
     }
 
     public function test_coordinator_modal_summarizes_each_agency_once(): void

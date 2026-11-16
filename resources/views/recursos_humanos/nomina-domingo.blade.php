@@ -403,6 +403,9 @@
                                     <option value="revisar" @selected($estatus === 'revisar')>Revisar</option>
                                 </select>
                             </div>
+                            <button class="btn btn-primary" id="btnAplicarFiltrosNominaDomingo" type="submit">
+                                <i class="ri-filter-3-line me-1"></i> Aplicar filtros
+                            </button>
                         </form>
                     </div>
                     <div class="card-body">
@@ -1041,8 +1044,15 @@
                 } catch (error) { Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: error.message }); } finally { this.disabled = false; }
             });
 
-            formFiltrar?.addEventListener('submit', function () {
-                document.getElementById('btnFiltrarNominaDomingo').disabled = true;
+            formFiltrar?.addEventListener('submit', function (event) {
+                if (formFiltrar.dataset.enviando === '1') {
+                    event.preventDefault();
+                    return;
+                }
+                formFiltrar.dataset.enviando = '1';
+                document.querySelectorAll('[form="formFiltrarNominaDomingo"], #formFiltrarNominaDomingo button[type="submit"]').forEach((boton) => {
+                    boton.disabled = true;
+                });
                 Swal.fire({
                     title: 'Aplicando el filtro...',
                     icon: 'info',
@@ -1050,6 +1060,14 @@
                     allowEscapeKey: false,
                     showConfirmButton: false,
                     didOpen: () => Swal.showLoading(),
+                });
+            });
+
+            formFiltrar?.querySelectorAll('select[name="empresa"], select[name="estatus"]').forEach((selector) => {
+                selector.addEventListener('change', function () {
+                    if (formFiltrar.dataset.enviando !== '1') {
+                        formFiltrar.requestSubmit();
+                    }
                 });
             });
 

@@ -1,0 +1,33 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        $permission = Permission::findOrCreate('reportes.movimiento_de_terminal.view', 'web');
+
+        Role::query()->whereIn('name', ['superadmin', 'admin', 'admin2', 'rh', 'Conta_Rep'])->get()
+            ->each(fn (Role $role) => $role->givePermissionTo($permission));
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Permission::query()->where('name', 'reportes.movimiento_de_terminal.view')
+            ->where('guard_name', 'web')->delete();
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+};

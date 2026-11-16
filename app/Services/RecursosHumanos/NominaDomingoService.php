@@ -223,6 +223,67 @@ class NominaDomingoService
             ->distinct()->orderBy('empresa')->pluck('empresa');
     }
 
+    /** @return Collection<int, array{tipo: string, terminal: string, cedula: string, empleado: string, fecha: string}> */
+    public function movimientosTerminal(Carbon $inicio, Carbon $fin, string $empresa, string $terminal, string $periodo): Collection
+    {
+        $terminalClave = $this->normalizar($terminal);
+        $perteneceEmpresa = Agencia::query()->where('empresa', $empresa)->pluck('terminal')
+            ->contains(fn (mixed $codigo): bool => $this->normalizar($codigo) === $terminalClave);
+
+        if (! $perteneceEmpresa) {
+            return collect();
+        }
+
+        $conexion = DB::connection();
+        $finExclusivo = $fin->copy()->addDay()->startOfDay();
+        $fechasPonche = collect();
+        $fuentes = [];
+
+        foreach (['ponche_por_cedula_ventas', 'nomina_domingo_ventas'] as $tabla) {
+            if (! Schema::hasTable($tabla)) {
+                continue;
+            }
+
+            $ventas = $conexion->table($tabla)
+                ->where('fecha_transaccion', '>=', $inicio->toDateString())
+                ->where('fecha_transaccion', '<', $finExclusivo->toDateString());
+
+            if ($tabla === 'ponche_por_cedula_ventas') {
+                $fechasPonche = (clone $ventas)->selectRaw('DATE(fecha_transaccion) as fecha')->distinct()->pluck('fecha');
+            } elseif ($fechasPonche->isNotEmpty()) {
+                $ventas->whereNotIn($conexion->raw('DATE(fecha_transaccion)'), $fechasPonche);
+            }
+
+            $fuentes[] = $ventas->where('terminal_clave', $terminalClave)
+                ->whereNotNull('usuario_venta')->where('usuario_venta', '<>', '')
+                ->where(fn ($query) => $query->where('tipo', '<>', 'Recargas')
+                    ->orWhereNull('estatus')->orWhere('estatus', '<>', 'Pendiente'))
+                ->select(['id', 'tipo', 'terminal', 'usuario_venta', 'fecha_transaccion']);
+        }
+
+        if ($fuentes === []) {
+            return collect();
+        }
+
+        $ventas = array_shift($fuentes);
+        foreach ($fuentes as $fuente) {
+            $ventas->unionAll($fuente);
+        }
+
+        $movimientos = $conexion->query()->fromSub($ventas, 'movimientos')
+            ->orderByDesc('fecha_transaccion')->orderByDesc('id')->get();
+        $empleados = $this->empleados($movimientos->pluck('usuario_venta')
+            ->map(fn (mixed $cedula): string => $this->normalizar($cedula))->unique()->all());
+
+        return $movimientos->map(fn (object $movimiento): array => [
+            'tipo' => (string) $movimiento->tipo,
+            'terminal' => (string) $movimiento->terminal,
+            'cedula' => (string) $movimiento->usuario_venta,
+            'empleado' => $empleados->get($this->normalizar($movimiento->usuario_venta))['nombre'] ?? 'Actualizar en la maestra de empleado',
+            'fecha' => (string) $movimiento->fecha_transaccion,
+        ]);
+    }
+
     /** @return array{total: int, usuarios: Collection<int, object>, transacciones: Collection<int, array{id: int, usuario_venta: string, fecha: string, monto: float, terminales: array<int, string>}>} */
     public function recargasPendientes(Carbon $fecha): array
     {

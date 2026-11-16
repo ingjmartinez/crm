@@ -2,6 +2,15 @@
 
 return [
     [
+        'nombre' => 'Movimiento de terminal',
+        'descripcion' => 'Consulta todos los movimientos de una terminal en un rango de fechas con los datos de nómina.',
+        'url' => '/reportes-movimiento-terminal',
+        'icono' => 'ri-exchange-line',
+        'categoria' => 'Agencias',
+        'tags' => ['terminal', 'movimiento', 'empleados', 'ventas'],
+        'activo' => true,
+    ],
+    [
         'nombre' => 'Ventas por Usuario',
         'descripcion' => 'Consulta ventas por usuario en un rango de fechas.',
         'url' => '/reportes-ventas-usuario-bet',
