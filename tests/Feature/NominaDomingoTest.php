@@ -276,6 +276,7 @@ class NominaDomingoTest extends TestCase
 
     public function test_double_shift_terminal_uses_shared_minimum_for_each_user(): void
     {
+        config(['nomina_domingo.doble_turno_habilitado' => true]);
         DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 7.75, 'minutos_requeridos_doble_turno' => 225, 'monto_fijo' => 1500]);
         DB::table('nomina_domingo_terminales_doble_turno')->insert(['terminal' => '0012']);
         DB::table('asistencias_bet')->insert([
@@ -309,6 +310,26 @@ class NominaDomingoTest extends TestCase
         $this->assertDatabaseMissing('nomina_domingo_terminales_doble_turno', ['terminal' => '12']);
         $this->assertDatabaseHas('nomina_domingo_auditorias', ['accion' => 'agregado', 'categoria' => 'doble_turno', 'terminal' => '12', 'usuario_id' => $usuario->id]);
         $this->assertDatabaseHas('nomina_domingo_auditorias', ['accion' => 'eliminado', 'categoria' => 'doble_turno', 'terminal' => '12', 'usuario_id' => $usuario->id]);
+    }
+
+    public function test_disabled_double_shift_uses_general_time_even_for_previously_registered_terminals(): void
+    {
+        $this->assertFalse(config('nomina_domingo.doble_turno_habilitado'));
+        DB::table('nomina_domingo_configuraciones')->insert([
+            'id' => 1, 'horas_requeridas' => 9, 'minutos_requeridos_doble_turno' => 330, 'monto_fijo' => 1500,
+        ]);
+        DB::table('nomina_domingo_terminales_doble_turno')->insert(['terminal' => '0012']);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '0012', 'cedula' => '00100000001', 'usuario' => 'Faltan dos minutos', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 16:58:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '0012', 'cedula' => '00100000002', 'usuario' => 'Nueve horas completas', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 17:00:00'],
+        ]);
+
+        $filas = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'));
+        $this->assertSame('No cumple', $filas->firstWhere('cedula', '00100000001')['estatus']);
+        $this->assertSame(0.0, $filas->firstWhere('cedula', '00100000001')['monto_pagar']);
+        $this->assertSame('Cumple', $filas->firstWhere('cedula', '00100000002')['estatus']);
+        $this->assertSame(1500.0, $filas->firstWhere('cedula', '00100000002')['monto_pagar']);
+        $this->assertDatabaseHas('nomina_domingo_terminales_doble_turno', ['terminal' => '0012']);
     }
 
     public function test_terminal_recognition_requires_a_file_or_manual_values(): void
@@ -1303,6 +1324,32 @@ JS;
         $this->assertTrue($process->isSuccessful(), $process->getErrorOutput());
     }
 
+    public function test_report_displays_whole_hours_and_preserves_minutes_for_calculations(): void
+    {
+        $this->autenticarUsuarioParaFiltros();
+        DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 9, 'monto_fijo' => 1500]);
+        DB::table('asistencias_bet')->insert([
+            ['fecha' => '2026-09-13', 'agencia_id' => '5', 'cedula' => '00100000001', 'usuario' => 'Horas con minutos', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 17:35:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '6', 'cedula' => '00100000002', 'usuario' => 'Menos de una hora', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 08:45:00'],
+            ['fecha' => '2026-09-13', 'agencia_id' => '7', 'cedula' => '00100000003', 'usuario' => 'Horas exactas', 'primer_login' => '2026-09-13 08:00:00', 'ultimo_login' => '2026-09-13 17:00:00'],
+        ]);
+
+        $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13', 'consultar' => 1]))
+            ->assertOk()
+            ->assertSee('<td data-order="575">9 h</td>', false)
+            ->assertSee('<td data-order="45">0 h</td>', false)
+            ->assertSee('<td data-order="540">9 h</td>', false)
+            ->assertDontSee('Horas trabajadas (h/min)')
+            ->assertViewHas('filas', function ($filas): bool {
+                $fila = $filas->firstWhere('empleado', 'Horas con minutos');
+
+                return $fila['minutos_trabajados'] === 575
+                    && $fila['horas_trabajadas_formato'] === '9 h 35 min'
+                    && $fila['estatus'] === 'Cumple'
+                    && $fila['monto_pagar'] === 1500.0;
+            });
+    }
+
     private function autenticarUsuarioParaFiltros(): void
     {
         Schema::create('permissions', function (Blueprint $table): void {
@@ -1621,6 +1668,42 @@ JS;
         ])->assertInvalid(['horas_requeridas_minutos']);
     }
 
+    public function test_configuration_hides_double_shift_time_and_preserves_its_saved_value(): void
+    {
+        $this->autenticarUsuarioParaFiltros();
+        DB::table('nomina_domingo_configuraciones')->insert([
+            'id' => 1, 'horas_requeridas' => 9, 'minutos_requeridos_doble_turno' => 330, 'monto_fijo' => 1500,
+        ]);
+
+        $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13']))
+            ->assertOk()
+            ->assertDontSee('Tiempo requerido por usuario en terminales doble turno')
+            ->assertDontSee('name="doble_turno_horas"', false)
+            ->assertDontSee('name="doble_turno_minutos"', false)
+            ->assertDontSee('id="modalTerminalesDobleTurno"', false)
+            ->assertDontSee('data-bs-target="#modalTerminalesDobleTurno"', false)
+            ->assertDontSee('const urlsDobleTurno', false);
+
+        $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
+            'horas_requeridas_horas' => 8, 'horas_requeridas_minutos' => 30, 'monto_fijo' => 1200,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('nomina_domingo_configuraciones', [
+            'id' => 1, 'horas_requeridas' => 8.5, 'minutos_requeridos_doble_turno' => 330, 'monto_fijo' => 1200,
+        ]);
+    }
+
+    public function test_configuration_can_be_saved_without_double_shift_time_when_not_previously_configured(): void
+    {
+        $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
+            'horas_requeridas_horas' => 9, 'horas_requeridas_minutos' => 0, 'monto_fijo' => 1500,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('nomina_domingo_configuraciones', [
+            'id' => 1, 'horas_requeridas' => 9, 'minutos_requeridos_doble_turno' => null, 'monto_fijo' => 1500,
+        ]);
+    }
+
     public function test_configuration_rejects_zero_double_shift_time(): void
     {
         $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
@@ -1629,6 +1712,18 @@ JS;
             'doble_turno_horas' => 0,
             'doble_turno_minutos' => 0,
             'monto_fijo' => 1200,
+        ])->assertInvalid(['doble_turno_horas']);
+    }
+
+    public function test_configuration_rejects_partial_double_shift_time(): void
+    {
+        $configuracion = ['horas_requeridas_horas' => 9, 'horas_requeridas_minutos' => 0, 'monto_fijo' => 1500];
+
+        $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
+            ...$configuracion, 'doble_turno_horas' => 5,
+        ])->assertInvalid(['doble_turno_minutos']);
+        $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
+            ...$configuracion, 'doble_turno_minutos' => 30,
         ])->assertInvalid(['doble_turno_horas']);
     }
 

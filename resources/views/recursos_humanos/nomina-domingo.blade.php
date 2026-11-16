@@ -101,9 +101,11 @@
                             <button class="btn btn-warning" type="button" id="btnAbrirTerminalesExcluidas" data-bs-toggle="modal" data-bs-target="#modalTerminalesExcluidas">
                                 <i class="ri-forbid-line me-1"></i> Terminales excluidas <span class="badge bg-dark ms-1" id="cantidadTerminalesExcluidas">0</span>
                             </button>
+                            @if (config('nomina_domingo.doble_turno_habilitado', false))
                             <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#modalTerminalesDobleTurno">
                                 <i class="ri-time-line me-1"></i> Terminales doble turno <span class="badge bg-dark ms-1" id="cantidadTerminalesDobleTurno">0</span>
                             </button>
+                            @endif
                         </div>
                     </div>
                     <div class="card-body">
@@ -411,13 +413,13 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped align-middle w-100" id="tablaNominaDomingo">
-                                <thead><tr><th>Cédula</th><th>ID empleado</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th><th>Horas trabajadas (h/min)</th><th>Estatus</th><th>Monto a pagar</th><th>Centro de costo</th></tr></thead>
+                                <thead><tr><th>Cédula</th><th>ID empleado</th><th>Empleado</th><th>Empresa</th><th>Coordinador</th><th>Ponche resumido</th><th>Horas trabajadas</th><th>Estatus</th><th>Monto a pagar</th><th>Centro de costo</th></tr></thead>
                                 <tbody>
                                     @foreach ($filasReporte as $fila)
                                         <tr title="Terminales: {{ $fila['terminales'] }}">
                                             <td>{{ $fila['cedula'] }}</td><td>{{ $fila['empleado_id'] ?: 'Sin ID' }}</td><td @class(['empleado-sin-maestra' => ! $fila['coincide_maestra']])>{{ $fila['empleado'] }}@if (! $fila['coincide_maestra'])<br><small>Validar usuario con la maestra de empleados</small>@endif</td><td>{{ $fila['empresa'] }}</td><td>{{ $fila['coordinador'] }}</td>
                                             <td>{{ $fila['entrada'] ? 'Primer login: '.\Carbon\Carbon::parse($fila['entrada'])->format('h:i A') : 'Sin primer login' }} | {{ $fila['salida_efectiva'] ? 'Último login: '.\Carbon\Carbon::parse($fila['salida_efectiva'])->format('h:i A') : 'Sin último login' }}</td>
-                                            <td data-order="{{ $fila['minutos_trabajados'] }}">{{ $fila['horas_trabajadas_formato'] }}</td>
+                                            <td data-order="{{ $fila['minutos_trabajados'] }}">{{ intdiv($fila['minutos_trabajados'], 60) }} h</td>
                                             <td><span class="badge {{ $fila['estatus'] === 'Cumple' ? 'bg-success' : ($fila['estatus'] === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger') }}">{{ $fila['estatus'] }}</span>@if ($fila['incidencia'])<br><small class="text-muted">{{ $fila['incidencia'] }}</small>@endif</td>
                                             <td data-order="{{ $fila['monto_pagar'] }}">RD$ {{ number_format($fila['monto_pagar'], 2) }}</td><td>{{ $fila['centros_costo'] }}</td>
                                         </tr>
@@ -522,6 +524,7 @@
         </div></div>
     </div>
 
+    @if (config('nomina_domingo.doble_turno_habilitado', false))
     <div class="modal fade" id="modalTerminalesDobleTurno" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
             <div class="modal-header"><div><h5 class="modal-title">Terminales doble turno</h5><small class="text-muted">Los usuarios de estas terminales se evaluarán con el tiempo especial de Configurar nómina.</small></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -538,6 +541,7 @@
             <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="btnGuardarTerminalesDobleTurno">Aplicar doble turno</button></div>
         </div></div>
     </div>
+    @endif
 
     <div class="modal fade" id="modalConfiguracion" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog"><div class="modal-content">
@@ -556,14 +560,6 @@
                             </div>
                         </div>
                         <small class="text-muted">Los minutos deben estar entre 0 y 59.</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Tiempo requerido por usuario en terminales doble turno</label>
-                        <div class="row g-2">
-                            <div class="col-6"><div class="input-group"><input type="number" min="0" max="24" step="1" class="form-control" name="doble_turno_horas" value="{{ old('doble_turno_horas', $configuracion['minutos_requeridos_doble_turno'] !== null ? intdiv($configuracion['minutos_requeridos_doble_turno'], 60) : '') }}" required><span class="input-group-text">horas</span></div></div>
-                            <div class="col-6"><div class="input-group"><input type="number" min="0" max="59" step="1" class="form-control" name="doble_turno_minutos" value="{{ old('doble_turno_minutos', $configuracion['minutos_requeridos_doble_turno'] !== null ? $configuracion['minutos_requeridos_doble_turno'] % 60 : '') }}" required><span class="input-group-text">minutos</span></div></div>
-                        </div>
-                        <small class="text-muted">Un solo tiempo para todas las terminales doble turno. Hasta configurarlo se aplica el tiempo general.</small>
                     </div>
                     <div><label class="form-label" for="monto_fijo">Monto fijo</label><div class="input-group"><span class="input-group-text">RD$</span><input type="number" step="0.01" min="0" class="form-control" id="monto_fijo" name="monto_fijo" value="{{ $configuracion['monto_fijo'] }}" required></div></div>
                 </div>
@@ -991,6 +987,7 @@
                 catch (error) { Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: error.message }); } finally { this.disabled = false; }
             });
 
+            @if (config('nomina_domingo.doble_turno_habilitado', false))
             const urlsDobleTurno = {
                 listar: @json(route('recursos-humanos.nomina-domingo.terminales-doble-turno.index')),
                 reconocer: @json(route('recursos-humanos.nomina-domingo.terminales-doble-turno.reconocer')),
@@ -1043,6 +1040,8 @@
                     window.location.reload();
                 } catch (error) { Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: error.message }); } finally { this.disabled = false; }
             });
+
+            @endif
 
             formFiltrar?.addEventListener('submit', function (event) {
                 if (formFiltrar.dataset.enviando === '1') {
@@ -1173,10 +1172,10 @@
                         : (cumple ? 'Agencias que cumplieron' : 'Agencias que no cumplieron');
                     document.getElementById('subtituloDetalleCoordinadorNomina').textContent = coordinador.coordinador;
                     encabezado.innerHTML = esEmpleado
-                        ? '<tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th class="text-end">Horas trabajadas (h/min)</th><th>Estado</th></tr>'
+                        ? '<tr><th>Terminal</th><th>Cédula</th><th>Empleado</th><th class="text-end">Horas trabajadas</th><th>Estado</th></tr>'
                         : '<tr><th>Terminal</th><th>Empresa</th><th class="text-center">Empleados evaluados</th></tr>';
                     tbody.innerHTML = esEmpleado
-                        ? filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.cedula)}</td><td>${escaparHtml(fila.empleado)}</td><td class="text-end" data-order="${Number(fila.minutos_trabajados)}">${escaparHtml(fila.horas_trabajadas_formato)}</td><td><span class="badge ${fila.estatus === 'Cumple' ? 'bg-success' : (fila.estatus === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger')}">${escaparHtml(fila.estatus)}</span></td></tr>`).join('')
+                        ? filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.cedula)}</td><td>${escaparHtml(fila.empleado)}</td><td class="text-end" data-order="${Number(fila.minutos_trabajados)}">${Math.floor(Number(fila.minutos_trabajados) / 60)} h</td><td><span class="badge ${fila.estatus === 'Cumple' ? 'bg-success' : (fila.estatus === 'Revisar' ? 'bg-warning text-dark' : 'bg-danger')}">${escaparHtml(fila.estatus)}</span></td></tr>`).join('')
                         : filas.map((fila) => `<tr><td>${escaparHtml(fila.terminal)}</td><td>${escaparHtml(fila.empresa)}</td><td class="text-center">${Number(fila.empleados)}</td></tr>`).join('');
 
                     bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetalleCoordinadorNomina')).show();

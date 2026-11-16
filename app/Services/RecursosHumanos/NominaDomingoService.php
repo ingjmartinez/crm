@@ -26,15 +26,20 @@ class NominaDomingoService
         ];
     }
 
-    /** @param array{horas_requeridas: float|int|string, monto_fijo: float|int|string, doble_turno_horas: int, doble_turno_minutos: int} $datos */
+    /** @param array{horas_requeridas: float|int|string, monto_fijo: float|int|string, doble_turno_horas?: int, doble_turno_minutos?: int} $datos */
     public function guardarConfiguracion(array $datos): void
     {
-        DB::table('nomina_domingo_configuraciones')->updateOrInsert(['id' => 1], [
+        $configuracion = [
             'horas_requeridas' => $datos['horas_requeridas'],
-            'minutos_requeridos_doble_turno' => $datos['doble_turno_horas'] * 60 + $datos['doble_turno_minutos'],
             'monto_fijo' => $datos['monto_fijo'],
             'created_at' => now(), 'updated_at' => now(),
-        ]);
+        ];
+
+        if (isset($datos['doble_turno_horas'], $datos['doble_turno_minutos'])) {
+            $configuracion['minutos_requeridos_doble_turno'] = $datos['doble_turno_horas'] * 60 + $datos['doble_turno_minutos'];
+        }
+
+        DB::table('nomina_domingo_configuraciones')->updateOrInsert(['id' => 1], $configuracion);
     }
 
     /** @return Collection<int, array<string, float|string|null>> */
@@ -77,7 +82,9 @@ class NominaDomingoService
         }
 
         $terminalesExcluidas = $this->terminalesExcluidas();
-        $terminalesDobleTurno = $this->terminalesDobleTurno();
+        $terminalesDobleTurno = config('nomina_domingo.doble_turno_habilitado', false)
+            ? $this->terminalesDobleTurno()
+            : collect();
         $claves = $ventasAsociadas->keys()->merge($ponches->keys())->unique()
             ->reject(function (string $clave) use ($terminalesExcluidas): bool {
                 $claveSinPrefijo = str_starts_with($clave, 'venta:') ? substr($clave, 6) : $clave;
