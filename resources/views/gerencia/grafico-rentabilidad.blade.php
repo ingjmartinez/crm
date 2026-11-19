@@ -141,6 +141,33 @@
                             <div id="graficoVentasPorProducto" aria-label="Gráfico de ventas por mes con barras de Tradicional, No Tradicional y Recarga" style="min-height: 374px"></div>
                         </div>
                     </div>
+                    <div id="tarjetaPromedioVentasTerminal" @class(['card mb-4', 'd-none' => $agenciasResumen->isEmpty()])>
+                        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <div>
+                                <h5 class="card-title mb-1">Promedio diario de ventas por terminal</h5>
+                                <p class="text-muted mb-0">Ventas de los productos seleccionados ÷ días calendario del período, incluidos los días sin ventas.</p>
+                            </div>
+                            <span class="badge bg-primary-subtle text-primary">{{ $etiquetaPeriodo }}</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
+                                <span class="text-muted" id="diasPromedioVentasTerminal"></span>
+                                <div>
+                                    <label class="form-label" for="buscarPromedioVentasTerminal">Buscar terminal o agencia</label>
+                                    <input type="search" class="form-control" id="buscarPromedioVentasTerminal" placeholder="Código o nombre de agencia">
+                                </div>
+                            </div>
+                            <p id="sinPromedioVentasTerminal" class="text-muted text-center d-none">No se encontraron terminales para esta búsqueda.</p>
+                            <div id="graficoPromedioVentasTerminal" aria-label="Promedio diario de ventas de cada terminal en pesos" style="min-height: 374px"></div>
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+                                <span class="text-muted" id="paginacionPromedioVentasTerminal" aria-live="polite"></span>
+                                <div class="btn-group" aria-label="Páginas de promedios por terminal">
+                                    <button type="button" class="btn btn-outline-primary" id="anteriorPromedioVentasTerminal">Anterior</button>
+                                    <button type="button" class="btn btn-outline-primary" id="siguientePromedioVentasTerminal">Siguiente</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     @foreach (['ventas_por_dia' => 'Ventas por día', 'meta_venta' => 'Meta de venta', 'premios_sacados' => 'Premios sacados', 'premios' => 'Premios propios pagados', 'ingreso_real' => 'Ingreso real', 'gastos' => 'Gastos', 'balance' => 'Balance'] as $campo => $titulo)
                         <div id="tarjetaGrafico-{{ $campo }}" data-tarjeta-metrica="{{ $campo }}" @class(['card mb-4', 'd-none' => $agenciasResumen->isEmpty()])>
                             <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -262,6 +289,55 @@
                 pagos: [...document.querySelectorAll('#pagosRentabilidadGrafico input:checked')].map((campo) => Number(campo.value)),
             });
             let datosGraficos = datosCargados ? FiltrosGraficoRentabilidad.filtrar(datosCargados, obtenerFiltros()) : null;
+            const contenedorPromedios = document.getElementById('graficoPromedioVentasTerminal');
+            const buscarPromedios = document.getElementById('buscarPromedioVentasTerminal');
+            let graficoPromedios = null;
+            let paginaPromedios = 1;
+            const actualizarGraficoPromedios = () => {
+                if (!datosGraficos || !contenedorPromedios) return;
+                const promedios = datosGraficos.promediosVentasTerminal;
+                const pagina = FiltrosGraficoRentabilidad.paginarPromedios(promedios, buscarPromedios.value, paginaPromedios);
+                paginaPromedios = pagina.pagina;
+                document.getElementById('tarjetaPromedioVentasTerminal').classList.toggle('d-none', datosGraficos.resumen.terminales === 0);
+                document.getElementById('diasPromedioVentasTerminal').textContent = promedios.dias + ' días calendario · Ordenado de mayor a menor promedio';
+                document.getElementById('sinPromedioVentasTerminal').classList.toggle('d-none', pagina.total > 0);
+                contenedorPromedios.classList.toggle('d-none', pagina.total === 0);
+                const desde = pagina.total === 0 ? 0 : (pagina.pagina - 1) * 20 + 1;
+                const hasta = Math.min(pagina.pagina * 20, pagina.total);
+                document.getElementById('paginacionPromedioVentasTerminal').textContent = `Mostrando ${desde} a ${hasta} de ${pagina.total} terminales`;
+                document.getElementById('anteriorPromedioVentasTerminal').disabled = pagina.pagina <= 1;
+                document.getElementById('siguientePromedioVentasTerminal').disabled = pagina.pagina >= pagina.paginas;
+                const opciones = {
+                    chart: { height: Math.max(374, pagina.terminales.length * 34 + 80), type: 'bar', toolbar: { show: false } },
+                    series: [{ name: 'Promedio diario', data: pagina.terminales.map((fila) => fila.promedio) }],
+                    colors: [getComputedStyle(document.documentElement).getPropertyValue('--vz-primary').trim() || '#405189'],
+                    plotOptions: { bar: { horizontal: true, barHeight: '65%', borderRadius: 3, colors: { ranges: [] } } },
+                    dataLabels: { enabled: false },
+                    xaxis: { categories: pagina.terminales.map((fila) => fila.terminal), labels: { formatter: moneda }, title: { text: 'Promedio diario de ventas (RD$)' } },
+                    yaxis: { title: { text: 'Terminal' } },
+                    tooltip: { y: { formatter: moneda } },
+                    noData: { text: 'Sin terminales para esta búsqueda.' },
+                };
+                if (graficoPromedios) {
+                    graficoPromedios.updateOptions(opciones);
+                } else if (typeof ApexCharts !== 'undefined') {
+                    graficoPromedios = new ApexCharts(contenedorPromedios, opciones);
+                    graficoPromedios.render();
+                }
+            };
+            buscarPromedios?.addEventListener('input', () => {
+                paginaPromedios = 1;
+                actualizarGraficoPromedios();
+            });
+            document.getElementById('anteriorPromedioVentasTerminal')?.addEventListener('click', () => {
+                paginaPromedios--;
+                actualizarGraficoPromedios();
+            });
+            document.getElementById('siguientePromedioVentasTerminal')?.addEventListener('click', () => {
+                paginaPromedios++;
+                actualizarGraficoPromedios();
+            });
+            actualizarGraficoPromedios();
             const actualizarGraficosMetricas = () => {
                 if (!datosGraficos) return;
                 document.querySelectorAll('[data-grafico-metrica]').forEach((contenedor) => {
@@ -366,6 +442,8 @@
                 const datos = FiltrosGraficoRentabilidad.filtrar(datosCargados, filtros);
                 filtrosAplicados = filtros;
                 datosGraficos = datos;
+                paginaPromedios = 1;
+                actualizarGraficoPromedios();
                 actualizarGraficosMetricas();
                 const sinTerminales = datos.resumen.terminales === 0;
                 document.getElementById('sinTerminalesRentabilidad').classList.toggle('d-none', !sinTerminales);

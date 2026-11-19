@@ -242,7 +242,9 @@ class PonchePorCedulaTest extends TestCase
             ->assertSee('Novedades de feriados')
             ->assertSee(json_encode(route('recursos-humanos.novedades-feriados.list')), false)
             ->assertSee('Salida calculada')
-            ->assertSee('Total de horas');
+            ->assertSee('Horas del sistema')
+            ->assertSee('Primera venta')
+            ->assertSee('Justificación del horario');
     }
 
     public function test_holiday_report_preserves_the_original_calculations_and_system_filter(): void
@@ -263,13 +265,170 @@ class PonchePorCedulaTest extends TestCase
         $original = $this->getJson(route('recursos-humanos.ponche-por-cedula.list', $filters))->assertOk();
 
         $this->getJson(route('recursos-humanos.novedades-feriados.list', $filters))
-            ->assertOk()->assertExactJson(array_map(fn (array $row): array => [...$row, 'idturno' => null, 'empleadoid' => null], $original->json()))
+            ->assertOk()->assertJson(array_map(fn (array $row): array => [...$row, 'idturno' => null, 'empleadoid' => null], $original->json()))
             ->assertJsonCount(2)
             ->assertJsonPath('0.salida_calculada', '2026-11-09 16:35:00')
             ->assertJsonPath('0.total_horas', 8.58);
 
         $this->getJson(route('recursos-humanos.novedades-feriados.list', [...$filters, 'sistema' => 'lotonet']))
             ->assertOk()->assertJsonCount(1)->assertJsonPath('0.sistema', 'Lotonet');
+    }
+
+    public function test_holiday_review_finds_other_sellers_even_when_company_cedula_and_shift_are_filtered(): void
+    {
+        DB::table('empleados')->insert([
+            ['cedula' => '40209126321', 'companyid' => 169, 'idturno' => '8', 'nombres' => 'Ana'],
+            ['cedula' => '40226483440', 'companyid' => 168, 'idturno' => '7', 'nombres' => 'Esmelin'],
+        ]);
+        DB::table('asistencias_bet')->insert([
+            'fecha' => '2026-11-15', 'agencia_id' => '051913', 'cedula' => '40209126321',
+            'primer_login' => '2026-11-15 08:06:44', 'ultimo_login' => '2026-11-15 18:25:27',
+        ]);
+        foreach ([
+            ['40226483440', '051913', '2026-11-15 08:30:47', 'Tradicional', 'Validos'],
+            ['40226483440', '51913', '2026-11-15 13:34:12', 'No Tradicional', 'Validos'],
+            ['402-0912632-1', '51913', '2026-11-15 13:40:21', 'Tradicional', 'Validos'],
+            ['40209126321', '051913', '2026-11-15 18:25:27', 'No Tradicional', 'Validos'],
+            ['40226483440', '051913', '2026-11-15 19:00:00', 'Recargas', 'Pendiente'],
+            ['99999999999', '99', '2026-11-15 10:00:00', 'Tradicional', 'Validos'],
+            ['88888888888', '051913', '2026-11-14 10:00:00', 'Tradicional', 'Validos'],
+        ] as [$cedula, $terminal, $fecha, $tipo, $estatus]) {
+            DB::table('ponche_por_cedula_ventas')->insert([
+                'usuario_venta' => $cedula, 'terminal' => $terminal, 'fecha_transaccion' => $fecha, 'tipo' => $tipo, 'estatus' => $estatus,
+            ]);
+        }
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [
+            'cedula' => '40209126321', 'empresa' => '169', 'idturno' => '8', 'sistema' => 'lotobet',
+            'fecha_inicio' => '2026-11-15', 'fecha_fin' => '2026-11-15',
+        ]))->assertOk()->assertJsonCount(1)
+            ->assertJsonPath('0.total_horas', 10.4)
+            ->assertJsonPath('0.primer_login', '2026-11-15 08:06:44')
+            ->assertJsonPath('0.primera_venta', '2026-11-15 13:40:21')
+            ->assertJsonPath('0.revision.estado', 'conflicto')
+            ->assertJsonPath('0.revision.primera_transaccion', '2026-11-15 13:40:21')
+            ->assertJsonPath('0.entrada_calculada', '2026-11-15 13:38:21')
+            ->assertJsonPath('0.hora_calculada', 4.87)
+            ->assertJsonPath('0.revision.ultima_transaccion', '2026-11-15 18:25:27')
+            ->assertJsonPath('0.revision.movimientos', 2)
+            ->assertJsonCount(1, '0.revision.coincidencias')
+            ->assertJsonPath('0.revision.coincidencias.0.cedula', '40226483440')
+            ->assertJsonPath('0.revision.coincidencias.0.primera', '2026-11-15 08:30:47')
+            ->assertJsonPath('0.revision.coincidencias.0.ultima', '2026-11-15 13:34:12')
+            ->assertJsonPath('0.revision.coincidencias.0.cantidad', 2);
+    }
+
+    public function test_holiday_review_does_not_confirm_hours_or_flag_a_non_overlapping_seller(): void
+    {
+        DB::table('asistencias_net')->insert([
+            'identificacion' => '40209126321', 'terminal' => '051913',
+            'entrada' => '2026-11-15 13:40:00', 'salida' => '2026-11-15 18:30:00',
+        ]);
+        foreach ([['40226483440', '13:34:12'], ['40209126321', '13:40:21']] as [$cedula, $hora]) {
+            DB::table('ponche_por_cedula_ventas')->insert([
+                'usuario_venta' => $cedula, 'terminal' => '51913', 'fecha_transaccion' => '2026-11-15 '.$hora, 'tipo' => 'Tradicional',
+            ]);
+        }
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [
+            'sistema' => 'lotonet', 'fecha_inicio' => '2026-11-15', 'fecha_fin' => '2026-11-15',
+        ]))->assertOk()->assertJsonCount(1)
+            ->assertJsonPath('0.primera_venta', '2026-11-15 13:40:21')
+            ->assertJsonPath('0.revision.estado', 'sin_cruce_detectado')
+            ->assertJsonPath('0.entrada_calculada', '2026-11-15 13:40:00')
+            ->assertJsonPath('0.hora_calculada', 4.83)
+            ->assertJsonPath('0.revision.coincidencias', []);
+    }
+
+    public function test_holiday_review_handles_missing_sales_and_incomplete_punches(): void
+    {
+        DB::table('asistencias_bet')->insert([
+            'fecha' => '2026-11-15', 'agencia_id' => null, 'cedula' => '40209126321',
+            'primer_login' => '2026-11-15 08:06:44', 'ultimo_login' => null,
+        ]);
+        Schema::drop('ponche_por_cedula_ventas');
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [
+            'sistema' => 'todos', 'fecha_inicio' => '2026-11-15', 'fecha_fin' => '2026-11-15',
+        ]))->assertOk()->assertJsonCount(1)
+            ->assertJsonPath('0.primera_venta', null)
+            ->assertJsonPath('0.revision.estado', 'sin_transacciones')
+            ->assertJsonPath('0.hora_calculada', null)
+            ->assertJsonPath('0.revision.primera_transaccion', null)
+            ->assertJsonPath('0.revision.ultima_transaccion', null)
+            ->assertJsonPath('0.revision.movimientos', 0)
+            ->assertJsonPath('0.revision.coincidencias', []);
+
+        DB::table('asistencias_bet')->where('cedula', '40209126321')->update(['ultimo_login' => '2026-11-15 13:06:44']);
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [
+            'sistema' => 'todos', 'fecha_inicio' => '2026-11-15', 'fecha_fin' => '2026-11-15',
+        ]))->assertOk()
+            ->assertJsonPath('0.entrada_calculada', '2026-11-15 08:06:44')
+            ->assertJsonPath('0.hora_calculada', 5)
+            ->assertJsonPath('0.primera_venta', null);
+    }
+
+    public function test_holiday_calculated_entry_and_exit_fall_back_to_transactions_when_punches_are_missing(): void
+    {
+        DB::table('asistencias_bet')->insert([
+            'fecha' => '2026-11-15', 'agencia_id' => '051913', 'cedula' => '40209126321',
+            'primer_login' => null, 'ultimo_login' => null,
+        ]);
+        foreach ([
+            ['Tradicional', '13:40:21', 'Validos'],
+            ['No Tradicional', '14:00:00', 'Validos'],
+            ['Recargas', '13:30:00', 'Validos'],
+            ['Recargas', '18:25:27', 'Validos'],
+            ['Recargas', '07:00:00', 'Pendiente'],
+            ['Recargas', '20:00:00', 'Pendiente'],
+        ] as [$tipo, $hora, $estatus]) {
+            DB::table('ponche_por_cedula_ventas')->insert([
+                'usuario_venta' => '40209126321', 'terminal' => '51913', 'fecha_transaccion' => '2026-11-15 '.$hora,
+                'tipo' => $tipo, 'estatus' => $estatus,
+            ]);
+        }
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [
+            'sistema' => 'lotobet', 'fecha_inicio' => '2026-11-15', 'fecha_fin' => '2026-11-15',
+        ]))->assertOk()->assertJsonCount(1)
+            ->assertJsonPath('0.entrada_calculada', '2026-11-15 13:28:00')
+            ->assertJsonPath('0.hora_calculada', 5.04)
+            ->assertJsonPath('0.ultimo_login', null)
+            ->assertJsonPath('0.salida_calculada', '2026-11-15 18:30:27')
+            ->assertJsonPath('0.total_horas', 0)
+            ->assertJsonPath('0.primera_venta', '2026-11-15 13:30:00');
+
+        DB::table('asistencias_bet')->where('cedula', '40209126321')->update(['primer_login' => '2026-11-15 08:00:00']);
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [
+            'sistema' => 'lotobet', 'fecha_inicio' => '2026-11-15', 'fecha_fin' => '2026-11-15',
+        ]))->assertOk()
+            ->assertJsonPath('0.entrada_calculada', '2026-11-15 08:00:00')
+            ->assertJsonPath('0.salida_calculada', '2026-11-15 18:30:27')
+            ->assertJsonPath('0.hora_calculada', 10.51);
+    }
+
+    public function test_holiday_calculated_entry_uses_the_midnight_punch_and_preserves_a_later_exit_punch(): void
+    {
+        DB::table('asistencias_net')->insert([
+            'identificacion' => '40209126321', 'terminal' => '051913',
+            'entrada' => '2026-11-15 00:00:00', 'salida' => '2026-11-15 18:30:00',
+        ]);
+        foreach (['00:01:00', '18:00:00'] as $hora) {
+            DB::table('ponche_por_cedula_ventas')->insert([
+                'usuario_venta' => '40209126321', 'terminal' => '51913',
+                'fecha_transaccion' => '2026-11-15 '.$hora, 'tipo' => 'Tradicional',
+            ]);
+        }
+
+        $this->getJson(route('recursos-humanos.novedades-feriados.list', [
+            'sistema' => 'lotonet', 'fecha_inicio' => '2026-11-15', 'fecha_fin' => '2026-11-15',
+        ]))->assertOk()->assertJsonCount(1)
+            ->assertJsonPath('0.entrada_calculada', '2026-11-15 00:00:00')
+            ->assertJsonPath('0.hora_calculada', 18.5)
+            ->assertJsonPath('0.salida_calculada', '2026-11-15 18:30:00')
+            ->assertJsonPath('0.primer_login', '2026-11-15 00:00:00');
     }
 
     public function test_holiday_report_validates_filters_and_handles_empty_results(): void
@@ -388,6 +547,7 @@ const html = fs.readFileSync(process.argv[2], 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/@json\(route\('[^']+'\)\)/g, "'/feriados/list'");
 const elementos = Object.fromEntries(Object.entries({cedula:'',empresa:'168',idturno:'',sistema:'todos',fecha_inicio:'2026-11-09',fecha_fin:'2026-11-09'}).map(([id,value]) => [id,{value,addEventListener(){}}]));
 elementos.btnBuscar = {addEventListener(evento,funcion){this.consultar=funcion;}};
+elementos.tablePoncheCedula = {addEventListener(){}};
 global.document = {getElementById(id){return elementos[id];}};
 let consultas = [];
 global.$ = () => ({DataTable(config){consultas.push(config);return {destroy(){}};}});
@@ -399,14 +559,45 @@ assert.equal(consultas[0].columns[1].data,'empleadoid');
 assert.equal(consultas[0].columns[1].render(null),'—');
 assert.equal(consultas[0].columns[1].render('100'),'100');
 assert.ok(html.includes('<th>Cédula</th><th>ID empleado</th>'));
-assert.equal(consultas[0].columns.length,9);
-assert.deepEqual(consultas[0].order,[[3,'asc'],[4,'asc']]);
-assert.equal(consultas[0].columns[4].data,'idturno');
+assert.equal(consultas[0].columns.length,11);
+assert.equal(consultas[0].columns[8].data,'hora_calculada');
+assert.equal(consultas[0].columns[8].render(null,'display'),'—');
+assert.equal(consultas[0].columns[8].render(4.87,'display'),formatearHoras(4.87));
+assert.equal(consultas[0].columns[8].render(0,'display'),formatearHoras(0));
+assert.equal(consultas[0].columns[8].render(4.87,'sort'),4.87);
+assert.equal(consultas[0].columns[9].data,'primera_venta');
+assert.equal(consultas[0].columns[10].data,'revision');
+assert.equal(consultas[0].columns[9].render(null),'—');
+assert.equal(consultas[0].columns[9].render('2026-11-15 13:40:21'),'13:40:21');
+assert.ok(!html.includes('Hora confirmada'));
+assert.ok(consultas[0].columns[10].render({estado:'conflicto'},'display').includes('Revisar cruce'));
+assert.ok(consultas[0].columns[10].render({estado:'conflicto'},'display').includes('btn-warning text-dark fw-semibold shadow-sm'));
+assert.ok(!consultas[0].columns[10].render({estado:'conflicto'},'display').includes('btn-outline-'));
+assert.equal(consultas[0].columns[10].render({motivo:'Requiere revisión'},'export'),'Requiere revisión');
+let modalAbierto = false;
+global.bootstrap = {Modal:{getOrCreateInstance(){return {show(){modalAbierto=true;}};}}};
+for (const id of ['revisionEmpleado','revisionFecha','revisionMotivo','revisionEntrada','revisionSalida','revisionPrimera','revisionEntradaCalculada','revisionCalculada','revisionUltima','revisionMovimientos','revisionCoincidencias','modalJustificacionFeriado']) elementos[id] = {};
+abrirJustificacion({nombre:'Ana',cedula:'40209126321',fecha:'2026-11-15',sistema:'Lotobet',primer_login:'2026-11-15 08:06:44',salida_calculada:'2026-11-15 18:30:27',hora_calculada:4.87,entrada_calculada:'2026-11-15 13:38:21',primera_venta:'2026-11-15 13:40:21',revision:{estado:'conflicto',motivo:'Posible relevo',primera_transaccion:'2026-11-15 13:40:21',ultima_transaccion:'2026-11-15 18:25:27',movimientos:26,coincidencias:[{cedula:'<img src=x onerror=alert(1)>',terminal:'51913',primera:'08:30:47',ultima:'13:34:12',cantidad:39}]}});
+assert.ok(modalAbierto);
+assert.equal(elementos.revisionCalculada.textContent,formatearHoras(4.87));
+assert.equal(elementos.revisionEntradaCalculada.textContent,'2026-11-15 13:38:21');
+elementos.totalHoras = {};
+elementos.totalHorasCalculadas = {};
+consultas[0].footerCallback.call({api(){return {rows(){return {data(){return {toArray(){return [{total_horas:10.4,hora_calculada:4.87},{total_horas:5,hora_calculada:null},{total_horas:1,hora_calculada:0}];}};}};}};}});
+assert.equal(elementos.totalHorasCalculadas.textContent,formatearHoras(4.87));
+assert.equal(elementos.totalHoras.textContent,formatearHoras(16.4));
+assert.equal(elementos.revisionPrimera.textContent,'2026-11-15 13:40:21');
+assert.ok(elementos.revisionCoincidencias.innerHTML.includes('&lt;img'));
+assert.ok(!elementos.revisionCoincidencias.innerHTML.includes('<img'));
+assert.deepEqual(consultas[0].order,[[3,'asc'],[0,'asc']]);
+assert.equal(consultas[0].columns[4].data,'primer_login');
+assert.ok(!consultas[0].columns.some(columna => columna.data === 'idturno'));
 assert.ok(!consultas[0].columns.some(columna => columna.data === 'sistema'));
 assert.equal(consultas[0].columns[4].render(null),'—');
-assert.equal(consultas[0].columns[4].render(0),0);
-assert.equal(consultas[0].columns[4].render('9'),'9');
-assert.ok(html.includes('<th>idturno</th>'));
+assert.ok(!html.includes('<th>idturno</th>'));
+assert.ok(html.includes('<select id="idturno"'));
+assert.ok(html.includes('<th class="text-end">Horas del sistema</th>'));
+assert.ok(html.includes('<th colspan="7" class="text-end">Horas del sistema</th>'));
 assert.ok(!html.includes('<th>Sistema</th>'));
 assert.deepEqual(consultas[0].ajax.data,{cedula:'',empresa:'168',idturno:'',sistema:'todos',fecha_inicio:'2026-11-09',fecha_fin:'2026-11-09'});
 for (const [id,nombre] of [['7','Matutino Banqueras'],['8','Vespertino Banqueras'],['14','Matutino Entrada Temprano'],['9','Turno Completo Banquera'],['1','Administrativo']]) {

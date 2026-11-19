@@ -1646,26 +1646,23 @@ JS;
         $this->actingAs($usuario);
         $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
             'horas_requeridas_horas' => 7,
-            'horas_requeridas_minutos' => 30,
             'doble_turno_horas' => 3,
             'doble_turno_minutos' => 45,
             'monto_fijo' => 1200,
         ])
             ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('nomina_domingo_configuraciones', ['id' => 1, 'horas_requeridas' => 7.5, 'minutos_requeridos_doble_turno' => 225, 'monto_fijo' => 1200]);
+        $this->assertDatabaseHas('nomina_domingo_configuraciones', ['id' => 1, 'horas_requeridas' => 7, 'minutos_requeridos_doble_turno' => 225, 'monto_fijo' => 1200]);
         $this->assertDatabaseHas('nomina_domingo_auditorias', ['accion' => 'modificado', 'categoria' => 'configuracion', 'usuario_id' => $usuario->id]);
     }
 
-    public function test_configuration_rejects_sixty_minutes(): void
+    public function test_configuration_requires_whole_hours_between_one_and_twenty_four(): void
     {
-        $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
-            'horas_requeridas_horas' => 7,
-            'horas_requeridas_minutos' => 60,
-            'doble_turno_horas' => 3,
-            'doble_turno_minutos' => 45,
-            'monto_fijo' => 1200,
-        ])->assertInvalid(['horas_requeridas_minutos']);
+        foreach ([0, 25, 8.5] as $horas) {
+            $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
+                'horas_requeridas_horas' => $horas, 'monto_fijo' => 1200,
+            ])->assertInvalid(['horas_requeridas_horas']);
+        }
     }
 
     public function test_configuration_hides_double_shift_time_and_preserves_its_saved_value(): void
@@ -1680,23 +1677,24 @@ JS;
             ->assertDontSee('Tiempo requerido por usuario en terminales doble turno')
             ->assertDontSee('name="doble_turno_horas"', false)
             ->assertDontSee('name="doble_turno_minutos"', false)
+            ->assertDontSee('name="horas_requeridas_minutos"', false)
             ->assertDontSee('id="modalTerminalesDobleTurno"', false)
             ->assertDontSee('data-bs-target="#modalTerminalesDobleTurno"', false)
             ->assertDontSee('const urlsDobleTurno', false);
 
         $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
-            'horas_requeridas_horas' => 8, 'horas_requeridas_minutos' => 30, 'monto_fijo' => 1200,
+            'horas_requeridas_horas' => 8, 'monto_fijo' => 1200,
         ])->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('nomina_domingo_configuraciones', [
-            'id' => 1, 'horas_requeridas' => 8.5, 'minutos_requeridos_doble_turno' => 330, 'monto_fijo' => 1200,
+            'id' => 1, 'horas_requeridas' => 8, 'minutos_requeridos_doble_turno' => 330, 'monto_fijo' => 1200,
         ]);
     }
 
     public function test_configuration_can_be_saved_without_double_shift_time_when_not_previously_configured(): void
     {
         $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
-            'horas_requeridas_horas' => 9, 'horas_requeridas_minutos' => 0, 'monto_fijo' => 1500,
+            'horas_requeridas_horas' => 9, 'monto_fijo' => 1500,
         ])->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('nomina_domingo_configuraciones', [
@@ -1715,6 +1713,17 @@ JS;
         ])->assertInvalid(['doble_turno_horas']);
     }
 
+    public function test_configuration_saves_whole_hours_even_if_legacy_minutes_are_submitted(): void
+    {
+        $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
+            'horas_requeridas_horas' => 9, 'horas_requeridas_minutos' => 58, 'monto_fijo' => 300,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('nomina_domingo_configuraciones', [
+            'id' => 1, 'horas_requeridas' => 9, 'monto_fijo' => 300,
+        ]);
+    }
+
     public function test_configuration_rejects_partial_double_shift_time(): void
     {
         $configuracion = ['horas_requeridas_horas' => 9, 'horas_requeridas_minutos' => 0, 'monto_fijo' => 1500];
@@ -1729,13 +1738,9 @@ JS;
 
     public function test_configuration_preserves_minute_precision_when_reading_decimal_storage(): void
     {
-        $this->post(route('recursos-humanos.nomina-domingo.configuracion'), [
-            'horas_requeridas_horas' => 7,
-            'horas_requeridas_minutos' => 1,
-            'doble_turno_horas' => 3,
-            'doble_turno_minutos' => 45,
-            'monto_fijo' => 1200,
-        ])->assertSessionHasNoErrors();
+        DB::table('nomina_domingo_configuraciones')->insert([
+            'id' => 1, 'horas_requeridas' => 7 + (1 / 60), 'monto_fijo' => 1200,
+        ]);
 
         $this->assertEqualsWithDelta(7 + (1 / 60), app(NominaDomingoService::class)->configuracion()['horas_requeridas'], 0.00001);
     }

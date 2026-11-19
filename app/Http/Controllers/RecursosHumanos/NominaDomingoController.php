@@ -148,7 +148,7 @@ class NominaDomingoController extends Controller
     public function actualizarConfiguracion(ActualizarNominaDomingoConfiguracionRequest $request): RedirectResponse
     {
         $datos = $request->validated();
-        $datos['horas_requeridas'] = (int) $datos['horas_requeridas_horas'] + ((int) $datos['horas_requeridas_minutos'] / 60);
+        $datos['horas_requeridas'] = (int) $datos['horas_requeridas_horas'];
         DB::transaction(function () use ($request, $datos): void {
             $antes = $this->service->configuracion();
             $this->service->guardarConfiguracion($datos);

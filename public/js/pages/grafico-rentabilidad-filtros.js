@@ -23,6 +23,11 @@
         const indicesMeses = new Map(datos.meses.map((mes, indice) => [mes, indice]));
         const mensuales = Object.fromEntries(['venta', 'premios', 'premios_sacados', 'ingreso_real', 'costos', 'gastos', 'balance']
             .map((campo) => [campo, datos.meses.map(() => 0)]));
+        const diasPeriodo = datos.meses.reduce((total, mes) => {
+            const [anio, numeroMes] = mes.split('-').map(Number);
+            return total + new Date(Date.UTC(anio, numeroMes, 0)).getUTCDate();
+        }, 0);
+        const promediosTerminales = [];
         const sumarPremios = (filas) => filas.reduce((total, fila) =>
             total + (todosLosPremios || productosPremios.has(fila.producto_id) ? fila.total : 0), 0);
 
@@ -42,6 +47,12 @@
                 }
             });
             const premios = sumarPremios(agencia.premios);
+            promediosTerminales.push({
+                terminal: agencia.terminal,
+                nombre: agencia.nombre || agencia.terminal,
+                ventas,
+                promedio: diasPeriodo > 0 ? ventas / diasPeriodo : 0,
+            });
             const ingreso = ventas - premios;
             const balance = ingreso - agencia.costos - agencia.gastos;
             resumen.venta += ventas;
@@ -94,8 +105,28 @@
         return {
             resumen,
             graficos,
+            promediosVentasTerminal: {
+                dias: diasPeriodo,
+                terminales: promediosTerminales.sort((a, b) => b.promedio - a.promedio || a.terminal.localeCompare(b.terminal, 'es', { numeric: true })),
+            },
             ventasPorProducto: Object.fromEntries(series.map((serie) => [serie.name, serie.data.reduce((suma, venta) => suma + venta, 0)])),
             ventasMensuales: { meses: datos.meses, etiquetas: datos.etiquetas, series },
+        };
+    }
+
+    function paginarPromedios(datos, busqueda, pagina, cantidad = 20) {
+        const texto = busqueda.trim().toLocaleLowerCase('es');
+        const terminales = datos.terminales.filter((fila) => !texto
+            || fila.terminal.toLocaleLowerCase('es').includes(texto)
+            || fila.nombre.toLocaleLowerCase('es').includes(texto));
+        const paginas = Math.max(1, Math.ceil(terminales.length / cantidad));
+        const paginaActual = Math.max(1, Math.min(pagina, paginas));
+
+        return {
+            pagina: paginaActual,
+            paginas,
+            total: terminales.length,
+            terminales: terminales.slice((paginaActual - 1) * cantidad, paginaActual * cantidad),
         };
     }
 
@@ -161,5 +192,5 @@
         return resultados.reduce(combinarMeses, null);
     }
 
-    global.FiltrosGraficoRentabilidad = { filtrar, cargarMeses };
+    global.FiltrosGraficoRentabilidad = { filtrar, cargarMeses, paginarPromedios };
 })(globalThis);

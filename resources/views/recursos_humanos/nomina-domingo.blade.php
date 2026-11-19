@@ -258,7 +258,7 @@
                 @endif
 
                 <div class="row">
-                    <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Horas requeridas</span><h4>{{ (int) floor($configuracion['horas_requeridas']) }} h {{ str_pad((string) round(($configuracion['horas_requeridas'] - floor($configuracion['horas_requeridas'])) * 60), 2, '0', STR_PAD_LEFT) }} min</h4></div></div></div>
+                    <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Horas requeridas</span><h4>{{ (int) floor($configuracion['horas_requeridas']) }} h</h4></div></div></div>
                     <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Monto fijo</span><h4>RD$ {{ number_format($configuracion['monto_fijo'], 2) }}</h4></div></div></div>
                     <div class="col-md-4"><div class="card card-animate"><div class="card-body"><span class="text-muted">Total a pagar</span><h4>RD$ {{ number_format($filas->sum('monto_pagar'), 2) }}</h4></div></div></div>
                 </div>
@@ -550,16 +550,8 @@
                 <div class="modal-header"><h5 class="modal-title">Configurar Nómina Domingo</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Tiempo requerido</label>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <div class="input-group"><input type="number" min="0" max="24" step="1" class="form-control" id="horas_requeridas_horas" name="horas_requeridas_horas" value="{{ old('horas_requeridas_horas', (int) floor($configuracion['horas_requeridas'])) }}" required><span class="input-group-text">horas</span></div>
-                            </div>
-                            <div class="col-6">
-                                <div class="input-group"><input type="number" min="0" max="59" step="1" class="form-control" id="horas_requeridas_minutos" name="horas_requeridas_minutos" value="{{ old('horas_requeridas_minutos', (int) round(($configuracion['horas_requeridas'] - floor($configuracion['horas_requeridas'])) * 60)) }}" required><span class="input-group-text">minutos</span></div>
-                            </div>
-                        </div>
-                        <small class="text-muted">Los minutos deben estar entre 0 y 59.</small>
+                        <label class="form-label" for="horas_requeridas_horas">Tiempo requerido</label>
+                        <div class="input-group"><input type="number" min="1" max="24" step="1" class="form-control" id="horas_requeridas_horas" name="horas_requeridas_horas" value="{{ old('horas_requeridas_horas', (int) floor($configuracion['horas_requeridas'])) }}" required><span class="input-group-text">horas</span></div>
                     </div>
                     <div><label class="form-label" for="monto_fijo">Monto fijo</label><div class="input-group"><span class="input-group-text">RD$</span><input type="number" step="0.01" min="0" class="form-control" id="monto_fijo" name="monto_fijo" value="{{ $configuracion['monto_fijo'] }}" required></div></div>
                 </div>

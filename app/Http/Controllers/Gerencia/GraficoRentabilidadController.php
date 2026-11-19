@@ -373,6 +373,7 @@ class GraficoRentabilidadController extends Controller
 
                 return [
                     'terminal' => $terminal,
+                    'nombre' => trim((string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $terminal)),
                     'empresa' => trim((string) $agencia->empresa),
                     'ruta' => trim((string) $agencia->ruta),
                     'socios' => $agencia->socios,
