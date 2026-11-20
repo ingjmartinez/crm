@@ -6,6 +6,7 @@ use App\Mail\AsistenciaComparativaCoordinadorMail;
 use App\Models\Agencia;
 use App\Models\CoordinadorOperador;
 use App\Models\Token;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -79,7 +80,7 @@ class AsistenciaComparativaController extends Controller
                 ->whereNotNull('correo')
                 ->whereRaw("TRIM(correo) <> ''")
                 ->pluck('correo')
-                ->map(fn($correo) => trim((string) $correo))
+                ->map(fn ($correo) => trim((string) $correo))
                 ->filter()
                 ->unique()
                 ->values();
@@ -99,7 +100,7 @@ class AsistenciaComparativaController extends Controller
             Mail::to($correos->all())->send(new AsistenciaComparativaCoordinadorMail($payload));
 
             return response()->json([
-                'message' => 'Reporte enviado correctamente a: ' . $correos->implode(', '),
+                'message' => 'Reporte enviado correctamente a: '.$correos->implode(', '),
                 'total' => count($rows),
             ]);
         } catch (Throwable $e) {
@@ -116,140 +117,140 @@ class AsistenciaComparativaController extends Controller
                 'coordinadoresOperadores' => function ($query) {
                     $query->where('puesto', 'coordinador')
                         ->select('coordinador_operador.id', 'nombre', 'apellido', 'correo');
-                }
+                },
             ])
-                ->select('id', 'agencia', 'nombre_agencia', 'terminal', 'horario_am', 'horario_pm')
-                ->whereNotNull('terminal')
-                ->where(function ($q) {
-                    $q->whereNotNull('horario_am')
-                        ->orWhereNotNull('horario_pm');
-                })
+            ->select('id', 'agencia', 'nombre_agencia', 'terminal', 'horario_am', 'horario_pm')
+            ->whereNotNull('terminal')
+            ->where(function ($q) {
+                $q->whereNotNull('horario_am')
+                    ->orWhereNotNull('horario_pm');
+            })
             ->when($coordinador !== '', function ($query) use ($coordinador) {
                 $query->whereHas('coordinadoresOperadores', function ($subQuery) use ($coordinador) {
                     $subQuery->where('puesto', 'coordinador')
                         ->whereRaw("TRIM(CONCAT(COALESCE(nombre, ''), ' ', COALESCE(apellido, ''))) = ?", [$coordinador]);
                 });
             })
-                ->get();
+            ->get();
 
         $mapAsistencia = $this->consolidarAsistenciasPorTerminalDesdeApi($fecha);
 
         $rows = [];
 
         foreach ($agencias as $agencia) {
-                $coordinadoresAgencia = $agencia->coordinadoresOperadores
-                    ->map(function ($item) {
-                        return trim((string) (($item->nombre ?? '') . ' ' . ($item->apellido ?? '')));
-                    })
-                    ->filter()
-                    ->unique()
-                    ->values();
+            $coordinadoresAgencia = $agencia->coordinadoresOperadores
+                ->map(function ($item) {
+                    return trim((string) (($item->nombre ?? '').' '.($item->apellido ?? '')));
+                })
+                ->filter()
+                ->unique()
+                ->values();
 
-                $coordinadorAgencia = $coordinadoresAgencia->isNotEmpty()
-                    ? $coordinadoresAgencia->implode(', ')
-                    : '-';
+            $coordinadorAgencia = $coordinadoresAgencia->isNotEmpty()
+                ? $coordinadoresAgencia->implode(', ')
+                : '-';
 
-                $terminalKey = $this->normalizarTerminal($agencia->terminal);
-                $asistencia = $mapAsistencia[$terminalKey] ?? null;
+            $terminalKey = $this->normalizarTerminal($agencia->terminal);
+            $asistencia = $mapAsistencia[$terminalKey] ?? null;
 
-                $entradaAmProgramada = $this->extraerHoraInicio($agencia->horario_am);
-                $salidaAmProgramada = $this->extraerHoraFin($agencia->horario_am);
-                $entradaPmProgramada = $this->extraerHoraInicio($agencia->horario_pm);
-                $salidaPmProgramada = $this->extraerHoraFin($agencia->horario_pm);
+            $entradaAmProgramada = $this->extraerHoraInicio($agencia->horario_am);
+            $salidaAmProgramada = $this->extraerHoraFin($agencia->horario_am);
+            $entradaPmProgramada = $this->extraerHoraInicio($agencia->horario_pm);
+            $salidaPmProgramada = $this->extraerHoraFin($agencia->horario_pm);
 
-                $entradaProgramada = $entradaAmProgramada ?: $entradaPmProgramada;
-                $salidaProgramada = $salidaPmProgramada ?: $salidaAmProgramada;
+            $entradaProgramada = $entradaAmProgramada ?: $entradaPmProgramada;
+            $salidaProgramada = $salidaPmProgramada ?: $salidaAmProgramada;
 
-                $entradaAmProgramadaDateTime = $this->parseFechaHora($fecha, $entradaAmProgramada);
-                $salidaAmProgramadaDateTime = $this->parseFechaHora($fecha, $salidaAmProgramada);
-                $entradaPmProgramadaDateTime = $this->parseFechaHora($fecha, $entradaPmProgramada);
-                $salidaPmProgramadaDateTime = $this->parseFechaHora($fecha, $salidaPmProgramada);
+            $entradaAmProgramadaDateTime = $this->parseFechaHora($fecha, $entradaAmProgramada);
+            $salidaAmProgramadaDateTime = $this->parseFechaHora($fecha, $salidaAmProgramada);
+            $entradaPmProgramadaDateTime = $this->parseFechaHora($fecha, $entradaPmProgramada);
+            $salidaPmProgramadaDateTime = $this->parseFechaHora($fecha, $salidaPmProgramada);
 
-                $entradaProgramadaDateTime = $this->parseFechaHora($fecha, $entradaProgramada);
-                $salidaProgramadaDateTime = $this->parseFechaHora($fecha, $salidaProgramada);
+            $entradaProgramadaDateTime = $this->parseFechaHora($fecha, $entradaProgramada);
+            $salidaProgramadaDateTime = $this->parseFechaHora($fecha, $salidaProgramada);
 
-                $entradasReales = $this->parsearHorasReales($asistencia['entradas'] ?? []);
-                $salidasReales = $this->parsearHorasReales($asistencia['salidas'] ?? []);
+            $entradasReales = $this->parsearHorasReales($asistencia['entradas'] ?? []);
+            $salidasReales = $this->parsearHorasReales($asistencia['salidas'] ?? []);
 
-                $entradaReal = $entradasReales[0] ?? null;
-                $salidaReal = !empty($salidasReales) ? $salidasReales[array_key_last($salidasReales)] : null;
+            $entradaReal = $entradasReales[0] ?? null;
+            $salidaReal = ! empty($salidasReales) ? $salidasReales[array_key_last($salidasReales)] : null;
 
-                $salidaAmReal = $this->seleccionarHoraCercana(
-                    $salidasReales,
-                    $salidaAmProgramadaDateTime,
-                    $entradaAmProgramadaDateTime,
-                    $entradaPmProgramadaDateTime
-                );
+            $salidaAmReal = $this->seleccionarHoraCercana(
+                $salidasReales,
+                $salidaAmProgramadaDateTime,
+                $entradaAmProgramadaDateTime,
+                $entradaPmProgramadaDateTime
+            );
 
-                $entradaPmReal = $this->seleccionarHoraCercana(
-                    $entradasReales,
-                    $entradaPmProgramadaDateTime,
-                    $salidaAmProgramadaDateTime,
-                    $salidaPmProgramadaDateTime
-                );
+            $entradaPmReal = $this->seleccionarHoraCercana(
+                $entradasReales,
+                $entradaPmProgramadaDateTime,
+                $salidaAmProgramadaDateTime,
+                $salidaPmProgramadaDateTime
+            );
 
-                $incumpleEntrada = false;
-                $incumpleSalida = false;
-                $minutosTarde = 0;
-                $minutosSalidaAntes = 0;
-                $observaciones = [];
+            $incumpleEntrada = false;
+            $incumpleSalida = false;
+            $minutosTarde = 0;
+            $minutosSalidaAntes = 0;
+            $observaciones = [];
 
-                if ($entradaProgramadaDateTime && $entradaReal) {
-                    if ($entradaReal->greaterThan($entradaProgramadaDateTime)) {
-                        $incumpleEntrada = true;
-                        $minutosTarde = $entradaProgramadaDateTime->diffInMinutes($entradaReal);
-                        $observaciones[] = 'Entrada tardía';
-                    }
-                } elseif ($entradaProgramadaDateTime && !$entradaReal) {
+            if ($entradaProgramadaDateTime && $entradaReal) {
+                if ($entradaReal->greaterThan($entradaProgramadaDateTime)) {
                     $incumpleEntrada = true;
-                    $observaciones[] = 'Sin registro de entrada';
+                    $minutosTarde = $entradaProgramadaDateTime->diffInMinutes($entradaReal);
+                    $observaciones[] = 'Entrada tardía';
                 }
-
-                if ($salidaProgramadaDateTime && $salidaReal) {
-                    if ($salidaReal->lessThan($salidaProgramadaDateTime)) {
-                        $incumpleSalida = true;
-                        $minutosSalidaAntes = $salidaReal->diffInMinutes($salidaProgramadaDateTime);
-                        $observaciones[] = 'Salida anticipada';
-                    }
-                } elseif ($salidaProgramadaDateTime && !$salidaReal) {
-                    $incumpleSalida = true;
-                    $observaciones[] = 'Sin registro de salida';
-                }
-
-                $incumplida = $incumpleEntrada || $incumpleSalida;
-
-                if ($soloIncumplidas && !$incumplida) {
-                    continue;
-                }
-
-                $rows[] = [
-                    'agencia_id' => $agencia->id,
-                    'agencia' => $agencia->agencia,
-                    'nombre_agencia' => $agencia->nombre_agencia,
-                    'coordinador' => $coordinadorAgencia,
-                    'terminal' => $agencia->terminal,
-                    'horario_am' => $agencia->horario_am,
-                    'horario_pm' => $agencia->horario_pm,
-                    'entrada_am_programada' => $entradaAmProgramada,
-                    'salida_am_programada' => $salidaAmProgramada,
-                    'entrada_pm_programada' => $entradaPmProgramada,
-                    'salida_pm_programada' => $salidaPmProgramada,
-                    'entrada_programada' => $entradaProgramada,
-                    'salida_programada' => $salidaProgramada,
-                    'entrada_real' => $entradaReal ? $entradaReal->format('h:i A') : '-',
-                    'salida_am_real' => $salidaAmReal ? $salidaAmReal->format('h:i A') : '-',
-                    'entrada_pm_real' => $entradaPmReal ? $entradaPmReal->format('h:i A') : '-',
-                    'salida_real' => $salidaReal ? $salidaReal->format('h:i A') : '-',
-                    'minutos_tarde' => $minutosTarde,
-                    'minutos_salida_antes' => $minutosSalidaAntes,
-                    'incumple_entrada' => $incumpleEntrada,
-                    'incumple_salida' => $incumpleSalida,
-                    'incumplida' => $incumplida,
-                    'estado' => $incumplida ? 'INCUMPLE' : 'CUMPLE',
-                    'observaciones' => empty($observaciones) ? 'Cumple horario' : implode(' | ', $observaciones),
-                    'fuente' => $asistencia['fuente'] ?? '-',
-                ];
+            } elseif ($entradaProgramadaDateTime && ! $entradaReal) {
+                $incumpleEntrada = true;
+                $observaciones[] = 'Sin registro de entrada';
             }
+
+            if ($salidaProgramadaDateTime && $salidaReal) {
+                if ($salidaReal->lessThan($salidaProgramadaDateTime)) {
+                    $incumpleSalida = true;
+                    $minutosSalidaAntes = $salidaReal->diffInMinutes($salidaProgramadaDateTime);
+                    $observaciones[] = 'Salida anticipada';
+                }
+            } elseif ($salidaProgramadaDateTime && ! $salidaReal) {
+                $incumpleSalida = true;
+                $observaciones[] = 'Sin registro de salida';
+            }
+
+            $incumplida = $incumpleEntrada || $incumpleSalida;
+
+            if ($soloIncumplidas && ! $incumplida) {
+                continue;
+            }
+
+            $rows[] = [
+                'agencia_id' => $agencia->id,
+                'agencia' => $agencia->agencia,
+                'nombre_agencia' => $agencia->nombre_agencia,
+                'coordinador' => $coordinadorAgencia,
+                'terminal' => $agencia->terminal,
+                'horario_am' => $agencia->horario_am,
+                'horario_pm' => $agencia->horario_pm,
+                'entrada_am_programada' => $entradaAmProgramada,
+                'salida_am_programada' => $salidaAmProgramada,
+                'entrada_pm_programada' => $entradaPmProgramada,
+                'salida_pm_programada' => $salidaPmProgramada,
+                'entrada_programada' => $entradaProgramada,
+                'salida_programada' => $salidaProgramada,
+                'entrada_real' => $entradaReal ? $entradaReal->format('h:i A') : '-',
+                'salida_am_real' => $salidaAmReal ? $salidaAmReal->format('h:i A') : '-',
+                'entrada_pm_real' => $entradaPmReal ? $entradaPmReal->format('h:i A') : '-',
+                'salida_real' => $salidaReal ? $salidaReal->format('h:i A') : '-',
+                'minutos_tarde' => $minutosTarde,
+                'minutos_salida_antes' => $minutosSalidaAntes,
+                'incumple_entrada' => $incumpleEntrada,
+                'incumple_salida' => $incumpleSalida,
+                'incumplida' => $incumplida,
+                'estado' => $incumplida ? 'INCUMPLE' : 'CUMPLE',
+                'observaciones' => empty($observaciones) ? 'Cumple horario' : implode(' | ', $observaciones),
+                'fuente' => $asistencia['fuente'] ?? '-',
+            ];
+        }
 
         return $rows;
     }
@@ -258,6 +259,8 @@ class AsistenciaComparativaController extends Controller
     {
         $bet = $this->obtenerAsistenciaLotobetApi($fecha);
         $net = $this->obtenerAsistenciaLotonetApi($fecha);
+        $conciliacion = app(ConciliacionHorarioService::class);
+        $actividad = $conciliacion->actividad($fecha, $fecha);
 
         $map = [];
 
@@ -265,7 +268,7 @@ class AsistenciaComparativaController extends Controller
             $terminalRaw = (string) ($row['agencia'] ?? $row['agencia_id'] ?? '');
             $terminalKey = $this->normalizarTerminal($terminalRaw);
 
-            if (!isset($map[$terminalKey])) {
+            if (! isset($map[$terminalKey])) {
                 $map[$terminalKey] = [
                     'entrada' => null,
                     'salida' => null,
@@ -277,19 +280,20 @@ class AsistenciaComparativaController extends Controller
                 ];
             }
 
-            $entrada = $row['primer_login'] ?? $row['entrada'] ?? null;
-            $salida = $row['ultimo_logout'] ?? $row['ultimo_login'] ?? $row['salida'] ?? null;
+            $calculo = $conciliacion->registroApi($row, $fecha, $actividad);
+            $entrada = $calculo['entrada_calculada'];
+            $salida = $calculo['salida_calculada'];
 
             if ($entrada) {
                 $map[$terminalKey]['entradas'][] = $entrada;
-                if (!$map[$terminalKey]['entrada'] || Carbon::parse($entrada)->lessThan(Carbon::parse($map[$terminalKey]['entrada']))) {
+                if (! $map[$terminalKey]['entrada'] || Carbon::parse($entrada)->lessThan(Carbon::parse($map[$terminalKey]['entrada']))) {
                     $map[$terminalKey]['entrada'] = $entrada;
                 }
             }
 
             if ($salida) {
                 $map[$terminalKey]['salidas'][] = $salida;
-                if (!$map[$terminalKey]['salida'] || Carbon::parse($salida)->greaterThan(Carbon::parse($map[$terminalKey]['salida']))) {
+                if (! $map[$terminalKey]['salida'] || Carbon::parse($salida)->greaterThan(Carbon::parse($map[$terminalKey]['salida']))) {
                     $map[$terminalKey]['salida'] = $salida;
                 }
             }
@@ -305,7 +309,7 @@ class AsistenciaComparativaController extends Controller
 
             $terminalKey = $this->normalizarTerminal($terminalRaw);
 
-            if (!isset($map[$terminalKey])) {
+            if (! isset($map[$terminalKey])) {
                 $map[$terminalKey] = [
                     'entrada' => null,
                     'salida' => null,
@@ -317,19 +321,20 @@ class AsistenciaComparativaController extends Controller
                 ];
             }
 
-            $entrada = $row['entrada'] ?? $row['primer_login'] ?? null;
-            $salida = $row['salida'] ?? $row['ultimo_logout'] ?? null;
+            $calculo = $conciliacion->registroApi($row, $fecha, $actividad);
+            $entrada = $calculo['entrada_calculada'];
+            $salida = $calculo['salida_calculada'];
 
             if ($entrada) {
                 $map[$terminalKey]['entradas'][] = $entrada;
-                if (!$map[$terminalKey]['entrada'] || Carbon::parse($entrada)->lessThan(Carbon::parse($map[$terminalKey]['entrada']))) {
+                if (! $map[$terminalKey]['entrada'] || Carbon::parse($entrada)->lessThan(Carbon::parse($map[$terminalKey]['entrada']))) {
                     $map[$terminalKey]['entrada'] = $entrada;
                 }
             }
 
             if ($salida) {
                 $map[$terminalKey]['salidas'][] = $salida;
-                if (!$map[$terminalKey]['salida'] || Carbon::parse($salida)->greaterThan(Carbon::parse($map[$terminalKey]['salida']))) {
+                if (! $map[$terminalKey]['salida'] || Carbon::parse($salida)->greaterThan(Carbon::parse($map[$terminalKey]['salida']))) {
                     $map[$terminalKey]['salida'] = $salida;
                 }
             }
@@ -350,7 +355,7 @@ class AsistenciaComparativaController extends Controller
     {
         $token = Token::find(1);
 
-        if (!$token) {
+        if (! $token) {
             throw new \RuntimeException('Genere un token de Lotobet.');
         }
 
@@ -381,7 +386,7 @@ class AsistenciaComparativaController extends Controller
 
         $payload = json_decode((string) $response, true);
         $code = isset($payload['code']) ? (string) $payload['code'] : null;
-        if ($code !== null && !in_array(strtolower(trim($code)), ['0', '00', '200', 'ok', 'success'], true)) {
+        if ($code !== null && ! in_array(strtolower(trim($code)), ['0', '00', '200', 'ok', 'success'], true)) {
             $msg = $payload['msg'] ?? $payload['message'] ?? 'Respuesta inválida de API Lotobet';
             throw new \RuntimeException($msg);
         }
@@ -419,7 +424,7 @@ class AsistenciaComparativaController extends Controller
 
         $payload = json_decode((string) $response, true);
         $code = isset($payload['code']) ? (string) $payload['code'] : null;
-        if ($code !== null && !in_array(strtolower(trim($code)), ['0', '00', '200', 'ok', 'success'], true)) {
+        if ($code !== null && ! in_array(strtolower(trim($code)), ['0', '00', '200', 'ok', 'success'], true)) {
             $msg = $payload['msg'] ?? $payload['message'] ?? 'Respuesta inválida de API Lotonet';
             throw new \RuntimeException($msg);
         }
@@ -429,42 +434,45 @@ class AsistenciaComparativaController extends Controller
 
     private function normalizarTerminal(?string $terminal): string
     {
-        if (!$terminal) {
+        if (! $terminal) {
             return '0';
         }
 
         $valor = ltrim(trim($terminal), '0');
+
         return $valor === '' ? '0' : $valor;
     }
 
     private function extraerHoraInicio(?string $horario): ?string
     {
-        if (!$horario || !str_contains($horario, '/')) {
+        if (! $horario || ! str_contains($horario, '/')) {
             return null;
         }
 
         $partes = explode('/', $horario);
+
         return isset($partes[0]) ? trim($partes[0]) : null;
     }
 
     private function extraerHoraFin(?string $horario): ?string
     {
-        if (!$horario || !str_contains($horario, '/')) {
+        if (! $horario || ! str_contains($horario, '/')) {
             return null;
         }
 
         $partes = explode('/', $horario);
+
         return isset($partes[1]) ? trim($partes[1]) : null;
     }
 
     private function parseFechaHora(string $fecha, ?string $hora): ?Carbon
     {
-        if (!$hora) {
+        if (! $hora) {
             return null;
         }
 
         try {
-            return Carbon::createFromFormat('Y-m-d g:i A', $fecha . ' ' . strtoupper($hora));
+            return Carbon::createFromFormat('Y-m-d g:i A', $fecha.' '.strtoupper($hora));
         } catch (Throwable $e) {
             return null;
         }
@@ -475,7 +483,7 @@ class AsistenciaComparativaController extends Controller
         $parsed = [];
 
         foreach ($horas as $hora) {
-            if (!$hora) {
+            if (! $hora) {
                 continue;
             }
 
@@ -509,7 +517,7 @@ class AsistenciaComparativaController extends Controller
             return null;
         }
 
-        if (!$objetivo) {
+        if (! $objetivo) {
             return $filtradas[0];
         }
 

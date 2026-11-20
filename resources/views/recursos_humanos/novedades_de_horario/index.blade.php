@@ -115,7 +115,7 @@
                     <div class="col-xl-3 col-md-6">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-uppercase fw-medium text-muted mb-1">Horas Acumuladas</p>
+                                <p class="text-uppercase fw-medium text-muted mb-1">Horas calculadas</p>
                                 <h4 class="mb-0" id="totalHorasAcumuladas">0.00</h4>
                             </div>
                         </div>
@@ -149,7 +149,7 @@
                                                 <th>Fecha</th>
                                                 <th>Primer Login</th>
                                                 <th>Ultimo Login</th>
-                                                <th class="text-end">Horas_Acumuladas</th>
+                                                <th class="text-end">Horas calculadas</th>
                                                 <th>Detalle</th>
                                                 <th>Acción</th>
                                             </tr>

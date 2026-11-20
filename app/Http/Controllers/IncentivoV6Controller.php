@@ -15,6 +15,7 @@ use App\Models\IncentivoPeriodo;
 use App\Models\IncentivoPeriodoDetalle;
 use App\Models\IncentivoTerminalTipoPago;
 use App\Services\IncentivoV6Calculator;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Query\Builder;
@@ -386,6 +387,22 @@ class IncentivoV6Controller extends Controller
     public function guardarPeriodo(GuardarPeriodoIncentivoV6Request $request): JsonResponse
     {
         $validated = $request->validated();
+        if (Schema::hasTable('asistencias_bet') || Schema::hasTable('asistencias_net')) {
+            $horas = app(ConciliacionHorarioService::class)->totalesPorCedula(
+                $validated['fecha_inicio'], $validated['fecha_fin'], $validated['sistema'], array_column($validated['detalles'], 'cedula')
+            );
+            foreach ($validated['detalles'] as $indice => &$detalle) {
+                $cedula = preg_replace('/\D+/', '', $detalle['cedula']);
+                $horasActuales = $horas->get($cedula, 0.0);
+                if (abs($horasActuales - (float) ($detalle['horas_total'] ?? 0)) > 0.01) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'detalles.'.$indice.'.horas_total' => 'Las horas de la cédula '.$cedula.' cambiaron. Consulte nuevamente el reporte antes de guardar el período.',
+                    ]);
+                }
+                $detalle['horas_total'] = $horasActuales;
+            }
+            unset($detalle);
+        }
         $fechaInicio = Carbon::createFromFormat('Y-m-d', $validated['fecha_inicio'])->startOfDay();
         $fechaFin = Carbon::createFromFormat('Y-m-d', $validated['fecha_fin'])->startOfDay();
         $userId = auth()->id();

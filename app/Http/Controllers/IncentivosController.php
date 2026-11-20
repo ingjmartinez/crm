@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Imports\AgenciasActualizacionMasivaImport;
 use App\Models\CoordinadorOperador;
 use App\Models\IncentivoAdministrativo;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,7 +36,7 @@ class IncentivosController extends Controller
             ->get();
 
         return view('incentivos.index', [
-            'productosExcluidos' => $productosExcluidos
+            'productosExcluidos' => $productosExcluidos,
         ]);
     }
 
@@ -46,11 +47,11 @@ class IncentivosController extends Controller
             ->get();
 
         return view('incentivos.procesar', [
-            'productosExcluidos' => $productosExcluidos
+            'productosExcluidos' => $productosExcluidos,
         ]);
     }
 
-    function list(Request $request)
+    public function list(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
         ini_set('memory_limit', '512M');
@@ -58,10 +59,11 @@ class IncentivosController extends Controller
         $excluidos = $request->input('excluidos', '');
         $year = $request->input('year', '');
         $incentivos = DB::select('CALL CalculoIncentivo(?, ?, ?)', [$mes,  $year, $excluidos]);
+
         return response()->json($incentivos);
     }
 
-    function save(Request $request)
+    public function save(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
         ini_set('memory_limit', '512M');
@@ -73,10 +75,10 @@ class IncentivosController extends Controller
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
-        if (!$incentivoId) {
+        if (! $incentivoId) {
             $incentivoId = DB::table('incentivo_temporal_c')->insertGetId([
                 'anio' => $anio,
-                'mes' => $mes
+                'mes' => $mes,
             ]);
         }
 
@@ -110,7 +112,7 @@ class IncentivosController extends Controller
         return response()->json(['message' => 'Incentivos guardados exitosamente.']);
     }
 
-    function listPlanAgencia(Request $request)
+    public function listPlanAgencia(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
         ini_set('memory_limit', '512M');
@@ -199,14 +201,14 @@ class IncentivosController extends Controller
         );
 
         // FORMAT(it.venta_base, 2) AS venta_base,
-        // CASE WHEN it.venta_mes >= it.meta_plan 
+        // CASE WHEN it.venta_mes >= it.meta_plan
         //             THEN 'SI CUMPLE'
         //             ELSE 'NO CUMPLE'
         //         END AS condicion
         return response()->json($planAgencia);
     }
 
-    function savePlanAgencia(Request $request)
+    public function savePlanAgencia(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
         ini_set('memory_limit', '512M');
@@ -218,10 +220,10 @@ class IncentivosController extends Controller
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
-        if (!$incentivoId) {
+        if (! $incentivoId) {
             $incentivoId = DB::table('incentivo_temporal_c')->insertGetId([
                 'anio' => $anio,
-                'mes' => $mes
+                'mes' => $mes,
             ]);
         }
 
@@ -257,7 +259,7 @@ class IncentivosController extends Controller
         return response()->json(['message' => 'Plan Agencia guardado exitosamente.']);
     }
 
-    function listEfectividad(Request $request)
+    public function listEfectividad(Request $request)
     {
         ini_set('max_execution_time', 600); // 5 minutes
         ini_set('memory_limit', '1G');
@@ -319,10 +321,11 @@ class IncentivosController extends Controller
                 AND it.venta_mes > 0
             ORDER BY it.agencia_id;"
         );
+
         return response()->json($data);
     }
 
-    function saveEfectividad(Request $request)
+    public function saveEfectividad(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
         ini_set('memory_limit', '512M');
@@ -334,10 +337,10 @@ class IncentivosController extends Controller
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
-        if (!$incentivoId) {
+        if (! $incentivoId) {
             $incentivoId = DB::table('incentivo_temporal_c')->insertGetId([
                 'anio' => $anio,
-                'mes' => $mes
+                'mes' => $mes,
             ]);
         }
 
@@ -372,7 +375,7 @@ class IncentivosController extends Controller
         return response()->json(['message' => 'Efectividad guardada exitosamente.']);
     }
 
-    function listPagoAgente(Request $request)
+    public function listPagoAgente(Request $request)
     {
         ini_set('max_execution_time', 600); // 5 minutes
         ini_set('memory_limit', '1G');
@@ -422,10 +425,11 @@ class IncentivosController extends Controller
                 AND pad.monto_agente > 0
                 AND it.venta_mes > 0;"
         );
+
         return response()->json($data);
     }
 
-    function savePagoAgente(Request $request)
+    public function savePagoAgente(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
         ini_set('memory_limit', '512M');
@@ -437,10 +441,10 @@ class IncentivosController extends Controller
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
-        if (!$incentivoId) {
+        if (! $incentivoId) {
             $incentivoId = DB::table('incentivo_temporal_c')->insertGetId([
                 'anio' => $anio,
-                'mes' => $mes
+                'mes' => $mes,
             ]);
         }
 
@@ -474,7 +478,7 @@ class IncentivosController extends Controller
         return response()->json(['message' => 'Pago Incentivos guardado exitosamente.']);
     }
 
-    function listPagoCoordinador(Request $request)
+    public function listPagoCoordinador(Request $request)
     {
         ini_set('max_execution_time', 600); // 5 minutes
         ini_set('memory_limit', '1G');
@@ -523,10 +527,11 @@ class IncentivosController extends Controller
             GROUP BY companyid, company, empleadoid, cedula, nombres, apellidos;",
             [$incentivoId, $sistema]
         );
+
         return response()->json($data);
     }
 
-    function savePagoCoordinador(Request $request)
+    public function savePagoCoordinador(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
         ini_set('memory_limit', '512M');
@@ -538,10 +543,10 @@ class IncentivosController extends Controller
         // Insertar o traer id de incentivo_temporal_c
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
-        if (!$incentivoId) {
+        if (! $incentivoId) {
             $incentivoId = DB::table('incentivo_temporal_c')->insertGetId([
                 'anio' => $anio,
-                'mes' => $mes
+                'mes' => $mes,
             ]);
         }
 
@@ -569,7 +574,7 @@ class IncentivosController extends Controller
         return response()->json(['message' => 'Pago Incentivos guardado exitosamente.']);
     }
 
-    function listPagoCoordinadorDetalle(Request $request)
+    public function listPagoCoordinadorDetalle(Request $request)
     {
         ini_set('max_execution_time', 600); // 5 minutes
         ini_set('memory_limit', '1G');
@@ -587,7 +592,7 @@ class IncentivosController extends Controller
             return response()->json(['message' => 'No hay datos registrados en el mes.']);
         }
 
-        $sql = "SELECT 
+        $sql = 'SELECT
                     agencia_id, 
                     tipo_producto, 
                     pad.sistema, 
@@ -607,27 +612,28 @@ class IncentivosController extends Controller
                         INNER JOIN empleados e ON c.empleado_id = e.empleadoid
                         WHERE e.cedula = ?
                     )
-                    AND excedente > 0";
+                    AND excedente > 0';
 
         $bindings = [$incentivoId, $cedula];
 
-        if (!empty($sistema)) {
-            $sql .= " AND pad.sistema = ?";
+        if (! empty($sistema)) {
+            $sql .= ' AND pad.sistema = ?';
             $bindings[] = $sistema;
         }
 
         if ($tipo_producto !== '') {
-            $sql .= " AND tipo_producto = ?";
+            $sql .= ' AND tipo_producto = ?';
             $bindings[] = $tipo_producto;
         }
 
-        $sql .= " ORDER BY agencia_id, tipo_producto, sistema";
+        $sql .= ' ORDER BY agencia_id, tipo_producto, sistema';
 
         $data = DB::select($sql, $bindings);
+
         return response()->json($data);
     }
 
-    function listPagoAdmin(Request $request)
+    public function listPagoAdmin(Request $request)
     {
         ini_set('max_execution_time', 600); // 5 minutes
         ini_set('memory_limit', '1G');
@@ -702,10 +708,11 @@ class IncentivosController extends Controller
                 emp.nombres, emp.apellidos, e.porcentaje
             ORDER BY Total_a_cobrar DESC;"
         );
+
         return response()->json($data);
     }
 
-    function savePagoAdmin(Request $request)
+    public function savePagoAdmin(Request $request)
     {
         ini_set('max_execution_time', 300); // 5 minutes
         ini_set('memory_limit', '512M');
@@ -718,10 +725,10 @@ class IncentivosController extends Controller
         $incentivoId = DB::table('incentivo_temporal_c')
             ->where('anio', $anio)->where('mes', $mes)->value('incentivo_id');
 
-        if (!$incentivoId) {
+        if (! $incentivoId) {
             $incentivoId = DB::table('incentivo_temporal_c')->insertGetId([
                 'anio' => $anio,
-                'mes' => $mes
+                'mes' => $mes,
             ]);
         }
 
@@ -752,7 +759,7 @@ class IncentivosController extends Controller
         return response()->json(['message' => 'Pago Incentivos guardado exitosamente.']);
     }
 
-    function listPagoAdminDetalle(Request $request)
+    public function listPagoAdminDetalle(Request $request)
     {
         ini_set('max_execution_time', 600); // 5 minutes
         ini_set('memory_limit', '1G');
@@ -993,7 +1000,7 @@ class IncentivosController extends Controller
 
         $data = $rawData->map(function ($row) use ($minimoAgencia) {
             $pctTexto = $row['pct_num'] > 0
-                ? rtrim(rtrim(number_format($row['pct_num'], 2, '.', ''), '0'), '.') . '%'
+                ? rtrim(rtrim(number_format($row['pct_num'], 2, '.', ''), '0'), '.').'%'
                 : '0%';
 
             return [
@@ -1105,7 +1112,7 @@ class IncentivosController extends Controller
             if (is_array($decoded) && count($decoded) > 0) {
                 $sanitized = collect($decoded)
                     ->map(function ($row) {
-                        if (!is_array($row)) {
+                        if (! is_array($row)) {
                             return null;
                         }
 
@@ -1128,7 +1135,7 @@ class IncentivosController extends Controller
                     ->values()
                     ->all();
 
-                if (!empty($sanitized)) {
+                if (! empty($sanitized)) {
                     $rangosPago = $sanitized;
                 }
             }
@@ -1243,7 +1250,7 @@ class IncentivosController extends Controller
                 $terminal = trim((string) $row->terminal);
                 $empresa = $empresaByTerminal[$terminal] ?? 'Sin empresa';
 
-                if (!isset($empresaCounterByCedula[$cedulaKey])) {
+                if (! isset($empresaCounterByCedula[$cedulaKey])) {
                     $empresaCounterByCedula[$cedulaKey] = [];
                 }
 
@@ -1280,7 +1287,7 @@ class IncentivosController extends Controller
                     }
                 }
 
-                if ($pagoEscala === 0.0 && !empty($rangosPago)) {
+                if ($pagoEscala === 0.0 && ! empty($rangosPago)) {
                     $ultimoRango = end($rangosPago);
                     if ($ventasMesActual >= (float) $ultimoRango['desde']) {
                         if ($tramoActivo === 'tramo2' && (float) $ultimoRango['desde'] >= 1000001) {
@@ -1346,7 +1353,7 @@ class IncentivosController extends Controller
                 $companyId = $empresaCompanyId($empresa);
             }
 
-            return $cedulaLookupKey($cedula) . '|' . $companyId;
+            return $cedulaLookupKey($cedula).'|'.$companyId;
         };
         $empleadosPorCedula = DB::table('empleados')
             ->whereIn(DB::raw('CAST(cedula AS UNSIGNED)'), $cedulasNormalizadas->all())
@@ -1491,7 +1498,7 @@ class IncentivosController extends Controller
             ->map(function ($coordinador) {
                 return [
                     'id' => $coordinador->id,
-                    'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
+                    'nombre' => trim(($coordinador->nombre ?? '').' '.($coordinador->apellido ?? '')),
                     'agencias' => (int) $coordinador->agencias_count,
                     'agencias_validas' => 0,
                     'monto_usuarios' => 0,
@@ -1512,7 +1519,7 @@ class IncentivosController extends Controller
         $response = $this->reporteNuevoIncentivoV2($request);
         $payload = $response->getData(true);
 
-        if (!isset($payload['data']) || !is_array($payload['data'])) {
+        if (! isset($payload['data']) || ! is_array($payload['data'])) {
             return $response;
         }
 
@@ -1700,7 +1707,7 @@ class IncentivosController extends Controller
                 ->map(function ($coordinador) {
                     return [
                         'id' => $coordinador->id,
-                        'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
+                        'nombre' => trim(($coordinador->nombre ?? '').' '.($coordinador->apellido ?? '')),
                         'agencias' => (int) $coordinador->agencias_count,
                         'agencias_validas' => 0,
                         'monto_usuarios' => 0,
@@ -1843,7 +1850,7 @@ class IncentivosController extends Controller
         $buildVentasQuery = function (string $tabla, string $sistema) use ($validated) {
             return DB::table($tabla)
                 ->selectRaw(
-                    "cedula, monto, fecha, producto_id, tipo, ? AS sistema",
+                    'cedula, monto, fecha, producto_id, tipo, ? AS sistema',
                     [$sistema]
                 )
                 ->whereBetween('fecha', [$validated['fecha_ini'], $validated['fecha_fin']])
@@ -1936,7 +1943,7 @@ class IncentivosController extends Controller
                 $companyId = $empresaCompanyId($empresa);
             }
 
-            return $cedulaLookupKey($cedula) . '|' . $companyId;
+            return $cedulaLookupKey($cedula).'|'.$companyId;
         };
 
         if (
@@ -1992,14 +1999,14 @@ class IncentivosController extends Controller
             }
 
             $coordinadores = $coordinadoresBase
-                ->map(function ($coordinador) use ($empleadosPorCedula, $cedulaLookupKey, $empleadoLookupKey, $empresaPorCoordinador) {
+                ->map(function ($coordinador) use ($empleadosPorCedula, $empleadoLookupKey, $empresaPorCoordinador) {
                     $cedula = (string) ($coordinador->cedula ?? '');
                     $empresa = (string) ($empresaPorCoordinador[$coordinador->id] ?? '');
                     $empleado = $empleadosPorCedula->get($empleadoLookupKey($cedula, $empresa));
 
                     return [
                         'id' => $coordinador->id,
-                        'nombre' => trim(($coordinador->nombre ?? '') . ' ' . ($coordinador->apellido ?? '')),
+                        'nombre' => trim(($coordinador->nombre ?? '').' '.($coordinador->apellido ?? '')),
                         'cedula' => $cedula,
                         'empleadoid' => (string) ($empleado->empleadoid ?? ''),
                         'viapago' => (string) ($empleado->viapago ?? ''),
@@ -2059,7 +2066,7 @@ class IncentivosController extends Controller
 
                 $fechaSalidaCondition = empty($fechaSalidaChecks)
                     ? '1 = 1'
-                    : '(' . implode(' AND ', $fechaSalidaChecks) . ')';
+                    : '('.implode(' AND ', $fechaSalidaChecks).')';
                 $cedulasAdministrativos = $administrativosBase
                     ->pluck('cedula')
                     ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
@@ -2151,7 +2158,7 @@ class IncentivosController extends Controller
             ->values();
 
         $porcentajesInvalidos = $rows
-            ->filter(fn ($row) => !in_array($row['grupo'], self::GRUPOS_ADMINISTRATIVOS_FIJOS_V5, true))
+            ->filter(fn ($row) => ! in_array($row['grupo'], self::GRUPOS_ADMINISTRATIVOS_FIJOS_V5, true))
             ->filter(fn ($row) => (float) $row['pct_total'] > 100)
             ->values();
 
@@ -2162,7 +2169,7 @@ class IncentivosController extends Controller
         }
 
         $duplicados = $rows
-            ->groupBy(fn ($row) => strtolower($row['grupo'] . '|' . $row['nombre'] . '|' . $row['empresa']))
+            ->groupBy(fn ($row) => strtolower($row['grupo'].'|'.$row['nombre'].'|'.$row['empresa']))
             ->filter(fn ($items) => $items->count() > 1)
             ->keys()
             ->values();
@@ -2182,7 +2189,7 @@ class IncentivosController extends Controller
                 ->all();
 
             IncentivoAdministrativo::query()
-                ->when(!empty($idsPayload), fn ($query) => $query->whereNotIn('id', $idsPayload))
+                ->when(! empty($idsPayload), fn ($query) => $query->whereNotIn('id', $idsPayload))
                 ->delete();
 
             foreach ($rows as $row) {
@@ -2230,7 +2237,7 @@ class IncentivosController extends Controller
             'terminales_manual' => 'nullable|string',
         ]);
 
-        if (!$request->hasFile('file') && trim((string) $request->input('terminales_manual', '')) === '') {
+        if (! $request->hasFile('file') && trim((string) $request->input('terminales_manual', '')) === '') {
             return response()->json([
                 'ok' => false,
                 'message' => 'Debe seleccionar un archivo o escribir al menos una terminal.',
@@ -2242,7 +2249,7 @@ class IncentivosController extends Controller
             $totalFilas = 0;
 
             if ($request->hasFile('file')) {
-                $import = new AgenciasActualizacionMasivaImport();
+                $import = new AgenciasActualizacionMasivaImport;
                 Excel::import($import, $request->file('file'));
 
                 $rows = $import->rows ?? collect();
@@ -2250,6 +2257,7 @@ class IncentivosController extends Controller
                 $terminales = $terminales->merge($rows
                     ->map(function ($rowCollection) {
                         $row = collect($rowCollection)->toArray();
+
                         return $this->valorColumnaReporteNuevoIncentivoV5($row, ['terminal']);
                     })
                     ->filter(fn ($terminal) => trim((string) $terminal) !== '')
@@ -2296,7 +2304,7 @@ class IncentivosController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Error al reconocer terminales: ' . $e->getMessage(),
+                'message' => 'Error al reconocer terminales: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -2320,7 +2328,7 @@ class IncentivosController extends Controller
 
         $terminales = $this->normalizarTerminalesExcluidasReporteNuevoIncentivoV5($request->input('terminales'));
 
-        if (!Schema::hasTable('terminales_excluidas_incentivo')) {
+        if (! Schema::hasTable('terminales_excluidas_incentivo')) {
             return response()->json([
                 'ok' => false,
                 'message' => 'La tabla terminales_excluidas_incentivo no existe. Ejecuta las migraciones pendientes.',
@@ -2363,10 +2371,7 @@ class IncentivosController extends Controller
             ['Terminal'],
         ];
 
-        return Excel::download(new class($data) implements
-            \Maatwebsite\Excel\Concerns\FromArray,
-            \Maatwebsite\Excel\Concerns\WithStyles,
-            \Maatwebsite\Excel\Concerns\ShouldAutoSize
+        return Excel::download(new class($data) implements \Maatwebsite\Excel\Concerns\FromArray, \Maatwebsite\Excel\Concerns\ShouldAutoSize, \Maatwebsite\Excel\Concerns\WithStyles
         {
             protected array $data;
 
@@ -2451,7 +2456,7 @@ class IncentivosController extends Controller
             if (is_array($decoded)) {
                 $rangosPago = collect($decoded)
                     ->map(function ($row) {
-                        if (!is_array($row)) {
+                        if (! is_array($row)) {
                             return null;
                         }
 
@@ -2491,7 +2496,7 @@ class IncentivosController extends Controller
             return strtolower(trim((string) ($empresa ?: 'Sin empresa')));
         };
         $rowKey = function ($cedula, $empresa) use ($empresaKey) {
-            return trim((string) $cedula) . '|' . $empresaKey($empresa);
+            return trim((string) $cedula).'|'.$empresaKey($empresa);
         };
         $normalizarEmpresaNegocio = function ($empresa) {
             $texto = trim((string) $empresa);
@@ -2536,11 +2541,11 @@ class IncentivosController extends Controller
         $buildVentasTerminalQuery = function (string $tabla, string $sistemaLabel, string $desde, string $hasta) use ($terminalesExcluidas) {
             $query = DB::table("{$tabla} as v")
                 ->selectRaw(
-                    "v.cedula,
+                    'v.cedula,
                     v.monto,
                     v.fecha,
                     TRIM(CAST(v.agencia_id AS CHAR)) AS terminal,
-                    ? AS sistema",
+                    ? AS sistema',
                     [$sistemaLabel]
                 )
                 ->whereBetween('v.fecha', [$desde, $hasta])
@@ -2613,7 +2618,7 @@ class IncentivosController extends Controller
         foreach ($rowsUltimoTerminal as $row) {
             $empresa = $resolveEmpresa($row->terminal);
             $key = $rowKey($row->cedula, $empresa);
-            if (!isset($ultimoAgrupado[$key])) {
+            if (! isset($ultimoAgrupado[$key])) {
                 $ultimoAgrupado[$key] = [
                     'cedula' => (string) $row->cedula,
                     'empresa' => $empresa,
@@ -2629,7 +2634,7 @@ class IncentivosController extends Controller
         foreach ($rowsMesActualTerminal as $row) {
             $empresa = $resolveEmpresa($row->terminal);
             $key = $rowKey($row->cedula, $empresa);
-            if (!isset($mesActualAgrupado[$key])) {
+            if (! isset($mesActualAgrupado[$key])) {
                 $mesActualAgrupado[$key] = [
                     'cedula' => (string) $row->cedula,
                     'empresa' => $empresa,
@@ -2642,7 +2647,7 @@ class IncentivosController extends Controller
             $mesActualAgrupado[$key]['dias'][(string) $row->fecha_venta] = true;
 
             if (
-                !isset($ultimaVentaPorKey[$key])
+                ! isset($ultimaVentaPorKey[$key])
                 || strcmp((string) $row->fecha_venta, (string) $ultimaVentaPorKey[$key]['ultimo_dia_venta']) > 0
             ) {
                 $ultimaVentaPorKey[$key] = [
@@ -2729,7 +2734,7 @@ class IncentivosController extends Controller
                 $companyId = $empresaCompanyId($empresa);
             }
 
-            return $cedulaLookupKey($cedula) . '|' . $companyId;
+            return $cedulaLookupKey($cedula).'|'.$companyId;
         };
         $empleadosPorCedula = collect();
         if ($cedulasNormalizadas->isNotEmpty()) {
@@ -2814,7 +2819,7 @@ class IncentivosController extends Controller
                         'empresa' => $resolveEmpresa($row->terminal),
                     ];
                 })
-                ->unique(fn ($row) => $row->cedula . '|' . $row->terminal . '|' . strtolower($row->empresa))
+                ->unique(fn ($row) => $row->cedula.'|'.$row->terminal.'|'.strtolower($row->empresa))
                 ->filter(fn ($row) => isset($qualifiedKeys[$rowKey($row->cedula, $row->empresa)]))
                 ->values();
 
@@ -2865,7 +2870,7 @@ class IncentivosController extends Controller
 
                             return [
                                 'cedula' => $cedulaString,
-                                'usuario' => trim(($employeeNamesByCedula[$cedulaLookup] ?? '') . ' | ' . $empresa),
+                                'usuario' => trim(($employeeNamesByCedula[$cedulaLookup] ?? '').' | '.$empresa),
                                 'incentivo' => (float) ($incentiveByKey[$key] ?? 0),
                             ];
                         })
@@ -2946,7 +2951,7 @@ class IncentivosController extends Controller
             if (is_array($decoded)) {
                 $rangosPago = collect($decoded)
                     ->map(function ($row) {
-                        if (!is_array($row)) {
+                        if (! is_array($row)) {
                             return null;
                         }
 
@@ -3026,11 +3031,11 @@ class IncentivosController extends Controller
         $buildVentasTerminalQuery = function (string $tabla, string $sistemaLabel) use ($fechaIniSeleccionada, $fechaFinSeleccionada, $terminalesExcluidas) {
             $query = DB::table("{$tabla} as v")
                 ->selectRaw(
-                    "v.cedula,
+                    'v.cedula,
                     TRIM(CAST(v.agencia_id AS CHAR)) AS terminal,
                     DATE(v.fecha) AS fecha_venta,
                     SUM(v.monto) AS monto,
-                    ? AS sistema",
+                    ? AS sistema',
                     [$sistemaLabel]
                 )
                 ->whereBetween('v.fecha', [$fechaIniSeleccionada, $fechaFinSeleccionada])
@@ -3083,9 +3088,9 @@ class IncentivosController extends Controller
         $rowsByCedulaEmpresa = [];
         foreach ($ventasRows as $row) {
             $empresa = $empresaByTerminal[trim((string) $row->terminal)] ?? 'Agencias por asignar empresa';
-            $key = trim((string) $row->cedula) . '|' . strtolower($empresa);
+            $key = trim((string) $row->cedula).'|'.strtolower($empresa);
 
-            if (!isset($rowsByCedulaEmpresa[$key])) {
+            if (! isset($rowsByCedulaEmpresa[$key])) {
                 $rowsByCedulaEmpresa[$key] = [
                     'cedula' => trim((string) $row->cedula),
                     'empresa' => $empresa,
@@ -3133,7 +3138,7 @@ class IncentivosController extends Controller
 
         if (isset($payload['data']) && is_array($payload['data'])) {
             foreach ($payload['data'] as &$row) {
-                if (!is_array($row)) {
+                if (! is_array($row)) {
                     continue;
                 }
 
@@ -3176,7 +3181,7 @@ class IncentivosController extends Controller
 
             if (isset($payload['meta']['resumen_empresas']) && is_array($payload['meta']['resumen_empresas'])) {
                 foreach ($payload['meta']['resumen_empresas'] as &$row) {
-                    if (!is_array($row)) {
+                    if (! is_array($row)) {
                         continue;
                     }
 
@@ -3197,7 +3202,7 @@ class IncentivosController extends Controller
 
             if (isset($payload['meta']['coordinador_detalle_usuarios']) && is_array($payload['meta']['coordinador_detalle_usuarios'])) {
                 foreach ($payload['meta']['coordinador_detalle_usuarios'] as &$usuarios) {
-                    if (!is_array($usuarios)) {
+                    if (! is_array($usuarios)) {
                         continue;
                     }
 
@@ -3217,7 +3222,7 @@ class IncentivosController extends Controller
 
     private function agregarHorasTotalesPayloadReporteNuevoIncentivoV5(array $payload, string $fechaIni, string $fechaFin, string $sistema): array
     {
-        if (!isset($payload['data']) || !is_array($payload['data']) || empty($payload['data'])) {
+        if (! isset($payload['data']) || ! is_array($payload['data']) || empty($payload['data'])) {
             return $payload;
         }
 
@@ -3235,7 +3240,7 @@ class IncentivosController extends Controller
         );
 
         foreach ($payload['data'] as &$row) {
-            if (!is_array($row)) {
+            if (! is_array($row)) {
                 continue;
             }
 
@@ -3273,7 +3278,7 @@ class IncentivosController extends Controller
 
     private function terminalesExcluidasIncentivoGuardadas()
     {
-        if (!Schema::hasTable('terminales_excluidas_incentivo')) {
+        if (! Schema::hasTable('terminales_excluidas_incentivo')) {
             return collect();
         }
 
@@ -3320,63 +3325,10 @@ class IncentivosController extends Controller
         return null;
     }
 
-    private function obtenerHorasTotalesReporteNuevoIncentivoV5(string $fechaIni, string $fechaFin, string $sistema, $cedulas)
+    private function obtenerHorasTotalesReporteNuevoIncentivoV5(string $fechaIni, string $fechaFin, string $sistema, $cedulas): \Illuminate\Support\Collection
     {
-        $cedulas = collect($cedulas)
-            ->map(fn ($cedula) => preg_replace('/\D+/', '', (string) $cedula))
-            ->filter()
-            ->unique()
-            ->values();
-
-        if ($cedulas->isEmpty()) {
-            return collect();
-        }
-
-        $queries = [];
-
-        if ($sistema === 'Todos' || $sistema === 'Lotonet') {
-            $queries[] = DB::table('asistencias_net')
-                ->selectRaw("REPLACE(identificacion, '-', '') AS cedula")
-                ->selectRaw('SUM(GREATEST(TIMESTAMPDIFF(SECOND, entrada, salida), 0)) / 3600 AS horas')
-                ->where('entrada', '>=', $fechaIni)
-                ->whereRaw('entrada < DATE_ADD(?, INTERVAL 1 DAY)', [$fechaFin])
-                ->whereNotNull('salida')
-                ->whereIn(DB::raw('CAST(REPLACE(identificacion, "-", "") AS UNSIGNED)'), $cedulas->all())
-                ->groupByRaw("REPLACE(identificacion, '-', '')");
-        }
-
-        if ($sistema === 'Todos' || $sistema === 'Lotobet') {
-            $queries[] = DB::table('asistencias_bet')
-                ->selectRaw("REPLACE(cedula, '-', '') AS cedula")
-                ->selectRaw('SUM(GREATEST(TIMESTAMPDIFF(SECOND, primer_login, ultimo_login), 0)) / 3600 AS horas')
-                ->whereBetween('fecha', [$fechaIni, $fechaFin])
-                ->whereNotNull('primer_login')
-                ->whereNotNull('ultimo_login')
-                ->whereIn(DB::raw('CAST(REPLACE(cedula, "-", "") AS UNSIGNED)'), $cedulas->all())
-                ->groupByRaw("REPLACE(cedula, '-', '')");
-        }
-
-        if (empty($queries)) {
-            return collect();
-        }
-
-        $query = array_shift($queries);
-        foreach ($queries as $unionQuery) {
-            $query->unionAll($unionQuery);
-        }
-
-        return DB::query()
-            ->fromSub($query, 'horas')
-            ->selectRaw('CAST(cedula AS UNSIGNED) AS cedula')
-            ->selectRaw('ROUND(SUM(COALESCE(horas, 0)), 2) AS horas_total')
-            ->groupByRaw('CAST(cedula AS UNSIGNED)')
-            ->get()
-            ->mapWithKeys(function ($row) {
-                $cedula = ltrim(preg_replace('/\D+/', '', (string) $row->cedula), '0');
-                $cedula = $cedula === '' ? '0' : $cedula;
-
-                return [$cedula => (float) $row->horas_total];
-            });
+        return app(ConciliacionHorarioService::class)->totalesPorCedula($fechaIni, $fechaFin, $sistema, collect($cedulas)->all())
+            ->mapWithKeys(fn (float $horas, string $cedula): array => [(ltrim($cedula, '0') ?: '0') => $horas]);
     }
 
     private function enteroMontoReporteNuevoIncentivoV5($value): int
@@ -3545,7 +3497,7 @@ class IncentivosController extends Controller
 
         $empresaId = '%';
         $empresa = $request->input('empresa');
-        if (!empty($empresa)) {
+        if (! empty($empresa)) {
             $empresaId = $empresa;
         }
 
@@ -3566,7 +3518,7 @@ class IncentivosController extends Controller
 
         $tipoId = '%';
         $tipo = $request->input('tipo');
-        if (!empty($tipo)) {
+        if (! empty($tipo)) {
             $tipoId = $tipo;
         }
 
@@ -3596,17 +3548,21 @@ class IncentivosController extends Controller
         // Construir filtro de horas
         $filtroHoras = '';
         if ($horas === '2') {
+            $inicioMes = Carbon::createFromDate((int) $anio, (int) $mes, 1)->startOfMonth();
+            $conciliacion = app(ConciliacionHorarioService::class);
+            $fuenteBet = $conciliacion->fuenteSql('lotobet', $inicioMes->toDateString(), $inicioMes->copy()->endOfMonth()->toDateString());
+            $fuenteNet = $conciliacion->fuenteSql('lotonet', $inicioMes->toDateString(), $inicioMes->copy()->endOfMonth()->toDateString());
             $filtroHoras = "AND EXISTS (
                     SELECT 1 FROM (
                         SELECT combined.cedula AS emp_cedula, SUM(combined.total_horas) AS horas_totales
                         FROM (
-                            SELECT ab.cedula, SUM(TIMESTAMPDIFF(HOUR, ab.primer_login, ab.ultimo_login)) AS total_horas
-                            FROM asistencias_bet ab
+                            SELECT ab.cedula, SUM(COALESCE(ab.segundos_calculados, 0)) / 3600 AS total_horas
+                            FROM {$fuenteBet} ab
                             WHERE YEAR(ab.fecha) = $anio AND MONTH(ab.fecha) = $mes
                             GROUP BY ab.cedula
                             UNION ALL
-                            SELECT an.identificacion AS cedula, SUM(TIMESTAMPDIFF(HOUR, an.entrada, an.salida)) AS total_horas
-                            FROM asistencias_net an
+                            SELECT an.identificacion AS cedula, SUM(COALESCE(an.segundos_calculados, 0)) / 3600 AS total_horas
+                            FROM {$fuenteNet} an
                             WHERE YEAR(an.entrada) = $anio AND MONTH(an.entrada) = $mes
                             GROUP BY an.identificacion
                         ) combined

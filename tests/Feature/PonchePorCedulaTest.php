@@ -171,7 +171,7 @@ class PonchePorCedulaTest extends TestCase
             ->assertJsonPath('1.total_horas', 12.08);
     }
 
-    public function test_exit_allows_five_minutes_after_the_last_sale_in_each_category(): void
+    public function test_exit_preserves_a_later_punch_in_each_category(): void
     {
         DB::table('asistencias_bet')->insert([
             ['fecha' => '2026-10-10', 'agencia_id' => '12', 'cedula' => '40240461497', 'primer_login' => '2026-10-10 08:00:00', 'ultimo_login' => '2026-10-10 17:00:00'],
@@ -187,9 +187,9 @@ class PonchePorCedulaTest extends TestCase
         $this->getJson(route('recursos-humanos.ponche-por-cedula.list', [
             'cedula' => '40240461497', 'sistema' => 'lotobet', 'fecha_inicio' => '2026-10-10', 'fecha_fin' => '2026-10-12',
         ]))->assertOk()
-            ->assertJsonPath('0.salida_calculada', '2026-10-10 17:03:00')
-            ->assertJsonPath('1.salida_calculada', '2026-10-11 17:03:00')
-            ->assertJsonPath('2.salida_calculada', '2026-10-12 17:03:00');
+            ->assertJsonPath('0.salida_calculada', '2026-10-10 17:00:00')
+            ->assertJsonPath('1.salida_calculada', '2026-10-11 17:00:00')
+            ->assertJsonPath('2.salida_calculada', '2026-10-12 17:00:00');
     }
 
     public function test_report_has_its_own_permission_on_both_routes(): void
@@ -552,6 +552,7 @@ global.document = {getElementById(id){return elementos[id];}};
 let consultas = [];
 global.$ = () => ({DataTable(config){consultas.push(config);return {destroy(){}};}});
 global.Swal = {fire(){},close(){},showLoading(){}};
+vm.runInThisContext(fs.readFileSync('public/js/pages/conciliacion-horario.js', 'utf8'));
 vm.runInThisContext(script);
 elementos.btnBuscar.consultar();
 assert.equal(consultas.length,1);

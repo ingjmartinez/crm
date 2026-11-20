@@ -9,6 +9,20 @@ use Tests\TestCase;
 
 class NovedadHorarioDayNameTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $usuario = \Mockery::mock(\App\Models\User::class)->makePartial();
+        $usuario->shouldReceive('can', 'hasRole', 'hasAnyRole')->andReturnFalse();
+        $usuario->setRelation('viewPermissions', collect());
+        $this->actingAs($usuario);
+        \Illuminate\Support\Facades\Schema::create('permissions', function (\Illuminate\Database\Schema\Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+        });
+    }
+
     public function test_detail_modal_formats_the_date_with_its_spanish_day_name(): void
     {
         $this->view('recursos_humanos.novedades_de_horario.index', [

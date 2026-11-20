@@ -288,6 +288,38 @@ class IncentivoV6PeriodoTest extends TestCase
         return $user;
     }
 
+    public function test_saved_hours_are_checked_against_current_punches_and_stale_updates_preserve_the_snapshot(): void
+    {
+        Schema::create('asistencias_bet', function (Blueprint $table): void {
+            $table->id();
+            $table->string('cedula');
+            $table->string('agencia_id');
+            $table->date('fecha');
+            $table->dateTime('primer_login')->nullable();
+            $table->dateTime('ultimo_login')->nullable();
+        });
+        try {
+            \Illuminate\Support\Facades\DB::table('asistencias_bet')->insert([
+                'cedula' => '40211111111', 'agencia_id' => '1001', 'fecha' => '2026-07-15',
+                'primer_login' => '2026-07-15 08:00:00', 'ultimo_login' => '2026-07-15 16:00:00',
+            ]);
+            $payload = $this->payload([$this->detail('40211111111', 1000, 1000)]);
+            $this->actingAs($this->userWithId(7))->withoutMiddleware([Authenticate::class, ForcePasswordChange::class]);
+            $ruta = route('incentivos.reporte-nuevo-incentivo-v6.periodo.guardar');
+            $this->postJson($ruta, $payload)->assertUnprocessable()->assertJsonValidationErrors('detalles.0.horas_total');
+            $this->assertDatabaseCount('incentivo_periodos', 0);
+            $payload['detalles'][0]['horas_total'] = 8;
+            $this->postJson($ruta, $payload)->assertOk();
+            $this->assertDatabaseHas('incentivo_periodo_detalles', ['cedula' => '40211111111', 'horas_total' => 8]);
+            \Illuminate\Support\Facades\DB::table('asistencias_bet')->update(['ultimo_login' => '2026-07-15 17:00:00']);
+            $this->postJson($ruta, $payload)->assertUnprocessable()->assertJsonValidationErrors('detalles.0.horas_total');
+            $this->assertDatabaseHas('incentivo_periodo_detalles', ['cedula' => '40211111111', 'horas_total' => 8]);
+            $this->assertDatabaseHas('incentivo_periodos', ['revision' => 1]);
+        } finally {
+            Schema::dropIfExists('asistencias_bet');
+        }
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $details
      * @return array<string, mixed>

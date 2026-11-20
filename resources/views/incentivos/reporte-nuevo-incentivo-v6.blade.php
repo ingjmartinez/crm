@@ -686,7 +686,7 @@
                                             <th class="col-monto text-end">Ventas Ult. Mes</th>
                                             <th class="col-monto text-end">Ventas Mes Actual</th>
                                             <th class="col-dias text-center">Dias</th>
-                                            <th class="col-horas text-center">Hora Total</th>
+                                            <th class="col-horas text-center" title="Horas calculadas: primer ponche sin cruce; primera venta menos dos minutos si hay cruce o falta la entrada">Hora Total</th>
                                             <th class="col-regla">Cumple Regla</th>
                                             <th class="col-monto text-end">Total a Pagar</th>
                                         </tr>

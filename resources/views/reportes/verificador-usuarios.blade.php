@@ -70,9 +70,9 @@
                                                 <th>Nombres</th>
                                                 <th>Apellidos</th>
                                                 <th>Cédula</th>
-                                                <th class="text-center">Horas NET</th>
-                                                <th class="text-center">Horas BET</th>
-                                                <th class="text-center">Horas Total</th>
+                                                <th class="text-center">Horas calculadas NET</th>
+                                                <th class="text-center">Horas calculadas BET</th>
+                                                <th class="text-center">Horas calculadas total</th>
                                                 <th class="text-center">Faltantes NET</th>
                                                 <th class="text-center">Faltantes BET</th>
                                                 <th class="text-center">Faltantes Total</th>

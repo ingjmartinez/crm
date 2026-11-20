@@ -13,6 +13,7 @@ use App\Models\PagoPorOtraEmpresaNet;
 use App\Models\Premio;
 use App\Models\PremioNet;
 use App\Services\FavoritoCatalogoService;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use App\ViewPermissionCatalog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
@@ -1915,6 +1916,9 @@ class ReporteController extends Controller
         DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'STRICT_TRANS_TABLES',''))");
         DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'NO_ZERO_DATE',''))");
 
+        $conciliacion = app(ConciliacionHorarioService::class);
+        $fuenteBet = $conciliacion->fuenteSql('lotobet', $fechaInicio, $fechaFin);
+        $fuenteNet = $conciliacion->fuenteSql('lotonet', $fechaInicio, $fechaFin);
         $query = "
             SELECT
                 e.empleadoid,
@@ -1957,12 +1961,12 @@ class ReporteController extends Controller
             FROM (
                 -- Cédulas con actividad (normalizadas)
                 SELECT DISTINCT REPLACE(identificacion, '-', '') AS cedula
-                FROM asistencias_net
+                FROM {$fuenteNet} asistencias_net
                 WHERE entrada >= ? AND entrada < DATE_ADD(?, INTERVAL 1 DAY)
 
                 UNION
                 SELECT DISTINCT REPLACE(cedula, '-', '')
-                FROM asistencias_bet
+                FROM {$fuenteBet} asistencias_bet
                 WHERE fecha BETWEEN ? AND ?
 
                 UNION
@@ -1983,10 +1987,10 @@ class ReporteController extends Controller
                 -- Horas NET
                 SELECT
                     REPLACE(identificacion, '-', '') AS cedula,
-                    SUM(GREATEST(TIMESTAMPDIFF(SECOND, entrada, salida), 0)) / 3600 AS horas_net
-                FROM asistencias_net
+                    SUM(COALESCE(segundos_calculados, 0)) / 3600 AS horas_net
+                FROM {$fuenteNet} asistencias_net
                 WHERE entrada >= ? AND entrada < DATE_ADD(?, INTERVAL 1 DAY)
-                  AND salida IS NOT NULL
+                  AND salida_calculada IS NOT NULL
                 GROUP BY REPLACE(identificacion, '-', '')
             ) an ON an.cedula = c.cedula
 
@@ -1994,11 +1998,11 @@ class ReporteController extends Controller
                 -- Horas BET
                 SELECT
                     REPLACE(cedula, '-', '') AS cedula,
-                    SUM(GREATEST(TIMESTAMPDIFF(SECOND, primer_login, ultimo_login), 0)) / 3600 AS horas_bet
-                FROM asistencias_bet
+                    SUM(COALESCE(segundos_calculados, 0)) / 3600 AS horas_bet
+                FROM {$fuenteBet} asistencias_bet
                 WHERE fecha BETWEEN ? AND ?
-                  AND primer_login IS NOT NULL
-                  AND ultimo_login IS NOT NULL
+                  AND entrada_calculada IS NOT NULL
+                  AND salida_calculada IS NOT NULL
                 GROUP BY REPLACE(cedula, '-', '')
             ) ab ON ab.cedula = c.cedula
 
@@ -2079,6 +2083,9 @@ class ReporteController extends Controller
         DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'STRICT_TRANS_TABLES',''))");
         DB::statement("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'NO_ZERO_DATE',''))");
 
+        $conciliacion = app(ConciliacionHorarioService::class);
+        $fuenteBet = $conciliacion->fuenteSql('lotobet', $fechaInicio, $fechaFin);
+        $fuenteNet = $conciliacion->fuenteSql('lotonet', $fechaInicio, $fechaFin);
         $query = "
             SELECT
                 e.empleadoid,
@@ -2111,11 +2118,11 @@ class ReporteController extends Controller
                 END AS comentario
             FROM (
                 SELECT DISTINCT REPLACE(identificacion, '-', '') AS cedula
-                FROM asistencias_net
+                FROM {$fuenteNet} asistencias_net
                 WHERE entrada >= ? AND entrada < DATE_ADD(?, INTERVAL 1 DAY)
                 UNION
                 SELECT DISTINCT REPLACE(cedula, '-', '')
-                FROM asistencias_bet
+                FROM {$fuenteBet} asistencias_bet
                 WHERE fecha BETWEEN ? AND ?
                 UNION
                 SELECT DISTINCT REPLACE(identificacion, '-', '')
@@ -2131,20 +2138,20 @@ class ReporteController extends Controller
             LEFT JOIN (
                 SELECT
                     REPLACE(identificacion, '-', '') AS cedula,
-                    SUM(GREATEST(TIMESTAMPDIFF(SECOND, entrada, salida), 0)) / 3600 AS horas_net
-                FROM asistencias_net
+                    SUM(COALESCE(segundos_calculados, 0)) / 3600 AS horas_net
+                FROM {$fuenteNet} asistencias_net
                 WHERE entrada >= ? AND entrada < DATE_ADD(?, INTERVAL 1 DAY)
-                  AND salida IS NOT NULL
+                  AND salida_calculada IS NOT NULL
                 GROUP BY REPLACE(identificacion, '-', '')
             ) an ON an.cedula = c.cedula
             LEFT JOIN (
                 SELECT
                     REPLACE(cedula, '-', '') AS cedula,
-                    SUM(GREATEST(TIMESTAMPDIFF(SECOND, primer_login, ultimo_login), 0)) / 3600 AS horas_bet
-                FROM asistencias_bet
+                    SUM(COALESCE(segundos_calculados, 0)) / 3600 AS horas_bet
+                FROM {$fuenteBet} asistencias_bet
                 WHERE fecha BETWEEN ? AND ?
-                  AND primer_login IS NOT NULL
-                  AND ultimo_login IS NOT NULL
+                  AND entrada_calculada IS NOT NULL
+                  AND salida_calculada IS NOT NULL
                 GROUP BY REPLACE(cedula, '-', '')
             ) ab ON ab.cedula = c.cedula
             LEFT JOIN (

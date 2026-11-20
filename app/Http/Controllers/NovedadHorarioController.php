@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\NovedadesHorarioExport;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -176,6 +177,9 @@ class NovedadHorarioController extends Controller
 
     private function buildNovedadesHorarioQuery(array $validated, Request $request): array
     {
+        $conciliacion = app(ConciliacionHorarioService::class);
+        $fuenteBet = $conciliacion->fuenteSql('lotobet', $validated['fecha_inicio'], $validated['fecha_fin']);
+        $fuenteNet = $conciliacion->fuenteSql('lotonet', $validated['fecha_inicio'], $validated['fecha_fin']);
         $uniones = [];
         $bindings = [];
         $agenciasPorTerminalSql = "
@@ -240,8 +244,8 @@ class NovedadHorarioController extends Controller
                     DATE(ab.fecha) AS fecha,
                     MIN(ab.primer_login) AS primer_login,
                     MAX(ab.ultimo_login) AS ultimo_login,
-                    ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(ab.primer_login), MAX(ab.ultimo_login)), 0) / 3600, 2) AS horas_acumuladas
-                FROM asistencias_bet ab
+                    ROUND(SUM(COALESCE(ab.segundos_calculados, 0)) / 3600, 2) AS horas_acumuladas
+                FROM {$fuenteBet} ab
                 LEFT JOIN ({$agenciasPorTerminalSql}) at
                     ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(ab.agencia_id AS CHAR))), ''), '0')
                 LEFT JOIN ({$agenciasPorCodigoSql}) aa
@@ -249,8 +253,8 @@ class NovedadHorarioController extends Controller
                 LEFT JOIN ({$empleadosSql}) e
                     ON TRIM(e.cedula) = TRIM(ab.cedula)
                 WHERE ab.fecha >= ? AND ab.fecha < DATE_ADD(?, INTERVAL 1 DAY)
-                  AND ab.primer_login IS NOT NULL
-                  AND ab.ultimo_login IS NOT NULL
+                  AND ab.entrada_calculada IS NOT NULL
+                  AND ab.salida_calculada IS NOT NULL
                   AND CHAR_LENGTH(REPLACE(REPLACE(TRIM(COALESCE(ab.cedula, '')), '-', ''), ' ', '')) >= 9
                 GROUP BY
                     COALESCE(at.empresa, aa.empresa, ''),
@@ -278,8 +282,8 @@ class NovedadHorarioController extends Controller
                     DATE(an.entrada) AS fecha,
                     MIN(an.entrada) AS primer_login,
                     MAX(COALESCE(an.salida, an.salida_inactividad)) AS ultimo_login,
-                    ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(an.entrada), MAX(COALESCE(an.salida, an.salida_inactividad))), 0) / 3600, 2) AS horas_acumuladas
-                FROM asistencias_net an
+                    ROUND(SUM(COALESCE(an.segundos_calculados, 0)) / 3600, 2) AS horas_acumuladas
+                FROM {$fuenteNet} an
                 LEFT JOIN ({$agenciasPorTerminalSql}) at
                     ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(an.agencia AS CHAR))), ''), '0')
                 LEFT JOIN ({$agenciasPorCodigoSql}) aa
@@ -288,7 +292,7 @@ class NovedadHorarioController extends Controller
                     ON TRIM(e.cedula) = TRIM(an.identificacion)
                 WHERE an.entrada >= ? AND an.entrada < DATE_ADD(?, INTERVAL 1 DAY)
                   AND an.entrada IS NOT NULL
-                  AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
+                  AND an.salida_calculada IS NOT NULL
                   AND CHAR_LENGTH(REPLACE(REPLACE(TRIM(COALESCE(an.identificacion, '')), '-', ''), ' ', '')) >= 9
                 GROUP BY
                     COALESCE(at.empresa, aa.empresa, ''),
@@ -503,6 +507,9 @@ class NovedadHorarioController extends Controller
             'empresa' => ['nullable', 'string', 'max:60'],
         ]);
 
+        $conciliacion = app(ConciliacionHorarioService::class);
+        $fuenteBet = $conciliacion->fuenteSql('lotobet', $validated['fecha_inicio'], $validated['fecha_fin']);
+        $fuenteNet = $conciliacion->fuenteSql('lotonet', $validated['fecha_inicio'], $validated['fecha_fin']);
         $uniones = [];
         $bindings = [];
         $agenciasPorTerminalSql = "
@@ -562,8 +569,8 @@ class NovedadHorarioController extends Controller
                     DATE(ab.fecha) AS fecha,
                     MIN(ab.primer_login) AS primer_login,
                     MAX(ab.ultimo_login) AS ultimo_login,
-                    ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(ab.primer_login), MAX(ab.ultimo_login)), 0) / 3600, 2) AS horas_acumuladas
-                FROM asistencias_bet ab
+                    ROUND(SUM(COALESCE(ab.segundos_calculados, 0)) / 3600, 2) AS horas_acumuladas
+                FROM {$fuenteBet} ab
                 LEFT JOIN ({$agenciasPorTerminalSql}) at
                     ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(ab.agencia_id AS CHAR))), ''), '0')
                 LEFT JOIN ({$agenciasPorCodigoSql}) aa
@@ -571,8 +578,8 @@ class NovedadHorarioController extends Controller
                 LEFT JOIN ({$empleadosSql}) e
                     ON TRIM(e.cedula) = TRIM(ab.cedula)
                 WHERE ab.fecha >= ? AND ab.fecha < DATE_ADD(?, INTERVAL 1 DAY)
-                  AND ab.primer_login IS NOT NULL
-                  AND ab.ultimo_login IS NOT NULL
+                  AND ab.entrada_calculada IS NOT NULL
+                  AND ab.salida_calculada IS NOT NULL
                   AND CHAR_LENGTH(REPLACE(REPLACE(TRIM(COALESCE(ab.cedula, '')), '-', ''), ' ', '')) >= 9
                 GROUP BY
                     COALESCE(at.empresa, aa.empresa, ''),
@@ -597,8 +604,8 @@ class NovedadHorarioController extends Controller
                     DATE(an.entrada) AS fecha,
                     MIN(an.entrada) AS primer_login,
                     MAX(COALESCE(an.salida, an.salida_inactividad)) AS ultimo_login,
-                    ROUND(GREATEST(TIMESTAMPDIFF(SECOND, MIN(an.entrada), MAX(COALESCE(an.salida, an.salida_inactividad))), 0) / 3600, 2) AS horas_acumuladas
-                FROM asistencias_net an
+                    ROUND(SUM(COALESCE(an.segundos_calculados, 0)) / 3600, 2) AS horas_acumuladas
+                FROM {$fuenteNet} an
                 LEFT JOIN ({$agenciasPorTerminalSql}) at
                     ON at.terminal_key = COALESCE(NULLIF(TRIM(LEADING '0' FROM TRIM(CAST(an.agencia AS CHAR))), ''), '0')
                 LEFT JOIN ({$agenciasPorCodigoSql}) aa
@@ -607,7 +614,7 @@ class NovedadHorarioController extends Controller
                     ON TRIM(e.cedula) = TRIM(an.identificacion)
                 WHERE an.entrada >= ? AND an.entrada < DATE_ADD(?, INTERVAL 1 DAY)
                   AND an.entrada IS NOT NULL
-                  AND COALESCE(an.salida, an.salida_inactividad) IS NOT NULL
+                  AND an.salida_calculada IS NOT NULL
                   AND CHAR_LENGTH(REPLACE(REPLACE(TRIM(COALESCE(an.identificacion, '')), '-', ''), ' ', '')) >= 9
                 GROUP BY
                     COALESCE(at.empresa, aa.empresa, ''),

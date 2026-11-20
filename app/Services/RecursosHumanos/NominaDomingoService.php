@@ -96,7 +96,9 @@ class NominaDomingoService
         $empleados = $this->empleados($cedulas);
         $agencias = $this->agencias();
 
-        $filas = $claves->map(function (string $clave) use ($ventasAsociadas, $ponches, $empleados, $agencias, $configuracion, $terminalesDobleTurno): array {
+        $conciliacion = app(ConciliacionHorarioService::class);
+        $actividad = $conciliacion->actividad($fecha->toDateString(), $fecha->toDateString());
+        $filas = $claves->map(function (string $clave) use ($ventasAsociadas, $ponches, $empleados, $agencias, $configuracion, $terminalesDobleTurno, $conciliacion, $actividad, $fecha): array {
             $ventaSinPonche = str_starts_with($clave, 'venta:');
             [$terminal, $cedula] = explode('|', $ventaSinPonche ? substr($clave, 6) : $clave, 2);
             $venta = $ventasAsociadas->get($clave);
@@ -106,11 +108,20 @@ class NominaDomingoService
             $ultimaTransaccion = $this->instante($venta['ultima_transaccion'] ?? null);
             $primeraTransaccion = $this->instante($venta['primera_transaccion'] ?? null);
             $salidaAjustada = $salidaPonche !== null && $ultimaTransaccion !== null && $ultimaTransaccion->greaterThanOrEqualTo($salidaPonche);
-            $salidaEfectiva = $this->salidaEfectiva($salidaPonche, $ultimaTransaccion);
+            $contexto = $conciliacion->conciliar(collect([[
+                'fecha' => $fecha->toDateString(), 'terminal' => $terminal, 'cedula' => $cedula, 'usuarios' => $ponche['usuarios'] ?? [],
+                'primer_login' => $entrada?->toDateTimeString(), 'ultimo_login' => $salidaPonche?->toDateTimeString(),
+            ]]), $actividad);
+            $calculo = $conciliacion->resolver($entrada?->toDateTimeString(), $salidaPonche?->toDateTimeString(), $primeraTransaccion?->toDateTimeString(), $ultimaTransaccion?->toDateTimeString(), $contexto['tiene_cruce']);
+            $entradaPonche = $entrada;
+            $entrada = $this->instante($calculo['entrada_calculada']);
+            $salidaEfectiva = $this->instante($calculo['salida_calculada']);
             $incidencia = match (true) {
+                $ponche === null => 'Sin primer login',
                 $entrada === null => 'Sin primer login',
-                $salidaPonche === null => 'Sin último login',
-                $salidaPonche->lessThan($entrada) => 'Último login anterior al primero',
+                $salidaEfectiva === null => 'Sin último login',
+                $salidaEfectiva->lessThan($entrada) => 'Último login anterior al primero',
+                $contexto['tiene_cruce'] => 'Cruce de usuarios: requiere revisión',
                 $primeraTransaccion !== null && $primeraTransaccion->lessThan($entrada) => 'Venta antes del primer login',
                 default => null,
             };
@@ -134,10 +145,13 @@ class NominaDomingoService
                 'origen_identidad' => $ponche !== null ? 'Ponche' : ($nombreMaestra ? 'Maestra de empleados' : 'Usuario de venta sin verificar'),
                 'empresa' => trim((string) ($agencia?->empresa ?? '')) ?: 'Sin empresa',
                 'coordinador' => trim((string) ($agencia?->coordinador_nombre ?? '')) ?: 'Sin coordinador',
+                ...$calculo,
+                'revision' => $contexto['revision'],
+                'entrada_ponche' => $entradaPonche?->toDateTimeString(),
                 'entrada' => $entrada?->toDateTimeString(), 'salida_ponche' => $salidaPonche?->toDateTimeString(),
                 'primera_transaccion' => $primeraTransaccion?->toDateTimeString(), 'ultima_transaccion' => $ultimaTransaccion?->toDateTimeString(),
                 'salida_efectiva' => $salidaEfectiva?->toDateTimeString(),
-                'fuente_salida' => $salidaPonche === null ? 'Sin último login' : ($salidaAjustada ? 'Última venta + 5 minutos' : 'Último login'),
+                'fuente_salida' => $salidaEfectiva === null ? 'Sin último login' : (($salidaPonche === null || $salidaAjustada) ? 'Última venta + 5 minutos' : 'Último login'),
                 'usuario_venta' => $venta['usuario_venta'] ?? null,
                 'tradicional_cantidad' => $venta['tradicional_cantidad'] ?? 0,
                 'tradicional_monto' => $venta['tradicional_monto'] ?? 0.0,
@@ -210,13 +224,9 @@ class NominaDomingoService
 
     public function salidaEfectiva(?Carbon $salidaPonche, ?Carbon $ultimaTransaccion): ?Carbon
     {
-        if ($salidaPonche === null || $ultimaTransaccion === null) {
-            return $salidaPonche;
-        }
+        $calculo = app(ConciliacionHorarioService::class)->resolver(null, $salidaPonche?->toDateTimeString(), null, $ultimaTransaccion?->toDateTimeString(), false);
 
-        return $ultimaTransaccion->greaterThanOrEqualTo($salidaPonche)
-            ? $ultimaTransaccion->copy()->addMinutes(5)
-            : $salidaPonche;
+        return $calculo['salida_calculada'] ? Carbon::parse($calculo['salida_calculada']) : null;
     }
 
     /** @return Collection<int, string> */

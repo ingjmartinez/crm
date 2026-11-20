@@ -7,20 +7,15 @@ use App\Http\Requests\RecursosHumanos\ConsultarNovedadesFeriadosRequest;
 use App\Models\Asistencia;
 use App\Models\AsistenciaNet;
 use App\Models\Empleado;
-use App\Services\RecursosHumanos\NominaDomingoService;
-use Carbon\Carbon;
-use Carbon\CarbonImmutable;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class NovedadesFeriadosController extends Controller
 {
-    public function __construct(private readonly NominaDomingoService $nominaDomingo) {}
+    public function __construct(private readonly ConciliacionHorarioService $conciliacion) {}
 
     public function index(): View
     {
@@ -89,68 +84,17 @@ class NovedadesFeriadosController extends Controller
             ->orderByRaw('CASE WHEN fechasalida IS NULL THEN 0 ELSE 1 END')
             ->get(['cedula', 'empleadoid', 'nombres', 'apellidos', 'idturno'])
             ->groupBy(fn (Empleado $empleado): string => $this->normalizarCedula($empleado->cedula));
-        $ventas = collect();
-        $actividad = collect();
-
-        if (Schema::hasTable('ponche_por_cedula_ventas')) {
-            $actividad = DB::table('ponche_por_cedula_ventas')
-                ->whereBetween('fecha_transaccion', [$filters['fecha_inicio'].' 00:00:00', $filters['fecha_fin'].' 23:59:59'])
-                ->whereNot(fn (QueryBuilder $query): QueryBuilder => $query->where('tipo', 'Recargas')->where('estatus', 'Pendiente'))
-                ->select(['usuario_venta', 'terminal'])
-                ->selectRaw('DATE(fecha_transaccion) AS fecha, MIN(fecha_transaccion) AS primera, MAX(fecha_transaccion) AS ultima, COUNT(*) AS cantidad')
-                ->groupBy('usuario_venta', 'terminal')->groupByRaw('DATE(fecha_transaccion)')
-                ->get()
-                ->map(fn (object $venta): array => [
-                    'cedula' => $this->normalizarCedula($venta->usuario_venta),
-                    'terminal' => $this->normalizarTerminal($venta->terminal),
-                    'fecha' => $venta->fecha,
-                    'primera' => $venta->primera,
-                    'ultima' => $venta->ultima,
-                    'cantidad' => (int) $venta->cantidad,
-                ])
-                ->filter(fn (array $venta): bool => $venta['cedula'] !== '' && $venta['terminal'] !== '')
-                ->groupBy(fn (array $venta): string => $venta['cedula'].'|'.$venta['fecha'].'|'.$venta['terminal'])
-                ->map(fn (Collection $grupo): array => [
-                    ...$grupo->first(),
-                    'primera' => $grupo->min('primera'),
-                    'ultima' => $grupo->max('ultima'),
-                    'cantidad' => $grupo->sum('cantidad'),
-                ]);
-            $ventas = $actividad->map(fn (array $venta): string => $venta['ultima']);
-        }
-
-        $actividadPorTerminal = $actividad->values()->groupBy(fn (array $venta): string => $venta['fecha'].'|'.$venta['terminal']);
+        $actividadPorTerminal = $this->conciliacion->actividad($filters['fecha_inicio'], $filters['fecha_fin']);
 
         $resultados = $rows->groupBy(fn (array $row): string => $row['cedula'].'|'.$row['fecha'].'|'.$row['sistema'])
-            ->map(function ($ponches) use ($empleados, $ventas, $actividadPorTerminal): array {
+            ->map(function ($ponches) use ($empleados, $actividadPorTerminal): array {
                 $cedula = $ponches->first()['cedula'];
                 $fecha = $ponches->first()['fecha'];
                 $empleado = $empleados->get($cedula)?->first();
                 $nombre = trim(($empleado?->nombres ?? '').' '.($empleado?->apellidos ?? '')) ?: 'No identificado';
                 $primero = $ponches->pluck('primer_login')->filter()->min();
                 $ultimo = $ponches->pluck('ultimo_login')->filter()->max();
-                $revision = $this->revisionTransaccional($ponches, $actividadPorTerminal);
-                $entradaCalculada = match (true) {
-                    $revision['estado'] !== 'conflicto' && $primero !== null => CarbonImmutable::parse($primero),
-                    $revision['primera_transaccion'] !== null => CarbonImmutable::parse($revision['primera_transaccion'])->subMinutes(2),
-                    default => null,
-                };
-                $ultimaVenta = $ponches->pluck('terminal')->filter()->unique()
-                    ->map(fn (string $terminal): mixed => $ventas->get($cedula.'|'.$fecha.'|'.$terminal))
-                    ->filter()->max();
-                $salidaCalculada = $this->nominaDomingo->salidaEfectiva(
-                    $ultimo ? Carbon::parse($ultimo) : null,
-                    $ultimaVenta ? Carbon::parse($ultimaVenta) : null
-                );
-                if ($salidaCalculada === null && $ultimaVenta) {
-                    $salidaCalculada = Carbon::parse($ultimaVenta)->addMinutes(5);
-                }
-                $segundos = $primero && $salidaCalculada
-                    ? max(0, CarbonImmutable::parse($primero)->diffInSeconds($salidaCalculada, false))
-                    : 0;
-                $segundosCalculados = $entradaCalculada && $salidaCalculada
-                    ? max(0, $entradaCalculada->diffInSeconds($salidaCalculada, false))
-                    : null;
+                $calculo = $this->conciliacion->conciliar($ponches, $actividadPorTerminal);
 
                 return [
                     'cedula' => $cedula,
@@ -161,66 +105,13 @@ class NovedadesFeriadosController extends Controller
                     'sistema' => $ponches->first()['sistema'],
                     'primer_login' => $primero,
                     'ultimo_login' => $ultimo,
-                    'salida_calculada' => $salidaCalculada?->toDateTimeString(),
-                    'total_horas' => round($segundos / 3600, 2),
-                    'hora_calculada' => $segundosCalculados !== null ? round($segundosCalculados / 3600, 2) : null,
-                    'entrada_calculada' => $entradaCalculada?->toDateTimeString(),
-                    'primera_venta' => $revision['primera_transaccion'],
-                    'revision' => $revision,
+                    ...$calculo,
+                    'total_horas' => $calculo['horas_sistema'],
                 ];
             })
             ->sortBy([['fecha', 'asc'], ['sistema', 'asc'], ['cedula', 'asc']])->values();
 
         return response()->json($resultados);
-    }
-
-    /** @return array{estado: string, motivo: string, primera_transaccion: ?string, ultima_transaccion: ?string, movimientos: int, coincidencias: array<int, array<string, mixed>>} */
-    private function revisionTransaccional(Collection $ponches, Collection $actividadPorTerminal): array
-    {
-        $cedula = $ponches->first()['cedula'];
-        $actividadPropia = collect();
-        $coincidencias = collect();
-
-        foreach ($ponches as $ponche) {
-            if ($ponche['terminal'] === '') {
-                continue;
-            }
-
-            $actividadTerminal = $actividadPorTerminal->get($ponche['fecha'].'|'.$ponche['terminal'], collect());
-            foreach ($actividadTerminal as $actividad) {
-                $clave = $actividad['cedula'].'|'.$actividad['terminal'];
-                if ($actividad['cedula'] === $cedula) {
-                    $actividadPropia->put($clave, $actividad);
-
-                    continue;
-                }
-
-                if ($ponche['primer_login'] && $ponche['ultimo_login']
-                    && $actividad['primera'] <= $ponche['ultimo_login']
-                    && $actividad['ultima'] >= $ponche['primer_login']) {
-                    $coincidencias->put($clave, $actividad);
-                }
-            }
-        }
-
-        $estado = match (true) {
-            $coincidencias->isNotEmpty() => 'conflicto',
-            $actividadPropia->isEmpty() => 'sin_transacciones',
-            default => 'sin_cruce_detectado',
-        };
-
-        return [
-            'estado' => $estado,
-            'motivo' => match ($estado) {
-                'conflicto' => 'El horario registrado se cruza con el intervalo de actividad transaccional de otra cédula en el mismo terminal. Puede existir un relevo que el resumen del ponche no refleja. Requiere revisión del responsable.',
-                'sin_transacciones' => 'No se encontraron transacciones vinculadas a esta cédula y terminal para el día consultado. La ausencia de ventas no demuestra ausencia laboral.',
-                default => 'No se detectó un cruce con la actividad transaccional de otra cédula en los terminales del ponche. Esto no confirma por sí solo la jornada.',
-            },
-            'primera_transaccion' => $actividadPropia->min('primera'),
-            'ultima_transaccion' => $actividadPropia->max('ultima'),
-            'movimientos' => $actividadPropia->sum('cantidad'),
-            'coincidencias' => $coincidencias->sortBy('primera')->values()->all(),
-        ];
     }
 
     private function normalizarCedula(mixed $valor): string

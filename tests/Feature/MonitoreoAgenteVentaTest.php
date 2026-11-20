@@ -20,6 +20,16 @@ class MonitoreoAgenteVentaTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutMiddleware();
+        $usuario = \Mockery::mock(\App\Models\User::class)->makePartial();
+        $usuario->shouldReceive('can', 'hasRole', 'hasAnyRole')->andReturnFalse();
+        $usuario->setRelation('viewPermissions', collect());
+        $this->actingAs($usuario);
+        Schema::create('permissions', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+        });
 
         Carbon::setTestNow('2026-08-12 10:00:00');
         $this->withoutMiddleware([

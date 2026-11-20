@@ -81,78 +81,13 @@
             </div>
         </div>
     </div>
-    <div class="modal fade" id="modalJustificacionFeriado" tabindex="-1" aria-labelledby="tituloJustificacionFeriado" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="tituloJustificacionFeriado">Justificación del horario</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="fw-semibold mb-1" id="revisionEmpleado"></p>
-                    <p class="text-muted small" id="revisionFecha"></p>
-                    <div class="alert alert-warning" id="revisionMotivo"></div>
-                    <dl class="row small mb-0">
-                        <dt class="col-6">Entrada del ponche</dt><dd class="col-6" id="revisionEntrada"></dd>
-                        <dt class="col-6">Salida calculada</dt><dd class="col-6" id="revisionSalida"></dd>
-                        <dt class="col-6">Primera venta</dt><dd class="col-6" id="revisionPrimera"></dd>
-                        <dt class="col-6">Entrada calculada</dt><dd class="col-6" id="revisionEntradaCalculada"></dd>
-                        <dt class="col-6">Hora calculada</dt><dd class="col-6" id="revisionCalculada"></dd>
-                        <dt class="col-6">Última transacción</dt><dd class="col-6" id="revisionUltima"></dd>
-                        <dt class="col-6">Movimientos</dt><dd class="col-6" id="revisionMovimientos"></dd>
-                    </dl>
-                    <div id="revisionCoincidencias"></div>
-                    <p class="text-muted small mt-3 mb-0">Las transacciones identifican actividad de la cuenta. La primera venta no confirma la hora exacta de entrada ni la presencia física. El motivo describe una inconsistencia posible, no una causa comprobada.</p>
-                </div>
-                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>
-            </div>
-        </div>
-    </div>
+    @include('recursos_humanos.partials.conciliacion-horario-modal')
 @endsection
 
 @section('script')
+    <script src="{{ asset('js/pages/conciliacion-horario.js') }}"></script>
     <script>
         let table;
-
-        function formatearHoras(valor) {
-            return valor === null || valor === undefined ? '—' : Number(valor).toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        }
-
-        function escaparTexto(valor) {
-            return String(valor ?? '').replace(/[&<>"']/g, caracter => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[caracter]));
-        }
-
-        function etiquetaRevision(revision) {
-            return {conflicto: 'Revisar cruce', sin_transacciones: 'Sin transacciones', sin_cruce_detectado: 'Ver evidencia'}[revision?.estado] || 'Pendiente';
-        }
-
-        function abrirJustificacion(fila) {
-            const revision = fila.revision;
-            const valores = {
-                revisionEmpleado: `${fila.nombre} · ${fila.cedula}`,
-                revisionFecha: `${fila.fecha} · ${fila.sistema}`,
-                revisionMotivo: revision.motivo,
-                revisionEntrada: fila.primer_login || 'Sin registro',
-                revisionSalida: fila.salida_calculada || 'Sin registro',
-                revisionPrimera: revision.primera_transaccion || 'Sin transacciones',
-                revisionCalculada: formatearHoras(fila.hora_calculada),
-                revisionEntradaCalculada: fila.entrada_calculada || 'Sin entrada disponible',
-                revisionUltima: revision.ultima_transaccion || 'Sin transacciones',
-                revisionMovimientos: revision.movimientos
-            };
-            Object.entries(valores).forEach(([id, valor]) => document.getElementById(id).textContent = valor);
-            document.getElementById('revisionMotivo').className = revision.estado === 'conflicto' ? 'alert alert-warning' : 'alert alert-info';
-            document.getElementById('revisionCoincidencias').innerHTML = revision.coincidencias.length
-                ? '<h6 class="mt-3">Actividad coincidente en el terminal</h6>' + revision.coincidencias.map(actividad => `
-                    <div class="border rounded p-2 mt-2 small">
-                        <strong>Cédula ${escaparTexto(actividad.cedula)}</strong> · Terminal ${escaparTexto(actividad.terminal)}<br>
-                        Primera: ${escaparTexto(actividad.primera)}<br>
-                        Última: ${escaparTexto(actividad.ultima)}<br>
-                        Movimientos: ${escaparTexto(actividad.cantidad)}
-                    </div>`).join('')
-                : '';
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalJustificacionFeriado')).show();
-        }
 
         function cargarDatos() {
             const cedula = document.getElementById('cedula').value.trim();
@@ -196,12 +131,7 @@
                     {data: 'total_horas', className: 'text-end', render: data => data === null ? '—' : Number(data).toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})},
                     {data: 'hora_calculada', className: 'text-end', render: (data, type) => type === 'display' ? formatearHoras(data) : data},
                     {data: 'primera_venta', defaultContent: '—', render: data => data ? data.slice(11) : '—'},
-                    {data: 'revision', render: (data, type) => {
-                        const etiqueta = etiquetaRevision(data);
-                        if (type !== 'display') return data?.motivo || etiqueta;
-                        const estilo = data?.estado === 'conflicto' ? 'btn-warning text-dark fw-semibold shadow-sm' : 'btn-outline-secondary';
-                        return `<button type="button" class="btn btn-sm ${estilo} btn-justificacion" aria-label="Ver justificación del horario">${etiqueta}</button>`;
-                    }}
+                    {data: 'revision', render: renderizarJustificacion}
                 ],
                 autoWidth: false,
                 dom: 'Bfrtip',

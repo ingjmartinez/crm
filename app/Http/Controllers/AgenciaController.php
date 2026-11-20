@@ -12,6 +12,7 @@ use App\Models\AgenciaHorario;
 use App\Models\CentroDeCosto;
 use App\Models\CoordinadorOperador;
 use App\Models\OperadorRuta;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
@@ -1677,22 +1678,10 @@ class AgenciaController extends Controller
 
     private function consolidarAsistenciasPorTerminal(string $fecha): array
     {
-        $bet = DB::table('asistencias_bet')
-            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM agencia_id), ''), '0') as terminal_key")
-            ->selectRaw('primer_login as entrada')
-            ->selectRaw('ultimo_login as salida')
-            ->whereDate('fecha', $fecha)
-            ->get();
-
-        $net = DB::table('asistencias_net')
-            ->selectRaw("COALESCE(NULLIF(TRIM(LEADING '0' FROM agencia), ''), NULLIF(TRIM(LEADING '0' FROM terminal), ''), '0') as terminal_key")
-            ->selectRaw('entrada')
-            ->selectRaw('salida')
-            ->where(function ($q) use ($fecha) {
-                $q->whereDate('entrada', $fecha)
-                    ->orWhereDate('salida', $fecha);
-            })
-            ->get();
+        $diarios = app(ConciliacionHorarioService::class)->consultar($fecha, $fecha);
+        $preparar = fn (array $fila): object => (object) ['terminal_key' => $fila['terminal'], 'entrada' => $fila['entrada_calculada'], 'salida' => $fila['salida_calculada']];
+        $bet = $diarios->where('sistema', 'Lotobet')->map($preparar);
+        $net = $diarios->where('sistema', 'Lotonet')->map($preparar);
 
         $map = [];
 

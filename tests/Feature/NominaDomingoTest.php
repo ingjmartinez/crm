@@ -29,6 +29,7 @@ class NominaDomingoTest extends TestCase
         parent::setUp();
         $this->withoutMiddleware();
         View::share('errors', new ViewErrorBag);
+        $this->autenticarUsuarioParaFiltros();
 
         Schema::create('nomina_domingo_configuraciones', function (Blueprint $table): void {
             $table->id();
@@ -448,7 +449,7 @@ class NominaDomingoTest extends TestCase
         $this->assertSame([100.0, 120.0, 80.0, null], $tendencia['tradicional']);
         $this->assertSame([50.0, 80.0, 70.0, null], $tendencia['no_tradicional']);
         $this->assertSame([0.0, 0.0, 30.0, null], $tendencia['recargas']);
-        $this->assertSame([100.0, 50.0, 100.0, null], $tendencia['cumplimiento']);
+        $this->assertSame([100.0, 0.0, 100.0, null], $tendencia['cumplimiento']);
         $this->assertSame(180.0, $tendencia['total_actual']);
         $this->assertSame(20.0, $tendencia['variacion_ventas']);
         $this->assertSame(0.0, $tendencia['variacion_tradicional']);
@@ -456,8 +457,8 @@ class NominaDomingoTest extends TestCase
         $this->assertSame(300.0, $tendencia['tradicional_mes']);
         $this->assertSame(200.0, $tendencia['no_tradicional_mes']);
         $this->assertSame(30.0, $tendencia['recargas_mes']);
-        $this->assertSame(75.0, $tendencia['cumplimiento_mensual']);
-        $this->assertSame(-33.3, $tendencia['variacion_cumplimiento']);
+        $this->assertSame(50.0, $tendencia['cumplimiento_mensual']);
+        $this->assertSame(-66.7, $tendencia['variacion_cumplimiento']);
 
         $this->get(route('recursos-humanos.nomina-domingo.index', ['fecha' => '2026-09-13', 'consultar' => 1]))
             ->assertOk()
@@ -605,7 +606,8 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('Maestra de empleados', $fila['origen_identidad']);
         $this->assertSame('Sin primer login', $fila['incidencia']);
         $this->assertSame('Revisar', $fila['estatus']);
-        $this->assertSame(0.0, $fila['horas_trabajadas']);
+        $this->assertSame(9.28, $fila['horas_trabajadas']);
+        $this->assertSame('2026-09-13 08:28:00', $fila['entrada_calculada']);
         $this->assertSame(0.0, $fila['monto_pagar']);
         $this->assertSame(100.0, $fila['tradicional_monto']);
         $this->assertSame(50.0, $fila['no_tradicional_monto']);
@@ -1143,7 +1145,7 @@ class NominaDomingoTest extends TestCase
         $this->assertSame('Última venta + 5 minutos', $fila['fuente_salida']);
     }
 
-    public function test_missing_last_login_requires_review_and_does_not_use_last_sale_for_hours(): void
+    public function test_missing_last_login_uses_the_last_sale_plus_five_minutes(): void
     {
         DB::table('nomina_domingo_configuraciones')->insert(['id' => 1, 'horas_requeridas' => 8, 'monto_fijo' => 1500]);
         DB::table('asistencias_bet')->insert([
@@ -1162,11 +1164,11 @@ class NominaDomingoTest extends TestCase
 
         $fila = app(NominaDomingoService::class)->generar(Carbon::parse('2026-09-13'))->first();
 
-        $this->assertSame('Sin último login', $fila['fuente_salida']);
-        $this->assertNull($fila['salida_efectiva']);
-        $this->assertSame(0.0, $fila['horas_trabajadas']);
-        $this->assertSame('Revisar', $fila['estatus']);
-        $this->assertSame(0.0, $fila['monto_pagar']);
+        $this->assertSame('Última venta + 5 minutos', $fila['fuente_salida']);
+        $this->assertSame('2026-09-13 17:46:00', $fila['salida_efectiva']);
+        $this->assertSame(8.27, $fila['horas_trabajadas']);
+        $this->assertSame('Cumple', $fila['estatus']);
+        $this->assertSame(1500.0, $fila['monto_pagar']);
     }
 
     public function test_report_can_filter_employees_by_compliance(): void
@@ -1352,12 +1354,14 @@ JS;
 
     private function autenticarUsuarioParaFiltros(): void
     {
-        Schema::create('permissions', function (Blueprint $table): void {
-            $table->id();
-            $table->string('name');
-            $table->string('guard_name');
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('permissions')) {
+            Schema::create('permissions', function (Blueprint $table): void {
+                $table->id();
+                $table->string('name');
+                $table->string('guard_name');
+                $table->timestamps();
+            });
+        }
         $usuario = Mockery::mock(User::class)->makePartial();
         $usuario->shouldReceive('can')->andReturnFalse();
         $usuario->shouldReceive('hasRole')->andReturnFalse();
@@ -1589,7 +1593,7 @@ JS;
             ->assertSee('class="empleado-sin-maestra"', false)
             ->assertSee('Validar usuario con la maestra de empleados')
             ->assertSee('<td>Empresa Norte</td>', false)
-            ->assertSee('Primer login: 08:00 AM | Último login: 04:00 PM')
+            ->assertSee('Primer ponche: 08:00 AM | Último login: 04:00 PM')
             ->assertSee('columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]');
     }
 

@@ -52,9 +52,9 @@
                     <div class="card-body">
                         <div class="table-responsive">
                             <table id="tablePoncheCedula" class="table table-bordered table-striped align-middle" style="width: 100%;">
-                                <thead><tr><th>Cédula</th><th>Nombre</th><th>Día</th><th>Sistema</th><th>Primer login</th><th>Último login</th><th>Salida calculada</th><th class="text-end">Total de horas</th></tr></thead>
+                                <thead><tr><th>Cédula</th><th>Nombre</th><th>Día</th><th>Sistema</th><th>Primer login</th><th>Último login</th><th>Salida calculada</th><th class="text-end">Horas del sistema</th><th class="text-end">Hora calculada</th><th>Primera venta</th><th>Justificación</th></tr></thead>
                                 <tbody></tbody>
-                                <tfoot><tr><th colspan="7" class="text-end">Total de horas</th><th id="totalHoras" class="text-end">0,00</th></tr></tfoot>
+                                <tfoot><tr><th colspan="7" class="text-end">Horas del sistema</th><th id="totalHoras" class="text-end">0,00</th><th id="totalHorasCalculadas" class="text-end">0,00</th><th></th><th></th></tr></tfoot>
                             </table>
                         </div>
                         <small class="text-muted">Total de registros: <span id="totalRegistros" class="fw-semibold">0</span></small>
@@ -64,9 +64,11 @@
             </div>
         </div>
     </div>
+    @include('recursos_humanos.partials.conciliacion-horario-modal')
 @endsection
 
 @section('script')
+    <script src="{{ asset('js/pages/conciliacion-horario.js') }}"></script>
     <script>
         let table;
 
@@ -107,7 +109,10 @@
                     {data: 'primer_login', defaultContent: '—', render: data => data || '—'},
                     {data: 'ultimo_login', defaultContent: '—', render: data => data || '—'},
                     {data: 'salida_calculada', defaultContent: '—', render: data => data || '—'},
-                    {data: 'total_horas', className: 'text-end', render: data => data === null ? '—' : Number(data).toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    {data: 'total_horas', className: 'text-end', render: data => formatearHoras(data)},
+                    {data: 'hora_calculada', className: 'text-end', render: (data, type) => type === 'display' ? formatearHoras(data) : data},
+                    {data: 'primera_venta', defaultContent: '—', render: data => data ? data.slice(11) : '—'},
+                    {data: 'revision', render: renderizarJustificacion}
                 ],
                 autoWidth: false,
                 dom: 'Bfrtip',
@@ -123,12 +128,17 @@
                 footerCallback: function() {
                     const total = this.api().rows({search: 'applied'}).data().toArray()
                         .reduce((suma, row) => suma + Number(row.total_horas || 0), 0);
-                    document.getElementById('totalHoras').textContent = total.toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    document.getElementById('totalHoras').textContent = formatearHoras(total);
+                    document.getElementById('totalHorasCalculadas').textContent = formatearHoras(this.api().rows().data().toArray().reduce((suma, row) => suma + Number(row.hora_calculada || 0), 0));
                 }
             });
         }
 
         document.getElementById('btnBuscar').addEventListener('click', cargarDatos);
+        document.getElementById('tablePoncheCedula').addEventListener('click', event => {
+            const boton = event.target.closest('.btn-justificacion');
+            if (boton && table) abrirJustificacion(table.row(boton.closest('tr')).data());
+        });
         document.getElementById('cedula').addEventListener('keypress', event => {
             if (event.key === 'Enter') cargarDatos();
         });

@@ -11,6 +11,7 @@ use App\Models\Agencia;
 use App\Models\Empleado;
 use App\Models\MonitoreoTerminalAgenciaPlaza;
 use App\Services\AsistenciaAgenteVentaEndpointService;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\JsonResponse;
@@ -123,11 +124,14 @@ class MonitoreoAgenteVentaController extends Controller
 
         $empleados = $this->empleadosPorCedula($registrosApi->pluck('cedula')->filter()->unique()->values());
         $movimientosVentas = $this->movimientosVentas($registrosApi);
+        $conciliacion = app(ConciliacionHorarioService::class);
+        $fechas = $registrosApi->pluck('fecha')->sort()->values();
+        $actividad = $fechas->isEmpty() ? collect() : $conciliacion->actividad($fechas->first(), $fechas->last());
         $agenciasPlazaIds = MonitoreoTerminalAgenciaPlaza::query()
             ->pluck('agencia_id')
             ->mapWithKeys(fn (int $agenciaId): array => [$agenciaId => true]);
 
-        return $registrosApi->map(function (array $registro) use ($agencias, $empleados, $movimientosVentas, $agenciasPlazaIds): array {
+        return $registrosApi->map(function (array $registro) use ($agencias, $empleados, $movimientosVentas, $agenciasPlazaIds, $conciliacion, $actividad): array {
             /** @var Agencia|null $agencia */
             $agencia = $agencias->get($this->claveAgencia($registro['sistema'], $registro['terminal']))?->first();
             $empresa = trim((string) ($agencia?->empresa ?? '')) ?: 'Sin empresa';
@@ -148,9 +152,17 @@ class MonitoreoAgenteVentaController extends Controller
                 : '';
             $entrada = $this->formatearPonche($registro['entrada'] ?? null, $registro['fecha']);
             $validacionPonches = $this->validarSalidaConMovimientos($registro, $movimientosVentas);
+            $calculo = $conciliacion->registroApi($registro, $registro['fecha'], $actividad);
+            if ($calculo['primera_venta'] !== null) {
+                $entrada = $this->formatearPonche($calculo['entrada_calculada'], $registro['fecha']);
+                $validacionPonches['salida'] = $this->formatearPonche($calculo['salida_calculada'], $registro['fecha']);
+                $validacionPonches['observacion'] = $calculo['revision']['motivo'];
+                $validacionPonches['estado'] = $calculo['tiene_cruce'] ? 'PENDIENTE DE VALIDACIÓN' : $this->estadoPonche($entrada, $validacionPonches['salida']);
+            }
 
             return [
                 'fecha' => Carbon::parse($registro['fecha'])->format('d/m/Y'),
+                ...$calculo,
                 'fecha_iso' => $registro['fecha'],
                 'sistema' => $registro['sistema'],
                 'cedula' => $cedula,

@@ -2,14 +2,14 @@
 
 namespace App\Exports;
 
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class VerificadorUsuariosExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles
+class VerificadorUsuariosExport implements FromCollection, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
 {
     protected $registros;
 
@@ -30,9 +30,9 @@ class VerificadorUsuariosExport implements FromCollection, WithHeadings, WithMap
             'Nombres',
             'Apellidos',
             'Cédula',
-            'Horas NET',
-            'Horas BET',
-            'Horas Total',
+            'Horas Calculadas NET',
+            'Horas Calculadas BET',
+            'Horas Calculadas Total',
             'Cant. Faltantes NET',
             'Cant. Faltantes BET',
             'Cant. Faltantes Total',

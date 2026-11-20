@@ -12,16 +12,14 @@ use App\Http\Requests\RecursosHumanos\SubirPonchePorCedulaFragmentoRequest;
 use App\Models\Asistencia;
 use App\Models\AsistenciaNet;
 use App\Models\Empleado;
-use App\Services\RecursosHumanos\NominaDomingoService;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use App\Services\RecursosHumanos\NominaDomingoVentasImportService;
 use App\Services\RecursosHumanos\PonchePorCedulaCargaTemporal;
 use Carbon\Carbon;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -31,7 +29,7 @@ use Throwable;
 class PonchePorCedulaController extends Controller
 {
     public function __construct(
-        private readonly NominaDomingoService $nominaDomingo,
+        private readonly ConciliacionHorarioService $conciliacion,
         private readonly NominaDomingoVentasImportService $ventasImport,
     ) {}
 
@@ -223,37 +221,15 @@ class PonchePorCedulaController extends Controller
                 ->first(['nombres', 'apellidos'])
             : null;
         $nombre = trim(($empleado?->nombres ?? '').' '.($empleado?->apellidos ?? '')) ?: 'No identificado';
-        $fechas = $rows->pluck('fecha')->unique()->values();
-        $ventas = collect();
-        if ($fechas->isNotEmpty() && Schema::hasTable('ponche_por_cedula_ventas')) {
-            foreach ($fechas as $fecha) {
-                $ventas = $ventas->concat(DB::table('ponche_por_cedula_ventas')
-                    ->whereDate('fecha_transaccion', $fecha)
-                    ->whereRaw("REPLACE(REPLACE(usuario_venta, '-', ''), ' ', '') = ?", [$cedula])
-                    ->get(['terminal', 'fecha_transaccion', 'tipo', 'estatus'])
-                    ->reject(fn (object $venta): bool => $venta->tipo === 'Recargas' && $venta->estatus === 'Pendiente')
-                    ->map(fn (object $venta): array => [
-                        'fecha' => $fecha,
-                        'terminal' => $this->normalizarClave($venta->terminal),
-                        'fecha_transaccion' => $venta->fecha_transaccion,
-                    ]));
-            }
-        }
+        $conciliacion = $this->conciliacion;
+        $actividad = $conciliacion->actividad($filters['fecha_inicio'], $filters['fecha_fin']);
 
         $resultados = $rows->groupBy(fn (array $row): string => $row['fecha'].'|'.$row['sistema'])
-            ->map(function ($ponches) use ($cedula, $nombre, $ventas): array {
+            ->map(function ($ponches) use ($cedula, $nombre, $conciliacion, $actividad): array {
                 $primero = $ponches->pluck('primer_login')->filter()->min();
                 $ultimo = $ponches->pluck('ultimo_login')->filter()->max();
                 $fecha = $ponches->first()['fecha'];
-                $terminales = $ponches->pluck('terminal')->filter()->unique();
-                $ultimaVenta = $ventas->where('fecha', $fecha)->whereIn('terminal', $terminales)->max('fecha_transaccion');
-                $salidaCalculada = $this->nominaDomingo->salidaEfectiva(
-                    $ultimo ? Carbon::parse($ultimo) : null,
-                    $ultimaVenta ? Carbon::parse($ultimaVenta) : null
-                );
-                $segundos = $primero && $salidaCalculada
-                    ? max(0, CarbonImmutable::parse($primero)->diffInSeconds($salidaCalculada, false))
-                    : 0;
+                $calculo = $conciliacion->conciliar($ponches->map(fn (array $ponche): array => [...$ponche, 'cedula' => $cedula]), $actividad);
 
                 return [
                     'cedula' => $cedula,
@@ -262,8 +238,8 @@ class PonchePorCedulaController extends Controller
                     'sistema' => $ponches->first()['sistema'],
                     'primer_login' => $primero,
                     'ultimo_login' => $ultimo,
-                    'salida_calculada' => $salidaCalculada?->toDateTimeString(),
-                    'total_horas' => round($segundos / 3600, 2),
+                    ...$calculo,
+                    'total_horas' => $calculo['horas_sistema'],
                 ];
             })
             ->sortBy([['fecha', 'asc'], ['sistema', 'asc']])

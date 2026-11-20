@@ -70,7 +70,7 @@ class NominaDomingoController extends Controller
         }
 
         $resumenCoordinadores = $this->service->resumenCoordinadores($filas);
-        $filasSinEntrada = $filas->whereNull('entrada')->values();
+        $filasSinEntrada = $filas->filter(fn (array $fila): bool => array_key_exists('entrada_ponche', $fila) ? $fila['entrada_ponche'] === null : $fila['entrada'] === null)->values();
         $totalSinEntrada = $filasSinEntrada->count();
         $totalConEntrada = $filas->count() - $totalSinEntrada;
         $totalIncidencias = $filas->where('estatus', 'Revisar')->count();

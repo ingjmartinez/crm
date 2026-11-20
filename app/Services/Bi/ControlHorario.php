@@ -8,18 +8,16 @@ use App\Models\AsistenciaNet;
 use App\Models\BiHorario;
 use App\Models\Empleado;
 use App\Services\AsistenciaAgenteVentaEndpointService;
-use App\Services\RecursosHumanos\NominaDomingoService;
-use Carbon\Carbon;
+use App\Services\RecursosHumanos\ConciliacionHorarioService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class ControlHorario
 {
     public function __construct(
-        private readonly NominaDomingoService $nominaDomingo,
+        private readonly ConciliacionHorarioService $conciliacion,
         private readonly AsistenciaAgenteVentaEndpointService $asistenciasEnVivo,
     ) {}
 
@@ -42,9 +40,10 @@ class ControlHorario
             ->keyBy(fn (Agencia $agencia): string => $this->clave($agencia->terminal));
 
         $this->asistenciasEnVivo->prepararAcceso($filters['sistema']);
+        $actividad = $this->conciliacion->actividad($fecha, $fecha);
         $ponches = collect($this->asistenciasEnVivo->consultar($fecha, $filters['sistema']))
             ->filter(fn (array $row): bool => $agencias->has($this->clave($row['terminal'] ?? '')))
-            ->map(function (array $row) use ($fecha): array {
+            ->map(function (array $row) use ($fecha, $actividad): array {
                 try {
                     $valor = (string) ($row['entrada'] ?? '');
                     $entrada = $valor === '' ? null : CarbonImmutable::parse(
@@ -54,7 +53,9 @@ class ControlHorario
                     $entrada = null;
                 }
 
-                return [...$row, 'entrada_fecha' => $entrada?->toDateTimeString()];
+                $calculo = $this->conciliacion->registroApi($row, $fecha, $actividad);
+
+                return [...$row, ...$calculo, 'entrada_ponche' => $entrada?->toDateTimeString(), 'entrada_fecha' => $calculo['entrada_calculada']];
             })
             ->filter(fn (array $row): bool => $row['entrada_fecha'] !== null
                 && substr($row['entrada_fecha'], 0, 10) === $fecha
@@ -144,25 +145,16 @@ class ControlHorario
             ->unique(fn (Empleado $empleado): string => $this->documento($empleado->cedula))
             ->keyBy(fn (Empleado $empleado): string => $this->documento($empleado->cedula));
 
-        $ventas = Schema::hasTable('ponche_por_cedula_ventas') && $rows->isNotEmpty()
-            ? DB::table('ponche_por_cedula_ventas')
-                ->whereBetween('fecha_transaccion', [$filters['desde'].' 00:00:00', $filters['hasta'].' 23:59:59'])
-                ->whereIn(DB::raw("REPLACE(REPLACE(usuario_venta, '-', ''), ' ', '')"), $cedulas->all())
-                ->get(['terminal', 'usuario_venta', 'fecha_transaccion', 'tipo', 'estatus'])
-                ->reject(fn (object $venta): bool => $venta->tipo === 'Recargas' && $venta->estatus === 'Pendiente')
-                ->groupBy(fn (object $venta): string => substr($venta->fecha_transaccion, 0, 10).'|'.$this->documento($venta->usuario_venta).'|'.$this->clave($venta->terminal))
-            : collect();
+        $conciliacion = $this->conciliacion;
+        $actividad = $conciliacion->actividad($filters['desde'], $filters['hasta']);
 
         return $rows->groupBy(fn (array $row): string => $row['fecha'].'|'.$row['cedula'].'|'.$row['sistema'].'|'.$row['terminal'])
-            ->map(function (Collection $ponches) use ($agencias, $empleados, $ventas, $horarios, $filters): array {
+            ->map(function (Collection $ponches) use ($agencias, $empleados, $conciliacion, $actividad, $horarios, $filters): array {
                 $row = $ponches->first();
                 $primero = $ponches->pluck('primer_login')->filter()->min();
                 $ultimo = $ponches->pluck('ultimo_login')->filter()->max();
-                $ultimaVenta = $ventas->get($row['fecha'].'|'.$row['cedula'].'|'.$row['terminal'], collect())->max('fecha_transaccion');
-                $salida = $this->nominaDomingo->salidaEfectiva(
-                    $ultimo ? Carbon::parse($ultimo) : null,
-                    $ultimaVenta ? Carbon::parse($ultimaVenta) : null
-                );
+                $calculo = $conciliacion->conciliar($ponches, $actividad);
+                $salida = $calculo['salida_calculada'] ? CarbonImmutable::parse($calculo['salida_calculada']) : null;
                 $horario = $horarios->get('empleado_terminal:'.$row['cedula'].':'.$row['terminal'])
                     ?? $horarios->get('empleado:'.$row['cedula'].':')
                     ?? $horarios->get('terminal::'.$row['terminal']);
@@ -170,7 +162,7 @@ class ControlHorario
                 $horaSalida = $horario?->salida ?? $filters['salida'];
                 $entradaProgramada = CarbonImmutable::parse($row['fecha'].' '.$horaEntrada);
                 $salidaProgramada = CarbonImmutable::parse($row['fecha'].' '.$horaSalida);
-                $entradaReal = $primero ? CarbonImmutable::parse($primero) : null;
+                $entradaReal = $calculo['entrada_calculada'] ? CarbonImmutable::parse($calculo['entrada_calculada']) : null;
                 $empleado = $empleados->get($row['cedula']);
                 $agencia = $agencias->get($row['terminal']);
 
@@ -183,8 +175,8 @@ class ControlHorario
                     'horario_salida' => $horaSalida,
                     'horario_tipo' => $horario?->tipo ?? 'general',
                     'primer_login' => $primero, 'ultimo_login' => $ultimo,
-                    'salida_calculada' => $salida?->toDateTimeString(),
-                    'total_horas' => $entradaReal && $salida ? round(max(0, $entradaReal->diffInSeconds($salida, false)) / 3600, 2) : 0,
+                    ...$calculo,
+                    'total_horas' => $calculo['hora_calculada'] ?? 0,
                     'minutos_entrada' => $entradaReal ? (int) round($entradaProgramada->diffInMinutes($entradaReal, false)) : null,
                     'minutos_salida' => $salida ? (int) round($salidaProgramada->diffInMinutes($salida, false)) : null,
                 ];

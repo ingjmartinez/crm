@@ -12,14 +12,13 @@ use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class NovedadesHorarioExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithColumnFormatting
+class NovedadesHorarioExport implements FromCollection, ShouldAutoSize, WithColumnFormatting, WithHeadings, WithMapping, WithStyles
 {
     public function __construct(
         private Collection $rows,
         private float $horasRequeridas,
         private float $valorHora
-    ) {
-    }
+    ) {}
 
     public function collection()
     {
@@ -37,7 +36,7 @@ class NovedadesHorarioExport implements FromCollection, WithHeadings, WithMappin
             'Fecha',
             'Primer Login',
             'Ultimo Login',
-            'Horas Acumuladas',
+            'Horas Calculadas',
             'Detalle',
             'Horas Faltantes',
             'Monto Falta',
