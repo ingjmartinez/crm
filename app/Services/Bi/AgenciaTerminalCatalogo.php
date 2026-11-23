@@ -3,6 +3,7 @@
 namespace App\Services\Bi;
 
 use App\Models\Agencia;
+use App\Models\BiVentaHora;
 use App\Models\BiVentaSnapshot;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -47,6 +48,38 @@ class AgenciaTerminalCatalogo
                 'terminal' => ltrim(trim((string) $agencia->terminal), '0') ?: '0',
                 'nombre' => (string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $agencia->terminal),
             ])->unique('terminal')->sortBy('terminal', SORT_NATURAL)->values()->all();
+    }
+
+    /** @return array<int, array{terminal: string, nombre: string}>|null */
+    public function sinVentas(?BiVentaHora $lectura, ?string $zona = null, ?string $empresa = null, ?string $ruta = null): ?array
+    {
+        if ($lectura?->productos_terminales === null) {
+            return null;
+        }
+
+        $ventasPorTerminal = $lectura->productos_terminales;
+
+        return Agencia::lotobet()->where('estatus', 1)
+            ->when($zona, fn (Builder $query): Builder => $query->where('zona', $zona))
+            ->when($empresa, fn (Builder $query): Builder => $query->where('empresa', $empresa))
+            ->when($ruta, fn (Builder $query): Builder => $query->where('ruta', $ruta))
+            ->whereNotNull('terminal')->whereRaw("TRIM(terminal) <> ''")
+            ->orderBy('id')->get(['terminal', 'nombre_agencia', 'agencia'])
+            ->map(fn (Agencia $agencia): array => [
+                'terminal' => ltrim(trim((string) $agencia->terminal), '0') ?: '0',
+                'nombre' => (string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $agencia->terminal),
+            ])->unique('terminal')
+            ->filter(function (array $agencia) use ($ventasPorTerminal): bool {
+                $ventaLoterias = 0.0;
+                foreach ($ventasPorTerminal[$agencia['terminal']] ?? [] as $producto => $monto) {
+                    $categoria = $this->clasificador->categoria(['producto_id' => (string) $producto]);
+                    if (in_array($categoria, ['tradicional', 'no_tradicional', 'externas'], true)) {
+                        $ventaLoterias += (float) $monto;
+                    }
+                }
+
+                return $ventaLoterias <= 0;
+            })->sortBy('terminal', SORT_NATURAL)->values()->all();
     }
 
     public function ultimaActualizacion(): ?string

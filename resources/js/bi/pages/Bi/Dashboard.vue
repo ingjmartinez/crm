@@ -51,7 +51,17 @@ const props = defineProps({
     gruposDisponibles: { type: Array, default: () => [] },
     alertasProductos: { type: Array, default: () => [] },
     terminalesLimites: { type: Array, default: () => [] },
+    terminalesSinVentas: { type: Array, default: null },
 });
+
+const terminalesSinVentasDialog = ref(null);
+const busquedaSinVentas = ref('');
+const terminalesSinVentasFiltradas = computed(() => (props.terminalesSinVentas ?? []).filter((row) =>
+    `${row.terminal} ${row.nombre}`.toLocaleLowerCase('es').includes(busquedaSinVentas.value.trim().toLocaleLowerCase('es'))));
+function abrirTerminalesSinVentas() {
+    busquedaSinVentas.value = '';
+    terminalesSinVentasDialog.value?.showModal();
+}
 
 const tabs = [
     { key: 'dashboard', name: 'Dashboard', color: 'blue' },
@@ -211,7 +221,7 @@ function cerrarComparativo() {
 }
 
 function handleModalKeydown(event) {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !terminalesSinVentasDialog.value?.open) {
         cerrarComparativo();
         if (terminalesAl80Abierto.value) cerrarTerminalesAl80();
     }
@@ -230,7 +240,7 @@ onMounted(() => {
                 desde: from.value,
                 hasta: until.value,
             }, {
-                only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos', 'promediosHistoricos', 'terminales', 'horaVentasCatalogo'],
+                only: ['lecturasPorHora', 'lecturasSemanaAnterior', 'rutasConMasVenta', 'indicadores', 'quinielaLotekaHoy', 'megaChanceHoy', 'alertasProductos', 'promediosHistoricos', 'terminales', 'horaVentasCatalogo', 'terminalesSinVentas'],
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
@@ -748,9 +758,10 @@ function recalcularVentas() {
                         <div v-for="card in asideCards" :key="card.name" class="bi-panel bi-stat">
                             <span>{{ card.name }}</span><strong :class="card.color">{{ card.value }}</strong><small>{{ card.detail }}</small>
                         </div>
-                        <div class="bi-panel bi-stat">
+                        <button type="button" class="bi-panel bi-stat bi-zero-sales-card" aria-haspopup="dialog" @click="abrirTerminalesSinVentas">
                             <span>VENTAS 0</span><strong class="red">{{ indicadores.terminalesSinVenta === null ? '—' : formatNumber(indicadores.terminalesSinVenta) }}</strong><small>Sin venta de loterías LotoBet · última lectura</small>
-                        </div>
+                            <span class="bi-day-card-hint">Ver terminales ›</span>
+                        </button>
                         <div class="bi-panel bi-stat bi-agency-percent">
                             <span>TERMINALES %</span><small>Con venta por categoría · última lectura</small>
                             <div v-for="category in coverageCards" :key="category.name" class="bi-agency-percent-row">
@@ -854,6 +865,26 @@ function recalcularVentas() {
             </template>
             <template v-else><div class="bi-heading"><h1>Métricas — {{ alcancePanel }}</h1><p>Indicadores comparativos del período seleccionado.</p></div><div class="bi-kpi-grid four"><div v-for="metric in metrics" :key="metric.name" class="bi-panel bi-stat"><span>{{ metric.name.toUpperCase() }}</span><strong :class="metric.color">{{ metric.value }}</strong><small>{{ metric.change }}</small></div></div><section class="bi-panel bi-chart-panel"><div class="bi-title"><h2>EVOLUCIÓN DE INDICADORES</h2></div><span v-if="!filtroActivo" class="bi-demo-label">Gráfico ilustrativo pendiente de datos comparativos</span><div v-if="!filtroActivo" class="bi-bars-chart"><div v-for="(height, index) in sales" :key="index" class="bi-bar-set"><div class="bi-bars"><div class="bi-bar sales" :style="{ height: `${height}%` }"></div><div class="bi-bar prizes" :style="{ height: `${prizes[index]}%` }"></div></div><small>{{ dates[index] }}</small></div></div></section></template>
         </main>
+        <dialog ref="terminalesSinVentasDialog" class="bi-comparison-modal bi-zero-sales-modal" aria-labelledby="bi-zero-sales-title" aria-describedby="bi-zero-sales-description">
+            <div class="bi-comparison-header">
+                <h2 id="bi-zero-sales-title">Terminales sin ventas</h2>
+                <button type="button" aria-label="Cerrar terminales sin ventas" autofocus @click="terminalesSinVentasDialog.close()">×</button>
+            </div>
+            <p id="bi-zero-sales-description" class="bi-comparison-note">{{ alcancePanel }} · {{ fechaLecturas }} · Lectura {{ indicadores.horaLectura === null ? 'pendiente' : `${String(indicadores.horaLectura).padStart(2, '0')}:00` }}. Agencias activas LotoBet sin venta de loterías tradicionales, no tradicionales ni externas.</p>
+            <template v-if="terminalesSinVentas !== null">
+                <label class="bi-zero-sales-search">Buscar terminal o nombre
+                    <input v-model="busquedaSinVentas" type="search" placeholder="Terminal o nombre de agencia">
+                </label>
+                <p class="bi-comparison-note" aria-live="polite">{{ formatNumber(terminalesSinVentasFiltradas.length) }} de {{ formatNumber(terminalesSinVentas.length) }} terminales</p>
+                <div v-if="terminalesSinVentasFiltradas.length" class="bi-comparison-scroll">
+                    <table><thead><tr><th scope="col">Terminal</th><th scope="col">Nombre de agencia</th></tr></thead>
+                        <tbody><tr v-for="row in terminalesSinVentasFiltradas" :key="row.terminal"><td><b>{{ row.terminal }}</b></td><td>{{ row.nombre }}</td></tr></tbody>
+                    </table>
+                </div>
+                <p v-else class="bi-caption">{{ busquedaSinVentas.trim() ? 'No hay coincidencias con la búsqueda.' : 'Todas las terminales activas tienen ventas de loterías.' }}</p>
+            </template>
+            <p v-else class="bi-caption">El detalle de terminales no está disponible. Espera la próxima lectura de ventas.</p>
+        </dialog>
         <div v-if="terminalesAl80Abierto" class="bi-modal-backdrop" @click.self="cerrarTerminalesAl80">
             <section class="bi-comparison-modal" role="dialog" aria-modal="true" aria-labelledby="bi-terminales-limites-title">
                 <div class="bi-comparison-header"><h2 id="bi-terminales-limites-title">Terminales al 80 % del límite · {{ totalTerminalesAl80 }}</h2><button ref="cerrarTerminalesAl80Button" type="button" aria-label="Cerrar listado de terminales" @click="cerrarTerminalesAl80">×</button></div>
@@ -874,6 +905,17 @@ function recalcularVentas() {
 </template>
 
 <style scoped>
+.bi-zero-sales-card { width: 100%; border: 0; text-align: left; cursor: pointer; }
+.bi-zero-sales-card:hover, .bi-zero-sales-card:focus-visible { outline: 2px solid #e51a48; outline-offset: 2px; }
+.bi-zero-sales-modal { margin: auto; width: min(640px, calc(100% - 24px)); max-height: 85dvh; box-sizing: border-box; }
+.bi-zero-sales-modal::backdrop { background: #08242cb5; }
+.bi-zero-sales-modal table { width: 100%; min-width: 0; table-layout: fixed; }
+.bi-zero-sales-modal th:first-child { width: 30%; }
+.bi-zero-sales-modal th, .bi-zero-sales-modal td { overflow-wrap: anywhere; text-align: left; }
+.bi-zero-sales-modal th:not(:first-child), .bi-zero-sales-modal td:not(:first-child) { text-align: left; }
+.bi-zero-sales-search { display: grid; gap: 8px; color: #153e50; font-size: 13px; }
+.bi-zero-sales-search input { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cce5ef; border-radius: 8px; font: inherit; }
+@media (max-width: 480px) { .bi-zero-sales-modal { padding: 16px; } }
 .bi-limit-card { width: 100%; border: 0; text-align: left; cursor: pointer; }
 .bi-limit-card:hover, .bi-limit-card:focus-visible { outline: 2px solid #d69e27; outline-offset: 2px; }
 .bi-catalog-search { display: flex; gap: 8px; flex-wrap: wrap; }

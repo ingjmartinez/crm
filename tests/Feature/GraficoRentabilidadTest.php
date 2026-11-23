@@ -469,9 +469,11 @@ class GraficoRentabilidadTest extends TestCase
         $this->assertStringNotContainsString('informe-ejecutivo', $contenido);
         $this->assertStringContainsString('Ventas mensuales por producto', $contenido);
         $this->assertStringContainsString('id="graficoVentasPorProducto"', $contenido);
-        $this->assertStringContainsString('Promedio diario de ventas por terminal', $contenido);
+        $this->assertStringContainsString('Promedio de venta del mes', $contenido);
         $this->assertStringContainsString('id="graficoPromedioVentasTerminal"', $contenido);
-        $this->assertStringContainsString('incluidos los días sin ventas', $contenido);
+        $this->assertStringContainsString('terminales seleccionadas', $contenido);
+        $this->assertStringNotContainsString('buscarPromedioVentasTerminal', $contenido);
+        $this->assertStringNotContainsString('paginacionPromedioVentasTerminal', $contenido);
         $this->assertStringContainsString('libs/apexcharts/apexcharts.min.js', $contenido);
         $this->assertStringContainsString('distributed: false', $contenido);
         $this->assertStringContainsString('series: ventasMensuales.series', $contenido);
@@ -692,14 +694,8 @@ get('filtrarRentabilidadGrafico').eventos.click();
 const norte = get('totalVentasProductosRentabilidad').textContent;
 const graficoPromedios = graficos.get(get('graficoPromedioVentasTerminal'));
 const promedioNorte = graficoPromedios.opciones.series[0].data[0];
-get('buscarPromedioVentasTerminal').value = 'Sin coincidencias';
-get('buscarPromedioVentasTerminal').eventos.input();
-const sinCoincidenciasPromedio = get('graficoPromedioVentasTerminal').classList.contains('d-none');
-get('buscarPromedioVentasTerminal').value = '1001';
-get('buscarPromedioVentasTerminal').eventos.input();
-const busquedaPromedio = graficoPromedios.opciones.xaxis.categories;
-get('buscarPromedioVentasTerminal').value = '';
-get('buscarPromedioVentasTerminal').eventos.input();
+const categoriasPromedio = graficoPromedios.opciones.xaxis.categories;
+const barrasPromedio = graficoPromedios.opciones.series[0].data.length;
 pagos[1].checked = true;
 pagos[1].eventos.change();
 const metas = graficos.get(get('graficoMetrica-meta_venta')).opciones.series;
@@ -714,7 +710,7 @@ const resumenOcultoAlFiltrar = get('tarjetaResumenRentabilidad').classList.conta
 get('mesRentabilidadGrafico').value = '2026-10';
 get('mesRentabilidadGrafico').eventos.input();
 get('filtrarRentabilidadGrafico').eventos.click();
-const resultado = { sur, vacio, norte, promedioNorte, sinCoincidenciasPromedio, busquedaPromedio, metas, diarios, gastosGrafico, balanceGrafico, resumenOcultoInicial, resumenVisible, resumenOcultoSinTerminales, resumenVisibleAlFiltrar, resumenOcultoAlFiltrar, deshabilitado: get('filtrarRentabilidadGrafico').disabled, sinCambio: get('totalVentasProductosRentabilidad').textContent === norte };
+const resultado = { sur, vacio, norte, promedioNorte, categoriasPromedio, barrasPromedio, metas, diarios, gastosGrafico, balanceGrafico, resumenOcultoInicial, resumenVisible, resumenOcultoSinTerminales, resumenVisibleAlFiltrar, resumenOcultoAlFiltrar, deshabilitado: get('filtrarRentabilidadGrafico').disabled, sinCambio: get('totalVentasProductosRentabilidad').textContent === norte };
 const graficoBalance = graficos.get(get('graficoMetrica-balance'));
 resultado.coloresBalance = [-1, -0.01, 0, 1].map((importe) => graficoBalance.rangosColor.find((rango) => importe >= rango.from && importe <= rango.to)?.color || 'normal');
 resultado.coloresVentasSinCambios = grafico.rangosColor.length === 0;
@@ -796,10 +792,10 @@ JS;
         $this->assertSame('RD$ 500.00', $resultado['sur']['ventas']);
         $this->assertSame('RD$ 430.00', $resultado['sur']['balance']);
         $this->assertSame([500], $resultado['sur']['serie']);
-        $this->assertEqualsWithDelta(500 / 30, $resultado['sur']['promedio'], 0.00001);
-        $this->assertEqualsWithDelta(1600 / 30, $resultado['promedioNorte'], 0.00001);
-        $this->assertTrue($resultado['sinCoincidenciasPromedio']);
-        $this->assertSame(['1001'], $resultado['busquedaPromedio']);
+        $this->assertEqualsWithDelta(500, $resultado['sur']['promedio'], 0.00001);
+        $this->assertEqualsWithDelta(1600, $resultado['promedioNorte'], 0.00001);
+        $this->assertSame(['Promedio de venta del mes'], $resultado['categoriasPromedio']);
+        $this->assertSame(1, $resultado['barrasPromedio']);
         $this->assertSame('RD$ 1,600.00', $resultado['norte']);
         $this->assertEqualsWithDelta(110 / 0.4, $resultado['metas'][0]['data'][0], 0.00001);
         $this->assertEqualsWithDelta(110 / 0.3, $resultado['metas'][1]['data'][0], 0.00001);
@@ -1024,7 +1020,7 @@ JS;
         return app(GraficoRentabilidadController::class)->cargar($request, $cargarDatos)->getData();
     }
 
-    public function test_daily_sales_averages_preserve_calendar_days_zero_sales_and_selected_filters(): void
+    public function test_monthly_sales_averages_preserve_zero_sales_and_selected_filters(): void
     {
         $this->crearDatos();
         DB::table('agencias')->insert([
@@ -1034,60 +1030,52 @@ JS;
         $filtros = ['empresa' => '', 'ruta' => '', 'socio' => '', 'alcance' => 'todas', 'terminal' => '', 'productos' => ['Tradicional', 'No Tradicional', 'Recarga']];
         $promedios = $this->filtrarEnNavegador($carga['datosCargados'], $filtros)['promediosVentasTerminal'];
 
-        $this->assertSame(30, $promedios['dias']);
-        $this->assertSame(['1001', '2001', '1002', '3001'], array_column($promedios['terminales'], 'terminal'));
-        $this->assertEqualsWithDelta(1600 / 30, $promedios['terminales'][0]['promedio'], 0.00001);
-        $this->assertSame('Agencia sin ventas', $promedios['terminales'][3]['nombre']);
-        $this->assertSame(0, $promedios['terminales'][3]['promedio']);
+        $this->assertSame(1, $promedios['meses']);
+        $this->assertEqualsWithDelta(2800 / 4, $promedios['promedio'], 0.00001);
 
         $seleccion = $this->filtrarEnNavegador($carga['datosCargados'], [
             ...$filtros, 'empresa' => 'Empresa A', 'ruta' => 'Norte', 'alcance' => 'terminal', 'terminal' => '1001', 'productos' => ['Tradicional'],
         ])['promediosVentasTerminal'];
-        $this->assertCount(1, $seleccion['terminales']);
-        $this->assertEqualsWithDelta(1000 / 30, $seleccion['terminales'][0]['promedio'], 0.00001);
+        $this->assertEqualsWithDelta(1000, $seleccion['promedio'], 0.00001);
 
         $sinProductos = $this->filtrarEnNavegador($carga['datosCargados'], [...$filtros, 'productos' => []])['promediosVentasTerminal'];
-        $this->assertSame([0, 0, 0, 0], array_column($sinProductos['terminales'], 'promedio'));
+        $this->assertSame(0, $sinProductos['promedio']);
         $sinAgencias = $this->filtrarEnNavegador($carga['datosCargados'], [...$filtros, 'empresa' => 'Inexistente'])['promediosVentasTerminal'];
-        $this->assertSame([], $sinAgencias['terminales']);
+        $this->assertSame(0, $sinAgencias['promedio']);
     }
 
-    public function test_daily_sales_averages_use_leap_days_and_months_without_sales(): void
+    public function test_monthly_sales_averages_include_months_without_sales_in_ranges_and_years(): void
     {
         $this->crearDatos();
         DB::table('vt_usuarios_bet')->insert(['agencia_id' => '1001', 'fecha' => '2024-02-01', 'tipo' => 'Tradicional', 'monto' => 870]);
         $filtros = ['empresa' => '', 'ruta' => '', 'alcance' => 'terminal', 'terminal' => '1001', 'productos' => ['Tradicional']];
         foreach ([
-            [['mes' => '2024-02'], 29],
-            [['periodo' => 'rango', 'mes_desde' => '2024-02', 'mes_hasta' => '2024-03'], 60],
-            [['periodo' => 'anio', 'anio' => 2024], 366],
-        ] as [$periodo, $dias]) {
+            [['mes' => '2024-02'], 1],
+            [['periodo' => 'rango', 'mes_desde' => '2024-02', 'mes_hasta' => '2024-03'], 2],
+            [['periodo' => 'anio', 'anio' => 2024], 12],
+        ] as [$periodo, $meses]) {
             $carga = $this->consultar($periodo);
             $promedios = $this->filtrarEnNavegador($carga['datosCargados'], $filtros)['promediosVentasTerminal'];
-            $this->assertSame($dias, $promedios['dias']);
-            $this->assertEqualsWithDelta(870 / $dias, $promedios['terminales'][0]['promedio'], 0.00001);
+            $this->assertSame($meses, $promedios['meses']);
+            $this->assertEqualsWithDelta(870 / $meses, $promedios['promedio'], 0.00001);
         }
     }
 
-    public function test_sales_average_pagination_keeps_every_terminal_and_supports_name_search(): void
+    public function test_sales_average_returns_one_value_for_all_terminals_and_handles_empty_periods(): void
     {
         $codigo = <<<'JS'
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 await import(pathToFileURL(process.argv[1]).href);
-const datos = {terminales: Array.from({length: 25}, (_, indice) => ({terminal: String(1000 + indice), nombre: 'Agencia ' + indice, promedio: 25 - indice}))};
-const primera = FiltrosGraficoRentabilidad.paginarPromedios(datos, '', 1);
-const segunda = FiltrosGraficoRentabilidad.paginarPromedios(datos, '', 2);
-assert.equal(primera.total, 25);
-assert.equal(primera.terminales.length, 20);
-assert.equal(segunda.terminales.length, 5);
-assert.deepEqual([...primera.terminales, ...segunda.terminales], datos.terminales);
-const encontrada = FiltrosGraficoRentabilidad.paginarPromedios(datos, ' AGENCIA 24 ', 2);
-assert.equal(encontrada.pagina, 1);
-assert.equal(encontrada.terminales[0].terminal, '1024');
-assert.equal(FiltrosGraficoRentabilidad.paginarPromedios(datos, '1000', 1).total, 1);
-assert.equal(FiltrosGraficoRentabilidad.paginarPromedios(datos, 'inexistente', 1).total, 0);
-assert.equal(FiltrosGraficoRentabilidad.paginarPromedios(datos, '', 99).pagina, 2);
+const agencias = Array.from({length: 25}, (_, indice) => ({
+    terminal: String(1000 + indice), ventas: [{mes: '2026-09', tipo: 'Tradicional', total: (indice + 1) * 100}],
+    premios: [], sacados: [], gastosMensuales: [], costos: 0, gastos: 0,
+}));
+const filtros = {productos: ['Tradicional'], alcance: 'todas'};
+const datos = {meses: ['2026-09', '2026-10'], etiquetas: [], productosPremios: {'Tradicional': [], 'No Tradicional': []}, agencias};
+assert.deepEqual(FiltrosGraficoRentabilidad.filtrar(datos, filtros).promediosVentasTerminal, {meses: 2, promedio: 650});
+assert.deepEqual(FiltrosGraficoRentabilidad.filtrar({...datos, meses: []}, filtros).promediosVentasTerminal, {meses: 0, promedio: 0});
+assert.deepEqual(FiltrosGraficoRentabilidad.filtrar({...datos, agencias: []}, filtros).promediosVentasTerminal, {meses: 2, promedio: 0});
 JS;
         $proceso = new Process(['node', '--input-type=module', '-e', $codigo, public_path('js/pages/grafico-rentabilidad-filtros.js')]);
         $proceso->run();

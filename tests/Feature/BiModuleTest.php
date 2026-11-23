@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\EnsureViewPermission;
 use App\Http\Middleware\ExpireInactiveSession;
 use App\Http\Middleware\PreventDeletionForAdmin2;
 use App\Models\Agencia;
@@ -131,6 +132,7 @@ class BiModuleTest extends TestCase
         (require database_path('migrations/2026_10_01_125650_add_terminal_scope_to_bi_limits.php'))->up();
         (require database_path('migrations/2026_10_03_130148_create_bi_venta_snapshots_table.php'))->up();
         (require database_path('migrations/2026_10_20_170729_add_productos_terminales_to_bi_venta_horas_table.php'))->up();
+        (require database_path('migrations/2026_10_21_153703_create_bi_horarios_table.php'))->up();
     }
 
     public function test_bi_route_is_protected_and_listed_in_dashboard_hub(): void
@@ -327,7 +329,7 @@ class BiModuleTest extends TestCase
 
     public function test_bi_initial_page_uses_the_script_data_expected_by_vue(): void
     {
-        $this->withoutMiddleware([ExpireInactiveSession::class, PreventDeletionForAdmin2::class]);
+        $this->withoutMiddleware([ExpireInactiveSession::class, PreventDeletionForAdmin2::class, EnsureViewPermission::class]);
 
         $this->actingAs(new User(['name' => 'Usuario BI', 'email' => 'bi@example.test']))
             ->get(route('bi.index'))
@@ -350,7 +352,7 @@ class BiModuleTest extends TestCase
             $queries[] = $query->sql;
         });
 
-        $this->withoutMiddleware([ExpireInactiveSession::class, PreventDeletionForAdmin2::class]);
+        $this->withoutMiddleware([ExpireInactiveSession::class, PreventDeletionForAdmin2::class, EnsureViewPermission::class]);
         $this->actingAs(new User(['name' => 'Usuario BI', 'email' => 'bi@example.test']))
             ->get(route('bi.index'))
             ->assertOk()
@@ -922,6 +924,72 @@ class BiModuleTest extends TestCase
             ->assertJsonPath('props.indicadores.promedioVentasDiarias', 150)
             ->assertJsonPath('props.indicadores.diasPromedioConDatos', 1)
             ->assertJsonPath('props.indicadores.tendencia7d', null);
+    }
+
+    public function test_zero_sales_list_uses_latest_lottery_sales_and_active_lotobet_terminals(): void
+    {
+        DB::table('catalogo_juegos')->insert([
+            ['producto_id' => '1', 'tipo' => 'Tradicional'],
+            ['producto_id' => '2', 'tipo' => 'No Tradicional'],
+            ['producto_id' => '3', 'tipo' => 'Externa'],
+            ['producto_id' => '4', 'tipo' => 'Recarga'],
+        ]);
+        foreach (range(1, 9) as $terminal) {
+            Agencia::query()->create([
+                'terminal' => '00'.$terminal, 'nombre_agencia' => 'Agencia '.$terminal,
+                'sistema' => $terminal === 8 ? 'OTRO' : 'LOTOBET',
+                'estatus' => $terminal === 9 ? 0 : 1,
+                'empresa' => $terminal === 7 ? 'Empresa B' : 'Empresa A',
+                'zona' => $terminal === 6 ? 'Sur' : 'Norte', 'ruta' => $terminal === 5 ? 'R2' : 'R1',
+            ]);
+        }
+        Agencia::query()->create(['terminal' => '004', 'sistema' => 'LOTOBET', 'estatus' => 1]);
+        Agencia::query()->create(['terminal' => '   ', 'sistema' => 'LOTOBET', 'estatus' => 1]);
+        BiVentaHora::factory()->create([
+            'fecha' => today()->toDateString(), 'hora' => 8,
+            'productos_terminales' => ['4' => ['1' => 100]],
+        ]);
+        $lectura = BiVentaHora::factory()->create([
+            'fecha' => today()->toDateString(), 'hora' => 9,
+            'productos_terminales' => ['1' => ['1' => 10], '2' => ['2' => 10], '3' => ['3' => 10], '4' => ['4' => 100]],
+        ]);
+
+        $this->withoutMiddleware()->withHeaders([
+            'X-Inertia' => 'true', 'X-Inertia-Partial-Component' => 'Bi/Dashboard',
+            'X-Inertia-Partial-Data' => 'terminalesSinVentas',
+        ])->get(route('bi.index'))->assertOk()->assertJsonPath('props.terminalesSinVentas', [
+            ['terminal' => '4', 'nombre' => 'Agencia 4'],
+            ['terminal' => '5', 'nombre' => 'Agencia 5'],
+            ['terminal' => '6', 'nombre' => 'Agencia 6'],
+            ['terminal' => '7', 'nombre' => 'Agencia 7'],
+        ]);
+
+        $this->get(route('bi.index', ['empresa' => 'Empresa A', 'zona' => 'Norte', 'ruta' => 'R1']))
+            ->assertOk()->assertJsonPath('props.terminalesSinVentas', [['terminal' => '4', 'nombre' => 'Agencia 4']]);
+
+        $lectura->update(['productos_terminales' => ['4' => ['1' => 1]]]);
+        $this->get(route('bi.index', ['empresa' => 'Empresa A', 'zona' => 'Norte', 'ruta' => 'R1']))
+            ->assertOk()->assertJsonPath('props.terminalesSinVentas', [
+                ['terminal' => '1', 'nombre' => 'Agencia 1'],
+                ['terminal' => '2', 'nombre' => 'Agencia 2'],
+                ['terminal' => '3', 'nombre' => 'Agencia 3'],
+            ]);
+    }
+
+    public function test_zero_sales_list_distinguishes_unavailable_detail_from_an_empty_list(): void
+    {
+        $catalogo = app(\App\Services\Bi\AgenciaTerminalCatalogo::class);
+        $this->assertNull($catalogo->sinVentas(null));
+        $lectura = BiVentaHora::factory()->create(['productos_terminales' => null]);
+        $this->assertNull($catalogo->sinVentas($lectura));
+        $lectura->update(['productos_terminales' => []]);
+        $this->assertSame([], $catalogo->sinVentas($lectura));
+
+        Agencia::query()->create(['terminal' => '001', 'agencia' => 'Nombre alterno', 'sistema' => 'LOTOBET', 'estatus' => 1]);
+        $this->assertSame([['terminal' => '1', 'nombre' => 'Nombre alterno']], $catalogo->sinVentas($lectura));
+        DB::table('catalogo_juegos')->insert(['producto_id' => '1', 'tipo' => 'Tradicional']);
+        $lectura->update(['productos_terminales' => ['1' => ['1' => 10]]]);
+        $this->assertSame([], $catalogo->sinVentas($lectura));
     }
 
     public function test_daily_sales_comparison_uses_hourly_sales_and_closed_day_summaries(): void

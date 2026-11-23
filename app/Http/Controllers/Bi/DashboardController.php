@@ -125,6 +125,7 @@ class DashboardController extends Controller
             'mensajeRecalculo' => session('biRecalculo'),
             'terminales' => fn () => $catalogo->paginar($busqueda, $zona, $empresa, $ruta, $snapshot),
             'horaVentasCatalogo' => $snapshot?->hora,
+            'terminalesSinVentas' => fn () => $catalogo->sinVentas($lecturas->last(), $zona, $empresa, $ruta),
             'zonas' => fn () => $catalogo->zonas($empresa),
             'zonaSeleccionada' => $zona,
             'empresas' => fn () => $catalogo->empresas(),
