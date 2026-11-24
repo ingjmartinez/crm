@@ -84,14 +84,18 @@ class ResumenZonaBi
         arsort($ventasPorRuta, SORT_NUMERIC);
         $totalVentas = array_sum($totales);
         $totalPremios = array_sum(array_column($seriePremios, 'premios'));
-        $evaluadas = Agencia::lotobet()->when($zona, fn ($query) => $query->where('zona', $zona))
+        // Mismo universo que AgenciaTerminalCatalogo::sinVentas(): solo terminales LotoBet activas.
+        $terminalesActivas = Agencia::lotobet()->when($zona, fn ($query) => $query->where('zona', $zona))
             ->when($empresa, fn ($query) => $query->where('empresa', $empresa))
-            ->when($ruta, fn ($query) => $query->where('ruta', $ruta))->where('estatus', 1)->count();
+            ->when($ruta, fn ($query) => $query->where('ruta', $ruta))->where('estatus', 1)
+            ->whereNotNull('terminal')->whereRaw("TRIM(terminal) <> ''")->pluck('terminal')
+            ->map(fn (string $terminal): string => ltrim(trim($terminal), '0') ?: '0')->unique()->values()->all();
+        $evaluadas = count($terminalesActivas);
         $conVenta = null;
         $cobertura = array_fill_keys($categorias, 0);
         if ($ultimaHora !== null) {
             $conVenta = 0;
-            foreach ($terminales as $terminal) {
+            foreach ($terminalesActivas as $terminal) {
                 $valores = $this->clasificarProductos($ultimaHora['terminales'][$terminal] ?? []);
                 foreach ($categorias as $categoria) {
                     if ($valores[$categoria] > 0) {

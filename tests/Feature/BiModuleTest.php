@@ -9,6 +9,7 @@ use App\Models\Agencia;
 use App\Models\BiVentaHora;
 use App\Models\BiVentaSnapshot;
 use App\Models\User;
+use App\Services\Bi\AgenciaTerminalCatalogo;
 use App\Services\Bi\ResumenZonaBi;
 use App\Services\Bi\ResumirPremiosDia;
 use App\Services\Bi\ResumirVentasDia;
@@ -924,6 +925,84 @@ class BiModuleTest extends TestCase
             ->assertJsonPath('props.indicadores.promedioVentasDiarias', 150)
             ->assertJsonPath('props.indicadores.diasPromedioConDatos', 1)
             ->assertJsonPath('props.indicadores.tendencia7d', null);
+    }
+
+    public function test_filtered_zero_sales_card_matches_active_lotobet_terminals_in_the_list(): void
+    {
+        DB::table('catalogo_juegos')->insert([
+            ['producto_id' => '1', 'tipo' => 'Tradicional'],
+            ['producto_id' => '2', 'tipo' => 'No Tradicional'],
+            ['producto_id' => '3', 'tipo' => 'Externa'],
+            ['producto_id' => '4', 'tipo' => 'Recarga'],
+        ]);
+        foreach ([
+            ['terminal' => '001', 'sistema' => 'LOTOBET', 'estatus' => 1],
+            ['terminal' => '002', 'sistema' => 'LOTOBET', 'estatus' => 1],
+            ['terminal' => '003', 'sistema' => 'LOTOBET', 'estatus' => 0],
+            ['terminal' => '004', 'sistema' => '', 'estatus' => 1],
+        ] as $agencia) {
+            Agencia::query()->create([
+                ...$agencia, 'empresa' => 'Grupo Joselito', 'zona' => 'Norte', 'ruta' => 'R1',
+            ]);
+        }
+        Agencia::query()->create([
+            'terminal' => '005', 'sistema' => 'LOTOBET', 'estatus' => 1,
+            'empresa' => 'Negosur', 'zona' => 'Sur', 'ruta' => 'R2',
+        ]);
+        $lectura = BiVentaHora::factory()->create([
+            'productos_terminales' => [
+                '1' => ['1' => 10], '2' => ['4' => 5], '3' => ['2' => 20], '4' => ['3' => 30],
+            ],
+        ]);
+        $hoy = CarbonImmutable::today();
+        $resumen = app(ResumenZonaBi::class);
+        $catalogo = app(AgenciaTerminalCatalogo::class);
+
+        foreach ([
+            [null, 'Grupo Joselito', null],
+            ['Norte', null, null],
+            [null, null, 'R1'],
+            ['Norte', 'Grupo Joselito', 'R1'],
+        ] as [$zona, $empresa, $ruta]) {
+            $resultado = $resumen->resumir($zona, $empresa, $ruta, $hoy, $hoy, collect([$lectura]));
+
+            $this->assertSame(2, $resultado['indicadores']['terminalesEvaluadas']);
+            $this->assertSame(1, $resultado['indicadores']['terminalesConVenta']);
+            $this->assertSame(1, $resultado['indicadores']['terminalesSinVenta']);
+            $this->assertSame(count($catalogo->sinVentas($lectura, $zona, $empresa, $ruta)), $resultado['indicadores']['terminalesSinVenta']);
+            $this->assertSame([
+                'tradicional' => 1, 'no_tradicional' => 0, 'externas' => 0, 'recargas' => 1, 'otros' => 0,
+            ], $resultado['indicadores']['coberturaCategorias']);
+            $this->assertSame(['1', '2', '3', '4'], $resultado['terminales']);
+            $this->assertSame(65.0, $resultado['indicadores']['ventasHoy']);
+            $this->assertSame(65.0, $resultado['lecturasPorHora'][0]['total']);
+            $this->assertSame([['nombre' => 'R1', 'monto' => 65.0]], $resultado['rutasConMasVenta']);
+        }
+    }
+
+    public function test_filtered_zero_sales_card_counts_unique_nonempty_terminals_and_preserves_unavailable_sales(): void
+    {
+        foreach ([' 001 ', '1', ' 002 ', '2', null, '', '   '] as $terminal) {
+            Agencia::query()->create([
+                'terminal' => $terminal, 'sistema' => 'LOTOBET', 'estatus' => 1, 'empresa' => 'Grupo Joselito',
+            ]);
+        }
+        $hoy = CarbonImmutable::today();
+        $resumen = app(ResumenZonaBi::class);
+        $resultado = $resumen->resumir(null, 'Grupo Joselito', null, $hoy, $hoy, collect());
+
+        $this->assertSame(2, $resultado['indicadores']['terminalesEvaluadas']);
+        $this->assertNull($resultado['indicadores']['terminalesConVenta']);
+        $this->assertNull($resultado['indicadores']['terminalesSinVenta']);
+
+        DB::table('catalogo_juegos')->insert(['producto_id' => '1', 'tipo' => 'Tradicional']);
+        $lectura = BiVentaHora::factory()->create(['productos_terminales' => ['1' => ['1' => 10]]]);
+        $resultado = $resumen->resumir(null, 'Grupo Joselito', null, $hoy, $hoy, collect([$lectura]));
+
+        $this->assertSame(2, $resultado['indicadores']['terminalesEvaluadas']);
+        $this->assertSame(1, $resultado['indicadores']['terminalesConVenta']);
+        $this->assertSame(1, $resultado['indicadores']['terminalesSinVenta']);
+        $this->assertSame(count(app(AgenciaTerminalCatalogo::class)->sinVentas($lectura, null, 'Grupo Joselito')), $resultado['indicadores']['terminalesSinVenta']);
     }
 
     public function test_zero_sales_list_uses_latest_lottery_sales_and_active_lotobet_terminals(): void
