@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class ResumenZonaBi
 {
-    public function __construct(private readonly ClasificarVentaBi $clasificador) {}
+    public function __construct(
+        private readonly ClasificarVentaBi $clasificador,
+        private readonly AgenciaTerminalCatalogo $catalogo,
+    ) {}
 
     /** @return array<string, mixed> */
     public function resumir(?string $zona, ?string $empresa, ?string $ruta, CarbonImmutable $desde, CarbonImmutable $hasta, Collection $lecturas): array
@@ -91,6 +94,7 @@ class ResumenZonaBi
             ->whereNotNull('terminal')->whereRaw("TRIM(terminal) <> ''")->pluck('terminal')
             ->map(fn (string $terminal): string => ltrim(trim($terminal), '0') ?: '0')->unique()->values()->all();
         $evaluadas = count($terminalesActivas);
+        $conVentasDia = $this->catalogo->conVentas($lecturas);
         $conVenta = null;
         $cobertura = array_fill_keys($categorias, 0);
         if ($ultimaHora !== null) {
@@ -102,7 +106,7 @@ class ResumenZonaBi
                         $cobertura[$categoria]++;
                     }
                 }
-                if ($valores['tradicional'] + $valores['no_tradicional'] + $valores['externas'] > 0) {
+                if (isset($conVentasDia[$terminal])) {
                     $conVenta++;
                 }
             }

@@ -100,6 +100,14 @@ class DashboardController extends Controller
             ->orderBy('hora')
             ->get(['hora', 'tradicional_acumulado', 'no_tradicional_acumulado', 'externas_acumulado', 'recargas_acumulado', 'otros_acumulado', 'productos_terminales', 'capturado_en']);
         $datosZona = $zona !== '' || $empresa !== '' || $ruta !== '' ? $resumenZona->resumir($zona, $empresa, $ruta, $desde, $hasta, $lecturas) : null;
+        $sinVentas = $catalogo->sinVentas($lecturas->last(), $zona, $empresa, $ruta, $lecturas);
+        $coberturaDiaria = $sinVentas === null ? [] : [
+            'terminalesEvaluadas' => count($catalogo->activas($zona, $empresa, $ruta)),
+            'terminalesSinVenta' => count($sinVentas),
+        ];
+        if ($sinVentas !== null) {
+            $coberturaDiaria['terminalesConVenta'] = $coberturaDiaria['terminalesEvaluadas'] - count($sinVentas);
+        }
 
         return Inertia::render('Bi/Dashboard', [
             'modulo' => 'BI',
@@ -125,7 +133,7 @@ class DashboardController extends Controller
             'mensajeRecalculo' => session('biRecalculo'),
             'terminales' => fn () => $catalogo->paginar($busqueda, $zona, $empresa, $ruta, $snapshot),
             'horaVentasCatalogo' => $snapshot?->hora,
-            'terminalesSinVentas' => fn () => $catalogo->sinVentas($lecturas->last(), $zona, $empresa, $ruta),
+            'terminalesSinVentas' => $sinVentas,
             'zonas' => fn () => $catalogo->zonas($empresa),
             'zonaSeleccionada' => $zona,
             'empresas' => fn () => $catalogo->empresas(),
@@ -142,7 +150,7 @@ class DashboardController extends Controller
             ],
             'ventasPorCategoria' => fn () => $datosZona['ventasPorCategoria'] ?? $ventasBet->resumir($desde, $hasta),
             'ventasPremios' => fn () => $datosZona['ventasPremios'] ?? $ventasPremios->resumir($desde, $hasta),
-            'indicadores' => fn () => $datosZona['indicadores'] ?? $indicadores->resumir($desde, $hasta, $lecturas->last()),
+            'indicadores' => fn () => array_replace($datosZona['indicadores'] ?? $indicadores->resumir($desde, $hasta, $lecturas->last()), $coberturaDiaria),
             'fechaLecturas' => today()->toDateString(),
             'lecturasPorHora' => $datosZona['lecturasPorHora'] ?? $lecturas->map(fn (BiVentaHora $lectura): array => [
                 'hora' => $lectura->hora,

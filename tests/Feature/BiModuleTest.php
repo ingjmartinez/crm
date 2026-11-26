@@ -1005,7 +1005,7 @@ class BiModuleTest extends TestCase
         $this->assertSame(count(app(AgenciaTerminalCatalogo::class)->sinVentas($lectura, null, 'Grupo Joselito')), $resultado['indicadores']['terminalesSinVenta']);
     }
 
-    public function test_zero_sales_list_uses_latest_lottery_sales_and_active_lotobet_terminals(): void
+    public function test_zero_sales_list_accumulates_daily_lottery_sales_for_active_lotobet_terminals(): void
     {
         DB::table('catalogo_juegos')->insert([
             ['producto_id' => '1', 'tipo' => 'Tradicional'],
@@ -1037,14 +1037,13 @@ class BiModuleTest extends TestCase
             'X-Inertia' => 'true', 'X-Inertia-Partial-Component' => 'Bi/Dashboard',
             'X-Inertia-Partial-Data' => 'terminalesSinVentas',
         ])->get(route('bi.index'))->assertOk()->assertJsonPath('props.terminalesSinVentas', [
-            ['terminal' => '4', 'nombre' => 'Agencia 4'],
             ['terminal' => '5', 'nombre' => 'Agencia 5'],
             ['terminal' => '6', 'nombre' => 'Agencia 6'],
             ['terminal' => '7', 'nombre' => 'Agencia 7'],
         ]);
 
         $this->get(route('bi.index', ['empresa' => 'Empresa A', 'zona' => 'Norte', 'ruta' => 'R1']))
-            ->assertOk()->assertJsonPath('props.terminalesSinVentas', [['terminal' => '4', 'nombre' => 'Agencia 4']]);
+            ->assertOk()->assertJsonPath('props.terminalesSinVentas', []);
 
         $lectura->update(['productos_terminales' => ['4' => ['1' => 1]]]);
         $this->get(route('bi.index', ['empresa' => 'Empresa A', 'zona' => 'Norte', 'ruta' => 'R1']))
@@ -1053,6 +1052,49 @@ class BiModuleTest extends TestCase
                 ['terminal' => '2', 'nombre' => 'Agencia 2'],
                 ['terminal' => '3', 'nombre' => 'Agencia 3'],
             ]);
+    }
+
+    public function test_zero_sales_decreases_across_hours_and_resets_each_day_for_all_filters(): void
+    {
+        DB::table('catalogo_juegos')->insert([
+            ['producto_id' => '1', 'tipo' => 'Tradicional'],
+            ['producto_id' => '2', 'tipo' => 'Recarga'],
+        ]);
+        foreach (range(1, 3) as $terminal) {
+            Agencia::query()->create([
+                'terminal' => '00'.$terminal, 'nombre_agencia' => 'Agencia '.$terminal,
+                'sistema' => 'LOTOBET', 'estatus' => 1,
+                'empresa' => 'Empresa A', 'zona' => 'Norte', 'ruta' => 'R1',
+            ]);
+        }
+        Agencia::query()->create(['terminal' => '1', 'sistema' => 'LOTOBET', 'estatus' => 1]);
+        BiVentaHora::factory()->create([
+            'fecha' => today()->subDay()->toDateString(), 'hora' => 22,
+            'productos_terminales' => ['3' => ['1' => 50]],
+        ]);
+        BiVentaHora::factory()->create([
+            'hora' => 5, 'productos_terminales' => ['3' => ['1' => 50]],
+        ]);
+        $this->withoutMiddleware()->withHeaders([
+            'X-Inertia' => 'true', 'X-Inertia-Partial-Component' => 'Bi/Dashboard',
+            'X-Inertia-Partial-Data' => 'indicadores,terminalesSinVentas',
+        ]);
+        foreach ([
+            6 => ['001' => ['1' => 10], '3' => ['2' => 20]],
+            7 => ['1' => ['1' => 10], '2' => ['1' => 5]],
+            8 => ['1' => ['1' => 0], '3' => ['2' => 30]],
+            9 => ['3' => ['1' => 1]],
+        ] as $hora => $productos) {
+            BiVentaHora::factory()->create(['hora' => $hora, 'productos_terminales' => $productos]);
+            $pendientes = $hora === 6 ? 2 : ($hora === 9 ? 0 : 1);
+            foreach ([[], ['empresa' => 'Empresa A'], ['zona' => 'Norte'], ['ruta' => 'R1']] as $filtros) {
+                $this->get(route('bi.index', $filtros))->assertOk()
+                    ->assertJsonPath('props.indicadores.terminalesEvaluadas', 3)
+                    ->assertJsonPath('props.indicadores.terminalesConVenta', 3 - $pendientes)
+                    ->assertJsonPath('props.indicadores.terminalesSinVenta', $pendientes)
+                    ->assertJsonCount($pendientes, 'props.terminalesSinVentas');
+            }
+        }
     }
 
     public function test_zero_sales_list_distinguishes_unavailable_detail_from_an_empty_list(): void

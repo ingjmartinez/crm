@@ -7,6 +7,7 @@ use App\Models\BiVentaHora;
 use App\Models\BiVentaSnapshot;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class AgenciaTerminalCatalogo
 {
@@ -51,14 +52,20 @@ class AgenciaTerminalCatalogo
     }
 
     /** @return array<int, array{terminal: string, nombre: string}>|null */
-    public function sinVentas(?BiVentaHora $lectura, ?string $zona = null, ?string $empresa = null, ?string $ruta = null): ?array
+    public function sinVentas(?BiVentaHora $lectura, ?string $zona = null, ?string $empresa = null, ?string $ruta = null, ?Collection $lecturas = null): ?array
     {
-        if ($lectura?->productos_terminales === null) {
+        $conVenta = $this->conVentas($lecturas ?? collect($lectura === null ? [] : [$lectura]));
+        if ($conVenta === null) {
             return null;
         }
 
-        $ventasPorTerminal = $lectura->productos_terminales;
+        return array_values(array_filter($this->activas($zona, $empresa, $ruta),
+            fn (array $agencia): bool => ! isset($conVenta[$agencia['terminal']])));
+    }
 
+    /** @return array<int, array{terminal: string, nombre: string}> */
+    public function activas(?string $zona = null, ?string $empresa = null, ?string $ruta = null): array
+    {
         return Agencia::lotobet()->where('estatus', 1)
             ->when($zona, fn (Builder $query): Builder => $query->where('zona', $zona))
             ->when($empresa, fn (Builder $query): Builder => $query->where('empresa', $empresa))
@@ -68,18 +75,37 @@ class AgenciaTerminalCatalogo
             ->map(fn (Agencia $agencia): array => [
                 'terminal' => ltrim(trim((string) $agencia->terminal), '0') ?: '0',
                 'nombre' => (string) ($agencia->nombre_agencia ?: $agencia->agencia ?: $agencia->terminal),
-            ])->unique('terminal')
-            ->filter(function (array $agencia) use ($ventasPorTerminal): bool {
+            ])->unique('terminal')->sortBy('terminal', SORT_NATURAL)->values()->all();
+    }
+
+    /**
+     * @param  Collection<int, BiVentaHora>  $lecturas
+     * @return array<string|int, true>|null
+     */
+    public function conVentas(Collection $lecturas): ?array
+    {
+        $conVenta = null;
+        foreach ($lecturas as $lectura) {
+            if ($lectura->productos_terminales === null) {
+                continue;
+            }
+            $conVenta ??= [];
+            foreach ($lectura->productos_terminales as $terminal => $productos) {
                 $ventaLoterias = 0.0;
-                foreach ($ventasPorTerminal[$agencia['terminal']] ?? [] as $producto => $monto) {
+                foreach ($productos as $producto => $monto) {
                     $categoria = $this->clasificador->categoria(['producto_id' => (string) $producto]);
                     if (in_array($categoria, ['tradicional', 'no_tradicional', 'externas'], true)) {
                         $ventaLoterias += (float) $monto;
                     }
                 }
 
-                return $ventaLoterias <= 0;
-            })->sortBy('terminal', SORT_NATURAL)->values()->all();
+                if ($ventaLoterias > 0) {
+                    $conVenta[ltrim(trim((string) $terminal), '0') ?: '0'] = true;
+                }
+            }
+        }
+
+        return $conVenta;
     }
 
     public function ultimaActualizacion(): ?string

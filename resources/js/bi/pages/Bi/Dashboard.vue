@@ -759,7 +759,7 @@ function recalcularVentas() {
                             <span>{{ card.name }}</span><strong :class="card.color">{{ card.value }}</strong><small>{{ card.detail }}</small>
                         </div>
                         <button type="button" class="bi-panel bi-stat bi-zero-sales-card" aria-haspopup="dialog" @click="abrirTerminalesSinVentas">
-                            <span>VENTAS 0</span><strong class="red">{{ indicadores.terminalesSinVenta === null ? '—' : formatNumber(indicadores.terminalesSinVenta) }}</strong><small>Sin venta de loterías LotoBet · última lectura</small>
+                            <span>VENTAS 0</span><strong class="red">{{ indicadores.terminalesSinVenta === null ? '—' : formatNumber(indicadores.terminalesSinVenta) }}</strong><small>Sin venta de loterías LotoBet · acumulado del día</small>
                             <span class="bi-day-card-hint">Ver terminales ›</span>
                         </button>
                         <div class="bi-panel bi-stat bi-agency-percent">
@@ -870,7 +870,7 @@ function recalcularVentas() {
                 <h2 id="bi-zero-sales-title">Terminales sin ventas</h2>
                 <button type="button" aria-label="Cerrar terminales sin ventas" autofocus @click="terminalesSinVentasDialog.close()">×</button>
             </div>
-            <p id="bi-zero-sales-description" class="bi-comparison-note">{{ alcancePanel }} · {{ fechaLecturas }} · Lectura {{ indicadores.horaLectura === null ? 'pendiente' : `${String(indicadores.horaLectura).padStart(2, '0')}:00` }}. Agencias activas LotoBet sin venta de loterías tradicionales, no tradicionales ni externas.</p>
+            <p id="bi-zero-sales-description" class="bi-comparison-note">{{ alcancePanel }} · {{ fechaLecturas }} · Lectura {{ indicadores.horaLectura === null ? 'pendiente' : `${String(indicadores.horaLectura).padStart(2, '0')}:00` }}. Agencias activas LotoBet que no han registrado venta de loterías tradicionales, no tradicionales ni externas en las lecturas del día desde las 06:00.</p>
             <template v-if="terminalesSinVentas !== null">
                 <label class="bi-zero-sales-search">Buscar terminal o nombre
                     <input v-model="busquedaSinVentas" type="search" placeholder="Terminal o nombre de agencia">
